@@ -563,7 +563,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
@@ -579,7 +579,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             {editingOrder && editingOrder.status !== 'draft' && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -626,84 +626,53 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             )}
 
             {/* Order Details */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:clientsOrders.orderDetails')}
               </h4>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsOrders.client')}
-                    </label>
-                    <CustomSelect
-                      options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                      value={formData.clientId || ''}
-                      onChange={(val) => handleClientChange(val as string)}
-                      placeholder={t('sales:clientQuotes.selectAClient')}
-                      searchable={true}
-                      disabled={isReadOnly}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                    />
-                    {errors.clientId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                    )}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsOrders.client')}
+                  </label>
+                  <CustomSelect
+                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                    value={formData.clientId || ''}
+                    onChange={(val) => handleClientChange(val as string)}
+                    placeholder={t('sales:clientQuotes.selectAClient')}
+                    searchable={true}
+                    disabled={isReadOnly}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
+                  {errors.clientId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' })}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
+                    {editingOrder?.id || '—'}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsOrders.paymentTerms')}
-                    </label>
-                    <CustomSelect
-                      options={getPaymentTermsOptions(t)}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(val) =>
-                        setFormData({
-                          ...formData,
-                          paymentTerms: val as ClientsOrder['paymentTerms'],
-                        })
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsOrders.status')}
-                    </label>
-                    <CustomSelect
-                      options={getStatusOptions(t)}
-                      value={formData.status || 'draft'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, status: val as ClientsOrder['status'] })
-                      }
-                      searchable={false}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('sales:clientQuotes.globalDiscount')}
-                    </label>
-                    <div
-                      className={`flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isLinkedOffer ? 'opacity-50' : ''}`}
-                    >
-                      <div className="flex w-12 self-stretch items-center justify-center border-r border-slate-200 bg-slate-100/30 text-xs font-bold text-slate-400">
-                        %
-                      </div>
-                      <ValidatedNumberInput
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={formData.discount}
-                        onValueChange={(value) => {
-                          const parsed = parseNumberInputValue(value);
-                          setFormData({ ...formData, discount: parsed });
-                        }}
-                        disabled={isReadOnly}
-                        className="flex-1 bg-transparent px-4 py-2.5 text-sm font-semibold outline-none disabled:bg-transparent"
-                      />
-                    </div>
-                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsOrders.paymentTerms')}
+                  </label>
+                  <CustomSelect
+                    options={getPaymentTermsOptions(t)}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(val) =>
+                      setFormData({
+                        ...formData,
+                        paymentTerms: val as ClientsOrder['paymentTerms'],
+                      })
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
                 </div>
               </div>
             </div>
@@ -729,7 +698,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-2 ml-1">
                       {t('accounting:clientsOrders.specialBidLabel')}
@@ -775,9 +744,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                            <div className="space-y-1 md:col-span-2 min-w-0">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                            <div className="space-y-1 lg:col-span-2 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('accounting:clientsOrders.specialBidLabel')}
                               </label>
                               <CustomSelect
@@ -803,8 +772,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                            <div className="space-y-1 md:col-span-3 min-w-0">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="space-y-1 lg:col-span-3 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.productsServices')}
                               </label>
                               <CustomSelect
@@ -819,8 +788,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="space-y-1 lg:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.qty')}
                               </label>
                               <ValidatedNumberInput
@@ -841,8 +810,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-                            <div className="flex flex-col items-center justify-center space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="flex flex-col items-center justify-center space-y-1 lg:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.cost')}
                               </label>
                               <span className="text-xs font-bold text-slate-600">
@@ -854,24 +823,24 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center justify-center space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.molPercentage')}
                               </label>
                               <span className="text-xs font-bold text-slate-600">
                                 {molPercentage.toFixed(1)}%
                               </span>
                             </div>
-                            <div className="flex items-center justify-center space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.marginLabel')}
                               </label>
                               <span className="text-xs font-bold text-emerald-600">
                                 {margin.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="space-y-1 md:col-span-3">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                            <div className="space-y-1 lg:col-span-3">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.salePrice')}
                               </label>
                               <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
@@ -904,69 +873,86 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             </div>
 
             {/* Notes & Cost Summary */}
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="md:w-2/3 space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
                   {t('accounting:clientsOrders.notes')}
-                </h4>
+                </label>
                 <textarea
                   rows={4}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
                   disabled={isReadOnly}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.costSummary')}
-                </h4>
+              <div className="md:w-1/3">
                 {(() => {
                   const { subtotal, discountAmount, total, margin, marginPercentage } =
                     calculateTotals(formData.items || [], formData.discount || 0);
                   return (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                    <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-500 shrink-0">
+                          {t('sales:clientQuotes.globalDiscount', {
+                            defaultValue: 'Global Discount %',
+                          })}
                         </span>
-                        <span className="text-sm font-bold text-slate-700">
-                          {subtotal.toFixed(2)} {currency}
-                        </span>
+                        <ValidatedNumberInput
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={formData.discount}
+                          onValueChange={(value) => {
+                            const parsed = parseNumberInputValue(value);
+                            setFormData({ ...formData, discount: parsed });
+                          }}
+                          disabled={isReadOnly}
+                          className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
                       </div>
-                      {formData.discount !== undefined && formData.discount > 0 && (
+                      <div className="border-t border-slate-200 pt-2 space-y-2">
                         <div className="flex justify-between">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.discountAmount', {
-                              discount: formData.discount,
-                            })}
+                            {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
                           </span>
-                          <span className="text-sm font-bold text-amber-600">
-                            -{discountAmount.toFixed(2)} {currency}
+                          <span className="text-sm font-black text-slate-800">
+                            {subtotal.toFixed(2)} {currency}
                           </span>
                         </div>
-                      )}
-                      <div className="flex justify-between border-t border-slate-200 pt-3">
-                        <span className="text-lg font-black text-slate-800">
-                          {t('sales:clientQuotes.totalLabel')}
-                        </span>
-                        <span className="text-lg font-black text-praetor">
-                          {total.toFixed(2)} {currency}
-                        </span>
+                        {formData.discount !== undefined && formData.discount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('sales:clientQuotes.discountAmount', {
+                                discount: formData.discount,
+                              })}
+                            </span>
+                            <span className="text-sm font-black text-amber-600">
+                              -{discountAmount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-sm font-bold text-emerald-600">
+                            {t('sales:clientQuotes.marginLabel')} ({marginPercentage.toFixed(1)}%)
+                          </span>
+                          <span className="text-sm font-black text-emerald-600">
+                            {margin.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-200 pt-2">
+                          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                            {t('sales:clientQuotes.totalLabel')}
+                          </span>
+                          <span className="text-lg font-black text-praetor">
+                            {total.toFixed(2)}{' '}
+                            <span className="text-sm text-slate-400 font-bold">{currency}</span>
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="font-bold text-slate-500">
-                          {t('sales:clientQuotes.marginLabel')}
-                        </span>
-                        <span className="font-bold text-emerald-600">
-                          {margin.toFixed(2)} {currency} ({marginPercentage.toFixed(1)}%)
-                        </span>
-                      </div>
-                    </>
+                    </div>
                   );
                 })()}
               </div>

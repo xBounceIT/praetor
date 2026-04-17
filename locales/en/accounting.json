@@ -133,7 +133,10 @@
     "linkedQuoteInfo": "This order was created from quote #{{number}}",
     "quoteDetailsReadOnly": "(Quote details are read-only)",
     "viewQuote": "View Quote",
-    "noItemsAdded": "No items added yet"
+    "noItemsAdded": "No items added yet",
+    "orderDetails": "Order Details",
+    "items": "Items",
+    "subtotal": "Subtotal"
   },
   "supplierInvoices": {
     "title": "Supplier Invoices",
@@ -150,6 +153,9 @@
     "total": "Total",
     "notes": "Notes",
     "actionsColumn": "Actions",
-    "deleteTitle": "Delete supplier invoice?"
+    "deleteTitle": "Delete supplier invoice?",
+    "invoiceDetails": "Invoice Details",
+    "items": "Items",
+    "subtotal": "Subtotal"
   }
 }

@@ -543,7 +543,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
@@ -561,99 +561,94 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
-            <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
+            <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:clientsInvoices.invoiceDetails')}
               </h4>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.invoiceNumber')}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.id || ''}
-                      onChange={(event) => setFormData({ ...formData, id: event.target.value })}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
-                      placeholder="INV-YYYY-XXXX"
-                    />
-                    {errors.id && (
-                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.id}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.issueDate')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.issueDate}
-                      onChange={(event) =>
-                        setFormData({ ...formData, issueDate: event.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                    {errors.issueDate && (
-                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.dueDate')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.dueDate}
-                      onChange={(event) =>
-                        setFormData({ ...formData, dueDate: event.target.value })
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                    {errors.dueDate && (
-                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
-                    )}
-                  </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.client')}
+                  </label>
+                  <CustomSelect
+                    options={activeClients.map((client) => ({
+                      id: client.id,
+                      name: client.name,
+                    }))}
+                    value={formData.clientId || ''}
+                    onChange={(value) => handleClientChange(value as string)}
+                    placeholder={t('accounting:clientsInvoices.allClients')}
+                    searchable={true}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
+                  {errors.clientId && (
+                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.clientId}</p>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.client')}
-                    </label>
-                    <CustomSelect
-                      options={activeClients.map((client) => ({
-                        id: client.id,
-                        name: client.name,
-                      }))}
-                      value={formData.clientId || ''}
-                      onChange={(value) => handleClientChange(value as string)}
-                      placeholder={t('accounting:clientsInvoices.allClients')}
-                      searchable={true}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                    />
-                    {errors.clientId && (
-                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.clientId}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.status')}
-                    </label>
-                    <CustomSelect
-                      options={statusOptions}
-                      value={formData.status || 'draft'}
-                      onChange={(value) =>
-                        setFormData({ ...formData, status: value as Invoice['status'] })
-                      }
-                      searchable={false}
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.invoiceNumber')}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.id || ''}
+                    onChange={(event) => setFormData({ ...formData, id: event.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                    placeholder="INV-YYYY-XXXX"
+                  />
+                  {errors.id && (
+                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.id}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.issueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.issueDate}
+                    onChange={(event) =>
+                      setFormData({ ...formData, issueDate: event.target.value })
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                  />
+                  {errors.issueDate && (
+                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.dueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.dueDate}
+                    onChange={(event) => setFormData({ ...formData, dueDate: event.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                  />
+                  {errors.dueDate && (
+                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.status')}
+                  </label>
+                  <CustomSelect
+                    options={statusOptions}
+                    value={formData.status || 'draft'}
+                    onChange={(value) =>
+                      setFormData({ ...formData, status: value as Invoice['status'] })
+                    }
+                    searchable={false}
+                  />
                 </div>
               </div>
             </div>
@@ -677,7 +672,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-2 ml-1">
                       {t('accounting:clientsInvoices.specialBid')}
@@ -704,9 +699,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
                     >
                       <div className="flex items-start gap-2">
-                        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                          <div className="space-y-1 md:col-span-2 min-w-0">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                          <div className="space-y-1 lg:col-span-2 min-w-0">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('accounting:clientsInvoices.specialBid')}
                             </label>
                             <CustomSelect
@@ -734,8 +729,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-2 min-w-0">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="space-y-1 lg:col-span-2 min-w-0">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.product')}
                             </label>
                             <CustomSelect
@@ -755,8 +750,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="space-y-1 lg:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.quantity')}
                             </label>
                             <div className="flex items-center gap-1">
@@ -781,8 +776,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               </span>
                             </div>
                           </div>
-                          <div className="space-y-1 md:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="space-y-1 lg:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.price')} ({currency})
                             </label>
                             <ValidatedNumberInput
@@ -801,8 +796,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="space-y-1 lg:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.discount')}%
                             </label>
                             <ValidatedNumberInput
@@ -820,8 +815,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-3">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                          <div className="space-y-1 lg:col-span-3">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.total')}
                             </label>
                             <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
@@ -865,77 +860,75 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="md:w-2/3 space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
                   {t('accounting:clientsInvoices.notes')}
-                </h4>
+                </label>
                 <textarea
                   rows={4}
                   value={formData.notes || ''}
                   onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
                   placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.costSummary')}
-                </h4>
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.subtotal')}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {grossSubtotal.toFixed(2)} {currency}
-                  </span>
-                </div>
-                {totalDiscount > 0 && (
+              <div className="md:w-1/3">
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.totalDiscount')}
+                      {t('accounting:clientsInvoices.subtotal')}
                     </span>
-                    <span className="text-sm font-bold text-amber-600">
-                      -{totalDiscount.toFixed(2)} {currency}
+                    <span className="text-sm font-black text-slate-800">
+                      {grossSubtotal.toFixed(2)} {currency}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('accounting:clientsInvoices.total')}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {total.toFixed(2)} {currency}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.amountPaid')}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <ValidatedNumberInput
-                      value={formData.amountPaid || 0}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          amountPaid: value === '' ? 0 : Number(value),
-                        }))
-                      }
-                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600"
-                    />
-                    <span className="text-xs font-bold text-slate-400">{currency}</span>
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-bold text-slate-500">
+                        {t('accounting:clientsInvoices.totalDiscount')}
+                      </span>
+                      <span className="text-sm font-black text-amber-600">
+                        -{totalDiscount.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-slate-200 pt-2">
+                    <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                      {t('accounting:clientsInvoices.total')}
+                    </span>
+                    <span className="text-lg font-black text-praetor">
+                      {total.toFixed(2)}{' '}
+                      <span className="text-sm text-slate-400 font-bold">{currency}</span>
+                    </span>
                   </div>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.balanceDue')}
-                  </span>
-                  <span className="font-bold text-red-500">
-                    {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
-                  </span>
+                  <div className="flex justify-between items-center border-t border-slate-200 pt-2">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.amountPaid')}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <ValidatedNumberInput
+                        value={formData.amountPaid || 0}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            amountPaid: value === '' ? 0 : Number(value),
+                          }))
+                        }
+                        className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
+                      />
+                      <span className="text-xs font-bold text-slate-400">{currency}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.balanceDue')}
+                    </span>
+                    <span className="font-black text-red-500">
+                      {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
