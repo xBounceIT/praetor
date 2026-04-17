@@ -1002,8 +1002,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       discountRow={
                         formData.discount !== undefined && formData.discount > 0
                           ? {
-                              label: t('sales:clientQuotes.discountAmount', {
-                                discount: formData.discount,
+                              label: t('sales:clientOffers.discountAmount', {
+                                defaultValue: 'Discount',
                               }),
                               amount: discountAmount,
                             }
