@@ -16,6 +16,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -1037,55 +1038,34 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                </h4>
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {totalsBreakdown.subtotal.toFixed(2)} {currency}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
-                  </span>
-                  <ValidatedNumberInput
-                    value={formData.discount || 0}
-                    onValueChange={(value) =>
+              <div className="w-full md:w-1/3">
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={totalsBreakdown.subtotal}
+                  total={totalsBreakdown.total}
+                  subtotalLabel={t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                  totalLabel={t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                  globalDiscount={{
+                    label: t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' }),
+                    value: formData.discount || 0,
+                    onChange: (value) =>
                       setFormData((prev) => ({
                         ...prev,
                         discount: parseNumberInputValue(value),
-                      }))
-                    }
-                    disabled={isReadOnly}
-                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-right outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                {Number(formData.discount || 0) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-amber-600">
-                      {t('sales:supplierQuotes.discountAmount', {
-                        defaultValue: 'Discount',
-                      })}
-                    </span>
-                    <span className="text-sm font-bold text-amber-600">
-                      -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {totalsBreakdown.total.toFixed(2)} {currency}
-                  </span>
-                </div>
+                      })),
+                    disabled: isReadOnly,
+                  }}
+                  discountRow={
+                    Number(formData.discount || 0) > 0
+                      ? {
+                          label: t('sales:supplierQuotes.discountAmount', {
+                            defaultValue: 'Discount',
+                          }),
+                          amount: totalsBreakdown.discountAmount,
+                        }
+                      : undefined
+                  }
+                />
               </div>
             </div>
 
