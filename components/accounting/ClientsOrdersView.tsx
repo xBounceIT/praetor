@@ -435,13 +435,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {
         header: t('accounting:clientsOrders.totalColumn'),
         accessorFn: (row: ClientsOrder) => {
-          const { total } = calculatePricingTotals(row.items, row.discount, DEFAULT_UNIT_TYPE);
+          const { total } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            DEFAULT_UNIT_TYPE,
+            row.discountType,
+          );
           return total;
         },
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: ClientsOrder }) => {
-          const { total } = calculatePricingTotals(row.items, row.discount, DEFAULT_UNIT_TYPE);
+          const { total } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            DEFAULT_UNIT_TYPE,
+            row.discountType,
+          );
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}

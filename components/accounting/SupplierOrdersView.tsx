@@ -248,11 +248,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       {
         header: t('accounting:supplierOrders.total'),
         id: 'orderTotal',
-        accessorFn: (row: SupplierSaleOrder) => calculateTotals(row.items, row.discount).total,
+        accessorFn: (row: SupplierSaleOrder) =>
+          calculateTotals(row.items, row.discount, row.discountType).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculateTotals(row.items, row.discount, row.discountType);
           const isMuted = row.status === 'sent';
 
           return (

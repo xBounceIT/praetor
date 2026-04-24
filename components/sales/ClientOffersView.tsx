@@ -282,12 +282,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       {
         header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculatePricingTotals(row.items, row.discount).total,
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
-          const { total } = calculatePricingTotals(row.items, row.discount);
+          const { total } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
           return (
             <span className="text-sm font-bold text-slate-700">
               {total.toFixed(2)} {currency}

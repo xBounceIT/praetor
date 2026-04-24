@@ -882,12 +882,18 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.totalColumn'),
         id: 'total',
-        accessorFn: (row) => calculatePricingTotals(row.items, row.discount).total,
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
-          const { total } = calculatePricingTotals(row.items, row.discount);
+          const { total } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
           const history = isHistoryRow(row);
           return (
             <span
