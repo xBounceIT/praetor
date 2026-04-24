@@ -1,4 +1,6 @@
 import type React from 'react';
+import type { DiscountType } from '../../types';
+import CustomSelect from './CustomSelect';
 import ValidatedNumberInput from './ValidatedNumberInput';
 
 export interface CostSummaryPanelProps {
@@ -10,7 +12,9 @@ export interface CostSummaryPanelProps {
   globalDiscount?: {
     label: string;
     value: number;
+    type: DiscountType;
     onChange: (value: string) => void;
+    onTypeChange: (type: DiscountType) => void;
     disabled?: boolean;
   };
   discountRow?: {
@@ -50,15 +54,27 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
       {globalDiscount && (
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold text-slate-500 shrink-0">{globalDiscount.label}</span>
-          <ValidatedNumberInput
-            step="0.01"
-            min="0"
-            max="100"
-            value={globalDiscount.value}
-            onValueChange={globalDiscount.onChange}
-            disabled={globalDiscount.disabled}
-            className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+          <div className="flex items-center gap-1">
+            <ValidatedNumberInput
+              step="0.01"
+              min="0"
+              max={globalDiscount.type === 'percentage' ? '100' : undefined}
+              value={globalDiscount.value}
+              onValueChange={globalDiscount.onChange}
+              disabled={globalDiscount.disabled}
+              className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <CustomSelect
+              options={[
+                { id: 'percentage', name: '%' },
+                { id: 'currency', name: currency },
+              ]}
+              value={globalDiscount.type}
+              onChange={(v) => globalDiscount.onTypeChange(v as DiscountType)}
+              disabled={globalDiscount.disabled}
+              buttonClassName="h-[34px] min-w-[52px] text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold"
+            />
+          </div>
         </div>
       )}
       <div className={globalDiscount ? 'border-t border-slate-200 pt-2 space-y-2' : 'space-y-2'}>

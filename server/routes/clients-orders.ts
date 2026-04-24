@@ -210,6 +210,7 @@ const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
   clientName: String(row.clientName),
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'clientOrder.discount'),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: String(row.status),
   notes: toNullableString(row.notes),
   createdAt: toFiniteNumber(row.createdAt, 'clientOrder.createdAt'),
@@ -249,6 +250,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
                 discount,
+                discount_type as "discountType",
                 status,
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -334,6 +336,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         notes,
       } = request.body as {
@@ -345,6 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         notes: unknown;
       };
@@ -410,6 +414,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
       if (linkedOfferIdResult.value) {
@@ -449,8 +454,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let orderResult: Awaited<ReturnType<typeof query>>;
       try {
         orderResult = await query(
-          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, discount_type, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                RETURNING
                   id,
                   linked_quote_id as "linkedQuoteId",
@@ -459,6 +464,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   client_name as "clientName",
                   payment_terms as "paymentTerms",
                   discount,
+                  discount_type as "discountType",
                   status,
                   notes,
                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -471,6 +477,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
+            discountTypeValue,
             status || 'draft',
             notes,
           ],
@@ -683,6 +690,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         notes,
       } = request.body as {
@@ -693,6 +701,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         notes: unknown;
       };
@@ -735,6 +744,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
       }
+
+      const discountTypeValue =
+        discountType !== undefined
+          ? discountType === 'currency'
+            ? 'currency'
+            : 'percentage'
+          : undefined;
 
       let linkedOfferIdValue = linkedOfferId;
       if (linkedOfferId !== undefined) {
@@ -1049,10 +1065,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                    client_name = COALESCE($5, client_name),
                    payment_terms = COALESCE($6, payment_terms),
                    discount = COALESCE($7, discount),
-                   status = COALESCE($8, status),
-                   notes = COALESCE($9, notes),
+                   discount_type = COALESCE($8, discount_type),
+                   status = COALESCE($9, status),
+                   notes = COALESCE($10, notes),
                    updated_at = CURRENT_TIMESTAMP
-               WHERE id = $10
+               WHERE id = $11
                RETURNING
                   id,
                   linked_quote_id as "linkedQuoteId",
@@ -1061,6 +1078,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   client_name as "clientName",
                   payment_terms as "paymentTerms",
                   discount,
+                  discount_type as "discountType",
                   status,
                   notes,
                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -1073,6 +1091,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             notes,
             idResult.value,

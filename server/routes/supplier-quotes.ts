@@ -142,6 +142,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   const normalizeSupplierQuoteRow = (quote: Record<string, unknown>) => ({
     ...quote,
+    discountType: quote.discountType === 'currency' ? 'currency' : 'percentage',
     status: normalizeSupplierQuoteStatus(String(quote.status)),
     expirationDate: normalizeNullableDateOnly(quote.expirationDate, 'supplierQuote.expirationDate'),
   });
@@ -170,6 +171,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplier_name as "supplierName",
         payment_terms as "paymentTerms",
         discount,
+        discount_type as "discountType",
         status,
         expiration_date as "expirationDate",
         (
@@ -238,6 +240,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -256,6 +259,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }>;
         paymentTerms?: string;
         discount?: string | number;
+        discountType?: unknown;
         status?: string;
         expirationDate?: string;
         notes?: string;
@@ -308,19 +312,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       let quoteResult: Awaited<ReturnType<typeof query>>;
       try {
         quoteResult = await query(
           `INSERT INTO supplier_quotes (
-          id, supplier_id, supplier_name, payment_terms, discount, status, expiration_date, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          id, supplier_id, supplier_name, payment_terms, discount, discount_type, status, expiration_date, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING
           id,
           supplier_id as "supplierId",
           supplier_name as "supplierName",
           payment_terms as "paymentTerms",
           discount,
+          discount_type as "discountType",
           status,
           expiration_date as "expirationDate",
           null::varchar as "linkedOrderId",
@@ -333,6 +339,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
+            discountTypeValue,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -425,6 +432,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -443,6 +451,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }>;
         paymentTerms?: string;
         discount?: string | number;
+        discountType?: unknown;
         status?: string;
         expirationDate?: string;
         notes?: string;
@@ -514,6 +523,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      const discountTypeValue =
+        discountType !== undefined
+          ? discountType === 'currency'
+            ? 'currency'
+            : 'percentage'
+          : undefined;
+
       let quoteResult: Awaited<ReturnType<typeof query>>;
       try {
         quoteResult = await query(
@@ -523,17 +539,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              supplier_name = COALESCE($3, supplier_name),
              payment_terms = COALESCE($4, payment_terms),
              discount = COALESCE($5, discount),
-             status = COALESCE($6, status),
-             expiration_date = COALESCE($7, expiration_date),
-             notes = COALESCE($8, notes),
+             discount_type = COALESCE($6, discount_type),
+             status = COALESCE($7, status),
+             expiration_date = COALESCE($8, expiration_date),
+             notes = COALESCE($9, notes),
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $9
+         WHERE id = $10
          RETURNING
           id,
           supplier_id as "supplierId",
            supplier_name as "supplierName",
            payment_terms as "paymentTerms",
            discount,
+           discount_type as "discountType",
            status,
            expiration_date as "expirationDate",
            null::varchar as "linkedOrderId",
@@ -546,6 +564,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             expirationDateValue,
             notes,

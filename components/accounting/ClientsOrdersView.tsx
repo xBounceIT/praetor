@@ -14,6 +14,7 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  formatDiscountValue,
   getEffectiveCost,
   getItemPricingContext,
   parseNumberInputValue,
@@ -90,6 +91,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     items: [],
     paymentTerms: 'immediate',
     discount: 0,
+    discountType: 'percentage',
     status: 'draft',
     notes: '',
   });
@@ -104,6 +106,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       items: order.items,
       paymentTerms: order.paymentTerms,
       discount: order.discount,
+      discountType: order.discountType || 'percentage',
       status: order.status,
       notes: order.notes || '',
     });
@@ -980,6 +983,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       formData.items || [],
                       formData.discount || 0,
                       DEFAULT_UNIT_TYPE,
+                      formData.discountType || 'percentage',
                     );
                   return (
                     <CostSummaryPanel
@@ -990,20 +994,26 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       totalLabel={t('sales:clientQuotes.totalLabel')}
                       globalDiscount={{
                         label: t('sales:clientQuotes.globalDiscount', {
-                          defaultValue: 'Global Discount %',
+                          defaultValue: 'Global Discount',
                         }),
                         value: formData.discount || 0,
+                        type: formData.discountType || 'percentage',
                         onChange: (value) => {
                           const parsed = parseNumberInputValue(value);
                           setFormData({ ...formData, discount: parsed });
                         },
+                        onTypeChange: (type) => setFormData({ ...formData, discountType: type }),
                         disabled: isReadOnly,
                       }}
                       discountRow={
-                        formData.discount !== undefined && formData.discount > 0
+                        discountAmount > 0
                           ? {
                               label: t('sales:clientOffers.discountAmount', {
-                                defaultValue: 'Discount',
+                                value: formatDiscountValue(
+                                  formData.discount ?? 0,
+                                  formData.discountType ?? 'percentage',
+                                  currency,
+                                ),
                               }),
                               amount: discountAmount,
                             }

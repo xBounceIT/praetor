@@ -1,4 +1,4 @@
-import type { SupplierUnitType } from '../types';
+import type { DiscountType, SupplierUnitType } from '../types';
 export type UnitType = SupplierUnitType;
 
 export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
@@ -79,6 +79,7 @@ export const calculatePricingTotals = (
   items: PricingItem[],
   globalDiscount: number,
   defaultUnitType: UnitType = 'hours',
+  discountType: DiscountType = 'percentage',
 ): PricingTotals => {
   let subtotal = 0;
   let totalCost = 0;
@@ -94,10 +95,19 @@ export const calculatePricingTotals = (
       convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType);
   });
 
-  const discountAmount = subtotal * (globalDiscount / 100);
+  const discountAmount =
+    discountType === 'currency'
+      ? Math.min(Math.max(globalDiscount, 0), subtotal)
+      : subtotal * (globalDiscount / 100);
   const total = subtotal - discountAmount;
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
   return { subtotal, discountAmount, total, margin, marginPercentage };
 };
+
+export const formatDiscountValue = (
+  discount: number,
+  discountType: DiscountType,
+  currency: string,
+): string => (discountType === 'currency' ? `${discount} ${currency}` : `${discount}%`);

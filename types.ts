@@ -1,6 +1,7 @@
 export type UserRole = string;
 export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 
 export interface RoleSummary {
@@ -283,7 +284,8 @@ export interface Quote {
     | '180gg'
     | '240gg'
     | '365gg';
-  discount: number; // global discount percentage
+  discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
@@ -335,6 +337,7 @@ export interface ClientOffer {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   notes?: string;
@@ -386,6 +389,7 @@ export interface ClientsOrder {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'confirmed' | 'denied';
   notes?: string;
   createdAt: number;
@@ -559,6 +563,7 @@ export interface SupplierQuote {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOrderId?: string;
@@ -597,6 +602,7 @@ export interface SupplierSaleOrder {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent';
   notes?: string;
   createdAt: number;

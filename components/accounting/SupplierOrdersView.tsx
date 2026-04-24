@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import { formatDiscountValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
@@ -32,7 +33,11 @@ const getPaymentTermsLabel = (
   return paymentTerms;
 };
 
-const calculateTotals = (items: SupplierSaleOrderItem[], globalDiscount: number) => {
+const calculateTotals = (
+  items: SupplierSaleOrderItem[],
+  globalDiscount: number,
+  discountType: 'percentage' | 'currency' = 'percentage',
+) => {
   let subtotal = 0;
 
   items.forEach((item) => {
@@ -42,7 +47,10 @@ const calculateTotals = (items: SupplierSaleOrderItem[], globalDiscount: number)
     subtotal += lineNet;
   });
 
-  const discountAmount = subtotal * (globalDiscount / 100);
+  const discountAmount =
+    discountType === 'currency'
+      ? Math.min(Math.max(globalDiscount, 0), subtotal)
+      : subtotal * (globalDiscount / 100);
   const total = subtotal - discountAmount;
 
   return {
@@ -108,6 +116,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     items: [],
     paymentTerms: 'immediate',
     discount: 0,
+    discountType: 'percentage',
     status: 'draft',
     notes: '',
   });
@@ -190,8 +199,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   );
 
   const totals = useMemo(
-    () => calculateTotals(formData.items || [], Number(formData.discount || 0)),
-    [formData.discount, formData.items],
+    () =>
+      calculateTotals(
+        formData.items || [],
+        Number(formData.discount || 0),
+        formData.discountType || 'percentage',
+      ),
+    [formData.discount, formData.discountType, formData.items],
   );
 
   // Filter orders by quoteFilterId if provided
@@ -731,18 +745,25 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   globalDiscount={{
                     label: t('accounting:supplierOrders.discount'),
                     value: formData.discount || 0,
+                    type: formData.discountType || 'percentage',
                     onChange: (value) =>
                       setFormData((prev) => ({
                         ...prev,
                         discount: value === '' ? 0 : Number(value),
                       })),
+                    onTypeChange: (type) =>
+                      setFormData((prev) => ({ ...prev, discountType: type })),
                     disabled: isReadOnly,
                   }}
                   discountRow={
-                    Number(formData.discount || 0) > 0
+                    totals.discountAmount > 0
                       ? {
-                          label: t('crm:quotes.discountAmount', {
-                            discount: Number(formData.discount || 0),
+                          label: t('sales:clientOffers.discountAmount', {
+                            value: formatDiscountValue(
+                              formData.discount ?? 0,
+                              formData.discountType ?? 'percentage',
+                              currency,
+                            ),
                           }),
                           amount: totals.discountAmount,
                         }

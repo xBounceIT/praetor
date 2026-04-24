@@ -131,6 +131,7 @@ const normalizeQuoteItems = (
 const calculateQuoteTotals = (
   items: Array<{ quantity: number; unitPrice: number; discount?: number }>,
   globalDiscount: number,
+  discountType: 'percentage' | 'currency' = 'percentage',
 ) => {
   const normalizedGlobalDiscount = Number.isFinite(globalDiscount) ? globalDiscount : 0;
   let subtotal = 0;
@@ -155,7 +156,10 @@ const calculateQuoteTotals = (
     subtotal += lineNet;
   }
 
-  const discountAmount = subtotal * (normalizedGlobalDiscount / 100);
+  const discountAmount =
+    discountType === 'currency'
+      ? Math.min(Math.max(normalizedGlobalDiscount, 0), subtotal)
+      : subtotal * (normalizedGlobalDiscount / 100);
   const total = subtotal - discountAmount;
   return { total, subtotal };
 };
@@ -659,6 +663,7 @@ const normalizeQuoteRow = (row: Record<string, unknown>) => ({
   clientName: String(row.clientName),
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'quote.discount'),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: String(row.status),
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
   notes: toNullableString(row.notes),
@@ -708,6 +713,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
                 discount,
+                discount_type as "discountType",
                 status,
                 expiration_date as "expirationDate",
                 notes,
@@ -796,6 +802,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -806,6 +813,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -840,6 +848,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountValue = discountResult.value || 0;
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       let resolvedItems: ResolvedQuoteItem[];
       try {
@@ -848,15 +857,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, (err as Error).message);
       }
 
-      const totals = calculateQuoteTotals(resolvedItems, discountValue);
+      const totals = calculateQuoteTotals(resolvedItems, discountValue, discountTypeValue);
       if (!Number.isFinite(totals.total) || totals.total <= 0) {
         return badRequest(reply, 'Total must be greater than 0');
       }
 
       try {
         const quoteResult = await query(
-          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING
                     id,
                     null::varchar as "linkedOfferId",
@@ -864,6 +873,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
                     discount,
+                    discount_type as "discountType",
                     status,
                     expiration_date as "expirationDate",
                     notes,
@@ -875,6 +885,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountValue,
+            discountTypeValue,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -999,6 +1010,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -1010,6 +1022,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -1038,15 +1051,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
       }
 
-      const currentStatusResult = await query('SELECT status, discount FROM quotes WHERE id = $1', [
-        idResult.value,
-      ]);
+      const currentStatusResult = await query(
+        'SELECT status, discount, discount_type FROM quotes WHERE id = $1',
+        [idResult.value],
+      );
       if (currentStatusResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
       const currentStatus = currentStatusResult.rows[0].status;
       const existingDiscountRaw = parseFloat(currentStatusResult.rows[0].discount || 0);
       const existingDiscount = Number.isFinite(existingDiscountRaw) ? existingDiscountRaw : 0;
+      const existingDiscountType: 'percentage' | 'currency' =
+        currentStatusResult.rows[0].discount_type === 'currency' ? 'currency' : 'percentage';
       const hasNonStatusOrIdUpdates =
         clientId !== undefined ||
         clientName !== undefined ||
@@ -1102,6 +1118,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
       }
+
+      const discountTypeValue =
+        discountType === 'currency'
+          ? 'currency'
+          : discountType !== undefined
+            ? 'percentage'
+            : undefined;
 
       const effectiveDiscount = discountValue ?? existingDiscount;
       const isRestore = status === 'quoted' && isExpiredOverride === false;
@@ -1231,7 +1254,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice: parseFloat(row.unitPrice),
           discount: parseFloat(row.discount || 0),
         }));
-        const totals = calculateQuoteTotals(itemsForTotal, effectiveDiscount as number);
+        const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+        const totals = calculateQuoteTotals(
+          itemsForTotal,
+          effectiveDiscount as number,
+          effectiveDiscountType,
+        );
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
@@ -1247,11 +1275,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  client_name = COALESCE($3, client_name),
                  payment_terms = COALESCE($4, payment_terms),
                  discount = COALESCE($5, discount),
-                 status = COALESCE($6, status),
-                 expiration_date = COALESCE($7, expiration_date),
-                 notes = COALESCE($8, notes),
+                 discount_type = COALESCE($6, discount_type),
+                 status = COALESCE($7, status),
+                 expiration_date = COALESCE($8, expiration_date),
+                 notes = COALESCE($9, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $9
+             WHERE id = $10
              RETURNING
                 id,
                 null::varchar as "linkedOfferId",
@@ -1259,6 +1288,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
                 discount,
+                discount_type as "discountType",
                 status,
                 expiration_date as "expirationDate",
                 notes,
@@ -1270,6 +1300,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             expirationDateValue,
             notes,

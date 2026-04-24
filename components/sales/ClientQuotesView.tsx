@@ -24,6 +24,7 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  formatDiscountValue,
   getItemPricingContext,
   parseNumberInputValue,
   roundToTwoDecimals,
@@ -65,6 +66,7 @@ const getDefaultFormData = (): Partial<Quote> => ({
   items: [],
   paymentTerms: 'immediate',
   discount: 0,
+  discountType: 'percentage',
   status: 'draft',
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
   notes: '',
@@ -179,9 +181,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
     return {
       discountValue,
-      ...calculatePricingTotals(formData.items || [], discountValue),
+      ...calculatePricingTotals(
+        formData.items || [],
+        discountValue,
+        'hours',
+        formData.discountType || 'percentage',
+      ),
     };
-  }, [formData.items, formData.discount]);
+  }, [formData.items, formData.discount, formData.discountType]);
 
   const openAddModal = () => {
     setEditingQuote(null);
@@ -202,6 +209,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       items: quote.items,
       paymentTerms: quote.paymentTerms,
       discount: quote.discount,
+      discountType: quote.discountType || 'percentage',
       status: quote.status,
       expirationDate: formattedDate,
       notes: quote.notes || '',
@@ -1751,6 +1759,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   globalDiscount={{
                     label: t('sales:clientQuotes.globalDiscount'),
                     value: formData.discount ?? 0,
+                    type: formData.discountType || 'percentage',
                     onChange: (value) => {
                       const parsed = parseNumberInputValue(value);
                       setFormData({ ...formData, discount: parsed });
@@ -1762,13 +1771,18 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         });
                       }
                     },
+                    onTypeChange: (type) => setFormData({ ...formData, discountType: type }),
                     disabled: isReadOnly,
                   }}
                   discountRow={
-                    formTotals.discountValue > 0
+                    formTotals.discountAmount > 0
                       ? {
                           label: t('sales:clientQuotes.discountAmount', {
-                            defaultValue: 'Discount',
+                            value: formatDiscountValue(
+                              formData.discount ?? 0,
+                              formData.discountType ?? 'percentage',
+                              currency,
+                            ),
                           }),
                           amount: formTotals.discountAmount,
                         }

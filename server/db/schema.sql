@@ -2109,3 +2109,17 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- Global discount type: allow percentage or fixed currency amount per document header
+ALTER TABLE quotes           ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE customer_offers  ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE sales            ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE supplier_sales   ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE supplier_quotes  ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+
+-- Widen header discount columns to DECIMAL(15,2) so currency amounts on large orders fit
+ALTER TABLE quotes           ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE customer_offers  ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE sales            ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE supplier_sales   ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE supplier_quotes  ALTER COLUMN discount TYPE DECIMAL(15, 2);

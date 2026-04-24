@@ -312,6 +312,7 @@ const normalizeOfferRow = (row: Record<string, unknown>) => ({
   clientName: String(row.clientName),
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'offer.discount'),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: String(row.status),
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
   notes: toNullableString(row.notes),
@@ -347,6 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             client_name as "clientName",
             payment_terms as "paymentTerms",
             discount,
+            discount_type as "discountType",
             status,
             expiration_date as "expirationDate",
             notes,
@@ -426,6 +428,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -437,6 +440,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: OfferItemInput[] | unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -483,6 +487,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
@@ -491,8 +496,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         createdOfferResult = await query(
           `INSERT INTO customer_offers
-            (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, linked_quote_id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
@@ -500,6 +505,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               client_name as "clientName",
               payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               expiration_date as "expirationDate",
               notes,
@@ -512,6 +518,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
+            discountTypeValue,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -621,6 +628,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -631,6 +639,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items?: OfferItemInput[] | unknown;
         paymentTerms?: unknown;
         discount?: unknown;
+        discountType?: unknown;
         status?: unknown;
         expirationDate?: unknown;
         notes?: unknown;
@@ -739,6 +748,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      const discountTypeValue =
+        discountType !== undefined
+          ? discountType === 'currency'
+            ? 'currency'
+            : 'percentage'
+          : undefined;
+
       let updatedOfferResult: DbQueryResult;
       try {
         updatedOfferResult = await query(
@@ -748,11 +764,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                client_name = COALESCE($3, client_name),
                payment_terms = COALESCE($4, payment_terms),
                discount = COALESCE($5, discount),
-               status = COALESCE($6, status),
-               expiration_date = COALESCE($7, expiration_date),
-               notes = COALESCE($8, notes),
+               discount_type = COALESCE($6, discount_type),
+               status = COALESCE($7, status),
+               expiration_date = COALESCE($8, expiration_date),
+               notes = COALESCE($9, notes),
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $9
+           WHERE id = $10
            RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
@@ -760,6 +777,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               client_name as "clientName",
               payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               expiration_date as "expirationDate",
               notes,
@@ -771,6 +789,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             expirationDateValue,
             notes,
