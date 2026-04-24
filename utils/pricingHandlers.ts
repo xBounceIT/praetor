@@ -35,7 +35,9 @@ export const makeCostUpdater =
       unitPrice: roundToTwoDecimals(newUnitPrice),
       ...(cur.supplierQuoteItemId
         ? { supplierQuoteUnitPrice: roundToTwoDecimals(hourlyCost) }
-        : { productCost: roundToTwoDecimals(hourlyCost) }),
+        : cur.specialBidId
+          ? { specialBidUnitPrice: roundToTwoDecimals(hourlyCost) }
+          : { productCost: roundToTwoDecimals(hourlyCost) }),
     };
     return { ...prev, items: updated };
   };
