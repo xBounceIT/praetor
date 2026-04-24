@@ -1678,6 +1678,39 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+DO $$
+DECLARE
+    linked_sale_constraint_definition TEXT;
+BEGIN
+    SELECT pg_get_constraintdef(c.oid)
+    INTO linked_sale_constraint_definition
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'supplier_invoices'
+      AND c.conname = 'supplier_invoices_linked_sale_id_fkey';
+
+    -- Older databases can still carry the pre-refactor FK to sales(id).
+    UPDATE supplier_invoices si
+    SET linked_sale_id = NULL
+    WHERE si.linked_sale_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM supplier_sales ss
+          WHERE ss.id = si.linked_sale_id
+      );
+
+    IF linked_sale_constraint_definition IS NULL THEN
+        ALTER TABLE supplier_invoices
+            ADD CONSTRAINT supplier_invoices_linked_sale_id_fkey
+            FOREIGN KEY (linked_sale_id) REFERENCES supplier_sales(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    ELSIF linked_sale_constraint_definition NOT ILIKE '%REFERENCES supplier_sales(id)%' THEN
+        ALTER TABLE supplier_invoices
+            DROP CONSTRAINT supplier_invoices_linked_sale_id_fkey,
+            ADD CONSTRAINT supplier_invoices_linked_sale_id_fkey
+            FOREIGN KEY (linked_sale_id) REFERENCES supplier_sales(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
 ALTER TABLE supplier_invoices DROP COLUMN IF EXISTS tax_amount;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_supplier_id ON supplier_invoices(supplier_id);
