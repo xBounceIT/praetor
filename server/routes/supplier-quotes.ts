@@ -8,7 +8,6 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalDateString,
-  optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -50,11 +49,10 @@ const supplierQuoteItemSchema = {
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
-  required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice', 'discount'],
+  required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice'],
 } as const;
 
 const supplierQuoteSchema = {
@@ -64,7 +62,6 @@ const supplierQuoteSchema = {
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
-    discount: { type: 'number' },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     linkedOrderId: { type: ['string', 'null'] },
@@ -73,16 +70,7 @@ const supplierQuoteSchema = {
     updatedAt: { type: 'number' },
     items: { type: 'array', items: supplierQuoteItemSchema },
   },
-  required: [
-    'id',
-    'supplierId',
-    'supplierName',
-    'discount',
-    'status',
-    'createdAt',
-    'updatedAt',
-    'items',
-  ],
+  required: ['id', 'supplierId', 'supplierName', 'status', 'createdAt', 'updatedAt', 'items'],
 } as const;
 
 const supplierQuoteItemBodySchema = {
@@ -92,7 +80,6 @@ const supplierQuoteItemBodySchema = {
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
@@ -107,7 +94,6 @@ const supplierQuoteCreateBodySchema = {
     supplierName: { type: 'string' },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -123,7 +109,6 @@ const supplierQuoteUpdateBodySchema = {
     supplierName: { type: 'string' },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -169,7 +154,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplier_id as "supplierId",
         supplier_name as "supplierName",
         payment_terms as "paymentTerms",
-        discount,
         status,
         expiration_date as "expirationDate",
         (
@@ -193,7 +177,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         product_name as "productName",
         quantity,
         unit_price as "unitPrice",
-        discount,
         note,
         unit_type as "unitType"
        FROM supplier_quote_items
@@ -237,7 +220,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierName,
         items,
         paymentTerms,
-        discount,
         status,
         expirationDate,
         notes,
@@ -250,12 +232,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           productName?: string;
           quantity?: string | number;
           unitPrice?: string | number;
-          discount?: string | number;
           note?: string;
           unitType?: 'hours' | 'days' | 'unit';
         }>;
         paymentTerms?: string;
-        discount?: string | number;
         status?: string;
         expirationDate?: string;
         notes?: string;
@@ -288,17 +268,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `items[${i}].unitPrice`,
         );
         if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-          item.discount,
-          `items[${i}].discount`,
-        );
-        if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
         normalizedItems.push({
           ...item,
           productName: productNameResult.value,
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
-          discount: itemDiscountResult.value || 0,
           unitType: normalizeUnitType(item.unitType),
         });
       }
@@ -306,21 +280,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
 
-      const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
-
       let quoteResult: Awaited<ReturnType<typeof query>>;
       try {
         quoteResult = await query(
           `INSERT INTO supplier_quotes (
-          id, supplier_id, supplier_name, payment_terms, discount, status, expiration_date, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          id, supplier_id, supplier_name, payment_terms, status, expiration_date, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING
           id,
           supplier_id as "supplierId",
           supplier_name as "supplierName",
           payment_terms as "paymentTerms",
-          discount,
           status,
           expiration_date as "expirationDate",
           null::varchar as "linkedOrderId",
@@ -332,7 +302,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierIdResult.value,
             supplierNameResult.value,
             paymentTerms || 'immediate',
-            discountResult.value || 0,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -355,8 +324,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO supplier_quote_items (
-          id, quote_id, product_id, product_name, quantity, unit_price, discount, note, unit_type
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          id, quote_id, product_id, product_name, quantity, unit_price, note, unit_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING
           id,
           quote_id as "quoteId",
@@ -364,7 +333,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           product_name as "productName",
           quantity,
           unit_price as "unitPrice",
-          discount,
           note,
           unit_type as "unitType"`,
           [
@@ -374,7 +342,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.productName,
             item.quantity,
             item.unitPrice,
-            item.discount || 0,
             item.note || null,
             item.unitType || 'unit',
           ],
@@ -424,7 +391,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierName,
         items,
         paymentTerms,
-        discount,
         status,
         expirationDate,
         notes,
@@ -437,12 +403,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           productName?: string;
           quantity?: string | number;
           unitPrice?: string | number;
-          discount?: string | number;
           note?: string;
           unitType?: 'hours' | 'days' | 'unit';
         }>;
         paymentTerms?: string;
-        discount?: string | number;
         status?: string;
         expirationDate?: string;
         notes?: string;
@@ -457,7 +421,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierName === undefined &&
         items === undefined &&
         paymentTerms === undefined &&
-        discount === undefined &&
         status === undefined &&
         expirationDate === undefined &&
         notes === undefined;
@@ -507,13 +470,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDateValue = expirationDateResult.value;
       }
 
-      let discountValue: number | undefined | null = discount as number | undefined;
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
-      }
-
       let quoteResult: Awaited<ReturnType<typeof query>>;
       try {
         quoteResult = await query(
@@ -522,18 +478,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              supplier_id = COALESCE($2, supplier_id),
              supplier_name = COALESCE($3, supplier_name),
              payment_terms = COALESCE($4, payment_terms),
-             discount = COALESCE($5, discount),
-             status = COALESCE($6, status),
-             expiration_date = COALESCE($7, expiration_date),
-             notes = COALESCE($8, notes),
+             status = COALESCE($5, status),
+             expiration_date = COALESCE($6, expiration_date),
+             notes = COALESCE($7, notes),
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $9
+         WHERE id = $8
          RETURNING
           id,
           supplier_id as "supplierId",
            supplier_name as "supplierName",
            payment_terms as "paymentTerms",
-           discount,
            status,
            expiration_date as "expirationDate",
            null::varchar as "linkedOrderId",
@@ -545,7 +499,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierIdValue,
             supplierNameValue,
             paymentTerms,
-            discountValue,
             status,
             expirationDateValue,
             notes,
@@ -593,17 +546,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             `items[${i}].unitPrice`,
           );
           if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-          const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-            item.discount,
-            `items[${i}].discount`,
-          );
-          if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
           normalizedItems.push({
             ...item,
             productName: productNameResult.value,
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
-            discount: itemDiscountResult.value || 0,
             unitType: normalizeUnitType(item.unitType),
           });
         }
@@ -614,8 +561,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO supplier_quote_items (
-            id, quote_id, product_id, product_name, quantity, unit_price, discount, note, unit_type
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            id, quote_id, product_id, product_name, quantity, unit_price, note, unit_type
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING
             id,
             quote_id as "quoteId",
@@ -623,7 +570,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             product_name as "productName",
             quantity,
             unit_price as "unitPrice",
-            discount,
             note,
             unit_type as "unitType"`,
             [
@@ -633,7 +579,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.productName,
               item.quantity,
               item.unitPrice,
-              item.discount || 0,
               item.note || null,
               item.unitType || 'unit',
             ],
@@ -651,7 +596,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           product_name as "productName",
           quantity,
           unit_price as "unitPrice",
-          discount,
           note,
           unit_type as "unitType"
          FROM supplier_quote_items

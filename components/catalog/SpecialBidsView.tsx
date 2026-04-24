@@ -9,7 +9,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue } from '../../utils/numbers';
+import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
 import Calendar from '../shared/Calendar';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -260,13 +260,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         ]
       : externalProductOptions;
 
-  const calcSalePrice = (costo: number, molPercentage: number) => {
-    if (molPercentage >= 100) return costo;
-    return costo / (1 - molPercentage / 100);
-  };
-
   const calcMargin = (costo: number, molPercentage: number) => {
-    return calcSalePrice(costo, molPercentage) - costo;
+    return calcProductSalePrice(costo, molPercentage) - costo;
   };
 
   const bidCostValue =
@@ -599,7 +594,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                     {bidPricing
-                      ? `${calcSalePrice(bidPricing.cost, bidPricing.mol).toFixed(2)} ${currency}`
+                      ? `${calcProductSalePrice(bidPricing.cost, bidPricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>

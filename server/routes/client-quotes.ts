@@ -5,6 +5,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
@@ -37,8 +38,6 @@ type IncomingQuoteItem = {
   unitType?: UnitType;
 };
 
-type UnitType = 'hours' | 'days' | 'unit';
-
 type QuoteItemSnapshot = {
   productCost: number;
   productMolPercentage: number | null;
@@ -49,8 +48,6 @@ type QuoteItemSnapshot = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
-  supplierQuoteItemDiscount: number | null;
-  supplierQuoteDiscount: number | null;
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
@@ -62,12 +59,6 @@ const normalizeNullableString = (value: unknown) => {
 };
 
 const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
-
-const normalizeUnitType = (value: unknown): UnitType => {
-  if (value === 'days') return 'days';
-  if (value === 'unit') return 'unit';
-  return 'hours';
-};
 
 const normalizeQuoteItems = (
   items: unknown[],
@@ -131,6 +122,7 @@ const normalizeQuoteItems = (
 const calculateQuoteTotals = (
   items: Array<{ quantity: number; unitPrice: number; discount?: number }>,
   globalDiscount: number,
+  discountType: 'percentage' | 'currency' = 'percentage',
 ) => {
   const normalizedGlobalDiscount = Number.isFinite(globalDiscount) ? globalDiscount : 0;
   let subtotal = 0;
@@ -155,7 +147,10 @@ const calculateQuoteTotals = (
     subtotal += lineNet;
   }
 
-  const discountAmount = subtotal * (normalizedGlobalDiscount / 100);
+  const discountAmount =
+    discountType === 'currency'
+      ? Math.min(Math.max(normalizedGlobalDiscount, 0), subtotal)
+      : subtotal * (normalizedGlobalDiscount / 100);
   const total = subtotal - discountAmount;
   return { total, subtotal };
 };
@@ -188,8 +183,6 @@ const getProductSnapshots = async (productIds: string[]) => {
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
-      supplierQuoteItemDiscount: null,
-      supplierQuoteDiscount: null,
     });
   });
   return snapshots;
@@ -243,8 +236,6 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
         supplierName: string;
         productId: string | null;
         unitPrice: number;
-        itemDiscount: number;
-        quoteDiscount: number;
         netCost: number;
       }
     >();
@@ -256,9 +247,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
         sq.id as "quoteId",
         sq.supplier_name as "supplierName",
         sqi.product_id as "productId",
-        sqi.unit_price as "unitPrice",
-        sqi.discount as "itemDiscount",
-        sq.discount as "quoteDiscount"
+        sqi.unit_price as "unitPrice"
      FROM supplier_quote_items sqi
      JOIN supplier_quotes sq ON sq.id = sqi.quote_id
      WHERE sqi.id = ANY($1) AND sq.status = 'accepted'`,
@@ -272,24 +261,17 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
       supplierName: string;
       productId: string | null;
       unitPrice: number;
-      itemDiscount: number;
-      quoteDiscount: number;
       netCost: number;
     }
   >();
   result.rows.forEach((row) => {
-    // Calculate net cost after discounts
-    const lineDiscountedCost =
-      Number(row.unitPrice ?? 0) * (1 - Number(row.itemDiscount ?? 0) / 100);
-    const netCost = lineDiscountedCost * (1 - Number(row.quoteDiscount ?? 0) / 100);
+    const netCost = Number(row.unitPrice ?? 0);
 
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
       productId: normalizeNullableString(row.productId),
       unitPrice: Number(row.unitPrice ?? 0),
-      itemDiscount: Number(row.itemDiscount ?? 0),
-      quoteDiscount: Number(row.quoteDiscount ?? 0),
       netCost,
     });
   });
@@ -376,8 +358,6 @@ const resolveQuoteItemSnapshots = async (
           supplierQuoteId: existingItem.supplierQuoteId ?? null,
           supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
           supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice ?? null,
-          supplierQuoteItemDiscount: existingItem.supplierQuoteItemDiscount ?? null,
-          supplierQuoteDiscount: existingItem.supplierQuoteDiscount ?? null,
         });
         continue;
       }
@@ -389,8 +369,6 @@ const resolveQuoteItemSnapshots = async (
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
-    let supplierQuoteItemDiscount: number | null = null;
-    let supplierQuoteDiscount: number | null = null;
 
     if (normalizedBidId) {
       const specialBidSnapshot = specialBidSnapshots.get(normalizedBidId);
@@ -428,8 +406,6 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
-      supplierQuoteItemDiscount = supplierQuoteSnapshot.itemDiscount;
-      supplierQuoteDiscount = supplierQuoteSnapshot.quoteDiscount;
     }
 
     const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
@@ -456,8 +432,6 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId,
       supplierQuoteSupplierName,
       supplierQuoteUnitPrice,
-      supplierQuoteItemDiscount,
-      supplierQuoteDiscount,
     });
   }
 
@@ -491,8 +465,6 @@ const quoteItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    supplierQuoteItemDiscount: { type: ['number', 'null'] },
-    supplierQuoteDiscount: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -518,6 +490,7 @@ const quoteSchema = {
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
@@ -531,6 +504,7 @@ const quoteSchema = {
     'clientId',
     'clientName',
     'discount',
+    'discountType',
     'status',
     'createdAt',
     'updatedAt',
@@ -569,6 +543,7 @@ const quoteCreateBodySchema = {
     items: { type: 'array', items: quoteItemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -585,6 +560,7 @@ const quoteUpdateBodySchema = {
     items: { type: 'array', items: quoteItemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -639,14 +615,6 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
     row.supplierQuoteUnitPrice,
     'quoteItem.supplierQuoteUnitPrice',
   ),
-  supplierQuoteItemDiscount: toNullableFiniteNumber(
-    row.supplierQuoteItemDiscount,
-    'quoteItem.supplierQuoteItemDiscount',
-  ),
-  supplierQuoteDiscount: toNullableFiniteNumber(
-    row.supplierQuoteDiscount,
-    'quoteItem.supplierQuoteDiscount',
-  ),
   discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
   note: toNullableString(row.note),
   unitType: normalizeUnitType(row.unitType),
@@ -659,6 +627,7 @@ const normalizeQuoteRow = (row: Record<string, unknown>) => ({
   clientName: String(row.clientName),
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'quote.discount'),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: String(row.status),
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
   notes: toNullableString(row.notes),
@@ -708,6 +677,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
                 discount,
+                discount_type as "discountType",
                 status,
                 expiration_date as "expirationDate",
                 notes,
@@ -736,8 +706,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 supplier_quote_item_id as "supplierQuoteItemId",
                 supplier_quote_supplier_name as "supplierQuoteSupplierName",
                 supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                supplier_quote_discount as "supplierQuoteDiscount",
                 discount,
                 note,
                 unit_type as "unitType"
@@ -796,6 +764,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -806,6 +775,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -840,6 +810,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountValue = discountResult.value || 0;
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       let resolvedItems: ResolvedQuoteItem[];
       try {
@@ -848,15 +819,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, (err as Error).message);
       }
 
-      const totals = calculateQuoteTotals(resolvedItems, discountValue);
+      const totals = calculateQuoteTotals(resolvedItems, discountValue, discountTypeValue);
       if (!Number.isFinite(totals.total) || totals.total <= 0) {
         return badRequest(reply, 'Total must be greater than 0');
       }
 
       try {
         const quoteResult = await query(
-          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING
                     id,
                     null::varchar as "linkedOfferId",
@@ -864,6 +835,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
                     discount,
+                    discount_type as "discountType",
                     status,
                     expiration_date as "expirationDate",
                     notes,
@@ -875,6 +847,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountValue,
+            discountTypeValue,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -891,10 +864,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               quantity, unit_price, product_cost, product_mol_percentage,
               special_bid_unit_price, special_bid_mol_percentage, discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount,
+              supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
               id,
               quote_id as "quoteId",
@@ -913,8 +886,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
               unit_type as "unitType"`,
             [
               itemId,
@@ -934,8 +905,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
-              item.supplierQuoteItemDiscount ?? null,
-              item.supplierQuoteDiscount ?? null,
               item.unitType || 'hours',
             ],
           );
@@ -999,6 +968,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -1010,6 +980,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -1025,6 +996,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items === undefined &&
         paymentTerms === undefined &&
         discount === undefined &&
+        discountType === undefined &&
         status === undefined &&
         expirationDate === undefined &&
         notes === undefined &&
@@ -1038,21 +1010,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
       }
 
-      const currentStatusResult = await query('SELECT status, discount FROM quotes WHERE id = $1', [
-        idResult.value,
-      ]);
+      const currentStatusResult = await query(
+        'SELECT status, discount, discount_type FROM quotes WHERE id = $1',
+        [idResult.value],
+      );
       if (currentStatusResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
       const currentStatus = currentStatusResult.rows[0].status;
       const existingDiscountRaw = parseFloat(currentStatusResult.rows[0].discount || 0);
       const existingDiscount = Number.isFinite(existingDiscountRaw) ? existingDiscountRaw : 0;
+      const existingDiscountType: 'percentage' | 'currency' =
+        currentStatusResult.rows[0].discount_type === 'currency' ? 'currency' : 'percentage';
       const hasNonStatusOrIdUpdates =
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
         paymentTerms !== undefined ||
         discount !== undefined ||
+        discountType !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined ||
         isExpiredOverride !== undefined;
@@ -1102,6 +1078,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
       }
+
+      const discountTypeValue =
+        discountType === 'currency'
+          ? 'currency'
+          : discountType !== undefined
+            ? 'percentage'
+            : undefined;
 
       const effectiveDiscount = discountValue ?? existingDiscount;
       const isRestore = status === 'quoted' && isExpiredOverride === false;
@@ -1154,10 +1137,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_id as "supplierQuoteId",
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
-              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
-              unit_type as "unitType"
+               supplier_quote_unit_price as "supplierQuoteUnitPrice",
+               unit_type as "unitType"
            FROM quote_items
            WHERE quote_id = $1`,
 
@@ -1193,15 +1174,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
                 ? null
                 : Number(item.supplierQuoteUnitPrice),
-            supplierQuoteItemDiscount:
-              item.supplierQuoteItemDiscount === undefined ||
-              item.supplierQuoteItemDiscount === null
-                ? null
-                : Number(item.supplierQuoteItemDiscount),
-            supplierQuoteDiscount:
-              item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-                ? null
-                : Number(item.supplierQuoteDiscount),
             unitType: normalizeUnitType(item.unitType),
           });
         });
@@ -1212,7 +1184,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, (err as Error).message);
         }
 
-        const totals = calculateQuoteTotals(normalizedItems, effectiveDiscount as number);
+        const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+        const totals = calculateQuoteTotals(
+          normalizedItems,
+          effectiveDiscount as number,
+          effectiveDiscountType,
+        );
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
@@ -1231,7 +1208,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice: parseFloat(row.unitPrice),
           discount: parseFloat(row.discount || 0),
         }));
-        const totals = calculateQuoteTotals(itemsForTotal, effectiveDiscount as number);
+        const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+        const totals = calculateQuoteTotals(
+          itemsForTotal,
+          effectiveDiscount as number,
+          effectiveDiscountType,
+        );
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
@@ -1247,11 +1229,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  client_name = COALESCE($3, client_name),
                  payment_terms = COALESCE($4, payment_terms),
                  discount = COALESCE($5, discount),
-                 status = COALESCE($6, status),
-                 expiration_date = COALESCE($7, expiration_date),
-                 notes = COALESCE($8, notes),
+                 discount_type = COALESCE($6, discount_type),
+                 status = COALESCE($7, status),
+                 expiration_date = COALESCE($8, expiration_date),
+                 notes = COALESCE($9, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $9
+             WHERE id = $10
              RETURNING
                 id,
                 null::varchar as "linkedOfferId",
@@ -1259,6 +1242,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
                 discount,
+                discount_type as "discountType",
                 status,
                 expiration_date as "expirationDate",
                 notes,
@@ -1270,6 +1254,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             expirationDateValue,
             notes,
@@ -1308,10 +1293,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               quantity, unit_price, product_cost, product_mol_percentage,
               special_bid_unit_price, special_bid_mol_percentage, discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount,
+              supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
               id,
               quote_id as "quoteId",
@@ -1330,8 +1315,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
               unit_type as "unitType"`,
             [
               itemId,
@@ -1351,8 +1334,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
-              item.supplierQuoteItemDiscount ?? null,
-              item.supplierQuoteDiscount ?? null,
               item.unitType || 'hours',
             ],
           );
@@ -1377,8 +1358,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                    supplier_quote_discount as "supplierQuoteDiscount",
                     discount,
                     note,
                     unit_type as "unitType"

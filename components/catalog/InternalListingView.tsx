@@ -9,7 +9,7 @@ import type {
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { parseNumberInputValue } from '../../utils/numbers';
+import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -255,13 +255,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const calcSalePrice = (costo: number, molPercentage: number) => {
-    if (molPercentage >= 100) return costo;
-    return costo / (1 - molPercentage / 100);
-  };
-
   const calcMargine = (costo: number, molPercentage: number) => {
-    return calcSalePrice(costo, molPercentage) - costo;
+    return calcProductSalePrice(costo, molPercentage) - costo;
   };
 
   const handleNumericValueChange = (field: 'costo' | 'molPercentage') => (value: string) => {
@@ -1453,7 +1448,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                     {pricing
-                      ? `${calcSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
+                      ? `${calcProductSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>
@@ -1639,7 +1634,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             id: 'salePrice',
-            accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
+            accessorFn: (row) => calcProductSalePrice(Number(row.costo), Number(row.molPercentage)),
             filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p, value }) => {
               const typeData = productTypes.find((t) => t.name === p.type);

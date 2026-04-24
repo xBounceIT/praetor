@@ -1,6 +1,7 @@
 export type UserRole = string;
 export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 
 export interface RoleSummary {
@@ -259,8 +260,6 @@ export interface QuoteItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: SupplierUnitType;
@@ -283,7 +282,8 @@ export interface Quote {
     | '180gg'
     | '240gg'
     | '365gg';
-  discount: number; // global discount percentage
+  discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
@@ -310,11 +310,11 @@ export interface ClientOfferItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
+  unitType?: SupplierUnitType;
 }
+
 export interface ClientOffer {
   id: string;
   linkedQuoteId: string;
@@ -334,6 +334,7 @@ export interface ClientOffer {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   notes?: string;
@@ -358,10 +359,9 @@ export interface ClientsOrderItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
+  unitType?: SupplierUnitType;
 }
 
 export interface ClientsOrder {
@@ -384,6 +384,7 @@ export interface ClientsOrder {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'confirmed' | 'denied';
   notes?: string;
   createdAt: number;
@@ -534,7 +535,6 @@ export interface SupplierQuoteItem {
   productName: string;
   quantity: number;
   unitPrice: number;
-  discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
 }
@@ -556,7 +556,6 @@ export interface SupplierQuote {
     | '180gg'
     | '240gg'
     | '365gg';
-  discount: number;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOrderId?: string;
@@ -595,6 +594,7 @@ export interface SupplierSaleOrder {
     | '240gg'
     | '365gg';
   discount: number;
+  discountType: DiscountType;
   status: 'draft' | 'sent';
   notes?: string;
   createdAt: number;

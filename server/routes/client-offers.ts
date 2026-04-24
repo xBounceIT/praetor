@@ -5,6 +5,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
@@ -50,8 +51,7 @@ const offerItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    supplierQuoteItemDiscount: { type: ['number', 'null'] },
-    supplierQuoteDiscount: { type: ['number', 'null'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
@@ -67,6 +67,7 @@ const offerSchema = {
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
@@ -80,6 +81,7 @@ const offerSchema = {
     'clientId',
     'clientName',
     'discount',
+    'discountType',
     'status',
     'createdAt',
     'updatedAt',
@@ -104,8 +106,7 @@ const offerItemBodySchema = {
     supplierQuoteItemId: { type: 'string' },
     supplierQuoteSupplierName: { type: 'string' },
     supplierQuoteUnitPrice: { type: 'number' },
-    supplierQuoteItemDiscount: { type: 'number' },
-    supplierQuoteDiscount: { type: 'number' },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
   },
@@ -122,6 +123,7 @@ const offerCreateBodySchema = {
     items: { type: 'array', items: offerItemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -138,6 +140,7 @@ const offerUpdateBodySchema = {
     items: { type: 'array', items: offerItemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -159,8 +162,7 @@ type OfferItemInput = {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: string | number | null;
-  supplierQuoteItemDiscount?: string | number | null;
-  supplierQuoteDiscount?: string | number | null;
+  unitType?: UnitType;
   discount?: string | number;
   note?: string;
 };
@@ -231,14 +233,7 @@ const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
         item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
           ? null
           : Number(item.supplierQuoteUnitPrice),
-      supplierQuoteItemDiscount:
-        item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-          ? null
-          : Number(item.supplierQuoteItemDiscount),
-      supplierQuoteDiscount:
-        item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-          ? null
-          : Number(item.supplierQuoteDiscount),
+      unitType: normalizeUnitType(item.unitType),
       discount: itemDiscountResult.value || 0,
       note: item.note || null,
     });
@@ -293,14 +288,7 @@ const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
     row.supplierQuoteUnitPrice,
     'offerItem.supplierQuoteUnitPrice',
   ),
-  supplierQuoteItemDiscount: toNullableFiniteNumber(
-    row.supplierQuoteItemDiscount,
-    'offerItem.supplierQuoteItemDiscount',
-  ),
-  supplierQuoteDiscount: toNullableFiniteNumber(
-    row.supplierQuoteDiscount,
-    'offerItem.supplierQuoteDiscount',
-  ),
+  unitType: normalizeUnitType(row.unitType),
   note: toNullableString(row.note),
   discount: toFiniteNumber(row.discount, 'offerItem.discount'),
 });
@@ -312,6 +300,7 @@ const normalizeOfferRow = (row: Record<string, unknown>) => ({
   clientName: String(row.clientName),
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'offer.discount'),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: String(row.status),
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
   notes: toNullableString(row.notes),
@@ -347,6 +336,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             client_name as "clientName",
             payment_terms as "paymentTerms",
             discount,
+            discount_type as "discountType",
             status,
             expiration_date as "expirationDate",
             notes,
@@ -373,8 +363,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplier_quote_item_id as "supplierQuoteItemId",
             supplier_quote_supplier_name as "supplierQuoteSupplierName",
             supplier_quote_unit_price as "supplierQuoteUnitPrice",
-            supplier_quote_item_discount as "supplierQuoteItemDiscount",
-            supplier_quote_discount as "supplierQuoteDiscount",
+            unit_type as "unitType",
             note,
             discount
          FROM customer_offer_items
@@ -426,6 +415,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -437,6 +427,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: OfferItemInput[] | unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
@@ -483,6 +474,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
@@ -491,8 +483,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         createdOfferResult = await query(
           `INSERT INTO customer_offers
-            (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, linked_quote_id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
@@ -500,6 +492,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               client_name as "clientName",
               payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               expiration_date as "expirationDate",
               notes,
@@ -512,6 +505,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
+            discountTypeValue,
             status || 'draft',
             expirationDateResult.value,
             notes,
@@ -533,8 +527,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
         const itemResult = await query(
           `INSERT INTO customer_offer_items
-            (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
            RETURNING
              id,
              offer_id as "offerId",
@@ -551,8 +545,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              supplier_quote_item_id as "supplierQuoteItemId",
              supplier_quote_supplier_name as "supplierQuoteSupplierName",
              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-             supplier_quote_item_discount as "supplierQuoteItemDiscount",
-             supplier_quote_discount as "supplierQuoteDiscount",
+             unit_type as "unitType",
              discount,
              note`,
           [
@@ -573,8 +566,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.supplierQuoteItemId,
             item.supplierQuoteSupplierName,
             item.supplierQuoteUnitPrice,
-            item.supplierQuoteItemDiscount,
-            item.supplierQuoteDiscount,
+            item.unitType || 'hours',
           ],
         );
         createdItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -621,6 +613,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         expirationDate,
         notes,
@@ -631,6 +624,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items?: OfferItemInput[] | unknown;
         paymentTerms?: unknown;
         discount?: unknown;
+        discountType?: unknown;
         status?: unknown;
         expirationDate?: unknown;
         notes?: unknown;
@@ -662,6 +656,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items !== undefined ||
         paymentTerms !== undefined ||
         discount !== undefined ||
+        discountType !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined;
       if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
@@ -739,6 +734,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      const discountTypeValue =
+        discountType !== undefined
+          ? discountType === 'currency'
+            ? 'currency'
+            : 'percentage'
+          : undefined;
+
       let updatedOfferResult: DbQueryResult;
       try {
         updatedOfferResult = await query(
@@ -748,11 +750,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                client_name = COALESCE($3, client_name),
                payment_terms = COALESCE($4, payment_terms),
                discount = COALESCE($5, discount),
-               status = COALESCE($6, status),
-               expiration_date = COALESCE($7, expiration_date),
-               notes = COALESCE($8, notes),
+               discount_type = COALESCE($6, discount_type),
+               status = COALESCE($7, status),
+               expiration_date = COALESCE($8, expiration_date),
+               notes = COALESCE($9, notes),
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $9
+           WHERE id = $10
            RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
@@ -760,6 +763,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               client_name as "clientName",
               payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               expiration_date as "expirationDate",
               notes,
@@ -771,6 +775,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             status,
             expirationDateValue,
             notes,
@@ -806,8 +811,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
             `INSERT INTO customer_offer_items
-              (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+              (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
              RETURNING
                id,
                offer_id as "offerId",
@@ -824,8 +829,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                supplier_quote_item_id as "supplierQuoteItemId",
                supplier_quote_supplier_name as "supplierQuoteSupplierName",
                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               supplier_quote_item_discount as "supplierQuoteItemDiscount",
-               supplier_quote_discount as "supplierQuoteDiscount",
+               unit_type as "unitType",
                discount,
                note`,
             [
@@ -846,8 +850,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId,
               item.supplierQuoteSupplierName,
               item.supplierQuoteUnitPrice,
-              item.supplierQuoteItemDiscount,
-              item.supplierQuoteDiscount,
+              item.unitType || 'hours',
             ],
           );
           updatedItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -867,14 +870,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                special_bid_unit_price as "specialBidUnitPrice",
                special_bid_mol_percentage as "specialBidMolPercentage",
                supplier_quote_id as "supplierQuoteId",
-               supplier_quote_item_id as "supplierQuoteItemId",
-               supplier_quote_supplier_name as "supplierQuoteSupplierName",
-               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               supplier_quote_item_discount as "supplierQuoteItemDiscount",
-               supplier_quote_discount as "supplierQuoteDiscount",
-               discount,
-               note
-            FROM customer_offer_items
+                supplier_quote_item_id as "supplierQuoteItemId",
+                supplier_quote_supplier_name as "supplierQuoteSupplierName",
+                supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                unit_type as "unitType",
+                discount,
+                note
+             FROM customer_offer_items
             WHERE offer_id = $1`,
           [updatedOfferId],
         );

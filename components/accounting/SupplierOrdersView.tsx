@@ -2,32 +2,15 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
-
+import { formatDiscountValue } from '../../utils/numbers';
+import { getPaymentTermsOptions } from '../../utils/options';
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-
-const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'immediate', name: t('crm:paymentTerms.immediate') },
-  { id: '15gg', name: t('crm:paymentTerms.15gg') },
-  { id: '21gg', name: t('crm:paymentTerms.21gg') },
-  { id: '30gg', name: t('crm:paymentTerms.30gg') },
-  { id: '45gg', name: t('crm:paymentTerms.45gg') },
-  { id: '60gg', name: t('crm:paymentTerms.60gg') },
-  { id: '90gg', name: t('crm:paymentTerms.90gg') },
-  { id: '120gg', name: t('crm:paymentTerms.120gg') },
-  { id: '180gg', name: t('crm:paymentTerms.180gg') },
-  { id: '240gg', name: t('crm:paymentTerms.240gg') },
-  { id: '365gg', name: t('crm:paymentTerms.365gg') },
-];
-
-const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'draft', name: t('accounting:supplierOrders.statusDraft') },
-  { id: 'sent', name: t('accounting:supplierOrders.statusSent') },
-];
 
 const getOrderStatusLabel = (
   status: SupplierSaleOrder['status'],
@@ -45,7 +28,11 @@ const getPaymentTermsLabel = (
   return paymentTerms;
 };
 
-const calculateTotals = (items: SupplierSaleOrderItem[], globalDiscount: number) => {
+const calculateTotals = (
+  items: SupplierSaleOrderItem[],
+  globalDiscount: number,
+  discountType: 'percentage' | 'currency' = 'percentage',
+) => {
   let subtotal = 0;
 
   items.forEach((item) => {
@@ -55,7 +42,10 @@ const calculateTotals = (items: SupplierSaleOrderItem[], globalDiscount: number)
     subtotal += lineNet;
   });
 
-  const discountAmount = subtotal * (globalDiscount / 100);
+  const discountAmount =
+    discountType === 'currency'
+      ? Math.min(Math.max(globalDiscount, 0), subtotal)
+      : subtotal * (globalDiscount / 100);
   const total = subtotal - discountAmount;
 
   return {
@@ -92,7 +82,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
-  const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
     () => suppliers.filter((supplier) => !supplier.isDisabled),
     [suppliers],
@@ -100,6 +89,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const activeProducts = useMemo(
     () => products.filter((product) => !product.isDisabled),
     [products],
+  );
+  const productOptions = useMemo(
+    () => activeProducts.map((product) => ({ id: product.id, name: product.name })),
+    [activeProducts],
+  );
+  const supplierOptions = useMemo(
+    () => activeSuppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
+    [activeSuppliers],
   );
 
   const [editingOrder, setEditingOrder] = useState<SupplierSaleOrder | null>(null);
@@ -113,6 +110,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     items: [],
     paymentTerms: 'immediate',
     discount: 0,
+    discountType: 'percentage',
     status: 'draft',
     notes: '',
   });
@@ -163,6 +161,17 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [isReadOnly, products],
   );
 
+  const removeItem = useCallback(
+    (index: number) => {
+      if (isReadOnly) return;
+      setFormData((prev) => ({
+        ...prev,
+        items: (prev.items || []).filter((_, i) => i !== index),
+      }));
+    },
+    [isReadOnly],
+  );
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -184,8 +193,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   );
 
   const totals = useMemo(
-    () => calculateTotals(formData.items || [], Number(formData.discount || 0)),
-    [formData.discount, formData.items],
+    () =>
+      calculateTotals(
+        formData.items || [],
+        Number(formData.discount || 0),
+        formData.discountType || 'percentage',
+      ),
+    [formData.discount, formData.discountType, formData.items],
   );
 
   // Filter orders by quoteFilterId if provided
@@ -199,7 +213,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
-        header: t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' }),
+        header: t('accounting:supplierOrders.orderNumber'),
         id: 'id',
         accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
@@ -219,10 +233,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.supplierName}
               </div>
               <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
-                {row.linkedQuoteId ||
-                  t('accounting:supplierOrders.noQuoteLink', {
-                    defaultValue: 'No quote link',
-                  })}
+                {row.linkedQuoteId || t('accounting:supplierOrders.noQuoteLink')}
               </div>
             </div>
           );
@@ -231,11 +242,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       {
         header: t('accounting:supplierOrders.total'),
         id: 'orderTotal',
-        accessorFn: (row: SupplierSaleOrder) => calculateTotals(row.items, row.discount).total,
+        accessorFn: (row: SupplierSaleOrder) =>
+          calculateTotals(row.items, row.discount, row.discountType).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculateTotals(row.items, row.discount, row.discountType);
           const isMuted = row.status === 'sent';
 
           return (
@@ -397,13 +409,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
                 <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
               </div>
-              {t('accounting:supplierOrders.editOrder', { defaultValue: 'Supplier Order' })}
+              {t('accounting:supplierOrders.editOrder')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -413,14 +425,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <span className="text-xs font-bold text-amber-700">
-                  {t('accounting:supplierOrders.readOnlyStatus', {
-                    defaultValue:
-                      'Non-draft orders are read-only. Change status from the list actions.',
-                  })}
+                  {t('accounting:supplierOrders.readOnlyStatus')}
                 </span>
               </div>
             )}
@@ -462,97 +471,55 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.invoiceDetails')}
+                {t('accounting:supplierOrders.orderDetails')}
               </h4>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierOrders.supplier')}
-                    </label>
-                    <CustomSelect
-                      options={activeSuppliers.map((supplier) => ({
-                        id: supplier.id,
-                        name: supplier.name,
-                      }))}
-                      value={formData.supplierId || ''}
-                      onChange={(value) => {
-                        const supplier = suppliers.find((item) => item.id === value);
-                        setFormData((prev) => ({
-                          ...prev,
-                          supplierId: value as string,
-                          supplierName: supplier?.name || '',
-                        }));
-                      }}
-                      searchable={true}
-                      disabled={isReadOnly}
-                    />
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierOrders.supplier')}
+                  </label>
+                  <CustomSelect
+                    options={supplierOptions}
+                    value={formData.supplierId || ''}
+                    onChange={(value) => {
+                      const supplier = suppliers.find((item) => item.id === value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        supplierId: value as string,
+                        supplierName: supplier?.name || '',
+                      }));
+                    }}
+                    searchable={true}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierOrders.orderNumber')}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
+                    {editingOrder?.id || '—'}
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierOrders.paymentTerms')}
-                    </label>
-                    <CustomSelect
-                      options={paymentTermsOptions}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          paymentTerms: value as SupplierSaleOrder['paymentTerms'],
-                        }))
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierOrders.status')}
-                    </label>
-                    <CustomSelect
-                      options={statusOptions}
-                      value={formData.status || 'draft'}
-                      onChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          status: value as SupplierSaleOrder['status'],
-                        }))
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierOrders.discount')}
-                    </label>
-                    <div
-                      className={`overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isReadOnly ? 'opacity-60' : ''}`}
-                    >
-                      <div className="flex items-center">
-                        <div className="flex w-12 items-center justify-center self-stretch border-r border-slate-200 bg-slate-100/30 text-xs font-bold text-slate-400">
-                          %
-                        </div>
-                        <ValidatedNumberInput
-                          value={formData.discount || 0}
-                          disabled={isReadOnly}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              discount: value === '' ? 0 : Number(value),
-                            }))
-                          }
-                          className="flex-1 bg-transparent px-4 py-2.5 text-sm font-semibold outline-none disabled:bg-transparent disabled:text-slate-400"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierOrders.paymentTerms')}
+                  </label>
+                  <CustomSelect
+                    options={paymentTermsOptions}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        paymentTerms: value as SupplierSaleOrder['paymentTerms'],
+                      }))
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
                 </div>
               </div>
             </div>
@@ -561,12 +528,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.items')}
+                  {t('accounting:supplierOrders.items')}
                 </h4>
               </div>
 
               {(formData.items || []).length > 0 && (
-                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
                     <div className="col-span-1">{t('common:labels.quantity')}</div>
@@ -577,6 +544,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
                     <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
+                  <div className="w-8 shrink-0"></div>
                 </div>
               )}
 
@@ -590,19 +558,90 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                            <div className="space-y-1 md:col-span-3 min-w-0">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.productsServices')}
+                        <div className="lg:hidden space-y-2">
+                          <CustomSelect
+                            options={productOptions}
+                            value={item.productId}
+                            onChange={(value) => updateItem(index, 'productId', value as string)}
+                            searchable={true}
+                            disabled={isReadOnly}
+                            buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('common:labels.quantity')}
                               </label>
+                              <ValidatedNumberInput
+                                value={item.quantity}
+                                disabled={isReadOnly}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('crm:internalListing.salePrice')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                disabled={isReadOnly}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('accounting:supplierOrders.discount')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                disabled={isReadOnly}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('common:labels.total')}
+                              </label>
+                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                {lineTotal.toFixed(2)} {currency}
+                              </div>
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            value={item.note || ''}
+                            disabled={isReadOnly}
+                            placeholder={t('accounting:supplierOrders.notes')}
+                            onChange={(event) => updateItem(index, 'note', event.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              disabled={isReadOnly}
+                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="hidden lg:flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-12 gap-2">
+                            <div className="lg:col-span-3 min-w-0">
                               <CustomSelect
-                                options={activeProducts.map((product) => ({
-                                  id: product.id,
-                                  name: product.name,
-                                }))}
+                                options={productOptions}
                                 value={item.productId}
                                 onChange={(value) =>
                                   updateItem(index, 'productId', value as string)
@@ -612,11 +651,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.qty')}
-                              </label>
+                            <div className="lg:col-span-1">
                               <ValidatedNumberInput
                                 value={item.quantity}
                                 disabled={isReadOnly}
@@ -626,11 +661,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:internalListing.salePrice')} ({currency})
-                              </label>
+                            <div className="lg:col-span-2">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
                                 disabled={isReadOnly}
@@ -640,11 +671,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:supplierOrders.discount')}
-                              </label>
+                            <div className="lg:col-span-1">
                               <ValidatedNumberInput
                                 value={item.discount || 0}
                                 disabled={isReadOnly}
@@ -654,11 +681,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:supplierOrders.notes')}
-                              </label>
+                            <div className="lg:col-span-2">
                               <input
                                 type="text"
                                 value={item.note || ''}
@@ -667,16 +690,18 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('common:labels.total')}
-                              </label>
-                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                                {lineTotal.toFixed(2)} {currency}
-                              </div>
+                            <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                              {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            disabled={isReadOnly}
+                            className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
                       </div>
                     );
@@ -684,19 +709,16 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('accounting:supplierOrders.noItemsAdded', {
-                    defaultValue: 'No items added yet',
-                  })}
+                  {t('accounting:supplierOrders.noItemsAdded')}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="md:w-2/3 space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
                   {t('accounting:supplierOrders.notes')}
-                </h4>
+                </label>
                 <textarea
                   rows={4}
                   value={formData.notes || ''}
@@ -704,43 +726,45 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.costSummary')}
-                </h4>
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.subtotal')}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {totals.subtotal.toFixed(2)} {currency}
-                  </span>
-                </div>
-                {Number(formData.discount || 0) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('crm:quotes.discountAmount', {
-                        discount: Number(formData.discount || 0),
-                      })}
-                    </span>
-                    <span className="text-sm font-bold text-amber-600">
-                      -{totals.discountAmount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('accounting:supplierOrders.total')}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {totals.total.toFixed(2)} {currency}
-                  </span>
-                </div>
+              <div className="md:w-1/3">
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={totals.subtotal}
+                  total={totals.total}
+                  subtotalLabel={t('accounting:supplierOrders.subtotal')}
+                  totalLabel={t('accounting:supplierOrders.total')}
+                  globalDiscount={{
+                    label: t('accounting:supplierOrders.discount'),
+                    value: formData.discount || 0,
+                    type: formData.discountType || 'percentage',
+                    onChange: (value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        discount: value === '' ? 0 : Number(value),
+                      })),
+                    onTypeChange: (type) =>
+                      setFormData((prev) => ({ ...prev, discountType: type })),
+                    disabled: isReadOnly,
+                  }}
+                  discountRow={
+                    totals.discountAmount > 0
+                      ? {
+                          label: t('sales:clientOffers.discountAmount', {
+                            value: formatDiscountValue(
+                              formData.discount ?? 0,
+                              formData.discountType ?? 'percentage',
+                              currency,
+                            ),
+                          }),
+                          amount: totals.discountAmount,
+                        }
+                      : undefined
+                  }
+                />
               </div>
             </div>
 
@@ -773,9 +797,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('accounting:supplierOrders.deleteTitle', {
-                  defaultValue: 'Delete supplier order?',
-                })}
+                {t('accounting:supplierOrders.deleteTitle')}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
                 {orderToDelete?.supplierName} · {orderToDelete?.linkedQuoteId || orderToDelete?.id}
@@ -805,19 +827,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-black text-slate-800">
-              {t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
+              {t('accounting:supplierOrders.title')}
             </h2>
-            <p className="text-sm text-slate-500">
-              {t('accounting:supplierOrders.subtitle', {
-                defaultValue: 'Orders created from supplier quotes.',
-              })}
-            </p>
+            <p className="text-sm text-slate-500">{t('accounting:supplierOrders.subtitle')}</p>
           </div>
         </div>
       </div>
 
       <StandardTable<SupplierSaleOrder>
-        title={t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
+        title={t('accounting:supplierOrders.title')}
         data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}

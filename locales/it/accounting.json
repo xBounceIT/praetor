@@ -133,7 +133,10 @@
     "linkedQuoteInfo": "Questo ordine è stato creato dal preventivo #{{number}}",
     "quoteDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
     "viewQuote": "Visualizza Preventivo",
-    "noItemsAdded": "Nessun articolo aggiunto"
+    "noItemsAdded": "Nessun articolo aggiunto",
+    "orderDetails": "Dettagli Ordine",
+    "items": "Articoli",
+    "subtotal": "Subtotale"
   },
   "supplierInvoices": {
     "title": "Fatture Fornitori",
@@ -150,6 +153,20 @@
     "total": "Totale",
     "notes": "Note",
     "actionsColumn": "Azioni",
-    "deleteTitle": "Eliminare fattura fornitore?"
+    "deleteTitle": "Eliminare fattura fornitore?",
+    "invoiceDetails": "Dettagli Fattura",
+    "items": "Articoli",
+    "subtotal": "Subtotale",
+    "statusDraft": "Bozza",
+    "statusSent": "Inviata",
+    "statusPaid": "Pagata",
+    "statusOverdue": "Scaduta",
+    "statusCancelled": "Annullata",
+    "balance": "Da pagare",
+    "balanceDue": "Da pagare",
+    "totalDiscount": "Sconto Totale",
+    "noItems": "Nessuna voce ancora. Aggiungi una riga per iniziare.",
+    "descriptionPlaceholder": "Descrizione",
+    "notesPlaceholder": "Note aggiuntive..."
   }
 }

@@ -16,6 +16,8 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { getPaymentTermsOptions } from '../../utils/options';
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -23,37 +25,17 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'immediate', name: t('crm:paymentTerms.immediate') },
-  { id: '15gg', name: t('crm:paymentTerms.15gg') },
-  { id: '21gg', name: t('crm:paymentTerms.21gg') },
-  { id: '30gg', name: t('crm:paymentTerms.30gg') },
-  { id: '45gg', name: t('crm:paymentTerms.45gg') },
-  { id: '60gg', name: t('crm:paymentTerms.60gg') },
-  { id: '90gg', name: t('crm:paymentTerms.90gg') },
-  { id: '120gg', name: t('crm:paymentTerms.120gg') },
-  { id: '180gg', name: t('crm:paymentTerms.180gg') },
-  { id: '240gg', name: t('crm:paymentTerms.240gg') },
-  { id: '365gg', name: t('crm:paymentTerms.365gg') },
-];
-
 interface TotalsBreakdown {
   subtotal: number;
-  discountAmount: number;
   total: number;
 }
 
-const calculateTotals = (items: SupplierQuoteItem[], globalDiscount: number): TotalsBreakdown => {
+const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let subtotal = 0;
   items.forEach((item) => {
-    const lineSubtotal = item.quantity * item.unitPrice;
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
+    subtotal += item.quantity * item.unitPrice;
   });
-  const discountAmount = subtotal * (globalDiscount / 100);
-  const total = subtotal - discountAmount;
-  return { subtotal, discountAmount, total };
+  return { subtotal, total: subtotal };
 };
 
 export interface SupplierQuotesViewProps {
@@ -75,7 +57,6 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   id: '',
   items: [],
   paymentTerms: 'immediate',
-  discount: 0,
   status: 'draft',
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
   notes: '',
@@ -139,7 +120,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOrderForQuote],
   );
 
-  const totalsBreakdown = calculateTotals(formData.items || [], Number(formData.discount || 0));
+  const totalsBreakdown = calculateTotals(formData.items || []);
 
   const inputClassName =
     'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
@@ -207,7 +188,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           productName: '',
           quantity: 1,
           unitPrice: 0,
-          discount: 0,
           unitType: 'unit' as const,
           note: '',
         },
@@ -316,13 +296,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount).total,
+        accessorFn: (row) => calculateTotals(row.items).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculateTotals(row.items);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
@@ -598,11 +578,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
-        discount: Number(item.discount ?? 0),
       })),
     };
 
@@ -618,7 +596,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -642,7 +620,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -687,14 +665,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:supplierQuotes.supplierInformation', {
                   defaultValue: 'Supplier Information',
                 })}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
@@ -744,15 +722,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('sales:supplierQuotes.quoteDetails', { defaultValue: 'Quote Details' })}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}
@@ -784,23 +753,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     className={inputClassName}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:supplierQuotes.status', { defaultValue: 'Status' })}
-                  </label>
-                  <CustomSelect
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: value as SupplierQuote['status'],
-                      }))
-                    }
-                    searchable={false}
-                    disabled={isReadOnly}
-                  />
-                </div>
               </div>
             </div>
 
@@ -826,20 +778,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden md:flex gap-3 px-3 mb-1 items-center">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                    <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
-                    <div className="col-span-2" />
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
-                    </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('sales:supplierQuotes.discount', { defaultValue: 'Disc %' })}
+                      {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
                   </div>
                   <div className="w-24 shrink-0 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">
@@ -852,17 +800,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const lineSubtotal = item.quantity * item.unitPrice;
-                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-                    const lineTotal = lineSubtotal - lineDiscount;
+                    const lineTotal = item.quantity * item.unitPrice;
                     return (
                       <div
                         key={item.id}
                         className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
                       >
-                        <div className="flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-12 md:col-span-4">
+                        <div className="lg:hidden flex items-start gap-3">
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
+                              </div>
                               <input
                                 type="text"
                                 value={item.productName || ''}
@@ -876,7 +825,80 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 className={itemInputClassName}
                               />
                             </div>
-                            <div className="col-span-4 md:col-span-1">
+                            <div>
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  value={item.quantity}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', parseNumberInputValue(value))
+                                  }
+                                  disabled={isReadOnly}
+                                  className={`${itemInputClassName} text-center flex-1`}
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  /
+                                </span>
+                                {renderUnitSelector(index, item)}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            disabled={isReadOnly}
+                            className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 lg:hidden">
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', parseNumberInputValue(value))
+                                }
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                {currency}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                            </div>
+                            <div className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                              {lineTotal.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="hidden lg:flex gap-2 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-7">
+                              <input
+                                type="text"
+                                value={item.productName || ''}
+                                disabled={isReadOnly}
+                                onChange={(event) =>
+                                  updateItem(index, 'productName', event.target.value)
+                                }
+                                placeholder={t('sales:supplierQuotes.product', {
+                                  defaultValue: 'Product',
+                                })}
+                                className={itemInputClassName}
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-1">
                               <ValidatedNumberInput
                                 value={item.quantity}
                                 onValueChange={(value) =>
@@ -885,34 +907,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 disabled={isReadOnly}
                                 className={`${itemInputClassName} text-center`}
                               />
-                            </div>
-                            <div className="hidden md:flex col-span-2 items-center justify-center">
+                              <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                /
+                              </span>
                               {renderUnitSelector(index, item)}
                             </div>
-                            <div className="col-span-4 md:col-span-2">
-                              <div className="flex items-center gap-1.5">
-                                <ValidatedNumberInput
-                                  value={item.unitPrice}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'unitPrice', parseNumberInputValue(value))
-                                  }
-                                  disabled={isReadOnly}
-                                  className={`${itemInputClassName} flex-1`}
-                                />
-                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-                                  {currency}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="col-span-4 md:col-span-3">
+                            <div className="col-span-3 flex items-center gap-1.5">
                               <ValidatedNumberInput
-                                value={item.discount || 0}
+                                value={item.unitPrice}
                                 onValueChange={(value) =>
-                                  updateItem(index, 'discount', parseNumberInputValue(value))
+                                  updateItem(index, 'unitPrice', parseNumberInputValue(value))
                                 }
                                 disabled={isReadOnly}
-                                className={itemInputClassName}
+                                className={`${itemInputClassName} flex-1`}
                               />
+                              <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                {currency}
+                              </span>
                             </div>
                           </div>
                           <div className="w-24 shrink-0 flex items-center justify-end">
@@ -954,7 +965,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
             </div>
 
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
               <div className="w-full space-y-4 md:w-2/3">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
@@ -974,55 +985,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                </h4>
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {totalsBreakdown.subtotal.toFixed(2)} {currency}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
-                  </span>
-                  <ValidatedNumberInput
-                    value={formData.discount || 0}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        discount: parseNumberInputValue(value),
-                      }))
-                    }
-                    disabled={isReadOnly}
-                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-right outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                {Number(formData.discount || 0) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-amber-600">
-                      {t('sales:supplierQuotes.discountAmount', {
-                        defaultValue: 'Discount',
-                      })}
-                    </span>
-                    <span className="text-sm font-bold text-amber-600">
-                      -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {totalsBreakdown.total.toFixed(2)} {currency}
-                  </span>
-                </div>
+              <div className="w-full md:w-1/3">
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={totalsBreakdown.subtotal}
+                  total={totalsBreakdown.total}
+                  subtotalLabel={t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                  totalLabel={t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                />
               </div>
             </div>
 

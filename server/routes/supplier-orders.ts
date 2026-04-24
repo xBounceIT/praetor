@@ -52,6 +52,7 @@ const orderSchema = {
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
@@ -64,6 +65,7 @@ const orderSchema = {
     'supplierId',
     'supplierName',
     'discount',
+    'discountType',
     'status',
     'createdAt',
     'updatedAt',
@@ -94,6 +96,7 @@ const createBodySchema = {
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
@@ -109,6 +112,7 @@ const updateBodySchema = {
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
@@ -211,6 +215,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplier_name as "supplierName",
             payment_terms as "paymentTerms",
             discount,
+            discount_type as "discountType",
             status,
             notes,
             EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -271,6 +276,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         notes,
       } = request.body as {
@@ -281,6 +287,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: SupplierOrderItemInput[] | unknown;
         paymentTerms: unknown;
         discount: unknown;
+        discountType: unknown;
         status: unknown;
         notes: unknown;
       };
@@ -332,6 +339,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
       const statusResult = parseSupplierOrderStatus(status);
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
@@ -342,8 +350,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         createdOrderResult = await query(
           `INSERT INTO supplier_sales
-            (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, discount_type, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
@@ -351,6 +359,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_name as "supplierName",
               payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               notes,
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -362,6 +371,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
+            discountTypeValue,
             statusResult.value || 'draft',
             notes,
           ],
@@ -456,6 +466,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items,
         paymentTerms,
         discount,
+        discountType,
         status,
         notes,
       } = request.body as {
@@ -465,6 +476,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items?: SupplierOrderItemInput[] | unknown;
         paymentTerms?: unknown;
         discount?: unknown;
+        discountType?: unknown;
         status?: unknown;
         notes?: unknown;
       };
@@ -507,6 +519,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items !== undefined ||
         paymentTerms !== undefined ||
         discount !== undefined ||
+        discountType !== undefined ||
         notes !== undefined;
       if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
@@ -560,6 +573,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      const discountTypeValue =
+        discountType !== undefined
+          ? discountType === 'currency'
+            ? 'currency'
+            : 'percentage'
+          : undefined;
+
       const statusResult = parseSupplierOrderStatus(status);
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
@@ -572,10 +592,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                supplier_name = COALESCE($3, supplier_name),
                payment_terms = COALESCE($4, payment_terms),
                discount = COALESCE($5, discount),
-               status = COALESCE($6, status),
-               notes = COALESCE($7, notes),
+               discount_type = COALESCE($6, discount_type),
+               status = COALESCE($7, status),
+               notes = COALESCE($8, notes),
                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $8
+            WHERE id = $9
             RETURNING
                id,
                linked_quote_id as "linkedQuoteId",
@@ -583,6 +604,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                supplier_name as "supplierName",
                payment_terms as "paymentTerms",
               discount,
+              discount_type as "discountType",
               status,
               notes,
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -593,6 +615,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameValue,
             paymentTerms,
             discountValue,
+            discountTypeValue,
             statusResult.value,
             notes,
             idResult.value,

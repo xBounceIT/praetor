@@ -427,8 +427,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         onClose={closeAssignments}
         users={users}
         roles={roles}
-        loadAssignedUserIds={(signal) => tasksApi.getUsers(managingTaskId!, signal)}
-        saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId!, ids)}
+        loadAssignedUserIds={(signal) => tasksApi.getUsers(managingTaskId as string, signal)}
+        saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId as string, ids)}
         entityLabel={t('common:labels.task')}
         entityName={managingTask?.name || ''}
         disabled={!canUpdateTasks}

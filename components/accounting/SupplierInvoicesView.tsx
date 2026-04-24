@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -16,24 +16,21 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'draft', name: t('accounting:clientsInvoices.statusDraft') },
-  { id: 'sent', name: t('accounting:clientsInvoices.statusSent') },
-  { id: 'paid', name: t('accounting:clientsInvoices.statusPaid') },
-  { id: 'overdue', name: t('accounting:clientsInvoices.statusOverdue') },
-  { id: 'cancelled', name: t('accounting:clientsInvoices.statusCancelled') },
-];
+const statusLabelMap: Record<string, string> = {
+  draft: 'accounting:supplierInvoices.statusDraft',
+  sent: 'accounting:supplierInvoices.statusSent',
+  paid: 'accounting:supplierInvoices.statusPaid',
+  overdue: 'accounting:supplierInvoices.statusOverdue',
+  cancelled: 'accounting:supplierInvoices.statusCancelled',
+};
+
+const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) =>
+  Object.entries(statusLabelMap).map(([id, key]) => ({ id, name: t(key) }));
 
 const getStatusLabel = (
   status: SupplierInvoice['status'],
   t: (key: string, options?: Record<string, unknown>) => string,
-) => {
-  if (status === 'sent') return t('accounting:clientsInvoices.statusSent');
-  if (status === 'paid') return t('accounting:clientsInvoices.statusPaid');
-  if (status === 'overdue') return t('accounting:clientsInvoices.statusOverdue');
-  if (status === 'cancelled') return t('accounting:clientsInvoices.statusCancelled');
-  return t('accounting:clientsInvoices.statusDraft');
-};
+) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
   let subtotal = 0;
@@ -74,6 +71,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const activeProducts = useMemo(
     () => products.filter((product) => !product.isDisabled),
     [products],
+  );
+  const productOptions = useMemo(
+    () => activeProducts.map((product) => ({ id: product.id, name: product.name })),
+    [activeProducts],
+  );
+  const supplierOptions = useMemo(
+    () => activeSuppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
+    [activeSuppliers],
   );
 
   const [editingInvoice, setEditingInvoice] = useState<SupplierInvoice | null>(null);
@@ -139,6 +144,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     },
     [products],
   );
+
+  const removeItem = useCallback((index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      items: (prev.items || []).filter((_, i) => i !== index),
+    }));
+  }, []);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -208,7 +220,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('accounting:clientsInvoices.dueDate'),
+        header: t('accounting:supplierInvoices.dueDate'),
         id: 'dueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
@@ -227,7 +239,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         filterFormat: (value: unknown) => Number(value).toFixed(2),
       },
       {
-        header: t('accounting:clientsInvoices.amountPaid'),
+        header: t('accounting:supplierInvoices.amountPaid'),
         id: 'amountPaid',
         accessorFn: (row: SupplierInvoice) => Number(row.amountPaid),
         cell: ({ row }: { row: SupplierInvoice }) => (
@@ -238,7 +250,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         filterFormat: (value: unknown) => Number(value).toFixed(2),
       },
       {
-        header: t('accounting:clientsInvoices.balance'),
+        header: t('accounting:supplierInvoices.balance'),
         id: 'balance',
         accessorFn: (row: SupplierInvoice) => Number(row.total) - Number(row.amountPaid || 0),
         cell: ({ row }: { row: SupplierInvoice }) => {
@@ -309,19 +321,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
                 <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingInvoice
-                ? t('accounting:supplierInvoices.editInvoice', {
-                    defaultValue: 'Edit Supplier Invoice',
-                  })
-                : t('accounting:supplierInvoices.addInvoice', {
-                    defaultValue: 'Add Supplier Invoice',
-                  })}
+                ? t('accounting:supplierInvoices.editInvoice')
+                : t('accounting:supplierInvoices.addInvoice')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -331,101 +339,92 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
-            <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
+            <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.invoiceDetails')}
+                {t('accounting:supplierInvoices.invoiceDetails')}
               </h4>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.invoiceNumber')}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.id || ''}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, id: event.target.value }))
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
-                      placeholder="INV-XXXX"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.issueDate')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.issueDate || ''}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.dueDate')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.dueDate || ''}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.supplier')}
+                  </label>
+                  <CustomSelect
+                    options={supplierOptions}
+                    value={formData.supplierId || ''}
+                    onChange={(value) => {
+                      const supplier = suppliers.find((item) => item.id === value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        supplierId: value as string,
+                        supplierName: supplier?.name || '',
+                      }));
+                    }}
+                    searchable={true}
+                    placeholder={t('accounting:supplierInvoices.selectSupplier')}
+                  />
                 </div>
-
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.supplier')}
-                    </label>
-                    <CustomSelect
-                      options={activeSuppliers.map((supplier) => ({
-                        id: supplier.id,
-                        name: supplier.name,
-                      }))}
-                      value={formData.supplierId || ''}
-                      onChange={(value) => {
-                        const supplier = suppliers.find((item) => item.id === value);
-                        setFormData((prev) => ({
-                          ...prev,
-                          supplierId: value as string,
-                          supplierName: supplier?.name || '',
-                        }));
-                      }}
-                      searchable={true}
-                      placeholder={t('accounting:supplierInvoices.selectSupplier')}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.status')}
-                    </label>
-                    <CustomSelect
-                      options={statusOptions}
-                      value={formData.status || 'draft'}
-                      onChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          status: value as SupplierInvoice['status'],
-                        }))
-                      }
-                      searchable={false}
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.invoiceNumber')}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.id || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, id: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                    placeholder="INV-XXXX"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.issueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.issueDate || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.dueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.dueDate || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.status')}
+                  </label>
+                  <CustomSelect
+                    options={statusOptions}
+                    value={formData.status || 'draft'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        status: value as SupplierInvoice['status'],
+                      }))
+                    }
+                    searchable={false}
+                  />
                 </div>
               </div>
             </div>
@@ -434,16 +433,16 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.items')}
+                  {t('accounting:supplierInvoices.items')}
                 </h4>
               </div>
 
               {(formData.items || []).length > 0 && (
-                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
                     <div className="col-span-3">
-                      {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                      {t('accounting:supplierInvoices.descriptionPlaceholder')}
                     </div>
                     <div className="col-span-1">{t('common:labels.quantity')}</div>
                     <div className="col-span-2">
@@ -452,6 +451,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
                     <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
+                  <div className="w-8 shrink-0"></div>
                 </div>
               )}
 
@@ -465,19 +465,86 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                            <div className="space-y-1 md:col-span-2 min-w-0">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.productsServices')}
+                        <div className="lg:hidden space-y-2">
+                          <CustomSelect
+                            options={productOptions}
+                            value={item.productId || ''}
+                            onChange={(value) => updateItem(index, 'productId', value as string)}
+                            searchable={true}
+                            buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={item.description}
+                            placeholder={t('accounting:supplierInvoices.descriptionPlaceholder')}
+                            onChange={(event) =>
+                              updateItem(index, 'description', event.target.value)
+                            }
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('common:labels.quantity')}
                               </label>
+                              <ValidatedNumberInput
+                                value={item.quantity}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('crm:internalListing.salePrice')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('accounting:supplierOrders.discount')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {t('common:labels.total')}
+                              </label>
+                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                {lineTotal.toFixed(2)} {currency}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="hidden lg:flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-12 gap-2">
+                            <div className="lg:col-span-2 min-w-0">
                               <CustomSelect
-                                options={activeProducts.map((product) => ({
-                                  id: product.id,
-                                  name: product.name,
-                                }))}
+                                options={productOptions}
                                 value={item.productId || ''}
                                 onChange={(value) =>
                                   updateItem(index, 'productId', value as string)
@@ -486,11 +553,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-3">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:clientsInvoices.descriptionPlaceholder')}
-                              </label>
+                            <div className="lg:col-span-3">
                               <input
                                 type="text"
                                 value={item.description}
@@ -500,11 +563,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.qty')}
-                              </label>
+                            <div className="lg:col-span-1">
                               <ValidatedNumberInput
                                 value={item.quantity}
                                 onValueChange={(value) =>
@@ -513,11 +572,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:internalListing.salePrice')} ({currency})
-                              </label>
+                            <div className="lg:col-span-2">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
                                 onValueChange={(value) =>
@@ -526,11 +581,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:supplierOrders.discount')}
-                              </label>
+                            <div className="lg:col-span-1">
                               <ValidatedNumberInput
                                 value={item.discount || 0}
                                 onValueChange={(value) =>
@@ -539,16 +590,17 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
-
-                            <div className="space-y-1 md:col-span-2">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('common:labels.total')}
-                              </label>
-                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                                {lineTotal.toFixed(2)} {currency}
-                              </div>
+                            <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                              {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
                       </div>
                     );
@@ -556,87 +608,57 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('accounting:clientsInvoices.noItems')}
+                  {t('accounting:supplierInvoices.noItems')}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="md:w-2/3 space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
                   {t('accounting:supplierInvoices.notes')}
-                </h4>
+                </label>
                 <textarea
                   rows={4}
                   value={formData.notes || ''}
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
-                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
+                  placeholder={t('accounting:supplierInvoices.notesPlaceholder')}
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
-                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.costSummary')}
-                </h4>
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.subtotal')}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {grossSubtotal.toFixed(2)} {currency}
-                  </span>
-                </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.totalDiscount')}
-                    </span>
-                    <span className="text-sm font-bold text-amber-600">
-                      -{totalDiscount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('accounting:supplierInvoices.total')}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {totals.total.toFixed(2)} {currency}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.amountPaid')}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <ValidatedNumberInput
-                      value={formData.amountPaid || 0}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          amountPaid: value === '' ? 0 : Number(value),
-                        }))
-                      }
-                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600"
-                    />
-                    <span className="text-xs font-bold text-slate-400">{currency}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.balanceDue')}
-                  </span>
-                  <span
-                    className={`font-bold ${balanceDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}
-                  >
-                    {balanceDue.toFixed(2)} {currency}
-                  </span>
-                </div>
+              <div className="md:w-1/3">
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={grossSubtotal}
+                  total={totals.total}
+                  subtotalLabel={t('accounting:supplierInvoices.subtotal')}
+                  totalLabel={t('accounting:supplierInvoices.total')}
+                  discountRow={
+                    totalDiscount > 0
+                      ? {
+                          label: t('accounting:supplierInvoices.totalDiscount'),
+                          amount: totalDiscount,
+                        }
+                      : undefined
+                  }
+                  amountPaid={{
+                    label: t('accounting:supplierInvoices.amountPaid'),
+                    value: formData.amountPaid || 0,
+                    onChange: (value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        amountPaid: value === '' ? 0 : Number(value),
+                      })),
+                  }}
+                  balanceDue={{
+                    label: t('accounting:supplierInvoices.balanceDue'),
+                    amount: balanceDue,
+                    colorClass: balanceDue > 0 ? 'text-red-500' : 'text-emerald-600',
+                  }}
+                />
               </div>
             </div>
 
@@ -667,9 +689,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('accounting:supplierInvoices.deleteTitle', {
-                  defaultValue: 'Delete supplier invoice?',
-                })}
+                {t('accounting:supplierInvoices.deleteTitle')}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
                 {invoiceToDelete?.supplierName} · {invoiceToDelete?.id}
@@ -699,19 +719,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-black text-slate-800">
-              {t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+              {t('accounting:supplierInvoices.title')}
             </h2>
-            <p className="text-sm text-slate-500">
-              {t('accounting:supplierInvoices.subtitle', {
-                defaultValue: 'Invoices created from supplier orders.',
-              })}
-            </p>
+            <p className="text-sm text-slate-500">{t('accounting:supplierInvoices.subtitle')}</p>
           </div>
         </div>
       </div>
 
       <StandardTable<SupplierInvoice>
-        title={t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+        title={t('accounting:supplierInvoices.title')}
         data={invoices}
         columns={columns}
         defaultRowsPerPage={10}

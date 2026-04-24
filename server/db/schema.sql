@@ -878,8 +878,7 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -965,14 +964,14 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_items(offer_id);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 -- Supplier quote source tracking columns for customer_offer_items
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -1190,6 +1189,7 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT 
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 DO $$
 BEGIN
     IF EXISTS (
@@ -1213,8 +1213,7 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
@@ -1240,7 +1239,6 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
-    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')),
     expiration_date DATE NOT NULL,
     notes TEXT,
@@ -1276,7 +1274,6 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -1680,6 +1677,39 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+DECLARE
+    linked_sale_constraint_definition TEXT;
+BEGIN
+    SELECT pg_get_constraintdef(c.oid)
+    INTO linked_sale_constraint_definition
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'supplier_invoices'
+      AND c.conname = 'supplier_invoices_linked_sale_id_fkey';
+
+    -- Older databases can still carry the pre-refactor FK to sales(id).
+    UPDATE supplier_invoices si
+    SET linked_sale_id = NULL
+    WHERE si.linked_sale_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM supplier_sales ss
+          WHERE ss.id = si.linked_sale_id
+      );
+
+    IF linked_sale_constraint_definition IS NULL THEN
+        ALTER TABLE supplier_invoices
+            ADD CONSTRAINT supplier_invoices_linked_sale_id_fkey
+            FOREIGN KEY (linked_sale_id) REFERENCES supplier_sales(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    ELSIF linked_sale_constraint_definition NOT ILIKE '%REFERENCES supplier_sales(id)%' THEN
+        ALTER TABLE supplier_invoices
+            DROP CONSTRAINT supplier_invoices_linked_sale_id_fkey,
+            ADD CONSTRAINT supplier_invoices_linked_sale_id_fkey
+            FOREIGN KEY (linked_sale_id) REFERENCES supplier_sales(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 ALTER TABLE supplier_invoices DROP COLUMN IF EXISTS tax_amount;
 
@@ -2109,3 +2139,47 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- Global discount type: allow percentage or fixed currency amount per document header
+ALTER TABLE quotes           ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE customer_offers  ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE sales            ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+ALTER TABLE supplier_sales   ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
+-- Widen header discount columns to DECIMAL(15,2) so currency amounts on large orders fit
+ALTER TABLE quotes           ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE customer_offers  ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE sales            ALTER COLUMN discount TYPE DECIMAL(15, 2);
+ALTER TABLE supplier_sales   ALTER COLUMN discount TYPE DECIMAL(15, 2);
+
+-- Migration: Remove discount columns from supplier quotes
+ALTER TABLE supplier_quotes DROP COLUMN IF EXISTS discount;
+ALTER TABLE supplier_quotes DROP COLUMN IF EXISTS discount_type;
+ALTER TABLE supplier_quote_items DROP COLUMN IF EXISTS discount;
+
+-- Migration: Remove supplier quote discount snapshot columns from client-facing tables
+ALTER TABLE quote_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE quote_items DROP COLUMN IF EXISTS supplier_quote_discount;
+ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_discount;
+ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_discount;
+
+-- Enforce discount_type values at DB level (idempotent)
+ALTER TABLE quotes          DROP CONSTRAINT IF EXISTS chk_quotes_discount_type;
+ALTER TABLE quotes          ADD  CONSTRAINT chk_quotes_discount_type          CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE customer_offers DROP CONSTRAINT IF EXISTS chk_customer_offers_discount_type;
+ALTER TABLE customer_offers ADD  CONSTRAINT chk_customer_offers_discount_type CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE sales           DROP CONSTRAINT IF EXISTS chk_sales_discount_type;
+ALTER TABLE sales           ADD  CONSTRAINT chk_sales_discount_type           CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE supplier_sales  DROP CONSTRAINT IF EXISTS chk_supplier_sales_discount_type;
+ALTER TABLE supplier_sales  ADD  CONSTRAINT chk_supplier_sales_discount_type  CHECK (discount_type IN ('percentage', 'currency'));
+
+-- Enforce unit_type values at DB level (idempotent)
+ALTER TABLE quote_items          DROP CONSTRAINT IF EXISTS chk_quote_items_unit_type;
+ALTER TABLE quote_items          ADD  CONSTRAINT chk_quote_items_unit_type          CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE customer_offer_items DROP CONSTRAINT IF EXISTS chk_customer_offer_items_unit_type;
+ALTER TABLE customer_offer_items ADD  CONSTRAINT chk_customer_offer_items_unit_type CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE sale_items           DROP CONSTRAINT IF EXISTS chk_sale_items_unit_type;
+ALTER TABLE sale_items           ADD  CONSTRAINT chk_sale_items_unit_type           CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE supplier_quote_items DROP CONSTRAINT IF EXISTS chk_supplier_quote_items_unit_type;
+ALTER TABLE supplier_quote_items ADD  CONSTRAINT chk_supplier_quote_items_unit_type CHECK (unit_type IN ('hours', 'days', 'unit'));

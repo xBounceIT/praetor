@@ -23,6 +23,7 @@
           "auth"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -41,8 +42,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "security": [],
         "responses": {
@@ -430,6 +430,7 @@
           "auth"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -444,8 +445,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -646,6 +646,7 @@
           "ai"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -667,8 +668,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1001,6 +1001,7 @@
           "users"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1038,8 +1039,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -1331,6 +1331,7 @@
           "users"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1663,6 +1664,7 @@
           "users"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1684,8 +1686,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -1966,6 +1967,7 @@
           "users"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2150,6 +2152,38 @@
                       "type": {
                         "type": "string"
                       },
+                      "contacts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "email": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "phone": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "fullName"
+                          ]
+                        }
+                      },
                       "contactName": {
                         "type": [
                           "null",
@@ -2175,6 +2209,42 @@
                         ]
                       },
                       "address": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressCountry": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressState": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressCap": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressProvince": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressCivicNumber": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "addressLine": {
                         "type": [
                           "null",
                           "string"
@@ -2369,6 +2439,7 @@
           "clients"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2379,6 +2450,38 @@
                   },
                   "type": {
                     "type": "string"
+                  },
+                  "contacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "email": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "phone": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    }
                   },
                   "contactName": {
                     "type": "string"
@@ -2395,6 +2498,24 @@
                   "address": {
                     "type": "string"
                   },
+                  "addressCountry": {
+                    "type": "string"
+                  },
+                  "addressState": {
+                    "type": "string"
+                  },
+                  "addressCap": {
+                    "type": "string"
+                  },
+                  "addressProvince": {
+                    "type": "string"
+                  },
+                  "addressCivicNumber": {
+                    "type": "string"
+                  },
+                  "addressLine": {
+                    "type": "string"
+                  },
                   "description": {
                     "type": "string"
                   },
@@ -2405,38 +2526,13 @@
                     "type": "string"
                   },
                   "sector": {
-                    "type": "string",
-                    "enum": [
-                      "FINANCE",
-                      "TELCO",
-                      "UTILITIES",
-                      "ENERGY",
-                      "SERVICES",
-                      "GDO",
-                      "HEALTH",
-                      "INDUSTRY",
-                      "PA",
-                      "TRASPORTI",
-                      "ALTRO"
-                    ]
+                    "type": "string"
                   },
                   "numberOfEmployees": {
-                    "type": "string",
-                    "enum": [
-                      "< 50",
-                      "50..250",
-                      "251..1000",
-                      "> 1000"
-                    ]
+                    "type": "string"
                   },
                   "revenue": {
-                    "type": "string",
-                    "enum": [
-                      "< 10",
-                      "11..50",
-                      "51..1000",
-                      "> 1000"
-                    ]
+                    "type": "string"
                   },
                   "fiscalCode": {
                     "type": "string"
@@ -2456,8 +2552,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2485,6 +2580,38 @@
                     "type": {
                       "type": "string"
                     },
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "email": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "phone": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fullName"
+                        ]
+                      }
+                    },
                     "contactName": {
                       "type": [
                         "null",
@@ -2510,6 +2637,42 @@
                       ]
                     },
                     "address": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCountry": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressState": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCap": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressProvince": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCivicNumber": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressLine": {
                       "type": [
                         "null",
                         "string"
@@ -2687,6 +2850,7 @@
           "clients"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2706,6 +2870,38 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "contacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "email": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "phone": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    }
                   },
                   "contactName": {
                     "type": [
@@ -2732,6 +2928,42 @@
                     ]
                   },
                   "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressCountry": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressState": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressCap": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressProvince": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressCivicNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "addressLine": {
                     "type": [
                       "string",
                       "null"
@@ -2838,6 +3070,38 @@
                     "type": {
                       "type": "string"
                     },
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "email": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "phone": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fullName"
+                        ]
+                      }
+                    },
                     "contactName": {
                       "type": [
                         "null",
@@ -2863,6 +3127,42 @@
                       ]
                     },
                     "address": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCountry": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressState": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCap": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressProvince": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressCivicNumber": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "addressLine": {
                       "type": [
                         "null",
                         "string"
@@ -3159,6 +3459,701 @@
         }
       }
     },
+    "/api/clients/profile-options/{category}": {
+      "get": {
+        "summary": "List client profile options for category",
+        "tags": [
+          "clients"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sector",
+                "numberOfEmployees",
+                "revenue",
+                "officeCountRange"
+              ]
+            },
+            "in": "path",
+            "name": "category",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "sector",
+                          "numberOfEmployees",
+                          "revenue",
+                          "officeCountRange"
+                        ]
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "sortOrder": {
+                        "type": "number"
+                      },
+                      "usageCount": {
+                        "type": "number"
+                      },
+                      "createdAt": {
+                        "type": [
+                          "null",
+                          "number"
+                        ]
+                      },
+                      "updatedAt": {
+                        "type": [
+                          "null",
+                          "number"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "category",
+                      "value",
+                      "sortOrder",
+                      "usageCount"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create client profile option",
+        "tags": [
+          "clients"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "sortOrder": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sector",
+                "numberOfEmployees",
+                "revenue",
+                "officeCountRange"
+              ]
+            },
+            "in": "path",
+            "name": "category",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "sector",
+                        "numberOfEmployees",
+                        "revenue",
+                        "officeCountRange"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "number"
+                    },
+                    "usageCount": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "category",
+                    "value",
+                    "sortOrder",
+                    "usageCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clients/profile-options/{category}/{id}": {
+      "put": {
+        "summary": "Update client profile option",
+        "tags": [
+          "clients"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "sortOrder": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sector",
+                "numberOfEmployees",
+                "revenue",
+                "officeCountRange"
+              ]
+            },
+            "in": "path",
+            "name": "category",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "sector",
+                        "numberOfEmployees",
+                        "revenue",
+                        "officeCountRange"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "number"
+                    },
+                    "usageCount": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "category",
+                    "value",
+                    "sortOrder",
+                    "usageCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete client profile option",
+        "tags": [
+          "clients"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sector",
+                "numberOfEmployees",
+                "revenue",
+                "officeCountRange"
+              ]
+            },
+            "in": "path",
+            "name": "category",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/projects/": {
       "get": {
         "summary": "List projects",
@@ -3325,6 +4320,7 @@
           "projects"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3349,8 +4345,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -3619,6 +4614,7 @@
           "projects"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3916,6 +4912,7 @@
           "projects"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3933,8 +4930,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -4258,6 +5254,7 @@
           "tasks"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4300,8 +5297,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -4471,6 +5467,129 @@
         }
       }
     },
+    "/api/tasks/hours": {
+      "get": {
+        "summary": "Get total logged hours per task for a project",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "projectId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tasks/{id}": {
       "put": {
         "summary": "Update task",
@@ -4478,6 +5597,7 @@
           "tasks"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4953,6 +6073,7 @@
           "tasks"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4970,8 +6091,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -5304,6 +6424,7 @@
           "entries"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -5354,8 +6475,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -5699,6 +6819,7 @@
           "entries"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6178,6 +7299,7 @@
           "settings"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6334,6 +7456,7 @@
           "settings"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6352,8 +7475,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -6655,6 +7777,7 @@
           "ldap"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7206,6 +8329,7 @@
           "general-settings"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7637,6 +8761,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7686,8 +8811,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -7875,6 +8999,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8387,6 +9512,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8405,8 +9531,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -8556,6 +9681,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8983,6 +10109,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -9005,8 +10132,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -9135,6 +10261,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -9157,8 +10284,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -9567,6 +10693,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -9589,8 +10716,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -9735,6 +10861,7 @@
           "products"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -10052,6 +11179,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -10148,18 +11282,6 @@
                                 "number"
                               ]
                             },
-                            "supplierQuoteItemDiscount": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "supplierQuoteDiscount": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
                             "discount": {
                               "type": "number"
                             },
@@ -10199,6 +11321,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -10326,6 +11449,7 @@
           "client-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -10407,6 +11531,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string"
                   },
@@ -10427,8 +11558,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -10461,6 +11591,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -10558,18 +11695,6 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
                           "discount": {
                             "type": "number"
                           },
@@ -10609,6 +11734,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -10719,6 +11845,7 @@
           "client-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -10800,6 +11927,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string"
                   },
@@ -10859,6 +11993,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -10956,18 +12097,6 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
                           "discount": {
                             "type": "number"
                           },
@@ -11007,6 +12136,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -11258,6 +12388,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -11357,16 +12494,12 @@
                                 "number"
                               ]
                             },
-                            "supplierQuoteItemDiscount": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "supplierQuoteDiscount": {
-                              "type": [
-                                "null",
-                                "number"
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
                               ]
                             },
                             "note": {
@@ -11397,6 +12530,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -11523,6 +12657,7 @@
           "client-offers"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -11587,11 +12722,13 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
-                        "supplierQuoteItemDiscount": {
-                          "type": "number"
-                        },
-                        "supplierQuoteDiscount": {
-                          "type": "number"
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -11612,6 +12749,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -11634,8 +12778,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -11665,6 +12808,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -11765,16 +12915,12 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
                             ]
                           },
                           "note": {
@@ -11805,6 +12951,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -11914,6 +13061,7 @@
           "client-offers"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -11975,11 +13123,13 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
-                        "supplierQuoteItemDiscount": {
-                          "type": "number"
-                        },
-                        "supplierQuoteDiscount": {
-                          "type": "number"
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -12000,6 +13150,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -12054,6 +13211,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -12154,16 +13318,12 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
                             ]
                           },
                           "note": {
@@ -12194,6 +13354,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -12588,6 +13749,7 @@
           "work-units"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -12612,8 +13774,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -12789,6 +13950,7 @@
           "work-units"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13281,6 +14443,7 @@
           "work-units"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13298,8 +14461,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -13487,6 +14649,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -13579,16 +14748,12 @@
                                 "number"
                               ]
                             },
-                            "supplierQuoteItemDiscount": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "supplierQuoteDiscount": {
-                              "type": [
-                                "null",
-                                "number"
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
                               ]
                             },
                             "note": {
@@ -13624,6 +14789,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -13750,6 +14916,7 @@
           "clients-orders"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13817,11 +14984,13 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
-                        "supplierQuoteItemDiscount": {
-                          "type": "number"
-                        },
-                        "supplierQuoteDiscount": {
-                          "type": "number"
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -13843,6 +15012,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string"
                   },
@@ -13857,8 +15033,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -13897,6 +15072,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -13990,16 +15172,12 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
                             ]
                           },
                           "note": {
@@ -14035,6 +15213,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -14144,6 +15323,7 @@
           "clients-orders"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -14208,11 +15388,13 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
-                        "supplierQuoteItemDiscount": {
-                          "type": "number"
-                        },
-                        "supplierQuoteDiscount": {
-                          "type": "number"
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -14233,6 +15415,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -14292,6 +15481,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -14385,16 +15581,12 @@
                               "number"
                             ]
                           },
-                          "supplierQuoteItemDiscount": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "supplierQuoteDiscount": {
-                            "type": [
-                              "null",
-                              "number"
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
                             ]
                           },
                           "note": {
@@ -14430,6 +15622,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -14896,6 +16089,7 @@
           "invoices"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -14988,8 +16182,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -15219,6 +16412,7 @@
           "invoices"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -15854,6 +17048,7 @@
           "suppliers"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -15896,8 +17091,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -16083,6 +17277,7 @@
           "suppliers"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -16455,9 +17650,6 @@
                           "string"
                         ]
                       },
-                      "discount": {
-                        "type": "number"
-                      },
                       "status": {
                         "type": "string"
                       },
@@ -16512,9 +17704,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "discount": {
-                              "type": "number"
-                            },
                             "note": {
                               "type": [
                                 "null",
@@ -16535,8 +17724,7 @@
                             "quoteId",
                             "productName",
                             "quantity",
-                            "unitPrice",
-                            "discount"
+                            "unitPrice"
                           ]
                         }
                       }
@@ -16545,7 +17733,6 @@
                       "id",
                       "supplierId",
                       "supplierName",
-                      "discount",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -16672,6 +17859,7 @@
           "supplier-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -16703,9 +17891,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "discount": {
-                          "type": "number"
-                        },
                         "note": {
                           "type": "string"
                         },
@@ -16728,9 +17913,6 @@
                   "paymentTerms": {
                     "type": "string"
                   },
-                  "discount": {
-                    "type": "number"
-                  },
                   "status": {
                     "type": "string"
                   },
@@ -16751,8 +17933,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -16776,9 +17957,6 @@
                         "null",
                         "string"
                       ]
-                    },
-                    "discount": {
-                      "type": "number"
                     },
                     "status": {
                       "type": "string"
@@ -16834,9 +18012,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "discount": {
-                            "type": "number"
-                          },
                           "note": {
                             "type": [
                               "null",
@@ -16857,8 +18032,7 @@
                           "quoteId",
                           "productName",
                           "quantity",
-                          "unitPrice",
-                          "discount"
+                          "unitPrice"
                         ]
                       }
                     }
@@ -16867,7 +18041,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "discount",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -16977,6 +18150,7 @@
           "supplier-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -17008,9 +18182,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "discount": {
-                          "type": "number"
-                        },
                         "note": {
                           "type": "string"
                         },
@@ -17032,9 +18203,6 @@
                   },
                   "paymentTerms": {
                     "type": "string"
-                  },
-                  "discount": {
-                    "type": "number"
                   },
                   "status": {
                     "type": "string"
@@ -17083,9 +18251,6 @@
                         "null",
                         "string"
                       ]
-                    },
-                    "discount": {
-                      "type": "number"
                     },
                     "status": {
                       "type": "string"
@@ -17141,9 +18306,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "discount": {
-                            "type": "number"
-                          },
                           "note": {
                             "type": [
                               "null",
@@ -17164,8 +18326,7 @@
                           "quoteId",
                           "productName",
                           "quantity",
-                          "unitPrice",
-                          "discount"
+                          "unitPrice"
                         ]
                       }
                     }
@@ -17174,7 +18335,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "discount",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -17428,6 +18588,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string",
                         "enum": [
@@ -17500,6 +18667,7 @@
                       "supplierId",
                       "supplierName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -17626,6 +18794,7 @@
           "supplier-orders"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -17680,6 +18849,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -17699,8 +18875,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -17733,6 +18908,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string",
@@ -17806,6 +18988,7 @@
                     "supplierId",
                     "supplierName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -17915,6 +19098,7 @@
           "supplier-orders"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -17965,6 +19149,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string",
@@ -18022,6 +19213,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string",
@@ -18095,6 +19293,7 @@
                     "supplierId",
                     "supplierName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -18547,6 +19746,7 @@
           "supplier-invoices"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -18625,8 +19825,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -18842,6 +20041,7 @@
           "supplier-invoices"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -19271,9 +20471,6 @@
                           "string"
                         ]
                       },
-                      "discount": {
-                        "type": "number"
-                      },
                       "status": {
                         "type": "string"
                       },
@@ -19328,9 +20525,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "discount": {
-                              "type": "number"
-                            },
                             "note": {
                               "type": [
                                 "null",
@@ -19351,8 +20545,7 @@
                             "quoteId",
                             "productName",
                             "quantity",
-                            "unitPrice",
-                            "discount"
+                            "unitPrice"
                           ]
                         }
                       }
@@ -19361,7 +20554,6 @@
                       "id",
                       "supplierId",
                       "supplierName",
-                      "discount",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -19488,6 +20680,7 @@
           "supplier-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -19519,9 +20712,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "discount": {
-                          "type": "number"
-                        },
                         "note": {
                           "type": "string"
                         },
@@ -19544,9 +20734,6 @@
                   "paymentTerms": {
                     "type": "string"
                   },
-                  "discount": {
-                    "type": "number"
-                  },
                   "status": {
                     "type": "string"
                   },
@@ -19567,8 +20754,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -19592,9 +20778,6 @@
                         "null",
                         "string"
                       ]
-                    },
-                    "discount": {
-                      "type": "number"
                     },
                     "status": {
                       "type": "string"
@@ -19650,9 +20833,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "discount": {
-                            "type": "number"
-                          },
                           "note": {
                             "type": [
                               "null",
@@ -19673,8 +20853,7 @@
                           "quoteId",
                           "productName",
                           "quantity",
-                          "unitPrice",
-                          "discount"
+                          "unitPrice"
                         ]
                       }
                     }
@@ -19683,7 +20862,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "discount",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -19793,6 +20971,7 @@
           "supplier-quotes"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -19824,9 +21003,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "discount": {
-                          "type": "number"
-                        },
                         "note": {
                           "type": "string"
                         },
@@ -19848,9 +21024,6 @@
                   },
                   "paymentTerms": {
                     "type": "string"
-                  },
-                  "discount": {
-                    "type": "number"
                   },
                   "status": {
                     "type": "string"
@@ -19899,9 +21072,6 @@
                         "null",
                         "string"
                       ]
-                    },
-                    "discount": {
-                      "type": "number"
                     },
                     "status": {
                       "type": "string"
@@ -19957,9 +21127,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "discount": {
-                            "type": "number"
-                          },
                           "note": {
                             "type": [
                               "null",
@@ -19980,8 +21147,7 @@
                           "quoteId",
                           "productName",
                           "quantity",
-                          "unitPrice",
-                          "discount"
+                          "unitPrice"
                         ]
                       }
                     }
@@ -19990,7 +21156,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "discount",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -20394,6 +21559,7 @@
           "special-bids"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -20440,8 +21606,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -20608,6 +21773,7 @@
           "special-bids"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21640,6 +22806,7 @@
           "email"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21846,6 +23013,7 @@
           "email"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21860,8 +23028,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -22191,6 +23358,7 @@
           "roles"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22211,8 +23379,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -22370,6 +23537,7 @@
           "roles"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22384,8 +23552,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -22697,6 +23864,7 @@
           "roles"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22714,8 +23882,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -23032,6 +24199,7 @@
           "reports"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23458,6 +24626,7 @@
           "reports"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23478,8 +24647,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "400": {
@@ -23582,6 +24750,7 @@
           "reports"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23607,8 +24776,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "400": {
@@ -23711,6 +24879,7 @@
           "reports"
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23731,8 +24900,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
