@@ -789,13 +789,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                    <div className="col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
-                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
-                    <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
                   </div>
@@ -895,7 +895,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         </div>
                         <div className="hidden lg:flex gap-2 items-center">
                           <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-5">
+                            <div className="col-span-7">
                               <input
                                 type="text"
                                 value={item.productName || ''}
@@ -909,7 +909,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 className={itemInputClassName}
                               />
                             </div>
-                            <div className="col-span-3 flex items-center gap-1">
+                            <div className="col-span-2 flex items-center gap-1">
                               <ValidatedNumberInput
                                 value={item.quantity}
                                 onValueChange={(value) =>
@@ -923,7 +923,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               </span>
                               {renderUnitSelector(index, item)}
                             </div>
-                            <div className="col-span-4 flex items-center gap-1.5">
+                            <div className="col-span-3 flex items-center gap-1.5">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
                                 onValueChange={(value) =>

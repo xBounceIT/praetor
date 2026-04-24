@@ -1522,11 +1522,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {t('sales:clientQuotes.supplierQuoteBadge')}
                               </span>
                             )}
-                            {selectedBid && !selectedSupplierQuote && (
-                              <span className="inline-flex px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
-                                {t('sales:clientQuotes.bidBadge')}
-                              </span>
-                            )}
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
                                 value={cost.toFixed(2)}
@@ -1653,11 +1648,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               {selectedSupplierQuote && (
                                 <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
-                                </span>
-                              )}
-                              {selectedBid && !selectedSupplierQuote && (
-                                <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
-                                  {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
                               <div className="flex items-center gap-1 w-full">
