@@ -243,8 +243,6 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
         supplierName: string;
         productId: string | null;
         unitPrice: number;
-        itemDiscount: number;
-        quoteDiscount: number;
         netCost: number;
       }
     >();
@@ -256,9 +254,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
         sq.id as "quoteId",
         sq.supplier_name as "supplierName",
         sqi.product_id as "productId",
-        sqi.unit_price as "unitPrice",
-        sqi.discount as "itemDiscount",
-        sq.discount as "quoteDiscount"
+        sqi.unit_price as "unitPrice"
      FROM supplier_quote_items sqi
      JOIN supplier_quotes sq ON sq.id = sqi.quote_id
      WHERE sqi.id = ANY($1) AND sq.status = 'accepted'`,
@@ -272,24 +268,17 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
       supplierName: string;
       productId: string | null;
       unitPrice: number;
-      itemDiscount: number;
-      quoteDiscount: number;
       netCost: number;
     }
   >();
   result.rows.forEach((row) => {
-    // Calculate net cost after discounts
-    const lineDiscountedCost =
-      Number(row.unitPrice ?? 0) * (1 - Number(row.itemDiscount ?? 0) / 100);
-    const netCost = lineDiscountedCost * (1 - Number(row.quoteDiscount ?? 0) / 100);
+    const netCost = Number(row.unitPrice ?? 0);
 
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
       productId: normalizeNullableString(row.productId),
       unitPrice: Number(row.unitPrice ?? 0),
-      itemDiscount: Number(row.itemDiscount ?? 0),
-      quoteDiscount: Number(row.quoteDiscount ?? 0),
       netCost,
     });
   });
@@ -508,6 +497,7 @@ const quoteSchema = {
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
@@ -521,6 +511,7 @@ const quoteSchema = {
     'clientId',
     'clientName',
     'discount',
+    'discountType',
     'status',
     'createdAt',
     'updatedAt',

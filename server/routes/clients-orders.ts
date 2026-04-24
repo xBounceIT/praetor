@@ -75,6 +75,7 @@ const clientOrderSchema = {
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
@@ -87,6 +88,7 @@ const clientOrderSchema = {
     'clientId',
     'clientName',
     'discount',
+    'discountType',
     'status',
     'createdAt',
     'updatedAt',
@@ -566,14 +568,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const [sqResult, existingSupplierOrder, sqItems] = await Promise.all([
             query(
               `SELECT id, supplier_id as "supplierId", supplier_name as "supplierName",
-                      payment_terms as "paymentTerms", discount, notes, status
+                      payment_terms as "paymentTerms", notes, status
                FROM supplier_quotes WHERE id = $1`,
               [sqId],
             ),
             query('SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1', [sqId]),
             query(
               `SELECT id, product_id as "productId", product_name as "productName",
-                      quantity, unit_price as "unitPrice", discount, note
+                      quantity, unit_price as "unitPrice", note
                FROM supplier_quote_items WHERE quote_id = $1`,
               [sqId],
             ),
@@ -589,15 +591,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const supplierOrderId = await generateSupplierOrderId(tx);
             await tx.query(
               `INSERT INTO supplier_sales
-                (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7)`,
+                (id, linked_quote_id, supplier_id, supplier_name, payment_terms, status, notes)
+               VALUES ($1, $2, $3, $4, $5, 'draft', $6)`,
               [
                 supplierOrderId,
                 sqId,
                 sq.supplierId,
                 sq.supplierName,
                 sq.paymentTerms || 'immediate',
-                sq.discount || 0,
                 sq.notes,
               ],
             );
@@ -606,7 +607,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               const placeholders = items
                 .map(
                   (_, i) =>
-                    `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`,
+                    `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`,
                 )
                 .join(', ');
               const params = items.flatMap((item) => [
@@ -616,11 +617,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 item.productName,
                 item.quantity,
                 item.unitPrice,
-                item.discount || 0,
                 item.note,
               ]);
               await tx.query(
-                `INSERT INTO supplier_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
+                `INSERT INTO supplier_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, note)
                  VALUES ${placeholders}`,
                 params,
               );
