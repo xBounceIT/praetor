@@ -855,6 +855,108 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         },
       },
       {
+        header: t('sales:clientQuotes.globalDiscount'),
+        id: 'globalDiscount',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
+            >
+              {formatDiscountValue(row.discount, row.discountType, currency)}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
+        id: 'subtotal',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { subtotal } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+            >
+              {subtotal.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('common:labels.discount'),
+        id: 'discountAmount',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { discountAmount } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          const history = isHistoryRow(row);
+          if (discountAmount <= 0) {
+            return (
+              <span
+                className={`text-sm font-semibold ${history ? 'text-slate-300' : 'text-slate-400'}`}
+              >
+                -
+              </span>
+            );
+          }
+          return (
+            <span
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
+            >
+              -{discountAmount.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:clientQuotes.marginLabel'),
+        id: 'margin',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { margin } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-emerald-600'}`}
+            >
+              {margin.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
         header: t('sales:clientQuotes.totalColumn'),
         id: 'total',
         accessorFn: (row) =>

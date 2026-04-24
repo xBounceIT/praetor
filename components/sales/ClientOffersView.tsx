@@ -12,6 +12,7 @@ import type {
 } from '../../types';
 import {
   addMonthsToDateOnly,
+  formatInsertDate,
   getLocalDateString,
   isDateOnlyBeforeToday,
   isDateOnlyWithinInclusiveRange,
@@ -273,10 +274,114 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
       },
       {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
+        cell: ({ row }) => {
+          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+          return formatInsertDate(timestamp);
+        },
+      },
+      {
         header: t('sales:clientOffers.clientColumn', { defaultValue: 'Client' }),
         accessorKey: 'clientName',
         cell: ({ row }) => {
           return <div className="font-bold text-slate-800">{row.clientName}</div>;
+        },
+      },
+      {
+        header: t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount' }),
+        id: 'globalDiscount',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => {
+          return (
+            <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">
+              {formatDiscountValue(row.discount, row.discountType, currency)}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' }),
+        id: 'subtotal',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { subtotal } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          return (
+            <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">
+              {subtotal.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('common:labels.discount'),
+        id: 'discountAmount',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { discountAmount } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          if (discountAmount <= 0) {
+            return <span className="text-sm font-semibold text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
+              -{discountAmount.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
+        id: 'margin',
+        accessorFn: (row) =>
+          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { margin } = calculatePricingTotals(
+            row.items,
+            row.discount,
+            'hours',
+            row.discountType,
+          );
+          return (
+            <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
+              {margin.toFixed(2)} {currency}
+            </span>
+          );
         },
       },
       {
