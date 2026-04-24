@@ -890,8 +890,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         onClose={closeAssignments}
         users={assignableUsers}
         roles={roles}
-        loadAssignedUserIds={(signal) => projectsApi.getUsers(managingProjectId!, signal)}
-        saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId!, ids)}
+        loadAssignedUserIds={(signal) => projectsApi.getUsers(managingProjectId as string, signal)}
+        saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId as string, ids)}
         entityLabel={t('common:labels.project')}
         entityName={managingProject?.name || ''}
         disabled={!canManageAssignments}

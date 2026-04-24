@@ -12,11 +12,6 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'draft', name: t('accounting:supplierOrders.statusDraft') },
-  { id: 'sent', name: t('accounting:supplierOrders.statusSent') },
-];
-
 const getOrderStatusLabel = (
   status: SupplierSaleOrder['status'],
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -87,7 +82,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
-  const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
     () => suppliers.filter((supplier) => !supplier.isDisabled),
     [suppliers],

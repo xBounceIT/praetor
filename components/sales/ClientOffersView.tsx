@@ -594,7 +594,19 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
           const lineDiscountedCost =
             selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
-          const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+          let netCost: number;
+          if (selectedQuote.discountType === 'currency' && selectedQuote.discount > 0) {
+            const quoteSubtotal = selectedQuote.items.reduce(
+              (sum, item) => sum + item.unitPrice * (1 - (item.discount ?? 0) / 100),
+              0,
+            );
+            netCost =
+              quoteSubtotal > 0
+                ? lineDiscountedCost - (lineDiscountedCost / quoteSubtotal) * selectedQuote.discount
+                : lineDiscountedCost;
+          } else {
+            netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+          }
 
           current.productId = selectedQuoteItem.productId || '';
           current.productName = product?.name || selectedQuoteItem.productName;

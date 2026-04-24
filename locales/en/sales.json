@@ -134,7 +134,8 @@
     "clientChangeRepriceNow": "Reprice lines",
     "clientChangeRepriceCancel": "Cancel",
     "supplierQuoteColumn": "Supplier Quote",
-    "revenue": "Revenue"
+    "revenue": "Revenue",
+    "molLabel": "MOL"
   },
   "clientOffers": {
     "title": "Client Offers",

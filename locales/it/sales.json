@@ -134,7 +134,8 @@
     "clientChangeRepriceNow": "Ricalcola righe",
     "clientChangeRepriceCancel": "Annulla",
     "supplierQuoteColumn": "Preventivo Fornitore",
-    "revenue": "Ricavi"
+    "revenue": "Ricavi",
+    "molLabel": "MOL"
   },
   "clientOffers": {
     "title": "Offerte Clienti",

@@ -15,7 +15,6 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   formatDiscountValue,
-  getEffectiveCost,
   getItemPricingContext,
   parseNumberInputValue,
   roundToTwoDecimals,
@@ -30,12 +29,6 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-
-const getStatusOptions = (t: (key: string) => string) => [
-  { id: 'draft', name: t('accounting:clientsOrders.statusDraft') },
-  { id: 'confirmed', name: t('accounting:clientsOrders.statusConfirmed') },
-  { id: 'denied', name: t('accounting:clientsOrders.statusDenied') },
-];
 
 export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
@@ -589,15 +582,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [
-      currency,
-      onUpdateClientsOrder,
-      onViewOffer,
-      t,
-      calculatePricingTotals,
-      confirmDelete,
-      openEditModal,
-    ],
+    [currency, onUpdateClientsOrder, onViewOffer, t, confirmDelete, openEditModal],
   );
 
   return (
