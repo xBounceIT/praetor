@@ -260,7 +260,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newErrors.items = t('sales:clientQuotes.errors.quantityGreaterThanZero');
       }
       if (!newErrors.items) {
-        const { total } = calculatePricingTotals(formData.items, discountValue);
+        const { total } = calculatePricingTotals(
+          formData.items,
+          discountValue,
+          'hours',
+          formData.discountType || 'percentage',
+        );
         if (!Number.isFinite(total) || total <= 0) {
           newErrors.total = t('sales:clientQuotes.errors.totalGreaterThanZero');
         }

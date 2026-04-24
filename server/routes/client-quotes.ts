@@ -1235,7 +1235,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, (err as Error).message);
         }
 
-        const totals = calculateQuoteTotals(normalizedItems, effectiveDiscount as number);
+        const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+        const totals = calculateQuoteTotals(
+          normalizedItems,
+          effectiveDiscount as number,
+          effectiveDiscountType,
+        );
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
