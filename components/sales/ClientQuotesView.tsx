@@ -24,7 +24,6 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
-  getEffectiveCost,
   getItemPricingContext,
   parseNumberInputValue,
   roundToTwoDecimals,
@@ -1661,20 +1660,28 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <ValidatedNumberInput
-                                value={cost.toFixed(2)}
-                                onValueChange={handleCostChange}
-                                disabled={isReadOnly}
-                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
+                              <div className="flex items-center gap-1 w-full">
+                                <ValidatedNumberInput
+                                  value={cost.toFixed(2)}
+                                  onValueChange={handleCostChange}
+                                  disabled={isReadOnly}
+                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
-                            <div className="col-span-1 flex items-center justify-center">
+                            <div className="col-span-1 flex items-center justify-center gap-1">
                               <ValidatedNumberInput
                                 value={molPercentage.toFixed(1)}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                %
+                              </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
