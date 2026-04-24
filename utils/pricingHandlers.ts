@@ -1,3 +1,4 @@
+import type { SupplierUnitType } from '../types';
 import {
   calcProductSalePrice,
   convertUnitPrice,
@@ -6,14 +7,13 @@ import {
   type PricingItem,
   parseNumberInputValue,
   roundToTwoDecimals,
-  type UnitType,
 } from './numbers';
 
 export const makeCostUpdater =
   <T extends { items?: PricingItem[] }>(
     index: number,
     value: string,
-    defaultUnitType: UnitType = 'hours',
+    defaultUnitType: SupplierUnitType = 'hours',
   ) =>
   (prev: T): T => {
     const items = prev.items || [];
@@ -46,7 +46,7 @@ export const makeMolUpdater =
   <T extends { items?: PricingItem[] }>(
     index: number,
     value: string,
-    defaultUnitType: UnitType = 'hours',
+    defaultUnitType: SupplierUnitType = 'hours',
   ) =>
   (prev: T): T => {
     const items = prev.items || [];

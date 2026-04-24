@@ -519,6 +519,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items !== undefined ||
         paymentTerms !== undefined ||
         discount !== undefined ||
+        discountType !== undefined ||
         notes !== undefined;
       if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({

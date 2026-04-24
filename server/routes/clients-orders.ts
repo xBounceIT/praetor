@@ -9,6 +9,7 @@ import {
   generateSupplierOrderId,
 } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { normalizeUnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
@@ -23,14 +24,6 @@ interface DatabaseError extends Error {
   constraint?: string;
   detail?: string;
 }
-
-type UnitType = 'hours' | 'days' | 'unit';
-
-const normalizeUnitType = (value: unknown): UnitType => {
-  if (value === 'days') return 'days';
-  if (value === 'unit') return 'unit';
-  return 'hours';
-};
 
 const idParamSchema = {
   type: 'object',
@@ -910,6 +903,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientNameValue !== undefined ||
         paymentTerms !== undefined ||
         discountValue !== undefined ||
+        discountType !== undefined ||
         notes !== undefined ||
         items !== undefined;
 

@@ -5,6 +5,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
@@ -37,8 +38,6 @@ type IncomingQuoteItem = {
   unitType?: UnitType;
 };
 
-type UnitType = 'hours' | 'days' | 'unit';
-
 type QuoteItemSnapshot = {
   productCost: number;
   productMolPercentage: number | null;
@@ -60,12 +59,6 @@ const normalizeNullableString = (value: unknown) => {
 };
 
 const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
-
-const normalizeUnitType = (value: unknown): UnitType => {
-  if (value === 'days') return 'days';
-  if (value === 'unit') return 'unit';
-  return 'hours';
-};
 
 const normalizeQuoteItems = (
   items: unknown[],
@@ -1003,6 +996,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items === undefined &&
         paymentTerms === undefined &&
         discount === undefined &&
+        discountType === undefined &&
         status === undefined &&
         expirationDate === undefined &&
         notes === undefined &&
@@ -1034,6 +1028,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items !== undefined ||
         paymentTerms !== undefined ||
         discount !== undefined ||
+        discountType !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined ||
         isExpiredOverride !== undefined;

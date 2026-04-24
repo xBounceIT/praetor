@@ -2130,3 +2130,23 @@ ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_item_disco
 ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_discount;
 ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
 ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_discount;
+
+-- Enforce discount_type values at DB level (idempotent)
+ALTER TABLE quotes          DROP CONSTRAINT IF EXISTS chk_quotes_discount_type;
+ALTER TABLE quotes          ADD  CONSTRAINT chk_quotes_discount_type          CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE customer_offers DROP CONSTRAINT IF EXISTS chk_customer_offers_discount_type;
+ALTER TABLE customer_offers ADD  CONSTRAINT chk_customer_offers_discount_type CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE sales           DROP CONSTRAINT IF EXISTS chk_sales_discount_type;
+ALTER TABLE sales           ADD  CONSTRAINT chk_sales_discount_type           CHECK (discount_type IN ('percentage', 'currency'));
+ALTER TABLE supplier_sales  DROP CONSTRAINT IF EXISTS chk_supplier_sales_discount_type;
+ALTER TABLE supplier_sales  ADD  CONSTRAINT chk_supplier_sales_discount_type  CHECK (discount_type IN ('percentage', 'currency'));
+
+-- Enforce unit_type values at DB level (idempotent)
+ALTER TABLE quote_items          DROP CONSTRAINT IF EXISTS chk_quote_items_unit_type;
+ALTER TABLE quote_items          ADD  CONSTRAINT chk_quote_items_unit_type          CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE customer_offer_items DROP CONSTRAINT IF EXISTS chk_customer_offer_items_unit_type;
+ALTER TABLE customer_offer_items ADD  CONSTRAINT chk_customer_offer_items_unit_type CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE sale_items           DROP CONSTRAINT IF EXISTS chk_sale_items_unit_type;
+ALTER TABLE sale_items           ADD  CONSTRAINT chk_sale_items_unit_type           CHECK (unit_type IN ('hours', 'days', 'unit'));
+ALTER TABLE supplier_quote_items DROP CONSTRAINT IF EXISTS chk_supplier_quote_items_unit_type;
+ALTER TABLE supplier_quote_items ADD  CONSTRAINT chk_supplier_quote_items_unit_type CHECK (unit_type IN ('hours', 'days', 'unit'));

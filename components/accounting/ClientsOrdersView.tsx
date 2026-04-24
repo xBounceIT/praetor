@@ -861,6 +861,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   isSupply={isSupply}
                                   quantity={Number(item.quantity) || 0}
                                   disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  i18nPrefix="sales:clientQuotes"
                                 />
                               </div>
                             </div>

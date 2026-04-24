@@ -1,5 +1,4 @@
 import type { DiscountType, SupplierUnitType } from '../types';
-export type UnitType = SupplierUnitType;
 
 export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
   if (value === '') return fallback;
@@ -11,13 +10,18 @@ export const roundToTwoDecimals = (value: number) => {
   return Number(Math.round(Number(value + 'e2')) + 'e-2');
 };
 
-export const convertUnitPrice = (price: number, fromType: UnitType, toType: UnitType): number => {
+export const convertUnitPrice = (
+  price: number,
+  fromType: SupplierUnitType,
+  toType: SupplierUnitType,
+): number => {
   if (fromType === toType) return price;
   const hourly = fromType === 'days' ? price / 8 : price;
   return toType === 'days' ? hourly * 8 : hourly;
 };
 
 export const calcProductSalePrice = (cost: number, molPercentage: number): number => {
+  // Guard against ≥100% MOL (would produce ≤0 or negative denominator)
   if (molPercentage >= 100) return cost;
   return cost / (1 - molPercentage / 100);
 };
@@ -30,7 +34,7 @@ export interface PricingItem {
   specialBidId?: string;
   specialBidUnitPrice?: number | null;
   productCost?: number;
-  unitType?: UnitType;
+  unitType?: SupplierUnitType;
   quantity?: number;
   productMolPercentage?: number | null;
   specialBidMolPercentage?: number | null;
@@ -57,7 +61,7 @@ export interface ItemPricingContext {
 
 export const getItemPricingContext = (
   item: PricingItem,
-  defaultUnitType: UnitType = 'hours',
+  defaultUnitType: SupplierUnitType = 'hours',
 ): ItemPricingContext => {
   const baseCost = getEffectiveCost(item);
   const unitCost = convertUnitPrice(baseCost, 'hours', item.unitType || defaultUnitType);
@@ -78,7 +82,7 @@ export interface PricingTotals {
 export const calculatePricingTotals = (
   items: PricingItem[],
   globalDiscount: number,
-  defaultUnitType: UnitType = 'hours',
+  defaultUnitType: SupplierUnitType = 'hours',
   discountType: DiscountType = 'percentage',
 ): PricingTotals => {
   let subtotal = 0;
