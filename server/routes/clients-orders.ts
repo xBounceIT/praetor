@@ -24,6 +24,14 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+type UnitType = 'hours' | 'days' | 'unit';
+
+const normalizeUnitType = (value: unknown): UnitType => {
+  if (value === 'days') return 'days';
+  if (value === 'unit') return 'unit';
+  return 'hours';
+};
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -50,6 +58,7 @@ const clientOrderItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
@@ -102,6 +111,7 @@ const clientOrderItemBodySchema = {
     supplierQuoteItemId: { type: 'string' },
     supplierQuoteSupplierName: { type: 'string' },
     supplierQuoteUnitPrice: { type: 'number' },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
   },
@@ -186,6 +196,7 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
     row.supplierQuoteUnitPrice,
     'clientOrderItem.supplierQuoteUnitPrice',
   ),
+  unitType: normalizeUnitType(row.unitType),
   note: toNullableString(row.note),
   discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
 });
@@ -265,6 +276,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 supplier_quote_item_id as "supplierQuoteItemId",
                 supplier_quote_supplier_name as "supplierQuoteSupplierName",
                 supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                unit_type as "unitType",
                 note,
                 discount
             FROM sale_items
@@ -394,6 +406,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
               ? null
               : Number(item.specialBidMolPercentage),
+          unitType: normalizeUnitType(item.unitType),
           discount: itemDiscountResult.value || 0,
         });
       }
@@ -491,8 +504,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                  RETURNING
                     id,
                     sale_id as "orderId",
@@ -509,6 +522,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                    unit_type as "unitType",
                     discount,
                     note`,
           [
@@ -529,6 +543,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.supplierQuoteItemId ?? null,
             item.supplierQuoteSupplierName ?? null,
             item.supplierQuoteUnitPrice ?? null,
+            item.unitType || 'hours',
           ],
         );
         createdItems.push(
@@ -802,6 +817,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
                 ? null
                 : Number(item.specialBidMolPercentage),
+            unitType: normalizeUnitType(item.unitType),
             discount: itemDiscountResult.value || 0,
           });
         }
@@ -965,8 +981,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                             supplier_quote_id as "supplierQuoteId",
                             supplier_quote_item_id as "supplierQuoteItemId",
                             supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    discount,
+                            supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                            unit_type as "unitType",
+                            discount,
                             note
                         FROM sale_items
                         WHERE sale_id = $1`,
@@ -1125,8 +1142,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         supplier_quote_id as "supplierQuoteId",
                         supplier_quote_item_id as "supplierQuoteItemId",
                         supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                         supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                         discount,
+                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                        unit_type as "unitType",
+                        discount,
                          note
                      FROM sale_items
                      WHERE sale_id = $1`,
@@ -1145,8 +1163,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                      RETURNING
                         id,
                         sale_id as "orderId",
@@ -1162,8 +1180,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         supplier_quote_id as "supplierQuoteId",
                         supplier_quote_item_id as "supplierQuoteItemId",
                         supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                         supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                         discount,
+                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                        unit_type as "unitType",
+                        discount,
                          note`,
             [
               itemId,
@@ -1183,6 +1202,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
+              item.unitType || 'hours',
             ],
           );
           updatedItems.push(
@@ -1208,6 +1228,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                    unit_type as "unitType",
                     discount,
                     note
                 FROM sale_items

@@ -964,6 +964,7 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_items(offer_id);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 -- Supplier quote source tracking columns for customer_offer_items
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
@@ -1188,6 +1189,7 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT 
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 DO $$
 BEGIN
     IF EXISTS (
