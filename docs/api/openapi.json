@@ -11179,6 +11179,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -11314,6 +11321,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -11523,6 +11531,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string"
                   },
@@ -11576,6 +11591,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -11712,6 +11734,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -11904,6 +11927,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string"
                   },
@@ -11963,6 +11993,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -12099,6 +12136,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -12350,6 +12388,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -12449,6 +12494,14 @@
                                 "number"
                               ]
                             },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -12477,6 +12530,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -12668,6 +12722,14 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -12687,6 +12749,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -12739,6 +12808,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -12839,6 +12915,14 @@
                               "number"
                             ]
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "note": {
                             "type": [
                               "null",
@@ -12867,6 +12951,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -13038,6 +13123,14 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -13057,6 +13150,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -13111,6 +13211,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -13211,6 +13318,14 @@
                               "number"
                             ]
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "note": {
                             "type": [
                               "null",
@@ -13239,6 +13354,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -14533,6 +14649,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string"
                       },
@@ -14625,6 +14748,14 @@
                                 "number"
                               ]
                             },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -14658,6 +14789,7 @@
                       "clientId",
                       "clientName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -14852,6 +14984,14 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -14871,6 +15011,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -14925,6 +15072,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -15018,6 +15172,14 @@
                               "number"
                             ]
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "note": {
                             "type": [
                               "null",
@@ -15051,6 +15213,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -15225,6 +15388,14 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -15244,6 +15415,13 @@
                   },
                   "discount": {
                     "type": "number"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
                   },
                   "status": {
                     "type": "string"
@@ -15303,6 +15481,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string"
@@ -15396,6 +15581,14 @@
                               "number"
                             ]
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "note": {
                             "type": [
                               "null",
@@ -15429,6 +15622,7 @@
                     "clientId",
                     "clientName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -18394,6 +18588,13 @@
                       "discount": {
                         "type": "number"
                       },
+                      "discountType": {
+                        "type": "string",
+                        "enum": [
+                          "percentage",
+                          "currency"
+                        ]
+                      },
                       "status": {
                         "type": "string",
                         "enum": [
@@ -18466,6 +18667,7 @@
                       "supplierId",
                       "supplierName",
                       "discount",
+                      "discountType",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -18647,6 +18849,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -18699,6 +18908,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string",
@@ -18772,6 +18988,7 @@
                     "supplierId",
                     "supplierName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -18933,6 +19150,13 @@
                   "discount": {
                     "type": "number"
                   },
+                  "discountType": {
+                    "type": "string",
+                    "enum": [
+                      "percentage",
+                      "currency"
+                    ]
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -18989,6 +19213,13 @@
                     },
                     "discount": {
                       "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
                     },
                     "status": {
                       "type": "string",
@@ -19062,6 +19293,7 @@
                     "supplierId",
                     "supplierName",
                     "discount",
+                    "discountType",
                     "status",
                     "createdAt",
                     "updatedAt",
