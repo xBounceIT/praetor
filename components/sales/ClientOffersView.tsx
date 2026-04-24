@@ -264,303 +264,291 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [STATUS_OPTIONS],
   );
 
-  const columns = useMemo<Column<ClientOffer>[]>(
-    () => [
-      {
-        header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
-        accessorKey: 'id',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+  const columns: Column<ClientOffer>[] = [
+    {
+      header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
+      accessorKey: 'id',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+    },
+    {
+      header: t('crm:clients.tableHeaders.insertDate'),
+      id: 'createdAt',
+      accessorFn: (row) => row.createdAt ?? 0,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      cell: ({ row }) => {
+        if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+        return (
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {formatInsertDate(row.createdAt)}
+          </span>
+        );
       },
-      {
-        header: t('crm:clients.tableHeaders.insertDate'),
-        id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        cell: ({ row }) => {
-          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
-          return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
-            </span>
-          );
-        },
-        filterFormat: (value) => {
-          const timestamp = typeof value === 'number' ? value : Number(value);
-          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-          return formatInsertDate(timestamp);
-        },
+      filterFormat: (value) => {
+        const timestamp = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+        return formatInsertDate(timestamp);
       },
-      {
-        header: t('sales:clientOffers.clientColumn', { defaultValue: 'Client' }),
-        accessorKey: 'clientName',
-        cell: ({ row }) => {
-          return <div className="font-bold text-slate-800">{row.clientName}</div>;
-        },
+    },
+    {
+      header: t('sales:clientOffers.clientColumn', { defaultValue: 'Client' }),
+      accessorKey: 'clientName',
+      cell: ({ row }) => {
+        return <div className="font-bold text-slate-800">{row.clientName}</div>;
       },
-      {
-        header: t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount' }),
-        id: 'globalDiscount',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) => {
-          return (
-            <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">
-              {formatDiscountValue(row.discount, row.discountType, currency)}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount' }),
+      id: 'globalDiscount',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        return (
+          <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">
+            {formatDiscountValue(row.discount, row.discountType, currency)}
+          </span>
+        );
       },
-      {
-        header: t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' }),
-        id: 'subtotal',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { subtotal } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          return (
-            <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">
-              {subtotal.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' }),
+      id: 'subtotal',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { subtotal } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return (
+          <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">
+            {subtotal.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('common:labels.discount'),
-        id: 'discountAmount',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { discountAmount } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          if (discountAmount <= 0) {
-            return <span className="text-sm font-semibold text-slate-400">-</span>;
-          }
-          return (
-            <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
-              -{discountAmount.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('common:labels.discount'),
+      id: 'discountAmount',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { discountAmount } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        if (discountAmount <= 0) {
+          return <span className="text-sm font-semibold text-slate-400">-</span>;
+        }
+        return (
+          <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
+            -{discountAmount.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
-        id: 'margin',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { margin } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          return (
-            <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
-              {margin.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
+      id: 'margin',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { margin } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return (
+          <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
+            {margin.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
-        id: 'total',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { total } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          return (
-            <span className="text-sm font-bold text-slate-700">
-              {total.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
+      id: 'total',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { total } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return (
+          <span className="text-sm font-bold text-slate-700">
+            {total.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
-        accessorKey: 'status',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        cell: ({ row }) => {
-          return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
-        },
+    },
+    {
+      header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
+      accessorKey: 'status',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      cell: ({ row }) => {
+        return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
       },
-      {
-        header: 'linkedQuoteId',
-        accessorKey: 'linkedQuoteId',
-        hidden: true,
-      },
-      {
-        header: t('sales:clientOffers.actionsColumn', { defaultValue: 'Actions' }),
-        id: 'actions',
-        align: 'right',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const hasOrder = offerIdsWithOrders.has(row.id);
+    },
+    {
+      header: 'linkedQuoteId',
+      accessorKey: 'linkedQuoteId',
+      hidden: true,
+    },
+    {
+      header: t('sales:clientOffers.actionsColumn', { defaultValue: 'Actions' }),
+      id: 'actions',
+      align: 'right',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const hasOrder = offerIdsWithOrders.has(row.id);
 
-          return (
-            <div className="flex justify-end gap-2">
-              {row.linkedQuoteId && onViewQuote && (
-                <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewQuote(row.linkedQuoteId);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
-              <Tooltip label={t('common:buttons.edit')}>
+        return (
+          <div className="flex justify-end gap-2">
+            {row.linkedQuoteId && onViewQuote && (
+              <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
                 {() => (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      openEditModal(row);
+                      onViewQuote(row.linkedQuoteId);
                     }}
                     className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                   >
-                    <i className="fa-solid fa-pen-to-square"></i>
+                    <i className="fa-solid fa-link"></i>
                   </button>
                 )}
               </Tooltip>
-              {row.status === 'draft' && (
-                <Tooltip label={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateOffer(row.id, { status: 'sent' });
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                    >
-                      <i className="fa-solid fa-paper-plane"></i>
-                    </button>
-                  )}
-                </Tooltip>
+            )}
+            <Tooltip label={t('common:buttons.edit')}>
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(row);
+                  }}
+                  className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
               )}
-              {row.status === 'sent' && (
-                <>
-                  <Tooltip
-                    label={t('sales:clientOffers.markAccepted', {
-                      defaultValue: 'Mark as accepted',
-                    })}
+            </Tooltip>
+            {row.status === 'draft' && (
+              <Tooltip label={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateOffer(row.id, { status: 'sent' });
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                   >
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdateOffer(row.id, { status: 'accepted' });
-                        }}
-                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                      >
-                        <i className="fa-solid fa-check"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  <Tooltip
-                    label={t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
-                  >
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdateOffer(row.id, { status: 'denied' });
-                        }}
-                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                </>
-              )}
-              {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
+                    <i className="fa-solid fa-paper-plane"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'sent' && (
+              <>
                 <Tooltip
-                  label={t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
+                  label={t('sales:clientOffers.markAccepted', {
+                    defaultValue: 'Mark as accepted',
+                  })}
                 >
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onCreateClientsOrder(row);
+                        onUpdateOffer(row.id, { status: 'accepted' });
                       }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
                     >
-                      <i className="fa-solid fa-cart-plus"></i>
+                      <i className="fa-solid fa-check"></i>
                     </button>
                   )}
                 </Tooltip>
-              )}
-              {row.status === 'draft' && (
-                <Tooltip label={t('common:buttons.delete')}>
+                <Tooltip
+                  label={t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
+                >
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOfferToDelete(row);
-                        setIsDeleteConfirmOpen(true);
+                        onUpdateOffer(row.id, { status: 'denied' });
                       }}
-                      className="p-2 text-slate-400 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
                     >
-                      <i className="fa-solid fa-trash-can"></i>
+                      <i className="fa-solid fa-xmark"></i>
                     </button>
                   )}
                 </Tooltip>
-              )}
-            </div>
-          );
-        },
+              </>
+            )}
+            {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
+              <Tooltip
+                label={t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
+              >
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateClientsOrder(row);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-cart-plus"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'draft' && (
+              <Tooltip label={t('common:buttons.delete')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOfferToDelete(row);
+                      setIsDeleteConfirmOpen(true);
+                    }}
+                    className="p-2 text-slate-400 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+          </div>
+        );
       },
-    ],
-    [
-      t,
-      currency,
-      getStatusLabel,
-      onViewQuote,
-      onUpdateOffer,
-      onCreateClientsOrder,
-      offerIdsWithOrders,
-      openEditModal,
-    ],
-  );
+    },
+  ];
 
   const openAddModal = () => {
     setEditingOffer(null);

@@ -814,285 +814,341 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   };
 
   // Column definitions for StandardTable
-  const columns = useMemo<Column<Quote>[]>(
-    () => [
-      {
-        header: t('sales:clientQuotes.quoteCodeColumn'),
-        accessorKey: 'id',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+  const columns: Column<Quote>[] = [
+    {
+      header: t('sales:clientQuotes.quoteCodeColumn'),
+      accessorKey: 'id',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+    },
+    {
+      header: t('crm:clients.tableHeaders.insertDate'),
+      id: 'createdAt',
+      accessorFn: (row) => row.createdAt ?? 0,
+      className: 'whitespace-nowrap',
+      cell: ({ row }) => {
+        if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+        return (
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {formatInsertDate(row.createdAt)}
+          </span>
+        );
       },
-      {
-        header: t('crm:clients.tableHeaders.insertDate'),
-        id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        className: 'whitespace-nowrap',
-        cell: ({ row }) => {
-          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
-          return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
-            </span>
-          );
-        },
-        filterFormat: (value) => {
-          const timestamp = typeof value === 'number' ? value : Number(value);
-          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-          return formatInsertDate(timestamp);
-        },
+      filterFormat: (value) => {
+        const timestamp = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+        return formatInsertDate(timestamp);
       },
-      {
-        header: t('sales:clientQuotes.clientColumn'),
-        accessorKey: 'clientName',
-        cell: ({ row }) => {
-          const history = isHistoryRow(row);
-          return (
-            <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
-              {row.clientName}
-            </div>
-          );
-        },
+    },
+    {
+      header: t('sales:clientQuotes.clientColumn'),
+      accessorKey: 'clientName',
+      cell: ({ row }) => {
+        const history = isHistoryRow(row);
+        return (
+          <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+            {row.clientName}
+          </div>
+        );
       },
-      {
-        header: t('sales:clientQuotes.globalDiscount'),
-        id: 'globalDiscount',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const history = isHistoryRow(row);
+    },
+    {
+      header: t('sales:clientQuotes.globalDiscount'),
+      id: 'globalDiscount',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
+          >
+            {formatDiscountValue(row.discount, row.discountType, currency)}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
+      id: 'subtotal',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { subtotal } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+          >
+            {subtotal.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('common:labels.discount'),
+      id: 'discountAmount',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { discountAmount } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        const history = isHistoryRow(row);
+        if (discountAmount <= 0) {
           return (
             <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
+              className={`text-sm font-semibold ${history ? 'text-slate-300' : 'text-slate-400'}`}
             >
-              {formatDiscountValue(row.discount, row.discountType, currency)}
+              -
             </span>
           );
-        },
+        }
+        return (
+          <span
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
+          >
+            -{discountAmount.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
-        id: 'subtotal',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { subtotal } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          const history = isHistoryRow(row);
-          return (
-            <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
-            >
-              {subtotal.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientQuotes.marginLabel'),
+      id: 'margin',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { margin } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-emerald-600'}`}
+          >
+            {margin.toFixed(2)} {currency}
+          </span>
+        );
       },
-      {
-        header: t('common:labels.discount'),
-        id: 'discountAmount',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { discountAmount } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          const history = isHistoryRow(row);
-          if (discountAmount <= 0) {
-            return (
-              <span
-                className={`text-sm font-semibold ${history ? 'text-slate-300' : 'text-slate-400'}`}
-              >
-                -
+    },
+    {
+      header: t('sales:clientQuotes.totalColumn'),
+      id: 'total',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { total } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+          >
+            {total.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientQuotes.paymentTermsColumn'),
+      accessorKey: 'paymentTerms',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[10rem]',
+      cell: ({ row }) => {
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
+          >
+            {row.paymentTerms === 'immediate'
+              ? t('sales:clientQuotes.immediatePayment')
+              : row.paymentTerms}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientQuotes.expirationColumn'),
+      accessorKey: 'expirationDate',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      cell: ({ row }) => {
+        const expired = isQuoteExpired(row);
+        const history = isHistoryRow(row);
+        return (
+          <div
+            className={`text-sm ${
+              history ? 'text-slate-400' : expired ? 'text-red-600 font-bold' : 'text-slate-600'
+            }`}
+          >
+            {formatDateOnlyForLocale(row.expirationDate)}
+            {expired && !history && (
+              <span className="ml-2 text-[10px] font-black">
+                {t('sales:clientQuotes.expiredLabel')}
               </span>
-            );
-          }
-          return (
-            <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
-            >
-              -{discountAmount.toFixed(2)} {currency}
-            </span>
-          );
-        },
+            )}
+          </div>
+        );
       },
-      {
-        header: t('sales:clientQuotes.marginLabel'),
-        id: 'margin',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { margin } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          const history = isHistoryRow(row);
-          return (
-            <span
-              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-emerald-600'}`}
-            >
-              {margin.toFixed(2)} {currency}
-            </span>
-          );
-        },
+    },
+    {
+      header: t('sales:clientQuotes.statusColumn'),
+      accessorKey: 'status',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      cell: ({ row }) => {
+        const expired = isQuoteExpired(row);
+        const history = isHistoryRow(row);
+        return (
+          <div className={history ? 'opacity-60' : ''}>
+            <StatusBadge
+              type={expired ? 'expired' : (row.status as StatusType)}
+              label={getStatusLabel(row.status)}
+            />
+          </div>
+        );
       },
-      {
-        header: t('sales:clientQuotes.totalColumn'),
-        id: 'total',
-        accessorFn: (row) =>
-          calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const { total } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            'hours',
-            row.discountType,
-          );
-          const history = isHistoryRow(row);
-          return (
-            <span
-              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
-            >
-              {total.toFixed(2)} {currency}
-            </span>
-          );
-        },
-      },
-      {
-        header: t('sales:clientQuotes.paymentTermsColumn'),
-        accessorKey: 'paymentTerms',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[10rem]',
-        cell: ({ row }) => {
-          const history = isHistoryRow(row);
-          return (
-            <span
-              className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
-            >
-              {row.paymentTerms === 'immediate'
-                ? t('sales:clientQuotes.immediatePayment')
-                : row.paymentTerms}
-            </span>
-          );
-        },
-      },
-      {
-        header: t('sales:clientQuotes.expirationColumn'),
-        accessorKey: 'expirationDate',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        cell: ({ row }) => {
-          const expired = isQuoteExpired(row);
-          const history = isHistoryRow(row);
-          return (
-            <div
-              className={`text-sm ${
-                history ? 'text-slate-400' : expired ? 'text-red-600 font-bold' : 'text-slate-600'
-              }`}
-            >
-              {formatDateOnlyForLocale(row.expirationDate)}
-              {expired && !history && (
-                <span className="ml-2 text-[10px] font-black">
-                  {t('sales:clientQuotes.expiredLabel')}
-                </span>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        header: t('sales:clientQuotes.statusColumn'),
-        accessorKey: 'status',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        cell: ({ row }) => {
-          const expired = isQuoteExpired(row);
-          const history = isHistoryRow(row);
-          return (
-            <div className={history ? 'opacity-60' : ''}>
-              <StatusBadge
-                type={expired ? 'expired' : (row.status as StatusType)}
-                label={getStatusLabel(row.status)}
-              />
-            </div>
-          );
-        },
-      },
-      {
-        header: t('sales:clientQuotes.actionsColumn'),
-        id: 'actions',
-        align: 'right',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[9rem]',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) => {
-          const expired = isQuoteExpired(row);
-          const hasOffer = hasOfferForQuote(row);
-          const offerStatus = getOfferStatusForQuote(row);
-          const history = isHistoryRow(row);
+    },
+    {
+      header: t('sales:clientQuotes.actionsColumn'),
+      id: 'actions',
+      align: 'right',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const expired = isQuoteExpired(row);
+        const hasOffer = hasOfferForQuote(row);
+        const offerStatus = getOfferStatusForQuote(row);
+        const history = isHistoryRow(row);
 
-          const isDeleteDisabled = expired || row.status !== 'draft' || history;
-          const deleteTitle = history
+        const isDeleteDisabled = expired || row.status !== 'draft' || history;
+        const deleteTitle = history
+          ? t('sales:clientQuotes.historyActionsDisabled', {
+              defaultValue: 'History entries cannot be modified.',
+            })
+          : expired
+            ? t('sales:clientQuotes.errors.expiredCannotDelete')
+            : t('sales:clientQuotes.deleteQuote');
+
+        const isCreateOfferDisabled = history || hasOffer;
+        const createOfferTitle = hasOffer
+          ? t('sales:clientQuotes.offerAlreadyExists', {
+              defaultValue: 'An offer for this quote already exists.',
+            })
+          : history
             ? t('sales:clientQuotes.historyActionsDisabled', {
                 defaultValue: 'History entries cannot be modified.',
               })
-            : expired
-              ? t('sales:clientQuotes.errors.expiredCannotDelete')
-              : t('sales:clientQuotes.deleteQuote');
+            : t('sales:clientQuotes.convertToOffer', {
+                defaultValue: 'Convert to offer',
+              });
 
-          const isCreateOfferDisabled = history || hasOffer;
-          const createOfferTitle = hasOffer
-            ? t('sales:clientQuotes.offerAlreadyExists', {
-                defaultValue: 'An offer for this quote already exists.',
-              })
-            : history
-              ? t('sales:clientQuotes.historyActionsDisabled', {
-                  defaultValue: 'History entries cannot be modified.',
-                })
-              : t('sales:clientQuotes.convertToOffer', {
-                  defaultValue: 'Convert to offer',
-                });
+        const canRestore = !hasOffer || offerStatus === 'draft';
+        const restoreTitle = !canRestore
+          ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
+              defaultValue: 'Restore is only possible when the linked offer is in draft status.',
+            })
+          : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
 
-          const canRestore = !hasOffer || offerStatus === 'draft';
-          const restoreTitle = !canRestore
-            ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
-                defaultValue: 'Restore is only possible when the linked offer is in draft status.',
-              })
-            : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
-
-          return (
-            <div className="flex justify-end gap-2">
+        return (
+          <div className="flex justify-end gap-2">
+            <Tooltip
+              label={
+                history
+                  ? t('sales:clientQuotes.historyActionsDisabled', {
+                      defaultValue: 'History entries cannot be modified.',
+                    })
+                  : t('sales:clientQuotes.editQuote')
+              }
+            >
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (history) return;
+                    openEditModal(row);
+                  }}
+                  disabled={history}
+                  className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </Tooltip>
+            {row.linkedOfferId && onViewOffer && (
+              <Tooltip label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
+                      onViewOffer(row.linkedOfferId!);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-link"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'accepted' && onCreateOffer && (
+              <Tooltip label={createOfferTitle}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isCreateOfferDisabled) return;
+                      onCreateOffer(row);
+                    }}
+                    disabled={isCreateOfferDisabled}
+                    className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                  >
+                    <i className="fa-solid fa-file-signature"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'draft' && (
               <Tooltip
                 label={
                   history
                     ? t('sales:clientQuotes.historyActionsDisabled', {
                         defaultValue: 'History entries cannot be modified.',
                       })
-                    : t('sales:clientQuotes.editQuote')
+                    : t('sales:clientQuotes.markAsSent')
                 }
               >
                 {() => (
@@ -1100,56 +1156,25 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (history) return;
-                      openEditModal(row);
+                      onUpdateQuote(row.id, { status: 'sent' });
                     }}
                     disabled={history}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                   >
-                    <i className="fa-solid fa-pen-to-square"></i>
+                    <i className="fa-solid fa-paper-plane"></i>
                   </button>
                 )}
               </Tooltip>
-              {row.linkedOfferId && onViewOffer && (
-                <Tooltip label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                        onViewOffer(row.linkedOfferId!);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
-              {row.status === 'accepted' && onCreateOffer && (
-                <Tooltip label={createOfferTitle}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isCreateOfferDisabled) return;
-                        onCreateOffer(row);
-                      }}
-                      disabled={isCreateOfferDisabled}
-                      className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
-                    >
-                      <i className="fa-solid fa-file-signature"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
-              {row.status === 'draft' && (
+            )}
+            {row.status === 'sent' && (
+              <>
                 <Tooltip
                   label={
                     history
                       ? t('sales:clientQuotes.historyActionsDisabled', {
                           defaultValue: 'History entries cannot be modified.',
                         })
-                      : t('sales:clientQuotes.markAsSent')
+                      : t('sales:clientQuotes.markAsConfirmed')
                   }
                 >
                   {() => (
@@ -1157,121 +1182,80 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (history) return;
-                        onUpdateQuote(row.id, { status: 'sent' });
+                        onUpdateQuote(row.id, { status: 'accepted' });
                       }}
                       disabled={history}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
                     >
-                      <i className="fa-solid fa-paper-plane"></i>
+                      <i className="fa-solid fa-check"></i>
                     </button>
                   )}
                 </Tooltip>
-              )}
-              {row.status === 'sent' && (
-                <>
-                  <Tooltip
-                    label={
-                      history
-                        ? t('sales:clientQuotes.historyActionsDisabled', {
-                            defaultValue: 'History entries cannot be modified.',
-                          })
-                        : t('sales:clientQuotes.markAsConfirmed')
-                    }
-                  >
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history) return;
-                          onUpdateQuote(row.id, { status: 'accepted' });
-                        }}
-                        disabled={history}
-                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                      >
-                        <i className="fa-solid fa-check"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  <Tooltip
-                    label={
-                      history
-                        ? t('sales:clientQuotes.historyActionsDisabled', {
-                            defaultValue: 'History entries cannot be modified.',
-                          })
-                        : t('sales:clientQuotes.markAsDenied')
-                    }
-                  >
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history) return;
-                          onUpdateQuote(row.id, { status: 'denied' });
-                        }}
-                        disabled={history}
-                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                </>
-              )}
-              {row.status === 'draft' && (
-                <Tooltip label={deleteTitle}>
+                <Tooltip
+                  label={
+                    history
+                      ? t('sales:clientQuotes.historyActionsDisabled', {
+                          defaultValue: 'History entries cannot be modified.',
+                        })
+                      : t('sales:clientQuotes.markAsDenied')
+                  }
+                >
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (isDeleteDisabled) return;
-                        confirmDelete(row);
+                        if (history) return;
+                        onUpdateQuote(row.id, { status: 'denied' });
                       }}
-                      disabled={isDeleteDisabled}
-                      className={`p-2 text-slate-400 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                      disabled={history}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
                     >
-                      <i className="fa-solid fa-trash-can"></i>
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              </>
+            )}
+            {row.status === 'draft' && (
+              <Tooltip label={deleteTitle}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isDeleteDisabled) return;
+                      confirmDelete(row);
+                    }}
+                    disabled={isDeleteDisabled}
+                    className={`p-2 text-slate-400 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {!row.linkedOfferId &&
+              (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
+                <Tooltip label={restoreTitle}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!canRestore) return;
+                        onUpdateQuote(row.id, { status: 'draft', isExpired: false });
+                      }}
+                      disabled={!canRestore}
+                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
+                    >
+                      <i className="fa-solid fa-rotate-left"></i>
                     </button>
                   )}
                 </Tooltip>
               )}
-              {!row.linkedOfferId &&
-                (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
-                  <Tooltip label={restoreTitle}>
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!canRestore) return;
-                          onUpdateQuote(row.id, { status: 'draft', isExpired: false });
-                        }}
-                        disabled={!canRestore}
-                        className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
-                      >
-                        <i className="fa-solid fa-rotate-left"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                )}
-            </div>
-          );
-        },
+          </div>
+        );
       },
-    ],
-    [
-      t,
-      currency,
-      isHistoryRow,
-      isQuoteExpired,
-      hasOfferForQuote,
-      getOfferStatusForQuote,
-      getStatusLabel,
-      onCreateOffer,
-      onViewOffer,
-      onUpdateQuote,
-      confirmDelete,
-      openEditModal,
-    ],
-  );
+    },
+  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
