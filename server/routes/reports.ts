@@ -2090,9 +2090,7 @@ const buildBusinessDataset = async (
           SELECT
             sq.id,
             sq.supplier_id,
-            SUM(
-              sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0)
-            ) * (1 - COALESCE(sq.discount, 0) / 100.0) as net_value
+            SUM(sqi.quantity * sqi.unit_price) as net_value
           FROM supplier_quotes sq
           JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
           WHERE sq.created_at::date >= $1
@@ -2164,8 +2162,7 @@ const buildBusinessDataset = async (
         `WITH per_quote AS (
         SELECT
           sq.id,
-          SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
-            * (1 - COALESCE(sq.discount, 0) / 100.0) as net_value
+          SUM(sqi.quantity * sqi.unit_price) as net_value
         FROM supplier_quotes sq
         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
@@ -2186,7 +2183,7 @@ const buildBusinessDataset = async (
           sq.status,
           sq.supplier_name,
           sq.created_at,
-          (SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0)) * (1 - COALESCE(sq.discount, 0) / 100.0)) as net_value
+          SUM(sqi.quantity * sqi.unit_price) as net_value
         FROM supplier_quotes sq
         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
@@ -2204,8 +2201,7 @@ const buildBusinessDataset = async (
         SELECT
           sq.id,
           sq.created_at,
-          SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
-            * (1 - COALESCE(sq.discount, 0) / 100.0) as net_value
+          SUM(sqi.quantity * sqi.unit_price) as net_value
         FROM supplier_quotes sq
         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
@@ -2226,7 +2222,7 @@ const buildBusinessDataset = async (
         SELECT
           sq.id,
           sq.supplier_name,
-          (SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0)) * (1 - COALESCE(sq.discount, 0) / 100.0)) as net_value
+          SUM(sqi.quantity * sqi.unit_price) as net_value
         FROM supplier_quotes sq
         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
@@ -2250,8 +2246,7 @@ const buildBusinessDataset = async (
           sq.supplier_name,
           sq.status,
           sq.created_at,
-          SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
-            * (1 - COALESCE(sq.discount, 0) / 100.0) as net_value
+          SUM(sqi.quantity * sqi.unit_price) as net_value
         FROM supplier_quotes sq
         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2

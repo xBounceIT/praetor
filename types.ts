@@ -260,8 +260,6 @@ export interface QuoteItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: SupplierUnitType;
@@ -312,12 +310,11 @@ export interface ClientOfferItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
 }
+
 export interface ClientOffer {
   id: string;
   linkedQuoteId: string;
@@ -362,8 +359,6 @@ export interface ClientsOrderItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  supplierQuoteItemDiscount?: number | null;
-  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
@@ -540,7 +535,6 @@ export interface SupplierQuoteItem {
   productName: string;
   quantity: number;
   unitPrice: number;
-  discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
 }
@@ -562,8 +556,6 @@ export interface SupplierQuote {
     | '180gg'
     | '240gg'
     | '365gg';
-  discount: number;
-  discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOrderId?: string;

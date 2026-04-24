@@ -878,8 +878,7 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -971,8 +970,7 @@ ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARC
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -1213,8 +1211,7 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
@@ -1240,7 +1237,6 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
-    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')),
     expiration_date DATE NOT NULL,
     notes TEXT,
@@ -1276,7 +1272,6 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -2115,11 +2110,21 @@ ALTER TABLE quotes           ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) 
 ALTER TABLE customer_offers  ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
 ALTER TABLE sales            ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
 ALTER TABLE supplier_sales   ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
-ALTER TABLE supplier_quotes  ADD COLUMN IF NOT EXISTS discount_type VARCHAR(10) NOT NULL DEFAULT 'percentage';
-
 -- Widen header discount columns to DECIMAL(15,2) so currency amounts on large orders fit
 ALTER TABLE quotes           ALTER COLUMN discount TYPE DECIMAL(15, 2);
 ALTER TABLE customer_offers  ALTER COLUMN discount TYPE DECIMAL(15, 2);
 ALTER TABLE sales            ALTER COLUMN discount TYPE DECIMAL(15, 2);
 ALTER TABLE supplier_sales   ALTER COLUMN discount TYPE DECIMAL(15, 2);
-ALTER TABLE supplier_quotes  ALTER COLUMN discount TYPE DECIMAL(15, 2);
+
+-- Migration: Remove discount columns from supplier quotes
+ALTER TABLE supplier_quotes DROP COLUMN IF EXISTS discount;
+ALTER TABLE supplier_quotes DROP COLUMN IF EXISTS discount_type;
+ALTER TABLE supplier_quote_items DROP COLUMN IF EXISTS discount;
+
+-- Migration: Remove supplier quote discount snapshot columns from client-facing tables
+ALTER TABLE quote_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE quote_items DROP COLUMN IF EXISTS supplier_quote_discount;
+ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS supplier_quote_discount;
+ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_item_discount;
+ALTER TABLE sale_items DROP COLUMN IF EXISTS supplier_quote_discount;

@@ -152,14 +152,6 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
     item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
       ? null
       : Number(item.supplierQuoteUnitPrice),
-  supplierQuoteItemDiscount:
-    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-      ? null
-      : Number(item.supplierQuoteItemDiscount),
-  supplierQuoteDiscount:
-    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-      ? null
-      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -196,14 +188,6 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
     item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
       ? null
       : Number(item.supplierQuoteUnitPrice),
-  supplierQuoteItemDiscount:
-    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-      ? null
-      : Number(item.supplierQuoteItemDiscount),
-  supplierQuoteDiscount:
-    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-      ? null
-      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -240,14 +224,6 @@ export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderI
     item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
       ? null
       : Number(item.supplierQuoteUnitPrice),
-  supplierQuoteItemDiscount:
-    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-      ? null
-      : Number(item.supplierQuoteItemDiscount),
-  supplierQuoteDiscount:
-    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-      ? null
-      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
 });
 
@@ -296,13 +272,11 @@ export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuo
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
-  discount: Number(item.discount || 0),
   note: item.note || '',
 });
 
 export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
-  discount: Number(q.discount || 0),
   items: (q.items || []).map(normalizeSupplierQuoteItem),
 });
 

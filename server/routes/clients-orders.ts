@@ -50,8 +50,6 @@ const clientOrderItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    supplierQuoteItemDiscount: { type: ['number', 'null'] },
-    supplierQuoteDiscount: { type: ['number', 'null'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
@@ -104,8 +102,6 @@ const clientOrderItemBodySchema = {
     supplierQuoteItemId: { type: 'string' },
     supplierQuoteSupplierName: { type: 'string' },
     supplierQuoteUnitPrice: { type: 'number' },
-    supplierQuoteItemDiscount: { type: 'number' },
-    supplierQuoteDiscount: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
   },
@@ -190,14 +186,6 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
     row.supplierQuoteUnitPrice,
     'clientOrderItem.supplierQuoteUnitPrice',
   ),
-  supplierQuoteItemDiscount: toNullableFiniteNumber(
-    row.supplierQuoteItemDiscount,
-    'clientOrderItem.supplierQuoteItemDiscount',
-  ),
-  supplierQuoteDiscount: toNullableFiniteNumber(
-    row.supplierQuoteDiscount,
-    'clientOrderItem.supplierQuoteDiscount',
-  ),
   note: toNullableString(row.note),
   discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
 });
@@ -277,8 +265,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 supplier_quote_item_id as "supplierQuoteItemId",
                 supplier_quote_supplier_name as "supplierQuoteSupplierName",
                 supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                supplier_quote_discount as "supplierQuoteDiscount",
                 note,
                 discount
             FROM sale_items
@@ -505,8 +491,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                  RETURNING
                     id,
                     sale_id as "orderId",
@@ -523,8 +509,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                    supplier_quote_discount as "supplierQuoteDiscount",
                     discount,
                     note`,
           [
@@ -545,8 +529,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.supplierQuoteItemId ?? null,
             item.supplierQuoteSupplierName ?? null,
             item.supplierQuoteUnitPrice ?? null,
-            item.supplierQuoteItemDiscount ?? null,
-            item.supplierQuoteDiscount ?? null,
           ],
         );
         createdItems.push(
@@ -983,10 +965,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                             supplier_quote_id as "supplierQuoteId",
                             supplier_quote_item_id as "supplierQuoteItemId",
                             supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                            supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                            supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                            supplier_quote_discount as "supplierQuoteDiscount",
-                            discount,
+                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                    discount,
                             note
                         FROM sale_items
                         WHERE sale_id = $1`,
@@ -1145,13 +1125,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         supplier_quote_id as "supplierQuoteId",
                         supplier_quote_item_id as "supplierQuoteItemId",
                         supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                        supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                        supplier_quote_discount as "supplierQuoteDiscount",
-                        discount,
-                        note
-                    FROM sale_items
-                    WHERE sale_id = $1`,
+                         supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                         discount,
+                         note
+                     FROM sale_items
+                     WHERE sale_id = $1`,
             [updatedOrderId],
           );
           updatedItems = itemsResult.rows.map((item) =>
@@ -1167,8 +1145,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                      RETURNING
                         id,
                         sale_id as "orderId",
@@ -1184,11 +1162,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         supplier_quote_id as "supplierQuoteId",
                         supplier_quote_item_id as "supplierQuoteItemId",
                         supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                        supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                        supplier_quote_discount as "supplierQuoteDiscount",
-                        discount,
-                        note`,
+                         supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                         discount,
+                         note`,
             [
               itemId,
               updatedOrderId,
@@ -1207,8 +1183,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
-              item.supplierQuoteItemDiscount ?? null,
-              item.supplierQuoteDiscount ?? null,
             ],
           );
           updatedItems.push(
@@ -1234,8 +1208,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                    supplier_quote_discount as "supplierQuoteDiscount",
                     discount,
                     note
                 FROM sale_items

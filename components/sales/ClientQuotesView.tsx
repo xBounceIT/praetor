@@ -303,14 +303,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
             ? null
             : Number(item.supplierQuoteUnitPrice),
-        supplierQuoteItemDiscount:
-          item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-            ? null
-            : Number(item.supplierQuoteItemDiscount),
-        supplierQuoteDiscount:
-          item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-            ? null
-            : Number(item.supplierQuoteDiscount),
       };
     });
 
@@ -356,8 +348,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   supplierQuoteItemId: null,
                   supplierQuoteSupplierName: null,
                   supplierQuoteUnitPrice: null,
-                  supplierQuoteItemDiscount: null,
-                  supplierQuoteDiscount: null,
                 };
               }
               return item;
@@ -372,8 +362,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 supplierQuoteItemId: null,
                 supplierQuoteSupplierName: null,
                 supplierQuoteUnitPrice: null,
-                supplierQuoteItemDiscount: null,
-                supplierQuoteDiscount: null,
               };
             }
 
@@ -401,8 +389,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               supplierQuoteItemId: null,
               supplierQuoteSupplierName: null,
               supplierQuoteUnitPrice: null,
-              supplierQuoteItemDiscount: null,
-              supplierQuoteDiscount: null,
+
               unitPrice,
               productCost: Number(product.costo),
               productMolPercentage: product.molPercentage,
@@ -487,8 +474,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
-      supplierQuoteItemDiscount: null,
-      supplierQuoteDiscount: null,
+
       discount: 0,
       note: '',
     };
@@ -526,8 +512,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
-        newItems[index].supplierQuoteItemDiscount = null;
-        newItems[index].supplierQuoteDiscount = null;
         newItems[index].specialBidId = '';
         newItems[index].specialBidUnitPrice = null;
         newItems[index].specialBidMolPercentage = null;
@@ -556,8 +540,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
-        newItems[index].supplierQuoteItemDiscount = null;
-        newItems[index].supplierQuoteDiscount = null;
 
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
@@ -617,9 +599,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           ? products.find((p) => p.id === selectedQuoteItem.productId)
           : undefined;
 
-        const lineDiscountedCost =
-          selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
-        const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+        const netCost = selectedQuoteItem.unitPrice;
 
         newItems[index].productId = selectedQuoteItem.productId || '';
         newItems[index].productName = product?.name || selectedQuoteItem.productName;
@@ -627,8 +607,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
         newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
         newItems[index].supplierQuoteUnitPrice = netCost;
-        newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
-        newItems[index].supplierQuoteDiscount = selectedQuote.discount;
 
         newItems[index].unitType = selectedQuoteItem.unitType || 'hours';
         newItems[index].quantity = selectedQuoteItem.quantity;
@@ -657,8 +635,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
-        newItems[index].supplierQuoteItemDiscount = null;
-        newItems[index].supplierQuoteDiscount = null;
 
         const existingProduct = products.find((p) => p.id === newItems[index].productId);
         if (existingProduct) {
@@ -726,8 +702,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].supplierQuoteItemId = null;
           newItems[index].supplierQuoteSupplierName = null;
           newItems[index].supplierQuoteUnitPrice = null;
-          newItems[index].supplierQuoteItemDiscount = null;
-          newItems[index].supplierQuoteDiscount = null;
         }
       }
     }
@@ -766,8 +740,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       quoteId: string;
       productId?: string;
       unitPrice: number;
-      discount: number;
-      quoteDiscount: number;
       unitType?: SupplierUnitType;
       quantity: number;
     }> = [];
@@ -775,12 +747,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       for (const item of quote.items) {
         options.push({
           id: item.id,
-          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)}${item.discount ? ` -${item.discount}%` : ''})`,
+          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`,
           quoteId: quote.id,
           productId: item.productId,
           unitPrice: item.unitPrice,
-          discount: item.discount ?? 0,
-          quoteDiscount: quote.discount,
           unitType: item.unitType,
           quantity: item.quantity,
         });

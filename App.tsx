@@ -2555,7 +2555,6 @@ const App: React.FC = () => {
         supplierId: quote.supplierId,
         supplierName: quote.supplierName,
         paymentTerms: quote.paymentTerms,
-        discount: quote.discount,
         status: 'draft',
         notes: quote.notes,
         items: quote.items.map((item) => ({

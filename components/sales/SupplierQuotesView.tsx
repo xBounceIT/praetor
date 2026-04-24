@@ -27,21 +27,15 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface TotalsBreakdown {
   subtotal: number;
-  discountAmount: number;
   total: number;
 }
 
-const calculateTotals = (items: SupplierQuoteItem[], globalDiscount: number): TotalsBreakdown => {
+const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let subtotal = 0;
   items.forEach((item) => {
-    const lineSubtotal = item.quantity * item.unitPrice;
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
+    subtotal += item.quantity * item.unitPrice;
   });
-  const discountAmount = subtotal * (globalDiscount / 100);
-  const total = subtotal - discountAmount;
-  return { subtotal, discountAmount, total };
+  return { subtotal, total: subtotal };
 };
 
 export interface SupplierQuotesViewProps {
@@ -63,7 +57,6 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   id: '',
   items: [],
   paymentTerms: 'immediate',
-  discount: 0,
   status: 'draft',
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
   notes: '',
@@ -127,7 +120,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOrderForQuote],
   );
 
-  const totalsBreakdown = calculateTotals(formData.items || [], Number(formData.discount || 0));
+  const totalsBreakdown = calculateTotals(formData.items || []);
 
   const inputClassName =
     'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
@@ -303,13 +296,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount).total,
+        accessorFn: (row) => calculateTotals(row.items).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculateTotals(row.items);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
@@ -585,11 +578,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
-        discount: Number(item.discount ?? 0),
       })),
     };
 
@@ -809,9 +800,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const lineSubtotal = item.quantity * item.unitPrice;
-                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-                    const lineTotal = lineSubtotal - lineDiscount;
+                    const lineTotal = item.quantity * item.unitPrice;
                     return (
                       <div
                         key={item.id}

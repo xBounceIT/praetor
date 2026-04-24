@@ -133,7 +133,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       for (const item of quote.items) {
         options.push({
           id: item.id,
-          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)}${item.discount ? ` -${item.discount}%` : ''})`,
+          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`,
         });
       }
     }
@@ -492,8 +492,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
-      supplierQuoteItemDiscount: null,
-      supplierQuoteDiscount: null,
       note: '',
     };
     setFormData((prev) => ({
@@ -536,8 +534,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
-          current.supplierQuoteItemDiscount = null;
-          current.supplierQuoteDiscount = null;
         }
       }
 
@@ -547,8 +543,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
-          current.supplierQuoteItemDiscount = null;
-          current.supplierQuoteDiscount = null;
 
           const product = products.find((p) => p.id === current.productId);
           if (product) {
@@ -592,21 +586,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             ? products.find((p) => p.id === selectedQuoteItem.productId)
             : undefined;
 
-          const lineDiscountedCost =
-            selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
-          let netCost: number;
-          if (selectedQuote.discountType === 'currency' && selectedQuote.discount > 0) {
-            const quoteSubtotal = selectedQuote.items.reduce(
-              (sum, item) => sum + item.unitPrice * (1 - (item.discount ?? 0) / 100),
-              0,
-            );
-            netCost =
-              quoteSubtotal > 0
-                ? lineDiscountedCost - (lineDiscountedCost / quoteSubtotal) * selectedQuote.discount
-                : lineDiscountedCost;
-          } else {
-            netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
-          }
+          const netCost = selectedQuoteItem.unitPrice;
 
           current.productId = selectedQuoteItem.productId || '';
           current.productName = product?.name || selectedQuoteItem.productName;
@@ -614,8 +594,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = selectedQuoteItem.id;
           current.supplierQuoteSupplierName = selectedQuote.supplierName;
           current.supplierQuoteUnitPrice = netCost;
-          current.supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
-          current.supplierQuoteDiscount = selectedQuote.discount;
           current.quantity = selectedQuoteItem.quantity;
           current.specialBidId = '';
           current.specialBidUnitPrice = null;

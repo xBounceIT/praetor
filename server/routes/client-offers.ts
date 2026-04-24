@@ -50,8 +50,6 @@ const offerItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    supplierQuoteItemDiscount: { type: ['number', 'null'] },
-    supplierQuoteDiscount: { type: ['number', 'null'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
@@ -104,8 +102,6 @@ const offerItemBodySchema = {
     supplierQuoteItemId: { type: 'string' },
     supplierQuoteSupplierName: { type: 'string' },
     supplierQuoteUnitPrice: { type: 'number' },
-    supplierQuoteItemDiscount: { type: 'number' },
-    supplierQuoteDiscount: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
   },
@@ -159,8 +155,6 @@ type OfferItemInput = {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: string | number | null;
-  supplierQuoteItemDiscount?: string | number | null;
-  supplierQuoteDiscount?: string | number | null;
   discount?: string | number;
   note?: string;
 };
@@ -231,14 +225,6 @@ const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
         item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
           ? null
           : Number(item.supplierQuoteUnitPrice),
-      supplierQuoteItemDiscount:
-        item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
-          ? null
-          : Number(item.supplierQuoteItemDiscount),
-      supplierQuoteDiscount:
-        item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-          ? null
-          : Number(item.supplierQuoteDiscount),
       discount: itemDiscountResult.value || 0,
       note: item.note || null,
     });
@@ -292,14 +278,6 @@ const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
   supplierQuoteUnitPrice: toNullableFiniteNumber(
     row.supplierQuoteUnitPrice,
     'offerItem.supplierQuoteUnitPrice',
-  ),
-  supplierQuoteItemDiscount: toNullableFiniteNumber(
-    row.supplierQuoteItemDiscount,
-    'offerItem.supplierQuoteItemDiscount',
-  ),
-  supplierQuoteDiscount: toNullableFiniteNumber(
-    row.supplierQuoteDiscount,
-    'offerItem.supplierQuoteDiscount',
   ),
   note: toNullableString(row.note),
   discount: toFiniteNumber(row.discount, 'offerItem.discount'),
@@ -375,8 +353,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplier_quote_item_id as "supplierQuoteItemId",
             supplier_quote_supplier_name as "supplierQuoteSupplierName",
             supplier_quote_unit_price as "supplierQuoteUnitPrice",
-            supplier_quote_item_discount as "supplierQuoteItemDiscount",
-            supplier_quote_discount as "supplierQuoteDiscount",
             note,
             discount
          FROM customer_offer_items
@@ -540,8 +516,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
         const itemResult = await query(
           `INSERT INTO customer_offer_items
-            (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
            RETURNING
              id,
              offer_id as "offerId",
@@ -558,8 +534,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              supplier_quote_item_id as "supplierQuoteItemId",
              supplier_quote_supplier_name as "supplierQuoteSupplierName",
              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-             supplier_quote_item_discount as "supplierQuoteItemDiscount",
-             supplier_quote_discount as "supplierQuoteDiscount",
              discount,
              note`,
           [
@@ -580,8 +554,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.supplierQuoteItemId,
             item.supplierQuoteSupplierName,
             item.supplierQuoteUnitPrice,
-            item.supplierQuoteItemDiscount,
-            item.supplierQuoteDiscount,
           ],
         );
         createdItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -825,8 +797,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
             `INSERT INTO customer_offer_items
-              (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+              (id, offer_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
              RETURNING
                id,
                offer_id as "offerId",
@@ -843,8 +815,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                supplier_quote_item_id as "supplierQuoteItemId",
                supplier_quote_supplier_name as "supplierQuoteSupplierName",
                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               supplier_quote_item_discount as "supplierQuoteItemDiscount",
-               supplier_quote_discount as "supplierQuoteDiscount",
                discount,
                note`,
             [
@@ -865,8 +835,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId,
               item.supplierQuoteSupplierName,
               item.supplierQuoteUnitPrice,
-              item.supplierQuoteItemDiscount,
-              item.supplierQuoteDiscount,
             ],
           );
           updatedItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -888,10 +856,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                supplier_quote_id as "supplierQuoteId",
                supplier_quote_item_id as "supplierQuoteItemId",
                supplier_quote_supplier_name as "supplierQuoteSupplierName",
-               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               supplier_quote_item_discount as "supplierQuoteItemDiscount",
-               supplier_quote_discount as "supplierQuoteDiscount",
-               discount,
+                supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                discount,
                note
             FROM customer_offer_items
             WHERE offer_id = $1`,

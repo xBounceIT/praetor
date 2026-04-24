@@ -49,8 +49,6 @@ type QuoteItemSnapshot = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
-  supplierQuoteItemDiscount: number | null;
-  supplierQuoteDiscount: number | null;
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
@@ -192,8 +190,6 @@ const getProductSnapshots = async (productIds: string[]) => {
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
-      supplierQuoteItemDiscount: null,
-      supplierQuoteDiscount: null,
     });
   });
   return snapshots;
@@ -380,8 +376,6 @@ const resolveQuoteItemSnapshots = async (
           supplierQuoteId: existingItem.supplierQuoteId ?? null,
           supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
           supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice ?? null,
-          supplierQuoteItemDiscount: existingItem.supplierQuoteItemDiscount ?? null,
-          supplierQuoteDiscount: existingItem.supplierQuoteDiscount ?? null,
         });
         continue;
       }
@@ -393,8 +387,6 @@ const resolveQuoteItemSnapshots = async (
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
-    let supplierQuoteItemDiscount: number | null = null;
-    let supplierQuoteDiscount: number | null = null;
 
     if (normalizedBidId) {
       const specialBidSnapshot = specialBidSnapshots.get(normalizedBidId);
@@ -432,8 +424,6 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
-      supplierQuoteItemDiscount = supplierQuoteSnapshot.itemDiscount;
-      supplierQuoteDiscount = supplierQuoteSnapshot.quoteDiscount;
     }
 
     const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
@@ -460,8 +450,6 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId,
       supplierQuoteSupplierName,
       supplierQuoteUnitPrice,
-      supplierQuoteItemDiscount,
-      supplierQuoteDiscount,
     });
   }
 
@@ -495,8 +483,6 @@ const quoteItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    supplierQuoteItemDiscount: { type: ['number', 'null'] },
-    supplierQuoteDiscount: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -643,14 +629,6 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
     row.supplierQuoteUnitPrice,
     'quoteItem.supplierQuoteUnitPrice',
   ),
-  supplierQuoteItemDiscount: toNullableFiniteNumber(
-    row.supplierQuoteItemDiscount,
-    'quoteItem.supplierQuoteItemDiscount',
-  ),
-  supplierQuoteDiscount: toNullableFiniteNumber(
-    row.supplierQuoteDiscount,
-    'quoteItem.supplierQuoteDiscount',
-  ),
   discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
   note: toNullableString(row.note),
   unitType: normalizeUnitType(row.unitType),
@@ -742,8 +720,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 supplier_quote_item_id as "supplierQuoteItemId",
                 supplier_quote_supplier_name as "supplierQuoteSupplierName",
                 supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                supplier_quote_discount as "supplierQuoteDiscount",
                 discount,
                 note,
                 unit_type as "unitType"
@@ -902,10 +878,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               quantity, unit_price, product_cost, product_mol_percentage,
               special_bid_unit_price, special_bid_mol_percentage, discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount,
+              supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
               id,
               quote_id as "quoteId",
@@ -924,8 +900,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
               unit_type as "unitType"`,
             [
               itemId,
@@ -945,8 +919,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
-              item.supplierQuoteItemDiscount ?? null,
-              item.supplierQuoteDiscount ?? null,
               item.unitType || 'hours',
             ],
           );
@@ -1177,10 +1149,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_id as "supplierQuoteId",
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
-              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
-              unit_type as "unitType"
+               supplier_quote_unit_price as "supplierQuoteUnitPrice",
+               unit_type as "unitType"
            FROM quote_items
            WHERE quote_id = $1`,
 
@@ -1216,15 +1186,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
                 ? null
                 : Number(item.supplierQuoteUnitPrice),
-            supplierQuoteItemDiscount:
-              item.supplierQuoteItemDiscount === undefined ||
-              item.supplierQuoteItemDiscount === null
-                ? null
-                : Number(item.supplierQuoteItemDiscount),
-            supplierQuoteDiscount:
-              item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
-                ? null
-                : Number(item.supplierQuoteDiscount),
             unitType: normalizeUnitType(item.unitType),
           });
         });
@@ -1344,10 +1305,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               quantity, unit_price, product_cost, product_mol_percentage,
               special_bid_unit_price, special_bid_mol_percentage, discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount,
+              supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
               id,
               quote_id as "quoteId",
@@ -1366,8 +1327,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              supplier_quote_item_discount as "supplierQuoteItemDiscount",
-              supplier_quote_discount as "supplierQuoteDiscount",
               unit_type as "unitType"`,
             [
               itemId,
@@ -1387,8 +1346,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.supplierQuoteItemId ?? null,
               item.supplierQuoteSupplierName ?? null,
               item.supplierQuoteUnitPrice ?? null,
-              item.supplierQuoteItemDiscount ?? null,
-              item.supplierQuoteDiscount ?? null,
               item.unitType || 'hours',
             ],
           );
@@ -1413,8 +1370,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",
                     supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_quote_item_discount as "supplierQuoteItemDiscount",
-                    supplier_quote_discount as "supplierQuoteDiscount",
                     discount,
                     note,
                     unit_type as "unitType"
