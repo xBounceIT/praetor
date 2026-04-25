@@ -455,7 +455,7 @@ const StandardTable = <T extends object>({
   // Render
   return (
     <div
-      className={`bg-white rounded-xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
+      className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
     >
       <div className="px-3 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-xl">
         <div className="flex items-center gap-3">
