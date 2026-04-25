@@ -887,39 +887,41 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 />
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center min-h-[42px] gap-1 lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.cost')}
                               </label>
-                              {item.supplierQuoteItemId && (
-                                <span className={`${pillBadgeClass} bg-emerald-600`}>
-                                  {t('sales:clientQuotes.supplierQuoteBadge')}
-                                </span>
-                              )}
-                              {item.supplierSaleId && (
-                                <span className={`${pillBadgeClass} bg-blue-600`}>
-                                  {t('accounting:clientsOrders.supplierOrderBadge', {
-                                    defaultValue: 'Supplier order',
-                                  })}
-                                </span>
-                              )}
-                              <div className="flex items-center gap-1">
-                                <ValidatedNumberInput
-                                  value={unitCost.toFixed(2)}
-                                  onValueChange={handleCostChange}
-                                  disabled={isReadOnly}
-                                  className={compactInputClass}
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  {currency}
-                                </span>
+                              <div className="flex flex-col items-center justify-center min-h-[42px] gap-1">
+                                {item.supplierQuoteItemId && (
+                                  <span className={`${pillBadgeClass} bg-emerald-600`}>
+                                    {t('sales:clientQuotes.supplierQuoteBadge')}
+                                  </span>
+                                )}
+                                {item.supplierSaleId && (
+                                  <span className={`${pillBadgeClass} bg-blue-600`}>
+                                    {t('accounting:clientsOrders.supplierOrderBadge', {
+                                      defaultValue: 'Supplier order',
+                                    })}
+                                  </span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={unitCost.toFixed(2)}
+                                    onValueChange={handleCostChange}
+                                    disabled={isReadOnly}
+                                    className={compactInputClass}
+                                  />
+                                  <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                    {currency}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                               </label>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-center min-h-[42px] gap-1">
                                 <ValidatedNumberInput
                                   value={molPercentage.toFixed(1)}
                                   onValueChange={handleMolChange}
@@ -931,21 +933,25 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                               </label>
-                              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                                {lineCost.toFixed(2)} {currency}
-                              </span>
+                              <div className="flex items-center justify-center min-h-[42px]">
+                                <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                  {lineCost.toFixed(2)} {currency}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.marginLabel')}
                               </label>
-                              <span className="text-xs font-bold text-emerald-600">
-                                {margin.toFixed(2)} {currency}
-                              </span>
+                              <div className="flex items-center justify-center min-h-[42px]">
+                                <span className="text-xs font-bold text-emerald-600">
+                                  {margin.toFixed(2)} {currency}
+                                </span>
+                              </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
