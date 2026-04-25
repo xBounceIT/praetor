@@ -128,8 +128,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         requireAnyPermission(
           'catalog.internal_listing.view',
-          'catalog.external_listing.view',
-          'catalog.special_bids.view',
           'sales.supplier_quotes.view',
           'sales.client_offers.view',
           'accounting.supplier_orders.view',
@@ -160,9 +158,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [
-        requireAnyPermission('catalog.internal_listing.create', 'catalog.external_listing.create'),
-      ],
+      onRequest: [requireAnyPermission('catalog.internal_listing.create')],
       schema: {
         tags: ['products'],
         summary: 'Create product',
@@ -311,9 +307,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [
-        requireAnyPermission('catalog.internal_listing.update', 'catalog.external_listing.update'),
-      ],
+      onRequest: [requireAnyPermission('catalog.internal_listing.update')],
       schema: {
         tags: ['products'],
         summary: 'Update product',
@@ -572,9 +566,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [
-        requireAnyPermission('catalog.internal_listing.delete', 'catalog.external_listing.delete'),
-      ],
+      onRequest: [requireAnyPermission('catalog.internal_listing.delete')],
       schema: {
         tags: ['products'],
         summary: 'Delete product',
@@ -675,7 +667,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       { name: 'customer_offer_items', column: 'product_id' },
       { name: 'sale_items', column: 'product_id' },
       { name: 'invoice_items', column: 'product_id' },
-      { name: 'special_bids', column: 'product_id' },
       { name: 'supplier_quote_items', column: 'product_id' },
       { name: 'supplier_sale_items', column: 'product_id' },
       { name: 'supplier_invoice_items', column: 'product_id' },
@@ -746,8 +737,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                SELECT 1 FROM sale_items si WHERE si.product_id = pr.id
                UNION ALL
                SELECT 1 FROM invoice_items ii WHERE ii.product_id = pr.id
-               UNION ALL
-               SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
                UNION ALL
@@ -1100,8 +1089,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                SELECT 1 FROM sale_items si WHERE si.product_id = pr.id
                UNION ALL
                SELECT 1 FROM invoice_items ii WHERE ii.product_id = pr.id
-               UNION ALL
-               SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
                UNION ALL

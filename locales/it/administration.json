@@ -35,9 +35,7 @@
       "supplier_quotes": "Preventivi Fornitori"
     },
     "catalog": {
-      "internal_listing": "Listino Interno",
-      "external_listing": "Listino Esterno",
-      "special_bids": "Offerte Speciali"
+      "internal_listing": "Listino Interno"
     },
     "accounting": {
       "clients_orders": "Ordini Clienti",
@@ -138,7 +136,6 @@
         "project": "progetto",
         "role": "ruolo",
         "settings": "impostazioni",
-        "special_bid": "offerta speciale",
         "supplier": "fornitore",
         "supplier_invoice": "fattura fornitore",
         "supplier_order": "ordine fornitore",

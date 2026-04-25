@@ -35,9 +35,7 @@ export const makeCostUpdater =
       unitPrice: roundToTwoDecimals(newUnitPrice),
       ...(cur.supplierQuoteItemId
         ? { supplierQuoteUnitPrice: roundToTwoDecimals(hourlyCost) }
-        : cur.specialBidId
-          ? { specialBidUnitPrice: roundToTwoDecimals(hourlyCost) }
-          : { productCost: roundToTwoDecimals(hourlyCost) }),
+        : { productCost: roundToTwoDecimals(hourlyCost) }),
     };
     return { ...prev, items: updated };
   };
@@ -61,12 +59,11 @@ export const makeMolUpdater =
       cur.unitType || defaultUnitType,
     );
     const newUnitPrice = calcProductSalePrice(curCost, newMol);
-    const molField = cur.specialBidId ? 'specialBidMolPercentage' : 'productMolPercentage';
     const updated = [...items];
     updated[index] = {
       ...cur,
       unitPrice: roundToTwoDecimals(newUnitPrice),
-      [molField]: roundToTwoDecimals(newMol),
+      productMolPercentage: roundToTwoDecimals(newMol),
     };
     return { ...prev, items: updated };
   };

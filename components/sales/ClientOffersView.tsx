@@ -6,7 +6,6 @@ import type {
   ClientOffer,
   ClientOfferItem,
   Product,
-  SpecialBid,
   SupplierQuote,
   SupplierUnitType,
 } from '../../types';
@@ -14,7 +13,6 @@ import {
   addMonthsToDateOnly,
   getLocalDateString,
   isDateOnlyBeforeToday,
-  isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
 import {
@@ -41,7 +39,6 @@ export interface ClientOffersViewProps {
   offers: ClientOffer[];
   clients: Client[];
   products: Product[];
-  specialBids: SpecialBid[];
   supplierQuotes: SupplierQuote[];
   offerIdsWithOrders: ReadonlySet<string>;
   onAddOffer?: (offerData: Partial<ClientOffer>) => void | Promise<void>;
@@ -72,7 +69,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
   products,
-  specialBids,
   supplierQuotes,
   offerIdsWithOrders,
   onAddOffer,
@@ -113,11 +109,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [activeProducts],
   );
   const today = getLocalDateString();
-  const activeSpecialBids = useMemo(() => {
-    return specialBids.filter((bid) => {
-      return isDateOnlyWithinInclusiveRange(today, bid.startDate, bid.endDate);
-    });
-  }, [specialBids, today]);
 
   const acceptedSupplierQuotes = useMemo(
     () =>
@@ -480,14 +471,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       offerId: editingOffer?.id || '',
       productId: '',
       productName: '',
-      specialBidId: '',
       quantity: 1,
       unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
-      specialBidUnitPrice: null,
-      specialBidMolPercentage: null,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
@@ -517,19 +505,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       if (field === 'productId') {
         const product = products.find((item) => item.id === value);
         if (product) {
-          const matchingBid = activeSpecialBids.find(
-            (bid) => bid.clientId === prev.clientId && bid.productId === value,
-          );
-          const molSource = matchingBid?.molPercentage ?? product.molPercentage;
-          const mol = molSource ? Number(molSource) : 0;
-          const cost = matchingBid ? Number(matchingBid.unitPrice) : Number(product.costo);
+          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           current.productName = product.name;
-          current.specialBidId = matchingBid?.id || '';
-          current.unitPrice = roundToTwoDecimals(calcProductSalePrice(cost, mol));
+          current.unitPrice = roundToTwoDecimals(calcProductSalePrice(Number(product.costo), mol));
           current.productCost = Number(product.costo);
           current.productMolPercentage = product.molPercentage;
-          current.specialBidUnitPrice = matchingBid ? Number(matchingBid.unitPrice) : null;
-          current.specialBidMolPercentage = matchingBid?.molPercentage ?? null;
           current.supplierQuoteId = null;
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
@@ -546,31 +526,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
           const product = products.find((p) => p.id === current.productId);
           if (product) {
-            const applicableBid = activeSpecialBids.find(
-              (b) => b.clientId === prev.clientId && b.productId === current.productId,
+            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+            current.unitPrice = roundToTwoDecimals(
+              calcProductSalePrice(Number(product.costo), mol),
             );
-            if (applicableBid) {
-              const molSource = applicableBid.molPercentage ?? product.molPercentage;
-              const mol = molSource ? Number(molSource) : 0;
-              current.specialBidId = applicableBid.id;
-              current.unitPrice = roundToTwoDecimals(
-                calcProductSalePrice(Number(applicableBid.unitPrice), mol),
-              );
-              current.productCost = Number(product.costo);
-              current.productMolPercentage = product.molPercentage;
-              current.specialBidUnitPrice = Number(applicableBid.unitPrice);
-              current.specialBidMolPercentage = applicableBid.molPercentage ?? null;
-            } else {
-              const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-              current.specialBidId = '';
-              current.unitPrice = roundToTwoDecimals(
-                calcProductSalePrice(Number(product.costo), mol),
-              );
-              current.productCost = Number(product.costo);
-              current.productMolPercentage = product.molPercentage;
-              current.specialBidUnitPrice = null;
-              current.specialBidMolPercentage = null;
-            }
+            current.productCost = Number(product.costo);
+            current.productMolPercentage = product.molPercentage;
           }
           items[index] = current;
           return { ...prev, items };
@@ -595,9 +556,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteSupplierName = selectedQuote.supplierName;
           current.supplierQuoteUnitPrice = netCost;
           current.quantity = selectedQuoteItem.quantity;
-          current.specialBidId = '';
-          current.specialBidUnitPrice = null;
-          current.specialBidMolPercentage = null;
 
           let salePrice: number;
           if (product) {
@@ -854,9 +812,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedBid = item.specialBidId
-                      ? activeSpecialBids.find((b) => b.id === item.specialBidId)
-                      : undefined;
                     const selectedSupplierQuote = item.supplierQuoteItemId
                       ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
                       : undefined;
@@ -1022,7 +977,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               {t('sales:clientQuotes.revenue')}
                             </div>
                             <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
                             >
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
@@ -1125,7 +1080,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>

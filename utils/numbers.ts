@@ -31,24 +31,19 @@ export interface PricingItem {
   discount?: number;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  specialBidId?: string;
-  specialBidUnitPrice?: number | null;
   productCost?: number;
   unitType?: SupplierUnitType;
   quantity?: number;
   productMolPercentage?: number | null;
-  specialBidMolPercentage?: number | null;
 }
 
 export const getEffectiveCost = (item: PricingItem): number => {
   if (item.supplierQuoteItemId) return Number(item.supplierQuoteUnitPrice ?? 0);
-  if (item.specialBidId) return Number(item.specialBidUnitPrice ?? 0);
   return Number(item.productCost ?? 0);
 };
 
 export const getEffectiveMol = (item: PricingItem): number => {
-  const molSource = item.specialBidId ? item.specialBidMolPercentage : item.productMolPercentage;
-  return molSource ? Number(molSource) : 0;
+  return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
 };
 
 export interface ItemPricingContext {

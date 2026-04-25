@@ -24,7 +24,6 @@ export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
 export { rolesApi } from './api/roles';
 export { settingsApi } from './api/settings';
-export { specialBidsApi } from './api/specialBids';
 export { supplierInvoicesApi } from './api/supplierInvoices';
 export { supplierOrdersApi } from './api/supplierOrders';
 export { supplierQuotesApi } from './api/supplierQuotes';
@@ -53,7 +52,6 @@ import { projectsApi } from './api/projects';
 import { reportsApi } from './api/reports';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
-import { specialBidsApi } from './api/specialBids';
 import { supplierInvoicesApi } from './api/supplierInvoices';
 import { supplierOrdersApi } from './api/supplierOrders';
 import { supplierQuotesApi } from './api/supplierQuotes';
@@ -81,7 +79,6 @@ export default {
   supplierQuotes: supplierQuotesApi,
   supplierOrders: supplierOrdersApi,
   supplierInvoices: supplierInvoicesApi,
-  specialBids: specialBidsApi,
   notifications: notificationsApi,
   workUnits: workUnitsApi,
   settings: settingsApi,

@@ -27,7 +27,6 @@ type IncomingQuoteItem = {
   id?: string;
   productId: string | null;
   productName: string;
-  specialBidId?: string | null;
   supplierQuoteItemId?: string | null;
   quantity: number;
   unitPrice: number;
@@ -41,8 +40,6 @@ type IncomingQuoteItem = {
 type QuoteItemSnapshot = {
   productCost: number;
   productMolPercentage: number | null;
-  specialBidUnitPrice: number | null;
-  specialBidMolPercentage: number | null;
   // Supplier quote snapshot fields
   supplierQuoteId: string | null;
   supplierQuoteItemId: string | null;
@@ -57,8 +54,6 @@ const normalizeNullableString = (value: unknown) => {
   const stringValue = String(value).trim();
   return stringValue.length > 0 ? stringValue : null;
 };
-
-const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
 
 const normalizeQuoteItems = (
   items: unknown[],
@@ -105,7 +100,6 @@ const normalizeQuoteItems = (
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
       productName: productNameResult.value,
-      specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
@@ -177,49 +171,10 @@ const getProductSnapshots = async (productIds: string[]) => {
         row.molPercentage === undefined || row.molPercentage === null
           ? null
           : Number(row.molPercentage),
-      specialBidUnitPrice: null,
-      specialBidMolPercentage: null,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
-    });
-  });
-  return snapshots;
-};
-
-const getSpecialBidSnapshots = async (specialBidIds: string[]) => {
-  const uniqueIds = Array.from(new Set(specialBidIds.filter(Boolean)));
-  if (uniqueIds.length === 0) {
-    return new Map<
-      string,
-      { productId: string; unitPrice: number; molPercentage: number | null }
-    >();
-  }
-
-  const result = await query(
-    `SELECT
-        id,
-        product_id as "productId",
-        unit_price as "unitPrice",
-        mol_percentage as "molPercentage"
-     FROM special_bids
-     WHERE id = ANY($1)`,
-    [uniqueIds],
-  );
-
-  const snapshots = new Map<
-    string,
-    { productId: string; unitPrice: number; molPercentage: number | null }
-  >();
-  result.rows.forEach((row) => {
-    snapshots.set(row.id, {
-      productId: row.productId,
-      unitPrice: Number(row.unitPrice ?? 0),
-      molPercentage:
-        row.molPercentage === undefined || row.molPercentage === null
-          ? null
-          : Number(row.molPercentage),
     });
   });
   return snapshots;
@@ -288,8 +243,6 @@ const resolveQuoteItemSnapshots = async (
     if (!existingItem) return true;
     return (
       existingItem.productId !== item.productId ||
-      normalizeSpecialBidId(existingItem.specialBidId) !==
-        normalizeSpecialBidId(item.specialBidId) ||
       normalizeNullableString(existingItem.supplierQuoteItemId) !==
         normalizeNullableString(item.supplierQuoteItemId) ||
       (item.productCost !== null && item.productCost !== existingItem.productCost) ||
@@ -298,18 +251,11 @@ const resolveQuoteItemSnapshots = async (
     );
   });
 
-  const [specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
-    getSpecialBidSnapshots(
-      itemsNeedingRecalc
-        .map((item) => normalizeSpecialBidId(item.specialBidId))
-        .filter((bidId): bidId is string => bidId !== null),
-    ),
-    getSupplierQuoteItemSnapshots(
-      itemsNeedingRecalc
-        .map((item) => normalizeNullableString(item.supplierQuoteItemId))
-        .filter((id): id is string => id !== null),
-    ),
-  ]);
+  const supplierQuoteSnapshots = await getSupplierQuoteItemSnapshots(
+    itemsNeedingRecalc
+      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
+      .filter((id): id is string => id !== null),
+  );
 
   const productIds = new Set<string>();
   for (const item of itemsNeedingRecalc) {
@@ -326,21 +272,14 @@ const resolveQuoteItemSnapshots = async (
 
   const resolvedItems: ResolvedQuoteItem[] = [];
   for (const item of items) {
-    const normalizedBidId = normalizeSpecialBidId(item.specialBidId);
     const normalizedSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
     let resolvedProductId = item.productId;
-
-    // Validate: cannot have both special bid and supplier quote
-    if (normalizedBidId && normalizedSupplierQuoteItemId) {
-      throw new Error(`Item cannot have both specialBidId and supplierQuoteItemId`);
-    }
 
     if (existingItemsById && item.id) {
       const existingItem = existingItemsById.get(item.id);
       const isUnchanged =
         existingItem &&
         existingItem.productId === item.productId &&
-        normalizeSpecialBidId(existingItem.specialBidId) === normalizedBidId &&
         normalizeNullableString(existingItem.supplierQuoteItemId) ===
           normalizedSupplierQuoteItemId &&
         (item.productCost === null || item.productCost === existingItem.productCost) &&
@@ -349,12 +288,9 @@ const resolveQuoteItemSnapshots = async (
       if (existingItem && isUnchanged) {
         resolvedItems.push({
           ...item,
-          specialBidId: normalizedBidId,
           supplierQuoteItemId: normalizedSupplierQuoteItemId,
           productCost: existingItem.productCost,
           productMolPercentage: existingItem.productMolPercentage ?? null,
-          specialBidUnitPrice: existingItem.specialBidUnitPrice ?? null,
-          specialBidMolPercentage: existingItem.specialBidMolPercentage ?? null,
           supplierQuoteId: existingItem.supplierQuoteId ?? null,
           supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
           supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice ?? null,
@@ -363,26 +299,10 @@ const resolveQuoteItemSnapshots = async (
       }
     }
 
-    let specialBidUnitPrice: number | null = null;
-    let specialBidMolPercentage: number | null = null;
     // Supplier quote snapshot fields
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
-
-    if (normalizedBidId) {
-      const specialBidSnapshot = specialBidSnapshots.get(normalizedBidId);
-      if (!specialBidSnapshot) {
-        throw new Error(`specialBidId "${normalizedBidId}" is invalid`);
-      }
-      if (specialBidSnapshot.productId !== resolvedProductId) {
-        throw new Error(
-          `specialBidId "${normalizedBidId}" does not match productId "${resolvedProductId}"`,
-        );
-      }
-      specialBidUnitPrice = specialBidSnapshot.unitPrice;
-      specialBidMolPercentage = specialBidSnapshot.molPercentage;
-    }
 
     if (normalizedSupplierQuoteItemId) {
       const supplierQuoteSnapshot = supplierQuoteSnapshots.get(normalizedSupplierQuoteItemId);
@@ -413,11 +333,10 @@ const resolveQuoteItemSnapshots = async (
       throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
-    const allowManualProductSnapshot = !normalizedBidId && !normalizedSupplierQuoteItemId;
+    const allowManualProductSnapshot = !normalizedSupplierQuoteItemId;
     resolvedItems.push({
       ...item,
       productId: resolvedProductId,
-      specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
       productCost:
         allowManualProductSnapshot && item.productCost !== null
@@ -427,8 +346,6 @@ const resolveQuoteItemSnapshots = async (
         allowManualProductSnapshot && item.productMolPercentage !== null
           ? item.productMolPercentage
           : (productSnapshot?.productMolPercentage ?? null),
-      specialBidUnitPrice,
-      specialBidMolPercentage,
       supplierQuoteId,
       supplierQuoteSupplierName,
       supplierQuoteUnitPrice,
@@ -453,13 +370,10 @@ const quoteItemSchema = {
     quoteId: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
-    specialBidId: { type: ['string', 'null'] },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
     productMolPercentage: { type: ['number', 'null'] },
-    specialBidUnitPrice: { type: ['number', 'null'] },
-    specialBidMolPercentage: { type: ['number', 'null'] },
     // Supplier quote fields
     supplierQuoteId: { type: ['string', 'null'] },
     supplierQuoteItemId: { type: ['string', 'null'] },
@@ -519,14 +433,11 @@ const quoteItemBodySchema = {
     id: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
-    specialBidId: { type: 'string' },
     supplierQuoteItemId: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
     productMolPercentage: { type: 'number' },
-    specialBidUnitPrice: { type: 'number' },
-    specialBidMolPercentage: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -591,21 +502,12 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   quoteId: String(row.quoteId),
   productId: toNullableString(row.productId) || '',
   productName: String(row.productName),
-  specialBidId: toNullableString(row.specialBidId),
   quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
   unitPrice: toFiniteNumber(row.unitPrice, 'quoteItem.unitPrice'),
   productCost: toFiniteNumber(row.productCost, 'quoteItem.productCost'),
   productMolPercentage: toNullableFiniteNumber(
     row.productMolPercentage,
     'quoteItem.productMolPercentage',
-  ),
-  specialBidUnitPrice: toNullableFiniteNumber(
-    row.specialBidUnitPrice,
-    'quoteItem.specialBidUnitPrice',
-  ),
-  specialBidMolPercentage: toNullableFiniteNumber(
-    row.specialBidMolPercentage,
-    'quoteItem.specialBidMolPercentage',
   ),
   // Supplier quote fields
   supplierQuoteId: toNullableString(row.supplierQuoteId),
@@ -695,13 +597,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 quote_id as "quoteId",
                 product_id as "productId",
                 product_name as "productName",
-                special_bid_id as "specialBidId",
                 quantity,
                 unit_price as "unitPrice",
                 product_cost as "productCost",
                 product_mol_percentage as "productMolPercentage",
-                special_bid_unit_price as "specialBidUnitPrice",
-                special_bid_mol_percentage as "specialBidMolPercentage",
                 supplier_quote_id as "supplierQuoteId",
                 supplier_quote_item_id as "supplierQuoteItemId",
                 supplier_quote_supplier_name as "supplierQuoteSupplierName",
@@ -860,26 +759,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO quote_items (
-              id, quote_id, product_id, product_name, special_bid_id,
+              id, quote_id, product_id, product_name,
               quantity, unit_price, product_cost, product_mol_percentage,
-              special_bid_unit_price, special_bid_mol_percentage, discount, note,
+              discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
               supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING
               id,
               quote_id as "quoteId",
               product_id as "productId",
               product_name as "productName",
-              special_bid_id as "specialBidId",
               quantity,
               unit_price as "unitPrice",
               product_cost as "productCost",
               product_mol_percentage as "productMolPercentage",
-              special_bid_unit_price as "specialBidUnitPrice",
-              special_bid_mol_percentage as "specialBidMolPercentage",
               discount,
               note,
               supplier_quote_id as "supplierQuoteId",
@@ -892,13 +788,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               nextIdResult.value,
               item.productId || null,
               item.productName,
-              item.specialBidId || null,
               item.quantity,
               item.unitPrice,
               item.productCost,
               item.productMolPercentage ?? null,
-              item.specialBidUnitPrice ?? null,
-              item.specialBidMolPercentage ?? null,
               item.discount || 0,
               item.note || null,
               item.supplierQuoteId ?? null,
@@ -1129,11 +1022,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `SELECT
               id,
               product_id as "productId",
-              special_bid_id as "specialBidId",
               product_cost as "productCost",
               product_mol_percentage as "productMolPercentage",
-              special_bid_unit_price as "specialBidUnitPrice",
-              special_bid_mol_percentage as "specialBidMolPercentage",
               supplier_quote_id as "supplierQuoteId",
               supplier_quote_item_id as "supplierQuoteItemId",
               supplier_quote_supplier_name as "supplierQuoteSupplierName",
@@ -1150,7 +1040,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: item.id,
             productId: normalizeNullableString(item.productId),
             productName: '',
-            specialBidId: normalizeSpecialBidId(item.specialBidId),
             quantity: 0,
             unitPrice: 0,
             discount: 0,
@@ -1159,14 +1048,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.productMolPercentage === undefined || item.productMolPercentage === null
                 ? null
                 : Number(item.productMolPercentage),
-            specialBidUnitPrice:
-              item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-                ? null
-                : Number(item.specialBidUnitPrice),
-            specialBidMolPercentage:
-              item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-                ? null
-                : Number(item.specialBidMolPercentage),
             supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
             supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
             supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
@@ -1289,26 +1170,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO quote_items (
-              id, quote_id, product_id, product_name, special_bid_id,
+              id, quote_id, product_id, product_name,
               quantity, unit_price, product_cost, product_mol_percentage,
-              special_bid_unit_price, special_bid_mol_percentage, discount, note,
+              discount, note,
               supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
               supplier_quote_unit_price,
               unit_type
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING
               id,
               quote_id as "quoteId",
               product_id as "productId",
               product_name as "productName",
-              special_bid_id as "specialBidId",
               quantity,
               unit_price as "unitPrice",
               product_cost as "productCost",
               product_mol_percentage as "productMolPercentage",
-              special_bid_unit_price as "specialBidUnitPrice",
-              special_bid_mol_percentage as "specialBidMolPercentage",
               discount,
               note,
               supplier_quote_id as "supplierQuoteId",
@@ -1321,13 +1199,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               updatedQuoteId,
               item.productId || null,
               item.productName,
-              item.specialBidId || null,
               item.quantity,
               item.unitPrice,
               item.productCost,
               item.productMolPercentage ?? null,
-              item.specialBidUnitPrice ?? null,
-              item.specialBidMolPercentage ?? null,
               item.discount || 0,
               item.note || null,
               item.supplierQuoteId ?? null,
@@ -1347,13 +1222,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     quote_id as "quoteId",
                     product_id as "productId",
                     product_name as "productName",
-                    special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
                     product_cost as "productCost",
                     product_mol_percentage as "productMolPercentage",
-                    special_bid_unit_price as "specialBidUnitPrice",
-                    special_bid_mol_percentage as "specialBidMolPercentage",
                     supplier_quote_id as "supplierQuoteId",
                     supplier_quote_item_id as "supplierQuoteItemId",
                     supplier_quote_supplier_name as "supplierQuoteSupplierName",

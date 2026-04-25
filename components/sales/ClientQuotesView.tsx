@@ -7,7 +7,6 @@ import type {
   Product,
   Quote,
   QuoteItem,
-  SpecialBid,
   SupplierQuote,
   SupplierUnitType,
 } from '../../types';
@@ -17,7 +16,6 @@ import {
   formatInsertDate,
   getLocalDateString,
   isDateOnlyBeforeToday,
-  isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
 import {
@@ -44,7 +42,6 @@ export interface ClientQuotesViewProps {
   quotes: Quote[];
   clients: Client[];
   products: Product[];
-  specialBids: SpecialBid[];
   supplierQuotes: SupplierQuote[];
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
@@ -76,7 +73,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
   products,
-  specialBids,
   supplierQuotes,
   onAddQuote,
   onUpdateQuote,
@@ -287,14 +283,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
             : Number(item.productMolPercentage),
-        specialBidUnitPrice:
-          item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-            ? null
-            : Number(item.specialBidUnitPrice),
-        specialBidMolPercentage:
-          item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-            ? null
-            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
         // Supplier quote snapshot fields
         supplierQuoteId: item.supplierQuoteId ?? null,
         supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -340,24 +328,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const updatedItems = shouldReprice
         ? (prev.items || []).map((item) => {
             if (!item.productId) {
-              if (item.specialBidId) {
-                return {
-                  ...item,
-                  specialBidId: '',
-                  supplierQuoteId: null,
-                  supplierQuoteItemId: null,
-                  supplierQuoteSupplierName: null,
-                  supplierQuoteUnitPrice: null,
-                };
-              }
-              return item;
-            }
-
-            const product = products.find((p) => p.id === item.productId);
-            if (!product) {
               return {
                 ...item,
-                specialBidId: '',
                 supplierQuoteId: null,
                 supplierQuoteItemId: null,
                 supplierQuoteSupplierName: null,
@@ -365,12 +337,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               };
             }
 
-            const applicableBid = activeSpecialBids.find(
-              (b) => b.clientId === clientId && b.productId === item.productId,
-            );
-            const molSource = applicableBid?.molPercentage ?? product.molPercentage;
-            const mol = molSource ? Number(molSource) : 0;
-            const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
+            const product = products.find((p) => p.id === item.productId);
+            if (!product) {
+              return {
+                ...item,
+                supplierQuoteId: null,
+                supplierQuoteItemId: null,
+                supplierQuoteSupplierName: null,
+                supplierQuoteUnitPrice: null,
+              };
+            }
+
+            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+            const cost = Number(product.costo);
             let unitPrice = convertUnitPrice(
               calcProductSalePrice(cost, mol),
               'hours',
@@ -384,7 +363,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 shouldReprice && editingQuote
                   ? `temp-reprice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
                   : item.id,
-              specialBidId: applicableBid ? applicableBid.id : '',
               supplierQuoteId: null,
               supplierQuoteItemId: null,
               supplierQuoteSupplierName: null,
@@ -393,8 +371,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               unitPrice,
               productCost: Number(product.costo),
               productMolPercentage: product.molPercentage,
-              specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
-              specialBidMolPercentage: applicableBid?.molPercentage ?? null,
             };
           })
         : prev.items || [];
@@ -467,8 +443,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
-      specialBidUnitPrice: null,
-      specialBidMolPercentage: null,
       // Supplier quote fields
       supplierQuoteId: null,
       supplierQuoteItemId: null,
@@ -512,9 +486,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
-        newItems[index].specialBidId = '';
-        newItems[index].specialBidUnitPrice = null;
-        newItems[index].specialBidMolPercentage = null;
 
         // Use standard product cost with unit type handling
         if (product.type === 'supply') {
@@ -535,7 +506,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
     if (field === 'supplierQuoteItemId') {
       if (!value || value === 'none') {
-        // Clear supplier quote and revert to product cost or special bid if available
+        // Clear supplier quote and revert to product cost
         newItems[index].supplierQuoteId = null;
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
@@ -543,46 +514,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
-          const applicableBid = activeSpecialBids.find(
-            (b) => b.clientId === formData.clientId && b.productId === newItems[index].productId,
-          );
-
-          if (applicableBid) {
-            newItems[index].specialBidId = applicableBid.id;
-            if (product.type === 'supply') {
-              newItems[index].unitType = 'hours';
-            }
-            const molSource = applicableBid.molPercentage ?? product.molPercentage;
-            const mol = molSource ? Number(molSource) : 0;
-            newItems[index].unitPrice = roundToTwoDecimals(
-              convertUnitPrice(
-                calcProductSalePrice(Number(applicableBid.unitPrice), mol),
-                'hours',
-                newItems[index].unitType || 'hours',
-              ),
-            );
-            newItems[index].productCost = Number(product.costo);
-            newItems[index].productMolPercentage = product.molPercentage;
-            newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
-            newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
-          } else {
-            if (product.type === 'supply') {
-              newItems[index].unitType = 'hours';
-            }
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            newItems[index].specialBidId = '';
-            newItems[index].unitPrice = roundToTwoDecimals(
-              convertUnitPrice(
-                calcProductSalePrice(Number(product.costo), mol),
-                'hours',
-                newItems[index].unitType || 'hours',
-              ),
-            );
-            newItems[index].productCost = Number(product.costo);
-            newItems[index].productMolPercentage = product.molPercentage;
-            newItems[index].specialBidUnitPrice = null;
-            newItems[index].specialBidMolPercentage = null;
+          if (product.type === 'supply') {
+            newItems[index].unitType = 'hours';
           }
+          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+          newItems[index].unitPrice = roundToTwoDecimals(
+            convertUnitPrice(
+              calcProductSalePrice(Number(product.costo), mol),
+              'hours',
+              newItems[index].unitType || 'hours',
+            ),
+          );
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData({ ...formData, items: newItems });
         return;
@@ -610,10 +554,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
         newItems[index].unitType = selectedQuoteItem.unitType || 'hours';
         newItems[index].quantity = selectedQuoteItem.quantity;
-
-        newItems[index].specialBidId = '';
-        newItems[index].specialBidUnitPrice = null;
-        newItems[index].specialBidMolPercentage = null;
 
         let salePrice: number;
         if (product) {
@@ -646,66 +586,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       }
     }
 
-    if (field === 'specialBidId') {
-      if (!value) {
-        newItems[index].specialBidId = '';
-        newItems[index].specialBidUnitPrice = null;
-        newItems[index].specialBidMolPercentage = null;
-
-        // Check for supplier quote first, then revert to product cost
-        if (newItems[index].supplierQuoteItemId) {
-          // Keep supplier quote data
-        } else {
-          const product = products.find((p) => p.id === newItems[index].productId);
-          if (product) {
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            newItems[index].unitPrice = roundToTwoDecimals(
-              convertUnitPrice(
-                calcProductSalePrice(Number(product.costo), mol),
-                'hours',
-                newItems[index].unitType || 'hours',
-              ),
-            );
-            newItems[index].productCost = Number(product.costo);
-            newItems[index].productMolPercentage = product.molPercentage;
-          }
-        }
-        setFormData({ ...formData, items: newItems });
-        return;
-      }
-
-      const bid = specialBids.find((b) => b.id === value);
-      if (bid) {
-        const product = products.find((p) => p.id === bid.productId);
-        if (product) {
-          newItems[index].productId = bid.productId;
-          newItems[index].productName = product.name;
-          if (product.type === 'supply') {
-            newItems[index].unitType = 'hours';
-          }
-          const molSource = bid.molPercentage ?? product.molPercentage;
-          const mol = molSource ? Number(molSource) : 0;
-          newItems[index].unitPrice = roundToTwoDecimals(
-            convertUnitPrice(
-              calcProductSalePrice(Number(bid.unitPrice), mol),
-              'hours',
-              newItems[index].unitType || 'hours',
-            ),
-          );
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productMolPercentage = product.molPercentage;
-          newItems[index].specialBidId = bid.id;
-          newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
-          newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
-
-          newItems[index].supplierQuoteId = null;
-          newItems[index].supplierQuoteItemId = null;
-          newItems[index].supplierQuoteSupplierName = null;
-          newItems[index].supplierQuoteUnitPrice = null;
-        }
-      }
-    }
-
     setFormData({ ...formData, items: newItems });
   };
 
@@ -720,10 +600,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [activeProducts],
   );
   const today = getLocalDateString();
-  const activeSpecialBids = useMemo(
-    () => specialBids.filter((b) => isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate)),
-    [specialBids, today],
-  );
 
   const acceptedSupplierQuotes = useMemo(
     () =>
@@ -1381,9 +1257,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedBid = item.specialBidId
-                      ? specialBids.find((b) => b.id === item.specialBidId)
-                      : undefined;
                     const selectedSupplierQuote = item.supplierQuoteItemId
                       ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
                       : undefined;
@@ -1560,7 +1433,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               {t('sales:clientQuotes.revenue')}
                             </div>
                             <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
                             >
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
@@ -1674,7 +1547,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>

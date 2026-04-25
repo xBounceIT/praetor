@@ -12,9 +12,7 @@ import RolesView from './components/administration/RolesView';
 import UserManagement from './components/administration/UserManagement';
 import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
-import ExternalListingView from './components/catalog/ExternalListingView';
 import InternalListingView from './components/catalog/InternalListingView';
-import SpecialBidsView from './components/catalog/SpecialBidsView';
 import ApiDocsView from './components/docs/ApiDocsView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
@@ -59,7 +57,6 @@ import type {
   ProjectTask,
   Quote,
   Role,
-  SpecialBid,
   Supplier,
   SupplierInvoice,
   SupplierQuote,
@@ -562,7 +559,6 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [specialBids, setSpecialBids] = useState<SpecialBid[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
   const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
@@ -656,8 +652,6 @@ const App: React.FC = () => {
       'accounting/supplier-invoices',
       // Catalog module
       'catalog/internal-listing',
-      'catalog/external-listing',
-      'catalog/special-bids',
       'projects/manage',
       'projects/tasks',
       'hr/internal',
@@ -705,8 +699,6 @@ const App: React.FC = () => {
       'accounting/supplier-invoices',
       // Catalog module
       'catalog/internal-listing',
-      'catalog/external-listing',
-      'catalog/special-bids',
       'projects/manage',
       'projects/tasks',
       'hr/internal',
@@ -1030,11 +1022,10 @@ const App: React.FC = () => {
           buildPermission('sales.client_offers', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
         ]);
-        const canViewCatalog = hasAnyPermission(permissions, [
+        const canViewCatalog = hasPermission(
+          permissions,
           buildPermission('catalog.internal_listing', 'view'),
-          buildPermission('catalog.external_listing', 'view'),
-          buildPermission('catalog.special_bids', 'view'),
-        ]);
+        );
         const canViewAccounting = hasAnyPermission(permissions, [
           buildPermission('accounting.clients_orders', 'view'),
           buildPermission('accounting.clients_invoices', 'view'),
@@ -1061,9 +1052,7 @@ const App: React.FC = () => {
           buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.clients_orders', 'view'),
           buildPermission('accounting.clients_invoices', 'view'),
-          buildPermission('catalog.special_bids', 'view'),
           buildPermission('catalog.internal_listing', 'view'),
-          buildPermission('catalog.external_listing', 'view'),
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
         ]);
@@ -1100,21 +1089,14 @@ const App: React.FC = () => {
         );
         const canListProducts = hasAnyPermission(permissions, [
           buildPermission('catalog.internal_listing', 'view'),
-          buildPermission('catalog.external_listing', 'view'),
-          buildPermission('catalog.special_bids', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
-        const canListSpecialBids = hasPermission(
-          permissions,
-          buildPermission('catalog.special_bids', 'view'),
-        );
         const canListSuppliers = hasAnyPermission(permissions, [
           buildPermission('crm.suppliers', 'view'),
           buildPermission('crm.suppliers_all', 'view'),
-          buildPermission('catalog.external_listing', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
@@ -1173,14 +1155,6 @@ const App: React.FC = () => {
           buildPermission('crm.suppliers', 'view'),
           buildPermission('crm.suppliers_all', 'view'),
         ]);
-        const canViewCatalogExternal = hasPermission(
-          permissions,
-          buildPermission('catalog.external_listing', 'view'),
-        );
-        const canViewCatalogSpecialBids = hasPermission(
-          permissions,
-          buildPermission('catalog.special_bids', 'view'),
-        );
         const canViewCatalogInternal = hasPermission(
           permissions,
           buildPermission('catalog.internal_listing', 'view'),
@@ -1365,12 +1339,6 @@ const App: React.FC = () => {
                 load: () => api.products.list(),
                 apply: (data) => setProducts(data as Product[]),
               },
-              {
-                dataset: 'special bids',
-                enabled: canListSpecialBids,
-                load: () => api.specialBids.list(),
-                apply: (data) => setSpecialBids(data as SpecialBid[]),
-              },
             ]);
             await loadOptionalDataset(
               module,
@@ -1425,12 +1393,6 @@ const App: React.FC = () => {
                 load: () => api.products.list(),
                 apply: (data) => setProducts(data as Product[]),
               },
-              {
-                dataset: 'special bids',
-                enabled: canListSpecialBids,
-                load: () => api.specialBids.list(),
-                apply: (data) => setSpecialBids(data as SpecialBid[]),
-              },
             ]);
             await loadOptionalDataset(
               module,
@@ -1445,29 +1407,9 @@ const App: React.FC = () => {
             failedDatasets = await loadDatasets(module, [
               {
                 dataset: 'products',
-                enabled:
-                  canListProducts &&
-                  (canViewCatalogInternal || canViewCatalogExternal || canViewCatalogSpecialBids),
+                enabled: canListProducts && canViewCatalogInternal,
                 load: () => api.products.list(),
                 apply: (data) => setProducts(data as Product[]),
-              },
-              {
-                dataset: 'special bids',
-                enabled: canListSpecialBids && canViewCatalogSpecialBids,
-                load: () => api.specialBids.list(),
-                apply: (data) => setSpecialBids(data as SpecialBid[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canViewCatalogSpecialBids && canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'suppliers',
-                enabled: canViewCatalogExternal && canListSuppliers,
-                load: () => api.suppliers.list(),
-                apply: (data) => setSuppliers(data as Supplier[]),
               },
             ]);
             await loadOptionalDataset(
@@ -2085,36 +2027,6 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Failed to add product:', err);
       throw err;
-    }
-  };
-
-  const addSpecialBid = async (bidData: Partial<SpecialBid>) => {
-    try {
-      const bid = await api.specialBids.create(bidData);
-      setSpecialBids([...specialBids, bid]);
-    } catch (err) {
-      console.error('Failed to add special bid:', err);
-      alert((err as Error).message || 'Failed to add special bid');
-    }
-  };
-
-  const handleUpdateSpecialBid = async (id: string, updates: Partial<SpecialBid>) => {
-    try {
-      const updated = await api.specialBids.update(id, updates);
-      setSpecialBids(specialBids.map((b) => (b.id === id ? updated : b)));
-    } catch (err) {
-      console.error('Failed to update special bid:', err);
-      alert((err as Error).message || 'Failed to update special bid');
-    }
-  };
-
-  const handleDeleteSpecialBid = async (id: string) => {
-    try {
-      await api.specialBids.delete(id);
-      setSpecialBids(specialBids.filter((b) => b.id !== id));
-    } catch (err) {
-      console.error('Failed to delete special bid:', err);
-      alert((err as Error).message || 'Failed to delete special bid');
     }
   };
 
@@ -2931,7 +2843,6 @@ const App: React.FC = () => {
     setProjects([]);
     setProjectTasks([]);
     setProducts([]);
-    setSpecialBids([]);
     setQuotes([]);
     setClientOffers([]);
     setClientsOrders([]);
@@ -2960,7 +2871,6 @@ const App: React.FC = () => {
       setProjects([]);
       setProjectTasks([]);
       setProducts([]);
-      setSpecialBids([]);
       setQuotes([]);
       setClientOffers([]);
       setClientsOrders([]);
@@ -3245,7 +3155,7 @@ const App: React.FC = () => {
             ) &&
               activeView === 'catalog/internal-listing' && (
                 <InternalListingView
-                  products={products.filter((product) => !product.supplierId)}
+                  products={products}
                   onAddProduct={addProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
@@ -3262,41 +3172,12 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['catalog/external-listing'],
-            ) &&
-              activeView === 'catalog/external-listing' && (
-                <ExternalListingView
-                  products={products.filter((product) => product.supplierId)}
-                  suppliers={suppliers}
-                  onAddProduct={addProduct}
-                  onUpdateProduct={handleUpdateProduct}
-                  onDeleteProduct={handleDeleteProduct}
-                  currency={generalSettings.currency}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['catalog/special-bids']) &&
-              activeView === 'catalog/special-bids' && (
-                <SpecialBidsView
-                  bids={specialBids}
-                  clients={clients}
-                  products={products}
-                  onAddBid={addSpecialBid}
-                  onUpdateBid={handleUpdateSpecialBid}
-                  onDeleteBid={handleDeleteSpecialBid}
-                  currency={generalSettings.currency}
-                />
-              )}
-
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
               activeView === 'sales/client-quotes' && (
                 <ClientQuotesView
                   quotes={quotes}
                   clients={clients}
                   products={products}
-                  specialBids={specialBids}
                   supplierQuotes={supplierQuotes}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
@@ -3326,7 +3207,6 @@ const App: React.FC = () => {
                   offers={clientOffers}
                   clients={clients}
                   products={products}
-                  specialBids={specialBids}
                   supplierQuotes={supplierQuotes}
                   offerIdsWithOrders={offerIdsWithOrders}
                   onUpdateOffer={handleUpdateClientOffer}
@@ -3371,7 +3251,6 @@ const App: React.FC = () => {
                   orders={clientsOrders}
                   clients={clients}
                   products={products}
-                  specialBids={specialBids}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
@@ -3393,7 +3272,6 @@ const App: React.FC = () => {
                   invoices={invoices}
                   clients={clients}
                   products={products}
-                  specialBids={specialBids}
                   clientsOrders={clientsOrders}
                   onAddInvoice={addInvoice}
                   onUpdateInvoice={handleUpdateInvoice}

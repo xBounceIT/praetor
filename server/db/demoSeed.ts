@@ -382,7 +382,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.saleItems);
       pushTextArrayPredicate(builder, 'sale_id', DEMO_IDS.sales);
       pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
-      pushTextArrayPredicate(builder, 'special_bid_id', DEMO_IDS.specialBids);
     }),
   );
 
@@ -407,7 +406,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.customerOfferItems);
       pushTextArrayPredicate(builder, 'offer_id', DEMO_IDS.customerOffers);
       pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
-      pushTextArrayPredicate(builder, 'special_bid_id', DEMO_IDS.specialBids);
     }),
   );
 
@@ -432,7 +430,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.quoteItems);
       pushTextArrayPredicate(builder, 'quote_id', DEMO_IDS.quotes);
       pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
-      pushTextArrayPredicate(builder, 'special_bid_id', DEMO_IDS.specialBids);
     }),
   );
 
@@ -442,16 +439,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     await executeDelete(client, 'quotes', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_IDS.quotes);
       pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
-    'special_bids',
-    await executeDelete(client, 'special_bids', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.specialBids);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
     }),
   );
 
@@ -593,11 +580,6 @@ const verificationSteps: VerificationStep[] = [
   { table: 'clients', ids: DEMO_IDS.clients, expected: DEMO_EXPECTED_COUNTS.clients },
   { table: 'suppliers', ids: DEMO_IDS.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
   { table: 'products', ids: DEMO_IDS.products, expected: DEMO_EXPECTED_COUNTS.products },
-  {
-    table: 'special_bids',
-    ids: DEMO_IDS.specialBids,
-    expected: DEMO_EXPECTED_COUNTS.special_bids,
-  },
   { table: 'quotes', ids: DEMO_IDS.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
   {
     table: 'quote_items',

@@ -85,7 +85,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         requireAnyPermission(
           'crm.suppliers.view',
           'crm.suppliers_all.view',
-          'catalog.external_listing.view',
           'sales.supplier_quotes.view',
           'accounting.supplier_orders.view',
           'accounting.supplier_invoices.view',

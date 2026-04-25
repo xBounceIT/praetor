@@ -21,7 +21,6 @@ import projectsRoutes from './routes/projects.ts';
 import reportsRoutes from './routes/reports.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
-import specialBidsRoutes from './routes/special-bids.ts';
 import supplierInvoicesRoutes from './routes/supplier-invoices.ts';
 import supplierOrdersRoutes from './routes/supplier-orders.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
@@ -116,7 +115,6 @@ export const buildApp = async () => {
   await fastify.register(supplierOrdersRoutes, { prefix: '/api/accounting/supplier-orders' });
   await fastify.register(supplierInvoicesRoutes, { prefix: '/api/accounting/supplier-invoices' });
   await fastify.register(supplierQuotesRoutes, { prefix: '/api/supplier-quotes' });
-  await fastify.register(specialBidsRoutes, { prefix: '/api/special-bids' });
   await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
   await fastify.register(emailRoutes, { prefix: '/api/email' });
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });

@@ -39,7 +39,6 @@ const invoiceItemSchema = {
     id: { type: 'string' },
     invoiceId: { type: 'string' },
     productId: { type: ['string', 'null'] },
-    specialBidId: { type: ['string', 'null'] },
     description: { type: 'string' },
     unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
     quantity: { type: 'number' },
@@ -95,7 +94,6 @@ const invoiceItemBodySchema = {
   type: 'object',
   properties: {
     productId: { type: 'string' },
-    specialBidId: { type: ['string', 'null'] },
     description: { type: 'string' },
     unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
     quantity: { type: 'number' },
@@ -163,10 +161,6 @@ const generateInvoiceId = async (issueDate: string) => {
 
 const formatInvoiceItem = (item: Record<string, unknown>) => ({
   ...item,
-  specialBidId:
-    item.specialBidId === undefined || item.specialBidId === null
-      ? null
-      : String(item.specialBidId),
   unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
   quantity: parseFloat(String(item.quantity ?? 0)),
   unitPrice: parseFloat(String(item.unitPrice ?? 0)),
@@ -183,7 +177,7 @@ const getInvoiceClientId = async (invoiceId: string) => {
 const validateAndNormalizeItems = async (
   items: unknown[],
   reply: FastifyReply,
-  effectiveClientId: string,
+  _effectiveClientId: string,
 ) => {
   const normalizedItems = [];
 
@@ -192,15 +186,6 @@ const validateAndNormalizeItems = async (
     const productIdResult = optionalNonEmptyString(item.productId, `items[${i}].productId`);
     if (!productIdResult.ok) {
       badRequest(reply, productIdResult.message);
-      return null;
-    }
-
-    const specialBidIdResult = optionalNonEmptyString(
-      item.specialBidId,
-      `items[${i}].specialBidId`,
-    );
-    if (!specialBidIdResult.ok) {
-      badRequest(reply, specialBidIdResult.message);
       return null;
     }
 
@@ -244,39 +229,9 @@ const validateAndNormalizeItems = async (
       return null;
     }
 
-    if (specialBidIdResult.value && !productIdResult.value) {
-      badRequest(reply, `items[${i}].productId is required when specialBidId is provided`);
-      return null;
-    }
-
-    if (specialBidIdResult.value) {
-      const bidResult = await query(
-        `SELECT product_id as "productId", client_id as "clientId"
-         FROM special_bids
-         WHERE id = $1`,
-        [specialBidIdResult.value],
-      );
-
-      if (bidResult.rows.length === 0) {
-        badRequest(reply, `items[${i}].specialBidId is invalid`);
-        return null;
-      }
-
-      const bid = bidResult.rows[0] as { productId: string; clientId: string };
-      if (bid.productId !== productIdResult.value) {
-        badRequest(reply, `items[${i}].specialBidId does not match productId`);
-        return null;
-      }
-      if (effectiveClientId && bid.clientId !== effectiveClientId) {
-        badRequest(reply, `items[${i}].specialBidId does not match clientId`);
-        return null;
-      }
-    }
-
     normalizedItems.push({
       ...item,
       productId: productIdResult.value,
-      specialBidId: specialBidIdResult.value,
       description: descriptionResult.value,
       unitOfMeasure: unitOfMeasureResult.value,
       quantity: quantityResult.value,
@@ -349,7 +304,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 id,
                 invoice_id as "invoiceId",
                 product_id as "productId",
-                special_bid_id as "specialBidId",
                 description,
                 unit_of_measure as "unitOfMeasure",
                 quantity,
@@ -512,14 +466,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO invoice_items (
-                        id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, discount
+                        id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount
                     ) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                     RETURNING 
                         id,
                         invoice_id as "invoiceId",
                         product_id as "productId",
-                        special_bid_id as "specialBidId",
                         description,
                         unit_of_measure as "unitOfMeasure",
                         quantity,
@@ -529,7 +482,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             itemId,
             invoiceId,
             item.productId || null,
-            item.specialBidId || null,
             item.description,
             item.unitOfMeasure,
             item.quantity,
@@ -762,14 +714,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO invoice_items (
-                            id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, discount
+                            id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount
                         ) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                         RETURNING 
                             id,
                             invoice_id as "invoiceId",
                             product_id as "productId",
-                            special_bid_id as "specialBidId",
                             description,
                             unit_of_measure as "unitOfMeasure",
                             quantity,
@@ -779,7 +730,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               itemId,
               updatedInvoiceId,
               item.productId || null,
-              item.specialBidId || null,
               item.description,
               item.unitOfMeasure,
               item.quantity,
@@ -796,7 +746,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         id,
                         invoice_id as "invoiceId",
                         product_id as "productId",
-                        special_bid_id as "specialBidId",
                         description,
                         unit_of_measure as "unitOfMeasure",
                         quantity,
