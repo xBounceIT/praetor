@@ -457,7 +457,7 @@ const StandardTable = <T extends object>({
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
     >
-      <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
+      <div className="px-8 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
         <div className="flex items-center gap-3">
           <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
             {title}
@@ -620,7 +620,7 @@ const StandardTable = <T extends object>({
                               ? { minWidth: '120px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
@@ -763,7 +763,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-8 py-4 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
+          className={`px-8 py-2 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
