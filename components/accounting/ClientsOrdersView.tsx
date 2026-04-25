@@ -887,7 +887,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 />
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center gap-1 lg:col-span-1">
+                            <div className="flex flex-col items-center justify-center min-h-[42px] gap-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.cost')}
                               </label>
@@ -915,7 +915,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                               </label>
@@ -931,7 +931,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                               </label>
@@ -939,7 +939,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 {lineCost.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                            <div className="flex flex-col items-center justify-center min-h-[42px] lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.marginLabel')}
                               </label>

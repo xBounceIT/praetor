@@ -483,7 +483,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Insert order items
-      const createdItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
@@ -528,9 +527,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.supplierSaleSupplierName ?? null,
             item.unitType || 'hours',
           ],
-        );
-        createdItems.push(
-          normalizeClientOrderItemRow(itemResult.rows[0] as Record<string, unknown>),
         );
       }
 
@@ -658,6 +654,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      // Re-fetch items to pick up supplier_sale_* fields set during auto-creation
+      const refreshedItems = await query(
+        `SELECT
+                id,
+                sale_id as "orderId",
+                product_id as "productId",
+                product_name as "productName",
+                quantity,
+                unit_price as "unitPrice",
+                product_cost as "productCost",
+                product_mol_percentage as "productMolPercentage",
+                supplier_quote_id as "supplierQuoteId",
+                supplier_quote_item_id as "supplierQuoteItemId",
+                supplier_quote_supplier_name as "supplierQuoteSupplierName",
+                supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                supplier_sale_id as "supplierSaleId",
+                supplier_sale_item_id as "supplierSaleItemId",
+                supplier_sale_supplier_name as "supplierSaleSupplierName",
+                unit_type as "unitType",
+                note,
+                discount
+            FROM sale_items
+            WHERE sale_id = $1
+            ORDER BY created_at ASC`,
+        [orderId],
+      );
+
       await logAudit({
         request,
         action: 'client_order.created',
@@ -670,7 +693,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       return reply.code(201).send({
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
-        items: createdItems,
+        items: refreshedItems.rows.map((item) =>
+          normalizeClientOrderItemRow(item as Record<string, unknown>),
+        ),
         ...(supplierOrderWarnings.length > 0 ? { warnings: supplierOrderWarnings } : {}),
       });
     },
