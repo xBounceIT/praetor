@@ -455,9 +455,9 @@ const StandardTable = <T extends object>({
   // Render
   return (
     <div
-      className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
+      className={`bg-white rounded-xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
     >
-      <div className="px-3 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
+      <div className="px-3 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-xl">
         <div className="flex items-center gap-3">
           <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
             {title}
@@ -763,7 +763,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
+          className={`px-3 py-2 bg-slate-50 border-t border-slate-200 rounded-b-xl ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
