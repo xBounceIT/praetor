@@ -461,23 +461,23 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     key={day.dateStr}
                     className={`px-2 py-2 text-center relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
-                    <p
-                      className={`text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
+                    <div
+                      className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
                     >
                       {day.dayName}
-                    </p>
+                      {day.holidayName && (
+                        <Tooltip label={day.holidayName}>
+                          {() => (
+                            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                          )}
+                        </Tooltip>
+                      )}
+                    </div>
                     <p
                       className={`text-sm font-black leading-none ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-600' : 'text-slate-700'}`}
                     >
                       {day.dayNum}
                     </p>
-                    {day.holidayName && (
-                      <Tooltip label={day.holidayName} wrapperClassName="absolute top-1 right-1">
-                        {() => (
-                          <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                        )}
-                      </Tooltip>
-                    )}
                   </th>
                 ))}
                 <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-20 text-center sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
