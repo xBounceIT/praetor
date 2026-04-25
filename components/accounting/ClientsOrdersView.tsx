@@ -29,7 +29,7 @@ import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
-import StandardTable, { type Column } from '../shared/StandardTable';
+import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -109,7 +109,7 @@ const computeDueDate = (
   if (!createdAt) return '—';
   const baseDate = getLocalDateString(new Date(createdAt));
   const days = paymentTerms && paymentTerms !== 'immediate' ? Number.parseInt(paymentTerms, 10) : 0;
-  if (days <= 0) return formatDateOnlyForLocale(baseDate);
+  if (!Number.isFinite(days) || days <= 0) return formatDateOnlyForLocale(baseDate);
   return formatDateOnlyForLocale(addDaysToDateOnly(baseDate, days));
 };
 

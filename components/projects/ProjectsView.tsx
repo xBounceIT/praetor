@@ -121,7 +121,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
-  const fetchHoursIdRef = useRef<string | null>(null);
+  const fetchHoursAbortRef = useRef<AbortController | null>(null);
   const fetchAllHoursGenRef = useRef(0);
   const [allProjectHours, setAllProjectHours] = useState<Record<
     string,
@@ -137,10 +137,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   };
 
-  const projectIds = useMemo(() => projects.map((p) => p.id).join(','), [projects]);
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
 
   useEffect(() => {
-    if (projects.length === 0) {
+    if (projectIds.length === 0) {
       setAllProjectHours({});
       return;
     }
@@ -149,10 +149,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setAllProjectHours(null);
     (async () => {
       try {
-        const map = await tasksApi.getHoursForProjects(
-          projects.map((p) => p.id),
-          abortController.signal,
-        );
+        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
         if (fetchAllHoursGenRef.current !== gen) return;
         setAllProjectHours(map);
       } catch (e) {
@@ -237,17 +234,18 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectTaskHours({});
     setHoursLoadState('loading');
     setIsModalOpen(true);
-    const fetchId = project.id;
-    fetchHoursIdRef.current = fetchId;
+    fetchHoursAbortRef.current?.abort();
+    const ac = new AbortController();
+    fetchHoursAbortRef.current = ac;
     tasksApi
-      .getHours(project.id)
+      .getHours(project.id, ac.signal)
       .then((h) => {
-        if (fetchHoursIdRef.current !== fetchId) return;
+        if (ac.signal.aborted) return;
         setProjectTaskHours(h);
         setHoursLoadState('idle');
       })
       .catch(() => {
-        if (fetchHoursIdRef.current !== fetchId) return;
+        if (ac.signal.aborted) return;
         setHoursLoadState('error');
       });
   };
