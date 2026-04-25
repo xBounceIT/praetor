@@ -444,22 +444,22 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           <table className="w-full min-w-max text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-44">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-44">
                   {t('weekly.client')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-48">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-48">
                   {t('weekly.project')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-52">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-52">
                   {t('weekly.task')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-40">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-40">
                   {t('weekly.location')}
                 </th>
                 {weekDays.map((day) => (
                   <th
                     key={day.dateStr}
-                    className={`px-2 py-4 text-center w-24 relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={`px-2 py-4 text-center relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
                     <p
                       className={`text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
@@ -492,7 +492,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   className="group hover:bg-slate-50/30 transition-all duration-500"
                 >
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-44">
+                    <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
                         value={row.clientId}
@@ -509,7 +509,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-48">
+                    <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={projects
                           .filter((p) => p.clientId === row.clientId)
@@ -531,7 +531,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-52">
+                    <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={projectTasks
                           .filter((t) => t.projectId === row.projectId)
@@ -557,7 +557,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-40">
+                    <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={[
                           { id: 'office', name: t('weekly.locationTypes.office') },
@@ -591,7 +591,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           onValueChange={(value) =>
                             handleValueChange(rowIndex, day.dateStr, 'duration', value)
                           }
-                          className={`w-16 text-center text-sm font-black transition-all duration-300 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-slate-700 bg-slate-50 border-slate-200'} ${day.isForbidden ? 'opacity-50 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50 border-red-100' : 'border-slate-200'} border rounded-lg py-2.5 focus:ring-2 focus:ring-praetor outline-none`}
+                          className={`w-full text-center text-sm font-black transition-all duration-300 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-slate-700 bg-slate-50 border-slate-200'} ${day.isForbidden ? 'opacity-50 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50 border-red-100' : 'border-slate-200'} border rounded-lg py-2.5 focus:ring-2 focus:ring-praetor outline-none`}
                         />
                         <input
                           type="text"
@@ -601,7 +601,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           onChange={(e) =>
                             handleValueChange(rowIndex, day.dateStr, 'note', e.target.value)
                           }
-                          className={`w-16 text-xs border focus:border-praetor focus:ring-1 focus:ring-praetor rounded px-2 py-1.5 transition-colors h-7 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-600 bg-slate-50' : 'text-slate-500 focus:text-slate-700'} ${day.isForbidden ? 'opacity-30 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30 border-red-100' : 'bg-slate-50 border-slate-100'}`}
+                          className={`w-full text-xs border focus:border-praetor focus:ring-1 focus:ring-praetor rounded px-2 py-1.5 transition-colors h-7 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-600 bg-slate-50' : 'text-slate-500 focus:text-slate-700'} ${day.isForbidden ? 'opacity-30 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30 border-red-100' : 'bg-slate-50 border-slate-100'}`}
                         />
                       </div>
                     </td>
