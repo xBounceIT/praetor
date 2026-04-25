@@ -621,6 +621,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               [supplierOrderId, sq.supplierName, orderId, sqId],
             );
 
+            // Map each supplier_sale_item back to its sale_item via quote_item_id.
+            // Safe because each supplier quote item maps 1:1 to a sale item within
+            // (sale_id, supplier_quote_id) — duplicates prevented by business logic.
             if (insertedSupplierItemIds.length > 0) {
               const valuesPlaceholders = insertedSupplierItemIds
                 .map((_, i) => `($${i * 2 + 3}, $${i * 2 + 4})`)

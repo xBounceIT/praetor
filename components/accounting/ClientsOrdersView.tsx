@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -105,10 +106,12 @@ const PricingCell: React.FC<PricingCellProps> = ({
 const computeDueDate = (
   createdAt: number | undefined,
   paymentTerms: string | undefined | null,
+  t: TFunction,
 ): string => {
   if (!createdAt) return '—';
+  if (paymentTerms === 'immediate') return t('crm:paymentTerms.immediate');
   const baseDate = getLocalDateString(new Date(createdAt));
-  const days = paymentTerms && paymentTerms !== 'immediate' ? Number.parseInt(paymentTerms, 10) : 0;
+  const days = Number.parseInt(paymentTerms ?? '', 10);
   if (!Number.isFinite(days) || days <= 0) return formatDateOnlyForLocale(baseDate);
   return formatDateOnlyForLocale(addDaysToDateOnly(baseDate, days));
 };
@@ -725,7 +728,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     })}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
-                    {computeDueDate(editingOrder?.createdAt, formData.paymentTerms)}
+                    {computeDueDate(editingOrder?.createdAt, formData.paymentTerms, t)}
                   </div>
                 </div>
               </div>
