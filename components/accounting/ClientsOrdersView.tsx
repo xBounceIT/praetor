@@ -9,11 +9,18 @@ import type {
   SupplierUnitType,
 } from '../../types';
 import {
+  addDaysToDateOnly,
+  formatDateOnlyForLocale,
+  formatInsertDate,
+  getLocalDateString,
+} from '../../utils/date';
+import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
   formatDiscountValue,
   getItemPricingContext,
+  type PricingTotals,
   parseNumberInputValue,
   roundToTwoDecimals,
 } from '../../utils/numbers';
@@ -22,7 +29,7 @@ import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -54,6 +61,56 @@ const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) =>
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
   if (status === 'denied') return t('accounting:clientsOrders.statusDenied');
   return t('accounting:clientsOrders.statusDraft');
+};
+
+const isHistoryRow = (status: ClientsOrder['status']) =>
+  status === 'confirmed' || status === 'denied';
+
+interface PricingCellProps {
+  value: number;
+  isHistory: boolean;
+  colorClass: string;
+  bold?: boolean;
+  prefix?: string;
+  dashOnZero?: boolean;
+  currency: string;
+}
+
+const PricingCell: React.FC<PricingCellProps> = ({
+  value,
+  isHistory,
+  colorClass,
+  bold = false,
+  prefix = '',
+  dashOnZero = false,
+  currency,
+}) => {
+  if (dashOnZero && value <= 0) {
+    return (
+      <span className={`text-sm font-semibold ${isHistory ? 'text-slate-300' : 'text-slate-400'}`}>
+        -
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-slate-400' : colorClass}`}
+    >
+      {prefix}
+      {value.toFixed(2)} {currency}
+    </span>
+  );
+};
+
+const computeDueDate = (
+  createdAt: number | undefined,
+  paymentTerms: string | undefined | null,
+): string => {
+  if (!createdAt) return '—';
+  const baseDate = getLocalDateString(new Date(createdAt));
+  const days = paymentTerms && paymentTerms !== 'immediate' ? Number.parseInt(paymentTerms, 10) : 0;
+  if (days <= 0) return formatDateOnlyForLocale(baseDate);
+  return formatDateOnlyForLocale(addDaysToDateOnly(baseDate, days));
 };
 
 const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
@@ -258,6 +315,17 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     return orders;
   }, [orders, offerFilterId]);
 
+  const orderPricingMap = useMemo(() => {
+    const map = new Map<string, PricingTotals>();
+    for (const order of filteredOrders) {
+      map.set(
+        order.id,
+        calculatePricingTotals(order.items, order.discount, DEFAULT_UNIT_TYPE, order.discountType),
+      );
+    }
+    return map;
+  }, [filteredOrders]);
+
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
 
   // Table columns definition with TableFilter support
@@ -272,51 +340,139 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row: ClientsOrder) => row.createdAt ?? 0,
+        className: 'whitespace-nowrap',
+        cell: ({ row }: { row: ClientsOrder }) => {
+          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value: unknown) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+          return formatInsertDate(timestamp);
+        },
+      },
+      {
         header: t('accounting:clientsOrders.clientColumn'),
         accessorFn: (row: ClientsOrder) => row.clientName,
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
+              className={`font-bold ${isHistoryRow(row.status) ? 'text-slate-400' : 'text-slate-800'}`}
             >
               {row.clientName}
             </div>
-            <div
-              className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
-            >
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
               {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
             </div>
           </div>
         ),
       },
       {
-        header: t('accounting:clientsOrders.totalColumn'),
-        accessorFn: (row: ClientsOrder) => {
-          const { total } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            DEFAULT_UNIT_TYPE,
-            row.discountType,
-          );
-          return total;
-        },
+        header: t('sales:clientQuotes.globalDiscount'),
+        id: 'globalDiscount',
         className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
+        headerClassName: 'min-w-[9rem]',
+        disableSorting: true,
+        disableFiltering: true,
         cell: ({ row }: { row: ClientsOrder }) => {
-          const { total } = calculatePricingTotals(
-            row.items,
-            row.discount,
-            DEFAULT_UNIT_TYPE,
-            row.discountType,
-          );
+          const history = isHistoryRow(row.status);
           return (
             <span
-              className={`text-sm font-bold whitespace-nowrap ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
             >
-              {total.toFixed(2)} {currency}
+              {formatDiscountValue(row.discount, row.discountType, currency)}
             </span>
           );
         },
+      },
+      {
+        header: t('accounting:clientsOrders.subtotal', { defaultValue: 'Subtotal' }),
+        id: 'subtotal',
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.subtotal ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
+          <PricingCell
+            value={Number(value)}
+            isHistory={isHistoryRow(row.status)}
+            colorClass="text-slate-700"
+            currency={currency}
+          />
+        ),
+      },
+      {
+        header: t('common:labels.discount'),
+        id: 'discountAmount',
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.discountAmount ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
+          <PricingCell
+            value={Number(value)}
+            isHistory={isHistoryRow(row.status)}
+            colorClass="text-amber-600"
+            prefix="-"
+            dashOnZero
+            currency={currency}
+          />
+        ),
+      },
+      {
+        header: t('accounting:clientsOrders.margin'),
+        id: 'margin',
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.margin ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
+          <PricingCell
+            value={Number(value)}
+            isHistory={isHistoryRow(row.status)}
+            colorClass="text-emerald-600"
+            bold
+            currency={currency}
+          />
+        ),
+      },
+      {
+        header: t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' }),
+        id: 'totalCost',
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.totalCost ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
+        cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
+          <PricingCell
+            value={Number(value)}
+            isHistory={isHistoryRow(row.status)}
+            colorClass="text-slate-700"
+            currency={currency}
+          />
+        ),
+      },
+      {
+        header: t('accounting:clientsOrders.totalColumn'),
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.total ?? 0,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
+          <PricingCell
+            value={Number(value)}
+            isHistory={isHistoryRow(row.status)}
+            colorClass="text-slate-700"
+            bold
+            currency={currency}
+          />
+        ),
         filterFormat: (val: unknown) => (val as number).toFixed(2),
       },
       {
@@ -327,7 +483,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-600'}`}
+            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-slate-400' : 'text-slate-600'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -339,9 +495,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
-          <div
-            className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
-          >
+          <div className={isHistoryRow(row.status) ? 'opacity-60' : ''}>
             <StatusBadge
               type={row.status as StatusType}
               label={getOrderStatusLabel(row.status, t)}
@@ -446,7 +600,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [currency, onUpdateClientsOrder, onViewOffer, t, confirmDelete, openEditModal],
+    [currency, onUpdateClientsOrder, onViewOffer, t, confirmDelete, openEditModal, orderPricingMap],
   );
 
   return (
@@ -521,7 +675,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:clientsOrders.orderDetails')}
               </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <label className="ml-1 text-xs font-bold text-slate-500">
                     {t('accounting:clientsOrders.client')}
@@ -564,6 +718,16 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     disabled={isReadOnly}
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:clientsOrders.paymentDueDate', {
+                      defaultValue: 'Payment due date',
+                    })}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
+                    {computeDueDate(editingOrder?.createdAt, formData.paymentTerms)}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -589,7 +753,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-10 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-2">
+                      {t('accounting:clientsOrders.supplierOrderColumn', {
+                        defaultValue: 'Supplier Order',
+                      })}
+                    </div>
                     <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
                     <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
                     <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
@@ -643,7 +812,27 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-10">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                            <div className="space-y-1 lg:col-span-2 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                {t('accounting:clientsOrders.supplierOrderColumn', {
+                                  defaultValue: 'Supplier Order',
+                                })}
+                              </label>
+                              <div className="flex items-center min-h-[42px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                {item.supplierSaleId ? (
+                                  <span className="text-xs font-semibold text-slate-700 truncate">
+                                    {item.supplierSaleSupplierName ?? '—'} · {item.supplierSaleId}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">
+                                    {t('accounting:clientsOrders.noSupplierOrder', {
+                                      defaultValue: 'No supplier order',
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="space-y-1 lg:col-span-2 min-w-0">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.productsServices')}
@@ -702,6 +891,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               {item.supplierQuoteItemId && (
                                 <span className={`${pillBadgeClass} bg-emerald-600`}>
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
+                                </span>
+                              )}
+                              {item.supplierSaleId && (
+                                <span className={`${pillBadgeClass} bg-blue-600`}>
+                                  {t('accounting:clientsOrders.supplierOrderBadge', {
+                                    defaultValue: 'Supplier order',
+                                  })}
                                 </span>
                               )}
                               <div className="flex items-center gap-1">
@@ -917,9 +1113,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
-          row.status === 'confirmed' || row.status === 'denied'
-            ? 'bg-slate-50 text-slate-400'
-            : 'hover:bg-slate-50/50'
+          isHistoryRow(row.status) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'
         }
         onRowClick={(row: ClientsOrder) => openEditModal(row)}
       />

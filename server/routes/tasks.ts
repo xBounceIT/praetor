@@ -317,6 +317,88 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  fastify.get(
+    '/hours/batch',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireAnyPermission(
+          'projects.tasks.view',
+          'projects.manage.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ),
+      ],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Get total logged hours per task for multiple projects',
+        querystring: {
+          type: 'object',
+          required: ['projectIds'],
+          properties: { projectIds: { type: 'string' } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: { type: 'number' },
+            },
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const { projectIds } = request.query as { projectIds: string };
+      const idsResult = requireNonEmptyString(projectIds, 'projectIds');
+      if (!idsResult.ok) return badRequest(reply, idsResult.message);
+
+      const idArray = idsResult.value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (idArray.length === 0) return badRequest(reply, 'projectIds must contain at least one ID');
+      if (idArray.length > 200) return badRequest(reply, 'projectIds cannot exceed 200 IDs');
+
+      const canViewAll = hasPermission(request, 'projects.tasks_all.view');
+      let queryText: string;
+      let queryParams: unknown[];
+
+      if (canViewAll) {
+        queryText = `
+          SELECT project_id, task, COALESCE(SUM(duration), 0)::float AS total
+          FROM time_entries
+          WHERE project_id = ANY($1)
+          GROUP BY project_id, task
+        `;
+        queryParams = [idArray];
+      } else {
+        queryText = `
+          SELECT te.project_id, te.task, COALESCE(SUM(te.duration), 0)::float AS total
+          FROM time_entries te
+          INNER JOIN tasks t ON t.name = te.task AND t.project_id = te.project_id
+          INNER JOIN user_tasks ut ON t.id = ut.task_id
+          WHERE te.project_id = ANY($1) AND ut.user_id = $2
+          GROUP BY te.project_id, te.task
+        `;
+        queryParams = [idArray, request.user.id];
+      }
+
+      const result = await query(queryText, queryParams);
+      const hours: Record<string, Record<string, number>> = {};
+      for (const row of result.rows) {
+        const pid = row.project_id as string;
+        if (!hours[pid]) hours[pid] = {};
+        hours[pid][row.task as string] = Number(row.total);
+      }
+      return reply.send(hours);
+    },
+  );
+
   // GET /hours - Get total hours logged per task for a project
   fastify.get(
     '/hours',

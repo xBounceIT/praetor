@@ -52,21 +52,6 @@ export const isDateOnlyAfterToday = (
   today: string = getLocalDateString(),
 ): boolean => normalizeDateOnlyString(dateOnly) > normalizeDateOnlyString(today);
 
-export const isDateOnlyWithinInclusiveRange = (
-  targetDate: string,
-  startDate?: string | null,
-  endDate?: string | null,
-): boolean => {
-  const normalizedTargetDate = normalizeDateOnlyString(targetDate);
-  if (startDate && normalizedTargetDate < normalizeDateOnlyString(startDate)) {
-    return false;
-  }
-  if (endDate && normalizedTargetDate > normalizeDateOnlyString(endDate)) {
-    return false;
-  }
-  return true;
-};
-
 /**
  * Formats a Unix timestamp (milliseconds) to a DD/MM/YYYY date string.
  * Returns '-' for invalid, null, or undefined timestamps.

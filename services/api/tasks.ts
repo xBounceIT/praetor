@@ -41,6 +41,14 @@ export const tasksApi = {
   getHours: (projectId: string): Promise<Record<string, number>> =>
     fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`),
 
+  getHoursForProjects: (
+    projectIds: string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, Record<string, number>>> =>
+    fetchApi(`/tasks/hours/batch?projectIds=${projectIds.map(encodeURIComponent).join(',')}`, {
+      signal,
+    }),
+
   getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
     fetchApi(`/tasks/${id}/users`, { signal }),
 
