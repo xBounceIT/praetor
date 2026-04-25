@@ -312,6 +312,7 @@ const TrackerView: React.FC<{
         header: t('common:labels.actions', { defaultValue: 'Actions' }),
         disableSorting: true,
         disableFiltering: true,
+        sticky: 'right',
         cell: ({ row }) => (
           <button
             onClick={(e) => {
