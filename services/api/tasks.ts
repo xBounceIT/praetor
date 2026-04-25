@@ -38,8 +38,16 @@ export const tasksApi = {
 
   delete: (id: string): Promise<void> => fetchApi(`/tasks/${id}`, { method: 'DELETE' }),
 
-  getHours: (projectId: string): Promise<Record<string, number>> =>
-    fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`),
+  getHours: (projectId: string, signal?: AbortSignal): Promise<Record<string, number>> =>
+    fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`, { signal }),
+
+  getHoursForProjects: (
+    projectIds: string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, Record<string, number>>> =>
+    fetchApi(`/tasks/hours/batch?projectIds=${projectIds.map(encodeURIComponent).join(',')}`, {
+      signal,
+    }),
 
   getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
     fetchApi(`/tasks/${id}/users`, { signal }),

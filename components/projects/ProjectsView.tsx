@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
@@ -13,6 +13,8 @@ import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
+
+const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
 
 type DraftTask = {
   _id: string;
@@ -119,7 +121,86 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
-  const fetchHoursIdRef = useRef<string | null>(null);
+  const fetchHoursAbortRef = useRef<AbortController | null>(null);
+  const fetchAllHoursGenRef = useRef(0);
+  const [allProjectHours, setAllProjectHours] = useState<Record<
+    string,
+    Record<string, number>
+  > | null>(null);
+  const [hexInput, setHexInput] = useState('');
+
+  const commitHexInput = () => {
+    if (isValidHex(hexInput)) {
+      setColor(hexInput);
+    } else {
+      setHexInput(color);
+    }
+  };
+
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+
+  useEffect(() => {
+    if (projectIds.length === 0) {
+      setAllProjectHours({});
+      return;
+    }
+    const gen = ++fetchAllHoursGenRef.current;
+    const abortController = new AbortController();
+    setAllProjectHours(null);
+    (async () => {
+      try {
+        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
+        if (fetchAllHoursGenRef.current !== gen) return;
+        setAllProjectHours(map);
+      } catch (e) {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load project hours', e);
+        if (fetchAllHoursGenRef.current !== gen) return;
+        setAllProjectHours({});
+      }
+    })();
+    return () => {
+      abortController.abort();
+    };
+  }, [projectIds]);
+
+  const projectMedianProgress = useMemo(() => {
+    if (!allProjectHours) return {};
+    const tasksByProject = new Map<string, ProjectTask[]>();
+    for (const t of tasks) {
+      const arr = tasksByProject.get(t.projectId);
+      if (arr) arr.push(t);
+      else tasksByProject.set(t.projectId, [t]);
+    }
+    const map: Record<string, number | null> = {};
+    for (const project of projects) {
+      const projectTasks = tasksByProject.get(project.id);
+      const hours = allProjectHours[project.id];
+      if (!hours || !projectTasks || projectTasks.length === 0) {
+        map[project.id] = null;
+        continue;
+      }
+      const progressValues = projectTasks
+        .filter((t) => (t.expectedEffort ?? 0) > 0)
+        .map((t) => {
+          const logged = hours[t.name] ?? 0;
+          const effort = t.expectedEffort as number;
+          return (logged / effort) * 100;
+        });
+      if (progressValues.length === 0) {
+        map[project.id] = null;
+        continue;
+      }
+      progressValues.sort((a, b) => a - b);
+      const mid = Math.floor(progressValues.length / 2);
+      const median =
+        progressValues.length % 2 !== 0
+          ? progressValues[mid]
+          : (progressValues[mid - 1] + progressValues[mid]) / 2;
+      map[project.id] = median;
+    }
+    return map;
+  }, [projects, tasks, allProjectHours]);
 
   // Modal Handlers
   const openAddModal = () => {
@@ -130,6 +211,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setClientId('');
     setDescription('');
     setColor(COLORS[0]);
+    setHexInput(COLORS[0]);
     setTempIsDisabled(false);
     setDraftTasks([]);
     setErrors({});
@@ -144,6 +226,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setOrderId('');
     setDescription(project.description || '');
     setColor(project.color);
+    setHexInput(project.color);
     setTempIsDisabled(project.isDisabled || false);
     setDraftTasks([]);
     setErrors({});
@@ -151,17 +234,18 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectTaskHours({});
     setHoursLoadState('loading');
     setIsModalOpen(true);
-    const fetchId = project.id;
-    fetchHoursIdRef.current = fetchId;
+    fetchHoursAbortRef.current?.abort();
+    const ac = new AbortController();
+    fetchHoursAbortRef.current = ac;
     tasksApi
-      .getHours(project.id)
+      .getHours(project.id, ac.signal)
       .then((h) => {
-        if (fetchHoursIdRef.current !== fetchId) return;
+        if (ac.signal.aborted) return;
         setProjectTaskHours(h);
         setHoursLoadState('idle');
       })
       .catch(() => {
-        if (fetchHoursIdRef.current !== fetchId) return;
+        if (ac.signal.aborted) return;
         setHoursLoadState('error');
       });
   };
@@ -736,19 +820,53 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 <label className="text-xs font-bold text-slate-500 ml-1">
                   {t('projects:projects.color')}
                 </label>
-                <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   {COLORS.map((c) => (
                     <Tooltip key={c} label={c}>
                       {() => (
                         <button
                           type="button"
-                          onClick={() => setColor(c)}
+                          onClick={() => {
+                            setColor(c);
+                            setHexInput(c);
+                          }}
                           className={`w-8 h-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
                           style={{ backgroundColor: c }}
                         />
                       )}
                     </Tooltip>
                   ))}
+                  <div className="flex items-center gap-2 ml-1 pl-3 border-l border-slate-300">
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => {
+                        setColor(e.target.value);
+                        setHexInput(e.target.value);
+                      }}
+                      className="w-8 h-8 rounded-lg cursor-pointer border-2 border-slate-200 p-0.5 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-none"
+                    />
+                    <input
+                      type="text"
+                      value={hexInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHexInput(val);
+                        if (isValidHex(val)) {
+                          setColor(val);
+                        }
+                      }}
+                      onBlur={commitHexInput}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          commitHexInput();
+                        }
+                      }}
+                      placeholder="#000000"
+                      className="w-[90px] text-xs px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none font-mono tabular-nums"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -985,6 +1103,40 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
               ),
+            },
+            {
+              header: t('projects:projects.tableHeaders.progress'),
+              id: 'progress',
+              disableFiltering: true,
+              disableSorting: true,
+              cell: ({ row }) => {
+                if (allProjectHours === null) {
+                  return (
+                    <span className="text-slate-400 text-xs">
+                      <i className="fa-solid fa-spinner fa-spin"></i>
+                    </span>
+                  );
+                }
+                const median = projectMedianProgress[row.id];
+                if (median === null) return <span className="text-slate-400 text-xs">—</span>;
+                const pct = Math.round(median);
+                const overBudget = median > 100;
+                return (
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <span
+                      className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+                    >
+                      {pct}%
+                    </span>
+                  </div>
+                );
+              },
             },
             {
               header: t('projects:projects.tableHeaders.status'),

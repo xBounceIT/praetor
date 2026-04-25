@@ -1129,8 +1129,21 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(5
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
 
+-- Supplier-sale-order linkage columns for sale_items
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_id VARCHAR(100);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_item_id VARCHAR(50);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_supplier_name VARCHAR(255);
+
+-- Backfill: link existing sale_items to their auto-created supplier_sales via shared supplier_quote_id
+UPDATE sale_items si
+SET supplier_sale_id = ss.id,
+    supplier_sale_supplier_name = ss.supplier_name
+FROM supplier_sales ss
+WHERE ss.linked_quote_id = si.supplier_quote_id
+  AND si.supplier_sale_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_supplier_sale_id ON sale_items(supplier_sale_id);
 
 -- Migration: Ensure sale_items prices use DECIMAL(15, 2)
 DO $$

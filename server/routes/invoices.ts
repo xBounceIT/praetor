@@ -174,11 +174,7 @@ const getInvoiceClientId = async (invoiceId: string) => {
   return (result.rows[0]?.clientId as string | undefined) ?? null;
 };
 
-const validateAndNormalizeItems = async (
-  items: unknown[],
-  reply: FastifyReply,
-  _effectiveClientId: string,
-) => {
+const validateAndNormalizeItems = async (items: unknown[], reply: FastifyReply) => {
   const normalizedItems = [];
 
   for (let i = 0; i < items.length; i++) {
@@ -397,7 +393,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
-      const normalizedItems = await validateAndNormalizeItems(items, reply, clientIdResult.value);
+      const normalizedItems = await validateAndNormalizeItems(items, reply);
       if (!normalizedItems) return;
 
       const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
@@ -699,11 +695,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        const effectiveClientId =
-          typeof clientIdValue === 'string' && clientIdValue.trim().length > 0
-            ? clientIdValue
-            : existingClientId || '';
-        const normalizedItems = await validateAndNormalizeItems(items, reply, effectiveClientId);
+        const normalizedItems = await validateAndNormalizeItems(items, reply);
         if (!normalizedItems) return;
         // Delete existing items
         await query('DELETE FROM invoice_items WHERE invoice_id = $1', [updatedInvoiceId]);

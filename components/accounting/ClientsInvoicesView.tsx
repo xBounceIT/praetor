@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
+import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -16,7 +16,6 @@ export interface ClientsInvoicesViewProps {
   invoices: Invoice[];
   clients: Client[];
   products: Product[];
-  clientsOrders: ClientsOrder[];
   onAddInvoice: (invoiceData: Partial<Invoice>) => void;
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
   onDeleteInvoice: (id: string) => void;
@@ -34,7 +33,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   invoices,
   clients,
   products,
-  clientsOrders: _clientsOrders,
   onAddInvoice,
   onUpdateInvoice,
   onDeleteInvoice,

@@ -65,6 +65,7 @@
       "client": "Client",
       "projectName": "Project Name",
       "description": "Description",
+      "progress": "Progress",
       "status": "Status",
       "actions": "Actions"
     }

@@ -70,6 +70,7 @@ export interface PricingTotals {
   subtotal: number;
   discountAmount: number;
   total: number;
+  totalCost: number;
   margin: number;
   marginPercentage: number;
 }
@@ -102,7 +103,7 @@ export const calculatePricingTotals = (
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
-  return { subtotal, discountAmount, total, margin, marginPercentage };
+  return { subtotal, discountAmount, total, totalCost, margin, marginPercentage };
 };
 
 export const formatDiscountValue = (

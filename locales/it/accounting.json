@@ -40,7 +40,11 @@
     "subtotal": "Imponibile",
     "total": "Totale",
     "margin": "Margine",
-    "orderNumber": "Numero ordine"
+    "orderNumber": "Numero ordine",
+    "supplierOrderColumn": "Ordine fornitore",
+    "noSupplierOrder": "Nessun ordine fornitore",
+    "supplierOrderBadge": "Ordine fornitore",
+    "paymentDueDate": "Data scadenza pagamento"
   },
   "clientsInvoices": {
     "title": "Fatture Clienti",

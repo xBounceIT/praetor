@@ -40,7 +40,11 @@
     "subtotal": "Subtotal",
     "total": "Total",
     "margin": "Margin",
-    "orderNumber": "Order Number"
+    "orderNumber": "Order Number",
+    "supplierOrderColumn": "Supplier Order",
+    "noSupplierOrder": "No supplier order",
+    "supplierOrderBadge": "Supplier order",
+    "paymentDueDate": "Payment due date"
   },
   "clientsInvoices": {
     "title": "Client's Invoices",

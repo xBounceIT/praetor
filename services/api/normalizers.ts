@@ -23,6 +23,41 @@ import type {
   User,
 } from '../../types';
 
+const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
+  value === undefined || value === null ? fallback : Number(value);
+
+type PricingItemBase = {
+  quantity?: number;
+  unitPrice?: number;
+  productCost?: number;
+  productMolPercentage?: number | null;
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice?: number | null;
+  supplierSaleId?: string | null;
+  supplierSaleItemId?: string | null;
+  supplierSaleSupplierName?: string | null;
+  discount?: number;
+  note?: string;
+};
+
+const normalizePricingItemFields = <T extends PricingItemBase>(item: T): T => ({
+  ...item,
+  quantity: Number(item.quantity || 0),
+  unitPrice: Number(item.unitPrice || 0),
+  productCost: nullableNumber(item.productCost, 0) as number,
+  productMolPercentage: nullableNumber(item.productMolPercentage),
+  supplierQuoteId: item.supplierQuoteId ?? null,
+  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+  supplierQuoteUnitPrice: nullableNumber(item.supplierQuoteUnitPrice),
+  supplierSaleId: item.supplierSaleId ?? null,
+  supplierSaleItemId: item.supplierSaleItemId ?? null,
+  supplierSaleSupplierName: item.supplierSaleSupplierName ?? null,
+  discount: Number(item.discount || 0),
+});
+
 export const normalizeClient = (c: Client): Client => ({
   ...c,
   contacts: Array.isArray(c.contacts)
@@ -126,24 +161,7 @@ export const normalizeProduct = (p: Product): Product => ({
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
-  ...item,
-  quantity: Number(item.quantity || 0),
-  unitPrice: Number(item.unitPrice || 0),
-  productCost:
-    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productMolPercentage:
-    item.productMolPercentage === undefined || item.productMolPercentage === null
-      ? null
-      : Number(item.productMolPercentage),
-  // Supplier quote fields
-  supplierQuoteId: item.supplierQuoteId ?? null,
-  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
-  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
-  supplierQuoteUnitPrice:
-    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
-      ? null
-      : Number(item.supplierQuoteUnitPrice),
-  discount: Number(item.discount || 0),
+  ...normalizePricingItemFields(item),
   note: item.note || '',
 });
 
@@ -154,24 +172,7 @@ export const normalizeQuote = (q: Quote): Quote => ({
 });
 
 export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem => ({
-  ...item,
-  quantity: Number(item.quantity || 0),
-  unitPrice: Number(item.unitPrice || 0),
-  productCost:
-    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productMolPercentage:
-    item.productMolPercentage === undefined || item.productMolPercentage === null
-      ? null
-      : Number(item.productMolPercentage),
-  // Supplier quote fields
-  supplierQuoteId: item.supplierQuoteId ?? null,
-  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
-  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
-  supplierQuoteUnitPrice:
-    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
-      ? null
-      : Number(item.supplierQuoteUnitPrice),
-  discount: Number(item.discount || 0),
+  ...normalizePricingItemFields(item),
   note: item.note || '',
 });
 
@@ -182,24 +183,7 @@ export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
 });
 
 export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderItem => ({
-  ...item,
-  quantity: Number(item.quantity || 0),
-  unitPrice: Number(item.unitPrice || 0),
-  productCost:
-    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productMolPercentage:
-    item.productMolPercentage === undefined || item.productMolPercentage === null
-      ? null
-      : Number(item.productMolPercentage),
-  // Supplier quote fields
-  supplierQuoteId: item.supplierQuoteId ?? null,
-  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
-  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
-  supplierQuoteUnitPrice:
-    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
-      ? null
-      : Number(item.supplierQuoteUnitPrice),
-  discount: Number(item.discount || 0),
+  ...normalizePricingItemFields(item),
 });
 
 export const normalizeClientsOrder = (o: ClientsOrder): ClientsOrder => ({

@@ -335,6 +335,9 @@ export interface ClientsOrderItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  supplierSaleId?: string | null;
+  supplierSaleItemId?: string | null;
+  supplierSaleSupplierName?: string | null;
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
