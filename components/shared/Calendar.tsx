@@ -232,7 +232,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className={`bg-white rounded-3xl border border-slate-200 shadow-sm w-full relative ${
+      className={`bg-white rounded-xl border border-slate-200 shadow-sm w-full relative ${
         isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
       }`}
       ref={containerRef}
