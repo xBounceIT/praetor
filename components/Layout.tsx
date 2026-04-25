@@ -17,7 +17,7 @@ const moduleRoutes: Record<string, View[]> = {
   timesheets: ['timesheets/tracker', 'timesheets/recurring'],
   crm: ['crm/clients', 'crm/suppliers'],
   sales: ['sales/client-quotes', 'sales/client-offers', 'sales/supplier-quotes'],
-  catalog: ['catalog/internal-listing', 'catalog/external-listing', 'catalog/special-bids'],
+  catalog: ['catalog/internal-listing'],
   projects: ['projects/manage', 'projects/tasks'],
   accounting: [
     'accounting/clients-orders',
@@ -363,30 +363,6 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               />
             )}
-            {canAccessView('catalog/external-listing') && (
-              <NavItem
-                icon="fa-boxes-stacked"
-                label={t('routes.externalProducts')}
-                active={activeView === 'catalog/external-listing'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('catalog/external-listing');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('catalog/special-bids') && (
-              <NavItem
-                icon="fa-tags"
-                label={t('routes.externalListing')}
-                active={activeView === 'catalog/special-bids'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('catalog/special-bids');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
           </>
         );
       case 'hr':
@@ -713,25 +689,20 @@ const Layout: React.FC<LayoutProps> = ({
                         ? t('titles.projects')
                         : activeView === 'projects/tasks'
                           ? t('titles.tasks')
-                          : activeView === 'catalog/external-listing'
-                            ? t('titles.externalProducts')
-                            : activeView === 'catalog/special-bids'
-                              ? t('titles.externalListing')
-                              : activeView === 'hr/internal'
-                                ? t('titles.internalEmployees')
-                                : activeView === 'hr/external'
-                                  ? t('titles.externalEmployees')
-                                  : t(
-                                      `routes.${activeView
-                                        .split('/')
-                                        .pop()
-                                        ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                      {
-                                        defaultValue:
-                                          activeView.split('/').pop()?.replace('-', ' ') ||
-                                          activeView,
-                                      },
-                                    )}
+                          : activeView === 'hr/internal'
+                            ? t('titles.internalEmployees')
+                            : activeView === 'hr/external'
+                              ? t('titles.externalEmployees')
+                              : t(
+                                  `routes.${activeView
+                                    .split('/')
+                                    .pop()
+                                    ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                  {
+                                    defaultValue:
+                                      activeView.split('/').pop()?.replace('-', ' ') || activeView,
+                                  },
+                                )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">

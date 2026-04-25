@@ -636,7 +636,6 @@ const DATASET_SECTIONS = [
   'suppliers',
   'supplierQuotes',
   'catalog',
-  'specialBids',
 ] as const;
 
 type DatasetSection = (typeof DATASET_SECTIONS)[number];
@@ -683,7 +682,6 @@ const datasetSectionTerms: Record<DatasetSection, string[]> = {
     'offerte fornitori',
   ],
   catalog: ['catalog', 'catalogo', 'product', 'products', 'prodotto', 'prodotti', 'subcategory'],
-  specialBids: ['special bid', 'special bids', 'offerta speciale', 'offerte speciali'],
 };
 
 const normalizeQueryText = (value: string) =>
@@ -1019,8 +1017,6 @@ const buildBusinessDataset = async (
     ];
     const productListPermissions = [
       'catalog.internal_listing.view',
-      'catalog.external_listing.view',
-      'catalog.special_bids.view',
       ...supplierWorkflowViewPermissions,
     ];
     const clientListPermissions = [
@@ -1034,9 +1030,7 @@ const buildBusinessDataset = async (
       'sales.client_offers.view',
       'accounting.clients_orders.view',
       'accounting.clients_invoices.view',
-      'catalog.special_bids.view',
       'catalog.internal_listing.view',
-      'catalog.external_listing.view',
       'sales.supplier_quotes.view',
       'administration.user_management.view',
       'administration.user_management.update',
@@ -1044,14 +1038,12 @@ const buildBusinessDataset = async (
     const supplierListPermissions = [
       'crm.suppliers.view',
       'crm.suppliers_all.view',
-      'catalog.external_listing.view',
       ...supplierWorkflowViewPermissions,
     ];
     const canViewQuotes = hasPermission(request, 'sales.client_quotes.view');
     const canViewOrders = hasPermission(request, 'accounting.clients_orders.view');
     const canViewInvoices = hasPermission(request, 'accounting.clients_invoices.view');
     const canViewSupplierQuotes = hasPermission(request, 'sales.supplier_quotes.view');
-    const canViewSpecialBids = hasPermission(request, 'catalog.special_bids.view');
 
     if (canViewQuotes)
       addGrantedPermissions(request, ['sales.client_quotes.view'], permissionsApplied);
@@ -1063,9 +1055,6 @@ const buildBusinessDataset = async (
     }
     if (canViewSupplierQuotes) {
       addGrantedPermissions(request, ['sales.supplier_quotes.view'], permissionsApplied);
-    }
-    if (canViewSpecialBids) {
-      addGrantedPermissions(request, ['catalog.special_bids.view'], permissionsApplied);
     }
 
     const canListProducts = productListPermissions.some((p) => hasPermission(request, p));
@@ -2331,7 +2320,7 @@ const buildBusinessDataset = async (
        ORDER BY value DESC`,
       );
 
-      const externalBySupplier = await query(
+      const productsBySupplier = await query(
         `SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
        FROM products p
        LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -2410,8 +2399,8 @@ const buildBusinessDataset = async (
           label: toText(r.label),
           value: toNumber(r.value),
         })),
-        externalProductsBySupplier: capTop(
-          externalBySupplier.rows.map((r) => ({
+        productsBySupplierCount: capTop(
+          productsBySupplier.rows.map((r) => ({
             label: toText(r.label),
             value: toNumber(r.value),
           })),
@@ -2427,81 +2416,6 @@ const buildBusinessDataset = async (
           productId: toText(r.product_id),
           productName: toText(r.product_name),
           value: toNumber(r.value),
-        })),
-      };
-    }
-
-    // Special bids (catalog.special_bids.view)
-    if (canViewSpecialBids && shouldIncludeDatasetSection(requestedSections, 'specialBids')) {
-      includedSections.add('specialBids');
-      const activeCount = await query(
-        `SELECT COUNT(*) as count
-       FROM special_bids
-       WHERE start_date <= $1 AND end_date >= $2`,
-        [toDate, fromDate],
-      );
-
-      const expiringSoon = await query(
-        `SELECT COUNT(*) as count
-       FROM special_bids
-       WHERE end_date >= $1
-         AND end_date <= ($1::date + INTERVAL '30 day')`,
-        [toDate],
-      );
-
-      const byClient = await query(
-        `SELECT client_name as label, COUNT(*) as value
-       FROM special_bids
-       WHERE start_date <= $1
-         AND end_date >= $2
-       GROUP BY client_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        [toDate, fromDate],
-      );
-
-      const byProduct = await query(
-        `SELECT product_name as label, COUNT(*) as value
-       FROM special_bids
-       WHERE start_date <= $1
-         AND end_date >= $2
-       GROUP BY product_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        [toDate, fromDate],
-      );
-
-      const topByUnitPrice = await query(
-        `SELECT
-         id,
-         client_name,
-         product_name,
-         unit_price,
-         start_date,
-         end_date
-       FROM special_bids
-       WHERE start_date <= $1
-         AND end_date >= $2
-       ORDER BY unit_price DESC
-       LIMIT ${listLimits.top}`,
-        [toDate, fromDate],
-      );
-
-      dataset.specialBids = {
-        activeInRange: toNumber(activeCount.rows[0]?.count),
-        expiringIn30Days: toNumber(expiringSoon.rows[0]?.count),
-        byClient: byClient.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-        byProduct: byProduct.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-        })),
-        topByUnitPrice: topByUnitPrice.rows.map((r) => ({
-          id: toText(r.id),
-          clientName: toText(r.client_name),
-          productName: toText(r.product_name),
-          unitPrice: toNumber(r.unit_price),
-          startDate: toText(r.start_date),
-          endDate: toText(r.end_date),
         })),
       };
     }
@@ -2541,7 +2455,6 @@ const buildBusinessDataset = async (
     }
 
     const dropOrder = [
-      'specialBids',
       'catalog',
       'supplierQuotes',
       'suppliers',

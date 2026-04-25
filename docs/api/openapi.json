@@ -11225,12 +11225,6 @@
                             "productName": {
                               "type": "string"
                             },
-                            "specialBidId": {
-                              "type": [
-                                "null",
-                                "string"
-                              ]
-                            },
                             "quantity": {
                               "type": "number"
                             },
@@ -11241,18 +11235,6 @@
                               "type": "number"
                             },
                             "productMolPercentage": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidUnitPrice": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidMolPercentage": {
                               "type": [
                                 "null",
                                 "number"
@@ -11478,9 +11460,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "supplierQuoteItemId": {
                           "type": "string"
                         },
@@ -11494,12 +11473,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "discount": {
@@ -11638,12 +11611,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -11654,18 +11621,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -11874,9 +11829,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "supplierQuoteItemId": {
                           "type": "string"
                         },
@@ -11890,12 +11842,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "discount": {
@@ -12040,12 +11986,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -12056,18 +11996,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -12437,12 +12365,6 @@
                             "productName": {
                               "type": "string"
                             },
-                            "specialBidId": {
-                              "type": [
-                                "null",
-                                "string"
-                              ]
-                            },
                             "quantity": {
                               "type": "number"
                             },
@@ -12453,18 +12375,6 @@
                               "type": "number"
                             },
                             "productMolPercentage": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidUnitPrice": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidMolPercentage": {
                               "type": [
                                 "null",
                                 "number"
@@ -12689,9 +12599,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -12702,12 +12609,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "supplierQuoteId": {
@@ -12858,12 +12759,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -12874,18 +12769,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -13090,9 +12973,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -13103,12 +12983,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "supplierQuoteId": {
@@ -13261,12 +13135,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -13277,18 +13145,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -14691,12 +14547,6 @@
                             "productName": {
                               "type": "string"
                             },
-                            "specialBidId": {
-                              "type": [
-                                "null",
-                                "string"
-                              ]
-                            },
                             "quantity": {
                               "type": "number"
                             },
@@ -14707,18 +14557,6 @@
                               "type": "number"
                             },
                             "productMolPercentage": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidUnitPrice": {
-                              "type": [
-                                "null",
-                                "number"
-                              ]
-                            },
-                            "specialBidMolPercentage": {
                               "type": [
                                 "null",
                                 "number"
@@ -14951,9 +14789,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -14964,12 +14799,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "supplierQuoteId": {
@@ -15115,12 +14944,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -15131,18 +14954,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -15355,9 +15166,6 @@
                         "productName": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": "string"
-                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -15368,12 +15176,6 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
-                        },
-                        "specialBidUnitPrice": {
-                          "type": "number"
-                        },
-                        "specialBidMolPercentage": {
                           "type": "number"
                         },
                         "supplierQuoteId": {
@@ -15524,12 +15326,6 @@
                           "productName": {
                             "type": "string"
                           },
-                          "specialBidId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
                           "quantity": {
                             "type": "number"
                           },
@@ -15540,18 +15336,6 @@
                             "type": "number"
                           },
                           "productMolPercentage": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidUnitPrice": {
-                            "type": [
-                              "null",
-                              "number"
-                            ]
-                          },
-                          "specialBidMolPercentage": {
                             "type": [
                               "null",
                               "number"
@@ -15916,12 +15700,6 @@
                                 "string"
                               ]
                             },
-                            "specialBidId": {
-                              "type": [
-                                "null",
-                                "string"
-                              ]
-                            },
                             "description": {
                               "type": "string"
                             },
@@ -16138,12 +15916,6 @@
                         "productId": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
                         "description": {
                           "type": "string"
                         },
@@ -16251,12 +16023,6 @@
                             "type": "string"
                           },
                           "productId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
-                          "specialBidId": {
                             "type": [
                               "null",
                               "string"
@@ -16458,12 +16224,6 @@
                         "productId": {
                           "type": "string"
                         },
-                        "specialBidId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
                         "description": {
                           "type": "string"
                         },
@@ -16574,12 +16334,6 @@
                             "type": "string"
                           },
                           "productId": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
-                          "specialBidId": {
                             "type": [
                               "null",
                               "string"
@@ -21261,729 +21015,6 @@
         "summary": "Delete supplier quote",
         "tags": [
           "supplier-quotes"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Default Response"
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/special-bids/": {
-      "get": {
-        "summary": "List special bids",
-        "tags": [
-          "special-bids"
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "bidCode": {
-                        "type": "string"
-                      },
-                      "clientId": {
-                        "type": "string"
-                      },
-                      "clientName": {
-                        "type": "string"
-                      },
-                      "productId": {
-                        "type": "string"
-                      },
-                      "productName": {
-                        "type": "string"
-                      },
-                      "unitPrice": {
-                        "type": "number"
-                      },
-                      "molPercentage": {
-                        "type": "number",
-                        "nullable": true
-                      },
-                      "startDate": {
-                        "type": "string",
-                        "format": "date"
-                      },
-                      "endDate": {
-                        "type": "string",
-                        "format": "date"
-                      },
-                      "createdAt": {
-                        "type": "number"
-                      },
-                      "updatedAt": {
-                        "type": "number"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "bidCode",
-                      "clientId",
-                      "clientName",
-                      "productId",
-                      "productName",
-                      "unitPrice",
-                      "startDate",
-                      "endDate",
-                      "createdAt",
-                      "updatedAt"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create special bid",
-        "tags": [
-          "special-bids"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "bidCode": {
-                    "type": "string"
-                  },
-                  "clientId": {
-                    "type": "string"
-                  },
-                  "clientName": {
-                    "type": "string"
-                  },
-                  "productId": {
-                    "type": "string"
-                  },
-                  "productName": {
-                    "type": "string"
-                  },
-                  "unitPrice": {
-                    "type": "number"
-                  },
-                  "molPercentage": {
-                    "type": "number"
-                  },
-                  "startDate": {
-                    "type": "string",
-                    "format": "date"
-                  },
-                  "endDate": {
-                    "type": "string",
-                    "format": "date"
-                  }
-                },
-                "required": [
-                  "clientId",
-                  "clientName",
-                  "productId",
-                  "productName",
-                  "unitPrice",
-                  "startDate",
-                  "endDate"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "bidCode": {
-                      "type": "string"
-                    },
-                    "clientId": {
-                      "type": "string"
-                    },
-                    "clientName": {
-                      "type": "string"
-                    },
-                    "productId": {
-                      "type": "string"
-                    },
-                    "productName": {
-                      "type": "string"
-                    },
-                    "unitPrice": {
-                      "type": "number"
-                    },
-                    "molPercentage": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "startDate": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "endDate": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "createdAt": {
-                      "type": "number"
-                    },
-                    "updatedAt": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "bidCode",
-                    "clientId",
-                    "clientName",
-                    "productId",
-                    "productName",
-                    "unitPrice",
-                    "startDate",
-                    "endDate",
-                    "createdAt",
-                    "updatedAt"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/special-bids/{id}": {
-      "put": {
-        "summary": "Update special bid",
-        "tags": [
-          "special-bids"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "bidCode": {
-                    "type": "string"
-                  },
-                  "clientId": {
-                    "type": "string"
-                  },
-                  "clientName": {
-                    "type": "string"
-                  },
-                  "productId": {
-                    "type": "string"
-                  },
-                  "productName": {
-                    "type": "string"
-                  },
-                  "unitPrice": {
-                    "type": "number"
-                  },
-                  "molPercentage": {
-                    "type": "number"
-                  },
-                  "startDate": {
-                    "type": "string",
-                    "format": "date"
-                  },
-                  "endDate": {
-                    "type": "string",
-                    "format": "date"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "bidCode": {
-                      "type": "string"
-                    },
-                    "clientId": {
-                      "type": "string"
-                    },
-                    "clientName": {
-                      "type": "string"
-                    },
-                    "productId": {
-                      "type": "string"
-                    },
-                    "productName": {
-                      "type": "string"
-                    },
-                    "unitPrice": {
-                      "type": "number"
-                    },
-                    "molPercentage": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "startDate": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "endDate": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "createdAt": {
-                      "type": "number"
-                    },
-                    "updatedAt": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "bidCode",
-                    "clientId",
-                    "clientName",
-                    "productId",
-                    "productName",
-                    "unitPrice",
-                    "startDate",
-                    "endDate",
-                    "createdAt",
-                    "updatedAt"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete special bid",
-        "tags": [
-          "special-bids"
         ],
         "parameters": [
           {

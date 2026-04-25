@@ -21,8 +21,7 @@ The project follows a full-stack architecture with a React-based frontend and a 
     - **Suppliers:** Manage vendor information.
 - **Sales & Catalog:**
     - **Client Quotes:** Create and manage sales quotations.
-    - **Special Bids:** Client-specific pricing and discounts.
-    - **Products Catalog:** Internal and external product listings.
+    - **Products Catalog:** Internal product listings.
 - **Accounting:**
     - **Clients Orders:** Track orders from clients.
     - **Invoices:** Manage billing and payment status.

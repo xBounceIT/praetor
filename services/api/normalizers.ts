@@ -13,7 +13,6 @@ import type {
   Quote,
   QuoteItem,
   RoleSummary,
-  SpecialBid,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -136,14 +135,6 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
       : Number(item.productMolPercentage),
-  specialBidUnitPrice:
-    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-      ? null
-      : Number(item.specialBidUnitPrice),
-  specialBidMolPercentage:
-    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-      ? null
-      : Number(item.specialBidMolPercentage),
   // Supplier quote fields
   supplierQuoteId: item.supplierQuoteId ?? null,
   supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -172,14 +163,6 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
       : Number(item.productMolPercentage),
-  specialBidUnitPrice:
-    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-      ? null
-      : Number(item.specialBidUnitPrice),
-  specialBidMolPercentage:
-    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-      ? null
-      : Number(item.specialBidMolPercentage),
   // Supplier quote fields
   supplierQuoteId: item.supplierQuoteId ?? null,
   supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -208,14 +191,6 @@ export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderI
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
       : Number(item.productMolPercentage),
-  specialBidUnitPrice:
-    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-      ? null
-      : Number(item.specialBidUnitPrice),
-  specialBidMolPercentage:
-    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-      ? null
-      : Number(item.specialBidMolPercentage),
   // Supplier quote fields
   supplierQuoteId: item.supplierQuoteId ?? null,
   supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -253,7 +228,6 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
 
 export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   ...item,
-  specialBidId: item.specialBidId ?? undefined,
   unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
@@ -309,11 +283,4 @@ export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvo
   total: Number(invoice.total ?? 0),
   amountPaid: Number(invoice.amountPaid ?? 0),
   items: (invoice.items || []).map(normalizeSupplierInvoiceItem),
-});
-
-export const normalizeSpecialBid = (b: SpecialBid): SpecialBid => ({
-  ...b,
-  unitPrice: Number(b.unitPrice || 0),
-  molPercentage:
-    b.molPercentage === undefined || b.molPercentage === null ? undefined : Number(b.molPercentage),
 });

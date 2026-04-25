@@ -228,33 +228,15 @@ export interface Product {
   createdAt?: number;
 }
 
-export interface SpecialBid {
-  id: string;
-  bidCode: string;
-  clientId: string;
-  clientName: string;
-  productId: string;
-  productName: string;
-  unitPrice: number;
-  molPercentage?: number;
-  startDate: string;
-  endDate: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface QuoteItem {
   id: string;
   quoteId: string;
   productId: string;
   productName: string;
-  specialBidId?: string;
   quantity: number;
   unitPrice: number;
   productCost?: number;
   productMolPercentage?: number | null;
-  specialBidUnitPrice?: number | null;
-  specialBidMolPercentage?: number | null;
   // Supplier quote source tracking
   supplierQuoteId?: string | null;
   supplierQuoteItemId?: string | null;
@@ -298,13 +280,10 @@ export interface ClientOfferItem {
   offerId: string;
   productId: string;
   productName: string;
-  specialBidId?: string;
   quantity: number;
   unitPrice: number;
   productCost?: number;
   productMolPercentage?: number | null;
-  specialBidUnitPrice?: number | null;
-  specialBidMolPercentage?: number | null;
   // Supplier quote source tracking
   supplierQuoteId?: string | null;
   supplierQuoteItemId?: string | null;
@@ -347,13 +326,10 @@ export interface ClientsOrderItem {
   orderId: string;
   productId: string;
   productName: string;
-  specialBidId?: string;
   quantity: number;
   unitPrice: number;
   productCost?: number;
   productMolPercentage?: number | null;
-  specialBidUnitPrice?: number | null;
-  specialBidMolPercentage?: number | null;
   // Supplier quote source tracking
   supplierQuoteId?: string | null;
   supplierQuoteItemId?: string | null;
@@ -412,8 +388,6 @@ export type View =
   | 'sales/supplier-quotes'
   // Catalog module
   | 'catalog/internal-listing'
-  | 'catalog/external-listing'
-  | 'catalog/special-bids'
   // Accounting module
   | 'accounting/clients-orders'
   | 'accounting/clients-invoices'
@@ -484,7 +458,6 @@ export interface InvoiceItem {
   id: string;
   invoiceId: string;
   productId?: string;
-  specialBidId?: string;
   description: string;
   unitOfMeasure: 'unit' | 'hours';
   quantity: number;

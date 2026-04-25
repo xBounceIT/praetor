@@ -6,10 +6,8 @@ import type {
   ClientsOrder,
   ClientsOrderItem,
   Product,
-  SpecialBid,
   SupplierUnitType,
 } from '../../types';
-import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -34,7 +32,6 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
-  specialBids: SpecialBid[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => void;
   onDeleteClientsOrder: (id: string) => void;
   onViewOffer?: (offerId: string) => void;
@@ -63,7 +60,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   orders,
   clients,
   products,
-  specialBids,
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onViewOffer,
@@ -136,14 +132,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
             : Number(item.productMolPercentage),
-        specialBidUnitPrice:
-          item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-            ? null
-            : Number(item.specialBidUnitPrice),
-        specialBidMolPercentage:
-          item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-            ? null
-            : Number(item.specialBidMolPercentage),
       };
     });
 
@@ -172,46 +160,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId);
-    setFormData((prev) => {
-      const updatedItems = (prev.items || []).map((item) => {
-        if (!item.productId) {
-          if (item.specialBidId) {
-            return { ...item, specialBidId: '' };
-          }
-          return item;
-        }
-
-        const product = products.find((p) => p.id === item.productId);
-        if (!product) {
-          return { ...item, specialBidId: '' };
-        }
-
-        const applicableBid = activeSpecialBids.find(
-          (b) => b.clientId === clientId && b.productId === item.productId,
-        );
-        const molSource = applicableBid?.molPercentage ?? product.molPercentage;
-        const mol = molSource ? Number(molSource) : 0;
-        const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
-
-        const hourlySalePrice = calcProductSalePrice(cost, mol);
-        return {
-          ...item,
-          specialBidId: applicableBid ? applicableBid.id : '',
-          unitPrice: convertHourlyToUnit(hourlySalePrice, item.unitType),
-          productCost: Number(product.costo),
-          productMolPercentage: product.molPercentage,
-          specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
-          specialBidMolPercentage: applicableBid?.molPercentage ?? null,
-        };
-      });
-
-      return {
-        ...prev,
-        clientId,
-        clientName: client?.name || '',
-        items: updatedItems,
-      };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      clientId,
+      clientName: client?.name || '',
+    }));
     if (errors.clientId) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -226,14 +179,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       id: 'temp-' + Date.now(),
       productId: '',
       productName: '',
-      specialBidId: '',
       quantity: 1,
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
-      specialBidUnitPrice: null,
-      specialBidMolPercentage: null,
       discount: 0,
     };
     setFormData({
@@ -263,82 +213,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     const newItems = [...(formData.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
 
-    // Auto-fill price when product is selected
     if (field === 'productId') {
       const product = activeProducts.find((p) => p.id === value);
       if (product) {
         newItems[index].productName = product.name;
-        const applicableBid = activeSpecialBids.find(
-          (b) => b.clientId === formData.clientId && b.productId === value,
-        );
-
-        if (applicableBid) {
-          const molSource = applicableBid.molPercentage ?? product.molPercentage;
-          const mol = molSource ? Number(molSource) : 0;
-          const hourlySalePrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
-          newItems[index].specialBidId = applicableBid.id;
-          newItems[index].unitPrice = convertHourlyToUnit(
-            hourlySalePrice,
-            newItems[index].unitType,
-          );
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productMolPercentage = product.molPercentage;
-          newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
-          newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
-        } else {
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
-          newItems[index].specialBidId = '';
-          newItems[index].unitPrice = convertHourlyToUnit(
-            hourlySalePrice,
-            newItems[index].unitType,
-          );
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productMolPercentage = product.molPercentage;
-          newItems[index].specialBidUnitPrice = null;
-          newItems[index].specialBidMolPercentage = null;
-        }
-      }
-    }
-
-    if (field === 'specialBidId') {
-      if (!value) {
-        newItems[index].specialBidId = '';
-        newItems[index].specialBidUnitPrice = null;
-        newItems[index].specialBidMolPercentage = null;
-        const product = products.find((p) => p.id === newItems[index].productId);
-        if (product) {
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
-          newItems[index].unitPrice = convertHourlyToUnit(
-            hourlySalePrice,
-            newItems[index].unitType,
-          );
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productMolPercentage = product.molPercentage;
-        }
-        setFormData({ ...formData, items: newItems });
-        return;
-      }
-
-      const bid = specialBids.find((b) => b.id === value);
-      if (bid) {
-        const product = products.find((p) => p.id === bid.productId);
-        if (product) {
-          newItems[index].productId = bid.productId;
-          newItems[index].productName = product.name;
-          const molSource = bid.molPercentage ?? product.molPercentage;
-          const mol = molSource ? Number(molSource) : 0;
-          const hourlySalePrice = calcProductSalePrice(Number(bid.unitPrice), mol);
-          newItems[index].unitPrice = convertHourlyToUnit(
-            hourlySalePrice,
-            newItems[index].unitType,
-          );
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productMolPercentage = product.molPercentage;
-          newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
-          newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
-        }
+        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+        const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
+        newItems[index].unitPrice = convertHourlyToUnit(hourlySalePrice, newItems[index].unitType);
+        newItems[index].productCost = Number(product.costo);
+        newItems[index].productMolPercentage = product.molPercentage;
       }
     }
 
@@ -363,25 +246,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
-  const today = getLocalDateString();
-  const activeSpecialBids = useMemo(
-    () => specialBids.filter((b) => isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate)),
-    [specialBids, today],
-  );
-  const clientSpecialBids = useMemo(
-    () =>
-      formData.clientId
-        ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
-        : activeSpecialBids,
-    [formData.clientId, activeSpecialBids],
-  );
-
-  const getBidDisplayValue = (bidId?: string) => {
-    if (!bidId) return t('sales:clientQuotes.noSpecialBid');
-    const bid =
-      activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
-    return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
-  };
 
   const isLinkedOffer = Boolean(formData.linkedOfferId);
   const isReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
@@ -725,10 +589,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-2 ml-1">
-                      {t('accounting:clientsOrders.specialBidLabel')}
-                    </div>
+                  <div className="grid flex-1 grid-cols-10 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
                     <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
                     <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
@@ -752,10 +613,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedBid = item.specialBidId
-                      ? specialBids.find((b) => b.id === item.specialBidId)
-                      : undefined;
-
                     const product = products.find((p) => p.id === item.productId);
                     const { unitCost, molPercentage, lineCost, quantity } = getItemPricingContext(
                       item,
@@ -786,34 +643,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
-                            <div className="space-y-1 lg:col-span-2 min-w-0">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                                {t('accounting:clientsOrders.specialBidLabel')}
-                              </label>
-                              <CustomSelect
-                                options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBid') },
-                                  ...clientSpecialBids.map((b) => ({
-                                    id: b.id,
-                                    name: `${b.clientName} · ${b.productName}`,
-                                  })),
-                                ]}
-                                value={item.specialBidId || 'none'}
-                                onChange={(val) =>
-                                  updateProductRow(
-                                    index,
-                                    'specialBidId',
-                                    val === 'none' ? '' : (val as string),
-                                  )
-                                }
-                                placeholder={t('sales:clientQuotes.selectBid')}
-                                displayValue={getBidDisplayValue(item.specialBidId)}
-                                searchable={true}
-                                disabled={isReadOnly}
-                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-10">
                             <div className="space-y-1 lg:col-span-2 min-w-0">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.productsServices')}
@@ -874,11 +704,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
                                 </span>
                               )}
-                              {selectedBid && !item.supplierQuoteItemId && (
-                                <span className={`${pillBadgeClass} bg-praetor`}>
-                                  {t('sales:clientQuotes.bidBadge')}
-                                </span>
-                              )}
                               <div className="flex items-center gap-1">
                                 <ValidatedNumberInput
                                   value={unitCost.toFixed(2)}
@@ -928,9 +753,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 {t('crm:internalListing.salePrice')}
                               </label>
                               <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                                <span
-                                  className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
-                                >
+                                <span className="text-sm font-semibold text-slate-800">
                                   {lineSalePrice.toFixed(2)} {currency}
                                 </span>
                               </div>

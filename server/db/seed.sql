@@ -459,75 +459,6 @@ ON CONFLICT (id) DO UPDATE SET
     is_disabled = EXCLUDED.is_disabled,
     created_at = EXCLUDED.created_at;
 
-INSERT INTO special_bids (
-    id,
-    bid_code,
-    client_id,
-    client_name,
-    product_id,
-    product_name,
-    unit_price,
-    mol_percentage,
-    start_date,
-    end_date,
-    created_at,
-    updated_at
-) VALUES
-    (
-        'dm_bid_01',
-        'DM-BID-001',
-        'dm_cli_01',
-        'Northwind Retail Italia S.p.A.',
-        'dm_prd_06',
-        'Microsoft 365 Annual Seat',
-        210.00,
-        14.29,
-        CURRENT_DATE - INTERVAL '20 days',
-        CURRENT_DATE + INTERVAL '40 days',
-        CURRENT_TIMESTAMP - INTERVAL '45 days',
-        CURRENT_TIMESTAMP - INTERVAL '7 days'
-    ),
-    (
-        'dm_bid_02',
-        'DM-BID-002',
-        'dm_cli_02',
-        'Helios Energy Services S.r.l.',
-        'dm_prd_05',
-        'Business Laptop Bundle',
-        1085.00,
-        12.44,
-        CURRENT_DATE - INTERVAL '80 days',
-        CURRENT_DATE - INTERVAL '10 days',
-        CURRENT_TIMESTAMP - INTERVAL '90 days',
-        CURRENT_TIMESTAMP - INTERVAL '12 days'
-    ),
-    (
-        'dm_bid_03',
-        'DM-BID-003',
-        'dm_cli_03',
-        'Comune di Verona - Innovazione Digitale',
-        'dm_prd_08',
-        'Branded Print Kit',
-        145.00,
-        17.24,
-        CURRENT_DATE + INTERVAL '15 days',
-        CURRENT_DATE + INTERVAL '75 days',
-        CURRENT_TIMESTAMP - INTERVAL '15 days',
-        CURRENT_TIMESTAMP - INTERVAL '2 days'
-    )
-ON CONFLICT (id) DO UPDATE SET
-    bid_code = EXCLUDED.bid_code,
-    client_id = EXCLUDED.client_id,
-    client_name = EXCLUDED.client_name,
-    product_id = EXCLUDED.product_id,
-    product_name = EXCLUDED.product_name,
-    unit_price = EXCLUDED.unit_price,
-    mol_percentage = EXCLUDED.mol_percentage,
-    start_date = EXCLUDED.start_date,
-    end_date = EXCLUDED.end_date,
-    created_at = EXCLUDED.created_at,
-    updated_at = EXCLUDED.updated_at;
-
 INSERT INTO quotes (
     id,
     client_id,
@@ -566,13 +497,10 @@ INSERT INTO quote_items (
     quote_id,
     product_id,
     product_name,
-    special_bid_id,
     quantity,
     unit_price,
     product_cost,
     product_mol_percentage,
-    special_bid_unit_price,
-    special_bid_mol_percentage,
     discount,
     note
 )
@@ -581,45 +509,38 @@ SELECT
     v.quote_id,
     p.id,
     p.name,
-    v.special_bid_id,
     v.quantity,
     v.unit_price,
     p.costo,
     p.mol_percentage,
-    sb.unit_price,
-    sb.mol_percentage,
     v.discount,
     v.note
 FROM (
     VALUES
-        ('dm_cqi_01', 'dm_cq_01', 'dm_prd_01', NULL::varchar(50), 5.00, 1230.00, 0.00, 'Discovery workshops and stakeholder interviews'),
-        ('dm_cqi_02', 'dm_cq_01', 'dm_prd_02', NULL::varchar(50), 2.00, 1715.00, 0.00, 'Deployment sprint for first release wave'),
-        ('dm_cqi_03', 'dm_cq_02', 'dm_prd_05', NULL::varchar(50), 12.00, 1159.00, 3.00, 'Endpoint refresh lot for field technicians'),
-        ('dm_cqi_04', 'dm_cq_03', 'dm_prd_06', NULL::varchar(50), 40.00, 225.00, 0.00, 'Accepted subscription bundle intentionally kept without downstream offer'),
-        ('dm_cqi_05', 'dm_cq_04', 'dm_prd_01', NULL::varchar(50), 3.00, 1230.00, 0.00, 'Strategic assessment package'),
-        ('dm_cqi_06', 'dm_cq_04', 'dm_prd_04', NULL::varchar(50), 1.00, 1090.00, 5.00, 'Executive training day'),
-        ('dm_cqi_07', 'dm_cq_05', 'dm_prd_07', NULL::varchar(50), 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
-        ('dm_cqi_08', 'dm_cq_06', 'dm_prd_06', 'dm_bid_01', 25.00, 210.00, 0.00, 'Accepted subscription bundle ready for offer creation'),
-        ('dm_cqi_09', 'dm_cq_07', 'dm_prd_01', NULL::varchar(50), 2.00, 1230.00, 0.00, 'Assessment for public-sector rollout'),
-        ('dm_cqi_10', 'dm_cq_07', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
-        ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', NULL::varchar(50), 2.00, 1090.00, 0.00, 'Training package for a small customer'),
-        ('dm_cqi_12', 'dm_cq_09', 'dm_prd_05', NULL::varchar(50), 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
-        ('dm_cqi_13', 'dm_cq_10', 'dm_prd_03', NULL::varchar(50), 6.00, 835.00, 0.00, 'Managed support bundle that expired before confirmation'),
-        ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', NULL::varchar(50), 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote')
-) AS v(id, quote_id, product_id, special_bid_id, quantity, unit_price, discount, note)
+        ('dm_cqi_01', 'dm_cq_01', 'dm_prd_01', 5.00, 1230.00, 0.00, 'Discovery workshops and stakeholder interviews'),
+        ('dm_cqi_02', 'dm_cq_01', 'dm_prd_02', 2.00, 1715.00, 0.00, 'Deployment sprint for first release wave'),
+        ('dm_cqi_03', 'dm_cq_02', 'dm_prd_05', 12.00, 1159.00, 3.00, 'Endpoint refresh lot for field technicians'),
+        ('dm_cqi_04', 'dm_cq_03', 'dm_prd_06', 40.00, 225.00, 0.00, 'Accepted subscription bundle intentionally kept without downstream offer'),
+        ('dm_cqi_05', 'dm_cq_04', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Strategic assessment package'),
+        ('dm_cqi_06', 'dm_cq_04', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Executive training day'),
+        ('dm_cqi_07', 'dm_cq_05', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
+        ('dm_cqi_08', 'dm_cq_06', 'dm_prd_06', 25.00, 210.00, 0.00, 'Accepted subscription bundle ready for offer creation'),
+        ('dm_cqi_09', 'dm_cq_07', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Assessment for public-sector rollout'),
+        ('dm_cqi_10', 'dm_cq_07', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
+        ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
+        ('dm_cqi_12', 'dm_cq_09', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
+        ('dm_cqi_13', 'dm_cq_10', 'dm_prd_03', 6.00, 835.00, 0.00, 'Managed support bundle that expired before confirmation'),
+        ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote')
+) AS v(id, quote_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
 ON CONFLICT (id) DO UPDATE SET
     quote_id = EXCLUDED.quote_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
-    special_bid_id = EXCLUDED.special_bid_id,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
-    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
-    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;
 
@@ -658,13 +579,10 @@ INSERT INTO customer_offer_items (
     offer_id,
     product_id,
     product_name,
-    special_bid_id,
     quantity,
     unit_price,
     product_cost,
     product_mol_percentage,
-    special_bid_unit_price,
-    special_bid_mol_percentage,
     discount,
     note
 )
@@ -673,38 +591,31 @@ SELECT
     v.offer_id,
     p.id,
     p.name,
-    v.special_bid_id,
     v.quantity,
     v.unit_price,
     p.costo,
     p.mol_percentage,
-    sb.unit_price,
-    sb.mol_percentage,
     v.discount,
     v.note
 FROM (
     VALUES
-        ('dm_coi_01', 'dm_co_01', 'dm_prd_01', NULL::varchar(50), 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
-        ('dm_coi_02', 'dm_co_01', 'dm_prd_04', NULL::varchar(50), 1.00, 1090.00, 5.00, 'Editable training line'),
-        ('dm_coi_03', 'dm_co_02', 'dm_prd_07', NULL::varchar(50), 2.00, 1795.00, 0.00, 'Pending security appliance offer'),
-        ('dm_coi_04', 'dm_co_03', 'dm_prd_06', 'dm_bid_01', 25.00, 210.00, 0.00, 'Accepted software bundle without downstream order'),
-        ('dm_coi_05', 'dm_co_04', 'dm_prd_01', NULL::varchar(50), 2.00, 1230.00, 0.00, 'Accepted assessment lot'),
-        ('dm_coi_06', 'dm_co_04', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 0.00, 'Accepted deployment sprint'),
-        ('dm_coi_07', 'dm_co_05', 'dm_prd_04', NULL::varchar(50), 2.00, 1090.00, 0.00, 'Denied training offer')
-) AS v(id, offer_id, product_id, special_bid_id, quantity, unit_price, discount, note)
+        ('dm_coi_01', 'dm_co_01', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
+        ('dm_coi_02', 'dm_co_01', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Editable training line'),
+        ('dm_coi_03', 'dm_co_02', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Pending security appliance offer'),
+        ('dm_coi_04', 'dm_co_03', 'dm_prd_06', 25.00, 210.00, 0.00, 'Accepted software bundle without downstream order'),
+        ('dm_coi_05', 'dm_co_04', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Accepted assessment lot'),
+        ('dm_coi_06', 'dm_co_04', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Accepted deployment sprint'),
+        ('dm_coi_07', 'dm_co_05', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Denied training offer')
+) AS v(id, offer_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
 ON CONFLICT (id) DO UPDATE SET
     offer_id = EXCLUDED.offer_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
-    special_bid_id = EXCLUDED.special_bid_id,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
-    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
-    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;
 
@@ -743,13 +654,10 @@ INSERT INTO sale_items (
     sale_id,
     product_id,
     product_name,
-    special_bid_id,
     quantity,
     unit_price,
     product_cost,
     product_mol_percentage,
-    special_bid_unit_price,
-    special_bid_mol_percentage,
     discount,
     note
 )
@@ -758,39 +666,32 @@ SELECT
     v.sale_id,
     p.id,
     p.name,
-    v.special_bid_id,
     v.quantity,
     v.unit_price,
     p.costo,
     p.mol_percentage,
-    sb.unit_price,
-    sb.mol_percentage,
     v.discount,
     v.note
 FROM (
     VALUES
-        ('dm_soi_01', 'dm_so_01', 'dm_prd_08', NULL::varchar(50), 25.00, 160.00, 0.00, 'Draft order for event print materials'),
-        ('dm_soi_02', 'dm_so_02', 'dm_prd_01', NULL::varchar(50), 2.00, 1230.00, 0.00, 'Linked assessment lot on a confirmed order'),
-        ('dm_soi_03', 'dm_so_02', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 0.00, 'Linked deployment lot on a confirmed order'),
-        ('dm_soi_04', 'dm_so_03', 'dm_prd_03', NULL::varchar(50), 6.00, 835.00, 0.00, 'Confirmed support retainer kept open without invoice'),
-        ('dm_soi_05', 'dm_so_03', 'dm_prd_06', 'dm_bid_01', 20.00, 210.00, 0.00, 'Confirmed software add-on still ready for invoicing'),
-        ('dm_soi_06', 'dm_so_04', 'dm_prd_01', NULL::varchar(50), 4.00, 1230.00, 5.00, 'Assessment track for operations'),
-        ('dm_soi_07', 'dm_so_04', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 5.00, 'Deployment wave for phase one'),
-        ('dm_soi_08', 'dm_so_05', 'dm_prd_05', NULL::varchar(50), 3.00, 1159.00, 0.00, 'Denied hardware order')
-) AS v(id, sale_id, product_id, special_bid_id, quantity, unit_price, discount, note)
+        ('dm_soi_01', 'dm_so_01', 'dm_prd_08', 25.00, 160.00, 0.00, 'Draft order for event print materials'),
+        ('dm_soi_02', 'dm_so_02', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Linked assessment lot on a confirmed order'),
+        ('dm_soi_03', 'dm_so_02', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Linked deployment lot on a confirmed order'),
+        ('dm_soi_04', 'dm_so_03', 'dm_prd_03', 6.00, 835.00, 0.00, 'Confirmed support retainer kept open without invoice'),
+        ('dm_soi_05', 'dm_so_03', 'dm_prd_06', 20.00, 210.00, 0.00, 'Confirmed software add-on still ready for invoicing'),
+        ('dm_soi_06', 'dm_so_04', 'dm_prd_01', 4.00, 1230.00, 5.00, 'Assessment track for operations'),
+        ('dm_soi_07', 'dm_so_04', 'dm_prd_02', 1.00, 1715.00, 5.00, 'Deployment wave for phase one'),
+        ('dm_soi_08', 'dm_so_05', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Denied hardware order')
+) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
 ON CONFLICT (id) DO UPDATE SET
     sale_id = EXCLUDED.sale_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
-    special_bid_id = EXCLUDED.special_bid_id,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
-    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
-    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;
 

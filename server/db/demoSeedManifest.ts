@@ -125,12 +125,6 @@ export const DEMO_PRODUCTS = [
   { id: 'dm_prd_09', productCode: 'DM-DISABLED-001', name: 'Legacy Token Pack' },
 ] as const;
 
-export const DEMO_SPECIAL_BIDS = [
-  { id: 'dm_bid_01', bidCode: 'DM-BID-001', clientId: 'dm_cli_01', productId: 'dm_prd_06' },
-  { id: 'dm_bid_02', bidCode: 'DM-BID-002', clientId: 'dm_cli_02', productId: 'dm_prd_05' },
-  { id: 'dm_bid_03', bidCode: 'DM-BID-003', clientId: 'dm_cli_03', productId: 'dm_prd_08' },
-] as const;
-
 export const DEMO_QUOTES = [
   { id: 'dm_cq_01' },
   { id: 'dm_cq_02' },
@@ -265,7 +259,6 @@ export const DEMO_IDS = {
   clients: DEMO_CLIENTS.map((item) => item.id),
   suppliers: DEMO_SUPPLIERS.map((item) => item.id),
   products: DEMO_PRODUCTS.map((item) => item.id),
-  specialBids: DEMO_SPECIAL_BIDS.map((item) => item.id),
   quotes: DEMO_QUOTES.map((item) => item.id),
   customerOffers: DEMO_CUSTOMER_OFFERS.map((item) => item.id),
   sales: DEMO_SALES.map((item) => item.id),
@@ -287,7 +280,6 @@ export const DEMO_EXPECTED_COUNTS = {
   clients: DEMO_CLIENTS.length,
   suppliers: DEMO_SUPPLIERS.length,
   products: DEMO_PRODUCTS.length,
-  special_bids: DEMO_SPECIAL_BIDS.length,
   quotes: DEMO_QUOTES.length,
   quote_items: DEMO_ITEM_IDS.quoteItems.length,
   customer_offers: DEMO_CUSTOMER_OFFERS.length,

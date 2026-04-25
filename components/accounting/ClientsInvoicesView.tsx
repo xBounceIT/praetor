@@ -1,13 +1,8 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, ClientsOrder, Invoice, InvoiceItem, Product, SpecialBid } from '../../types';
-import {
-  addDaysToDateOnly,
-  formatDateOnlyForLocale,
-  getLocalDateString,
-  isDateOnlyWithinInclusiveRange,
-} from '../../utils/date';
+import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
+import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
@@ -21,7 +16,6 @@ export interface ClientsInvoicesViewProps {
   invoices: Invoice[];
   clients: Client[];
   products: Product[];
-  specialBids: SpecialBid[];
   clientsOrders: ClientsOrder[];
   onAddInvoice: (invoiceData: Partial<Invoice>) => void;
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
@@ -40,7 +34,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   invoices,
   clients,
   products,
-  specialBids,
   clientsOrders: _clientsOrders,
   onAddInvoice,
   onUpdateInvoice,
@@ -97,19 +90,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     () => products.filter((product) => !product.isDisabled),
     [products],
   );
-  const activeSpecialBids = useMemo(() => {
-    const today = getLocalDateString();
-    return specialBids.filter((bid) =>
-      isDateOnlyWithinInclusiveRange(today, bid.startDate, bid.endDate),
-    );
-  }, [specialBids]);
-  const clientSpecialBids = useMemo(
-    () =>
-      formData.clientId
-        ? activeSpecialBids.filter((bid) => bid.clientId === formData.clientId)
-        : activeSpecialBids,
-    [activeSpecialBids, formData.clientId],
-  );
 
   const generateInvoiceId = () => {
     const year = new Date().getFullYear();
@@ -127,46 +107,24 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     }
   }, [errors.items]);
 
-  const findApplicableBid = useCallback(
-    (clientId: string, productId: string) =>
-      activeSpecialBids.find((bid) => bid.clientId === clientId && bid.productId === productId),
-    [activeSpecialBids],
-  );
-
   const applyProductPricing = useCallback(
     (
       item: InvoiceItem,
       product: Product,
-      specialBid?: SpecialBid,
       options?: { preserveDescription?: boolean },
     ): InvoiceItem => {
-      const molSource = specialBid?.molPercentage ?? product.molPercentage;
-      const mol = molSource ? Number(molSource) : 0;
-      const cost = specialBid ? Number(specialBid.unitPrice) : Number(product.costo);
+      const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+      const cost = Number(product.costo);
 
       return {
         ...item,
         productId: product.id,
-        specialBidId: specialBid?.id || undefined,
         description: options?.preserveDescription ? item.description : product.name,
         unitOfMeasure: normalizeUnitOfMeasure(product.costUnit),
         unitPrice: calcProductSalePrice(cost, mol),
       };
     },
     [],
-  );
-
-  const getBidDisplayValue = useCallback(
-    (bidId?: string) => {
-      if (!bidId) return t('accounting:clientsInvoices.noSpecialBid');
-      const bid =
-        activeSpecialBids.find((item) => item.id === bidId) ||
-        specialBids.find((item) => item.id === bidId);
-      return bid
-        ? `${bid.clientName} · ${bid.productName}`
-        : t('accounting:clientsInvoices.noSpecialBid');
-    },
-    [activeSpecialBids, specialBids, t],
   );
 
   const openAddModal = () => {
@@ -195,7 +153,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       ...invoice,
       items: invoice.items.map((item) => ({
         ...item,
-        specialBidId: item.specialBidId || undefined,
         unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
       })),
     });
@@ -218,28 +175,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find((item) => item.id === clientId);
-    setFormData((prev) => {
-      const updatedItems = (prev.items || []).map((item) => {
-        if (!item.productId) {
-          return item.specialBidId ? { ...item, specialBidId: undefined } : item;
-        }
-
-        const product = products.find((candidate) => candidate.id === item.productId);
-        if (!product) {
-          return { ...item, specialBidId: undefined };
-        }
-
-        const applicableBid = findApplicableBid(clientId, item.productId);
-        return applyProductPricing(item, product, applicableBid, { preserveDescription: true });
-      });
-
-      return {
-        ...prev,
-        clientId,
-        clientName: client?.name || '',
-        items: updatedItems,
-      };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      clientId,
+      clientName: client?.name || '',
+    }));
 
     if (errors.clientId) {
       setErrors((prev) => {
@@ -254,7 +194,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     const newItem: Partial<InvoiceItem> = {
       id: `temp-${Date.now()}`,
       productId: undefined,
-      specialBidId: undefined,
       description: '',
       unitOfMeasure: 'unit',
       quantity: 1,
@@ -290,32 +229,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
           nextItem = {
             ...currentItem,
             productId: undefined,
-            specialBidId: undefined,
           };
         } else {
           const product = products.find((item) => item.id === value);
           if (product) {
-            const applicableBid = prev.clientId
-              ? findApplicableBid(prev.clientId, product.id)
-              : undefined;
-            nextItem = applyProductPricing(currentItem, product, applicableBid);
-          }
-        }
-      }
-
-      if (field === 'specialBidId') {
-        if (!value) {
-          const product = products.find((item) => item.id === currentItem.productId);
-          nextItem = product
-            ? applyProductPricing(currentItem, product)
-            : { ...currentItem, specialBidId: undefined };
-        } else {
-          const bid = specialBids.find((item) => item.id === value);
-          if (bid) {
-            const product = products.find((item) => item.id === bid.productId);
-            if (product) {
-              nextItem = applyProductPricing(currentItem, product, bid);
-            }
+            nextItem = applyProductPricing(currentItem, product);
           }
         }
       }
@@ -357,7 +275,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
     const roundedItems = (formData.items || []).map((item) => ({
       ...item,
-      specialBidId: item.specialBidId || undefined,
       unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
       quantity: Number(item.quantity ?? 0),
       unitPrice: Number(item.unitPrice ?? 0),
@@ -670,15 +587,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-2 ml-1">
-                      {t('accounting:clientsInvoices.specialBid')}
-                    </div>
-                    <div className="col-span-2">{t('common:labels.product')}</div>
-                    <div className="col-span-1">{t('common:labels.quantity')}</div>
+                    <div className="col-span-3">{t('common:labels.product')}</div>
+                    <div className="col-span-2">{t('common:labels.quantity')}</div>
                     <div className="col-span-2">
                       {t('common:labels.price')} ({currency})
                     </div>
-                    <div className="col-span-1">{t('common:labels.discount')}%</div>
+                    <div className="col-span-2">{t('common:labels.discount')}%</div>
                     <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
                   <div className="w-8 shrink-0"></div>
@@ -696,36 +610,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     >
                       <div className="flex items-start gap-2">
                         <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
-                          <div className="space-y-1 lg:col-span-2 min-w-0">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('accounting:clientsInvoices.specialBid')}
-                            </label>
-                            <CustomSelect
-                              options={[
-                                {
-                                  id: 'none',
-                                  name: t('accounting:clientsInvoices.noSpecialBid'),
-                                },
-                                ...clientSpecialBids.map((bid) => ({
-                                  id: bid.id,
-                                  name: `${bid.clientName} · ${bid.productName}`,
-                                })),
-                              ]}
-                              value={item.specialBidId || 'none'}
-                              onChange={(value) =>
-                                updateItemRow(
-                                  index,
-                                  'specialBidId',
-                                  value === 'none' ? undefined : (value as string),
-                                )
-                              }
-                              placeholder={t('accounting:clientsInvoices.selectSpecialBid')}
-                              displayValue={getBidDisplayValue(item.specialBidId)}
-                              searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1 lg:col-span-2 min-w-0">
+                          <div className="space-y-1 lg:col-span-3 min-w-0">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.product')}
                             </label>
@@ -746,7 +631,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 lg:col-span-1">
+                          <div className="space-y-1 lg:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.quantity')}
                             </label>
@@ -792,7 +677,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 lg:col-span-1">
+                          <div className="space-y-1 lg:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                               {t('common:labels.discount')}%
                             </label>

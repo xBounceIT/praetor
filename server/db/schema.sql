@@ -53,14 +53,6 @@ BEGIN
             ('manager', 'catalog.internal_listing.create'),
             ('manager', 'catalog.internal_listing.update'),
             ('manager', 'catalog.internal_listing.delete'),
-            ('manager', 'catalog.external_listing.view'),
-            ('manager', 'catalog.external_listing.create'),
-            ('manager', 'catalog.external_listing.update'),
-            ('manager', 'catalog.external_listing.delete'),
-            ('manager', 'catalog.special_bids.view'),
-            ('manager', 'catalog.special_bids.create'),
-            ('manager', 'catalog.special_bids.update'),
-            ('manager', 'catalog.special_bids.delete'),
             ('manager', 'accounting.clients_orders.view'),
             ('manager', 'accounting.clients_orders.create'),
             ('manager', 'accounting.clients_orders.update'),
@@ -119,6 +111,18 @@ BEGIN
 END $$;
 
 -- Seed workflow permissions for manager role and migrate supplier quote permissions
+
+ALTER TABLE IF EXISTS quote_items DROP COLUMN IF EXISTS special_bid_id;
+ALTER TABLE IF EXISTS quote_items DROP COLUMN IF EXISTS special_bid_unit_price;
+ALTER TABLE IF EXISTS quote_items DROP COLUMN IF EXISTS special_bid_mol_percentage;
+ALTER TABLE IF EXISTS customer_offer_items DROP COLUMN IF EXISTS special_bid_id;
+ALTER TABLE IF EXISTS customer_offer_items DROP COLUMN IF EXISTS special_bid_unit_price;
+ALTER TABLE IF EXISTS customer_offer_items DROP COLUMN IF EXISTS special_bid_mol_percentage;
+ALTER TABLE IF EXISTS sale_items DROP COLUMN IF EXISTS special_bid_id;
+ALTER TABLE IF EXISTS sale_items DROP COLUMN IF EXISTS special_bid_unit_price;
+ALTER TABLE IF EXISTS sale_items DROP COLUMN IF EXISTS special_bid_mol_percentage;
+ALTER TABLE IF EXISTS invoice_items DROP COLUMN IF EXISTS special_bid_id;
+DROP TABLE IF EXISTS special_bids;
 INSERT INTO role_permissions (role_id, permission)
 VALUES
     ('manager', 'sales.client_offers.view'),
@@ -855,23 +859,17 @@ CREATE TABLE IF NOT EXISTS quote_items (
     quote_id VARCHAR(100) NOT NULL REFERENCES quotes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
-    special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 2),
-    special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
 -- Supplier quote source tracking columns
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
@@ -903,12 +901,11 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'quote_items'
-          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND column_name IN ('unit_price', 'product_cost', 'supplier_quote_unit_price')
           AND numeric_scale != 2
     ) THEN
         ALTER TABLE quote_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE quote_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
-        ALTER TABLE quote_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE quote_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
     END IF;
 END $$;
@@ -951,13 +948,10 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
     offer_id VARCHAR(100) NOT NULL REFERENCES customer_offers(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
-    special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 2),
-    special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -993,85 +987,12 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'customer_offer_items'
-          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND column_name IN ('unit_price', 'product_cost', 'supplier_quote_unit_price')
           AND numeric_scale != 2
     ) THEN
         ALTER TABLE customer_offer_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE customer_offer_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
-        ALTER TABLE customer_offer_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE customer_offer_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
-    END IF;
-END $$;
-
--- Special bids table
-CREATE TABLE IF NOT EXISTS special_bids (
-    id VARCHAR(50) PRIMARY KEY,
-    bid_code VARCHAR(50) UNIQUE NOT NULL,
-    client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    client_name VARCHAR(255) NOT NULL,
-    product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-    product_name VARCHAR(255) NOT NULL,
-    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    mol_percentage DECIMAL(5, 2),
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Migration: Add bid_code column for existing installations
-ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS bid_code VARCHAR(50);
-
--- Generate bid codes for existing bids (runs only once when bid_code is added)
-DO $$
-DECLARE
-    bid_record RECORD;
-    next_sequence INTEGER := 1;
-    current_year INTEGER;
-BEGIN
-    current_year := EXTRACT(YEAR FROM CURRENT_DATE);
-    FOR bid_record IN
-        SELECT id FROM special_bids WHERE bid_code IS NULL ORDER BY created_at ASC
-    LOOP
-        UPDATE special_bids
-        SET bid_code = 'BID-' || current_year || '-' || LPAD(next_sequence::TEXT, 4, '0')
-        WHERE id = bid_record.id;
-        next_sequence := next_sequence + 1;
-    END LOOP;
-END $$;
-
--- Make bid_code NOT NULL and create unique index (safe to run multiple times)
-ALTER TABLE special_bids ALTER COLUMN bid_code SET NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_special_bids_bid_code_unique ON special_bids(bid_code);
-
--- Migration: Rename expiration_date to end_date and add start_date for existing installations
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='special_bids' AND column_name='expiration_date') THEN
-        ALTER TABLE special_bids RENAME COLUMN expiration_date TO end_date;
-    END IF;
-END $$;
-ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS start_date DATE;
-UPDATE special_bids SET start_date = CURRENT_DATE WHERE start_date IS NULL;
-ALTER TABLE special_bids ALTER COLUMN start_date SET NOT NULL;
-
-ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS mol_percentage DECIMAL(5, 2);
-
-DROP INDEX IF EXISTS idx_special_bids_unique;
-CREATE INDEX IF NOT EXISTS idx_special_bids_client_product ON special_bids(client_id, product_id);
-CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);
-CREATE INDEX IF NOT EXISTS idx_special_bids_product_id ON special_bids(product_id);
-CREATE INDEX IF NOT EXISTS idx_special_bids_date_range ON special_bids(start_date, end_date);
-
--- Migration: Ensure special_bids prices use DECIMAL(15, 2)
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'special_bids'
-          AND column_name = 'unit_price' AND numeric_scale != 2
-    ) THEN
-        ALTER TABLE special_bids ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
     END IF;
 END $$;
 
@@ -1173,22 +1094,16 @@ CREATE TABLE IF NOT EXISTS sale_items (
     sale_id VARCHAR(100) NOT NULL REFERENCES sales(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
-    special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 2),
-    special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 DO $$
 BEGIN
@@ -1223,12 +1138,11 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'sale_items'
-          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND column_name IN ('unit_price', 'product_cost', 'supplier_quote_unit_price')
           AND numeric_scale != 2
     ) THEN
         ALTER TABLE sale_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE sale_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
-        ALTER TABLE sale_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
         ALTER TABLE sale_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
     END IF;
 END $$;
@@ -1608,7 +1522,6 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     id VARCHAR(50) PRIMARY KEY,
     invoice_id VARCHAR(100) NOT NULL REFERENCES invoices(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
-    special_bid_id VARCHAR(50),
     description VARCHAR(255) NOT NULL,
     unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
@@ -1617,7 +1530,6 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit';
 
 UPDATE invoice_items ii
