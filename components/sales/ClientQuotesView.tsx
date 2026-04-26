@@ -18,6 +18,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { getLinkedFieldStatus } from '../../utils/fieldStatus';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -31,6 +32,7 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
+import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -172,6 +174,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         editingQuote.status === 'accepted' ||
         editingQuote.status === 'denied'),
   );
+
+  const readOnlyReason = editingQuote?.linkedOfferId
+    ? t('sales:clientQuotes.readOnlyBecauseOffer', {
+        defaultValue: 'Read-only due to linked offer',
+      })
+    : t('sales:clientQuotes.readOnlyBecauseFinal', {
+        defaultValue: 'Read-only due to finalized status',
+      });
+  const supplierLockedReason = t('sales:fieldInfo.fieldLockedBySupplierQuote', {
+    defaultValue: 'Locked due to linked supplier quote',
+  });
+  const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
+  const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
+
+  const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
 
   const formTotals = useMemo(() => {
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
@@ -649,6 +666,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     index: number,
     selectProps: { className?: string; buttonClassName?: string },
   ) => {
+    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
     if (isLinkedProductMissing(item)) {
       return (
         <input
@@ -666,7 +684,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         onChange={(val) => updateProductRow(index, 'productId', val as string)}
         placeholder={t('sales:clientQuotes.selectProduct')}
         searchable={true}
-        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        disabled={isReadOnly || isLinkedToSupplierQuote}
         className={selectProps.className}
         buttonClassName={selectProps.buttonClassName}
       />
@@ -1163,12 +1181,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <span className="text-amber-700 text-xs font-bold">
                   {editingQuote?.linkedOfferId
                     ? t('sales:clientQuotes.readOnlyBecauseOffer', {
-                        defaultValue:
-                          'This quote is read-only because an offer was created from it.',
+                        defaultValue: 'Read-only due to linked offer',
                       })
                     : t('sales:clientQuotes.readOnlyBecauseFinal', {
-                        defaultValue:
-                          'This quote is read-only because it was already accepted or denied.',
+                        defaultValue: 'Read-only due to finalized status',
                       })}
                 </span>
               </div>
@@ -1212,6 +1228,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientQuotes.clientInformation')}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.clientInformation', {
+                    defaultValue: 'Client and document details',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -1294,6 +1317,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.productsServices')}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.productsServices', {
+                      defaultValue: 'Products and services for this quote',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <button
                   type="button"
@@ -1343,10 +1373,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedSupplierQuote = item.supplierQuoteItemId
-                      ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
-                      : undefined;
-
                     const {
                       unitCost: cost,
                       molPercentage,
@@ -1358,6 +1384,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
+
+                    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                    const linkedFieldStatus = getLinkedFieldStatus({
+                      isReadOnly,
+                      isLinkedToSupplierQuote,
+                      readOnlyReason,
+                      supplierLockedReason,
+                      statusEditable,
+                    });
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
@@ -1377,12 +1412,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <div className="lg:hidden flex items-start gap-3">
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.supplierQuoteColumn')}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.supplierQuote', {
+                                    defaultValue:
+                                      'Link this item to a supplier quote for cost tracking',
+                                  })}
+                                  status={readOnlyStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
+                                  {
+                                    id: 'none',
+                                    name: t('sales:clientQuotes.noSupplierQuote'),
+                                  },
                                   ...supplierQuoteItemOptions.map((o) => ({
                                     id: o.id,
                                     name: o.name,
@@ -1407,8 +1453,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               />
                             </div>
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.productsServices')}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.product', {
+                                    defaultValue: 'Select a product or service for this line item',
+                                  })}
+                                  status={linkedFieldStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
                               {renderProductSelectOrFallback(item, index, {
                                 className: 'min-w-0',
@@ -1428,8 +1481,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                           <div>
-                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('sales:clientQuotes.qty')}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.qty', {
+                                  defaultValue: 'Quantity of items or hours',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
@@ -1446,7 +1506,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                   );
                                 }}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                                 className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                               />
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1457,24 +1517,26 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 onChange={(val) => handleUnitTypeChange(index, val)}
                                 isSupply={isSupply}
                                 quantity={Number(item.quantity) || 0}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                               />
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('crm:internalListing.cost')}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.cost', {
+                                  defaultValue: 'Unit cost for this item',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
-                            {selectedSupplierQuote && (
-                              <span className="inline-flex px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
-                                {t('sales:clientQuotes.supplierQuoteBadge')}
-                              </span>
-                            )}
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
                                 value={cost.toFixed(2)}
                                 onValueChange={handleCostChange}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
@@ -1483,8 +1545,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               MOL (%)
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.mol', {
+                                  defaultValue: 'Margin overhead loading percentage',
+                                })}
+                                status={readOnlyStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
@@ -1518,9 +1587,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.revenue')}
                             </div>
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                            >
+                            <div className="text-sm font-semibold whitespace-nowrap text-slate-800">
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -1530,7 +1597,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
+                                  {
+                                    id: 'none',
+                                    name: t('sales:clientQuotes.noSupplierQuote'),
+                                  },
                                   ...supplierQuoteItemOptions.map((o) => ({
                                     id: o.id,
                                     name: o.name,
@@ -1577,7 +1647,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                     );
                                   }}
-                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
                                   className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1588,27 +1658,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   onChange={(val) => handleUnitTypeChange(index, val)}
                                   isSupply={isSupply}
                                   quantity={Number(item.quantity) || 0}
-                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
                                 />
                               </div>
                             </div>
-                            <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                              {selectedSupplierQuote && (
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
-                                  {t('sales:clientQuotes.supplierQuoteBadge')}
-                                </span>
-                              )}
-                              <div className="flex items-center gap-1 w-full">
-                                <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
-                                  onValueChange={handleCostChange}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  {currency}
-                                </span>
-                              </div>
+                            <div className="col-span-1 flex items-center justify-center gap-1">
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                {currency}
+                              </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
                               <ValidatedNumberInput
@@ -1632,9 +1695,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                              >
+                              <span className="text-xs font-semibold whitespace-nowrap text-slate-800">
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
                             </div>
@@ -1675,6 +1736,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.notesLabel')}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.notes', {
+                      defaultValue: 'Additional notes for the entire document',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <textarea
                   rows={4}

@@ -1,4 +1,18 @@
 {
+  "fieldInfo": {
+    "statusEditable": "Editable",
+    "supplierQuote": "Link this item to a supplier quote for cost tracking",
+    "product": "Select a product or service for this line item",
+    "qty": "Quantity of items or hours",
+    "cost": "Unit cost for this item",
+    "mol": "Margin overhead loading percentage",
+    "notes": "Additional notes for the entire document",
+    "clientInformation": "Client and document details",
+    "productsServices": "Products and services for this quote",
+    "items": "Line items for this offer",
+    "statusLabel": "Status:",
+    "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
+  },
   "clientQuotes": {
     "title": "Quotes",
     "subtitle": "Create and manage client quotes",
@@ -34,8 +48,8 @@
     "convertToOffer": "Convert to Offer",
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "{{status}} quotes are read-only",
-    "readOnlyBecauseOffer": "This quote is read-only because an offer was created from it.",
-    "readOnlyBecauseFinal": "This quote is read-only because it was already accepted or denied.",
+    "readOnlyBecauseOffer": "Read-only due to linked offer",
+    "readOnlyBecauseFinal": "Read-only due to finalized status",
     "linkedOffer": "Linked Offer",
     "linkedOfferInfo": "Offer #{{number}}",
     "offerDetailsReadOnly": "(Quote details are read-only)",
@@ -143,7 +157,7 @@
     "addOffer": "Add offer",
     "sourceQuote": "Source quote",
     "viewQuote": "View quote",
-    "readOnlyStatus": "Non-draft offers are read-only. Change status from the list actions.",
+    "readOnlyStatus": "Read-only due to non-draft status",
     "clientInformation": "Client Information",
     "client": "Client",
     "clientColumn": "Client",
@@ -183,7 +197,8 @@
     "markSent": "Mark as sent",
     "markAccepted": "Mark as accepted",
     "markDenied": "Mark as denied",
-    "createOrder": "Create sale order"
+    "createOrder": "Create sale order",
+    "clientLockedByQuote": "Locked due to linked quote"
   },
   "supplierQuotes": {
     "title": "Supplier Quotes",
