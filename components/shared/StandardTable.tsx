@@ -391,7 +391,7 @@ const StandardTable = <T extends object>({
             }
           }}
           className="w-20"
-          buttonClassName="px-2 py-1 bg-white/10 border border-white/20 text-xs font-bold text-white rounded-lg"
+          buttonClassName="px-2 py-1 bg-white border border-white/20 text-xs font-bold text-slate-700 rounded-lg"
           searchable={false}
         />
         <span className="text-xs font-bold text-white/70 ml-2">
