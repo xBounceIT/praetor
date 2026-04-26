@@ -99,6 +99,7 @@
     "unit": "Unità",
     "units": "Unità",
     "supplierQuoteBadge": "Fornitore",
+    "fieldLockedBySupplierQuote": "Bloccato perché questa voce è collegata a un preventivo fornitore.",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
     "quotesTitle": "Preventivi",
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",
@@ -183,7 +184,8 @@
     "markSent": "Segna come inviata",
     "markAccepted": "Segna come accettata",
     "markDenied": "Segna come rifiutata",
-    "createOrder": "Crea ordine di vendita"
+    "createOrder": "Crea ordine di vendita",
+    "clientLockedByQuote": "Il cliente non può essere modificato perché questa offerta è collegata a un preventivo."
   },
   "supplierQuotes": {
     "title": "Preventivi Fornitori",

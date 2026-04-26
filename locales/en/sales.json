@@ -99,6 +99,7 @@
     "unit": "Unit",
     "units": "Units",
     "supplierQuoteBadge": "Supplier",
+    "fieldLockedBySupplierQuote": "Locked because this item is linked to a supplier quote.",
     "createYourFirstQuote": "Create your first quote",
     "quotesTitle": "Quotes",
     "quotesSubtitle": "Manage client quotes and proposals",
@@ -183,7 +184,8 @@
     "markSent": "Mark as sent",
     "markAccepted": "Mark as accepted",
     "markDenied": "Mark as denied",
-    "createOrder": "Create sale order"
+    "createOrder": "Create sale order",
+    "clientLockedByQuote": "Client cannot be changed because this offer is linked to a quote."
   },
   "supplierQuotes": {
     "title": "Supplier Quotes",
