@@ -73,6 +73,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   useEffect(() => {
     if (projectIds.length === 0) {
       setTaskHours({});
+      setHoursLoadState('idle');
       return;
     }
     const gen = ++fetchHoursGenRef.current;
