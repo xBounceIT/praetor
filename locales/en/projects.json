@@ -61,6 +61,7 @@
     "noTasksAdded": "No tasks added yet.",
     "progress": "Progress",
     "deleteProjectTitle": "Delete Project: {{name}}?",
+    "deleteTaskTitle": "Delete Task: {{name}}?",
     "deleteTaskConfirm": "Delete this task? This action cannot be undone.",
     "linkedOrder": "Linked Order",
     "noOrderLinked": "No order linked",

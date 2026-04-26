@@ -85,6 +85,15 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+const FK_VIOLATION = '23503';
+const ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
+
+const handleForeignKeyViolation = (error: DatabaseError, reply: FastifyReply) => {
+  const message =
+    error.constraint === ORDER_FK_CONSTRAINT ? 'Linked order not found' : 'Client not found';
+  return reply.code(400).send({ error: message });
+};
+
 class ProjectNotFoundError extends Error {
   constructor() {
     super('Project not found');
@@ -283,10 +292,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (err) {
         const error = err as DatabaseError;
-        if (error.code === '23503') {
-          // Foreign key violation
-          return reply.code(400).send({ error: 'Client not found' });
-        }
+        if (error.code === FK_VIOLATION) return handleForeignKeyViolation(error, reply);
         throw err;
       }
     },
@@ -487,10 +493,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(404).send({ error: err.message });
         }
         const error = err as DatabaseError;
-        if (error.code === '23503') {
-          // Foreign key violation
-          return reply.code(400).send({ error: 'Client not found' });
-        }
+        if (error.code === FK_VIOLATION) return handleForeignKeyViolation(error, reply);
         throw err;
       }
 
