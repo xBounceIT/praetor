@@ -52,6 +52,7 @@ const taskSchema = {
     revenue: { type: 'number' },
     notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    createdAt: { type: 'number' },
   },
   required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
 } as const;
@@ -138,7 +139,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let queryText = `
             SELECT id, name, project_id, description, is_recurring,
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-                   expected_effort, revenue, notes, is_disabled
+                   expected_effort, revenue, notes, is_disabled,
+                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
             FROM tasks ORDER BY name
         `;
       let queryParams: string[] = [];
@@ -147,7 +149,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
-                       t.expected_effort, t.revenue, t.notes, t.is_disabled
+                       t.expected_effort, t.revenue, t.notes, t.is_disabled,
+                       EXTRACT(EPOCH FROM t.created_at) * 1000 as "createdAt"
                 FROM tasks t
                 INNER JOIN user_tasks ut ON t.id = ut.task_id
                 WHERE ut.user_id = $1
@@ -173,6 +176,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
         notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
+        createdAt: t.createdAt ? parseFloat(t.createdAt) : undefined,
       }));
 
       return value;
@@ -246,9 +250,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = 't-' + crypto.randomUUID();
 
       try {
-        await query(
+        const insertResult = await query(
           `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           RETURNING EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
           [
             id,
             nameResult.value,
@@ -264,6 +269,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             false,
           ],
         );
+
+        const taskCreatedAt = insertResult.rows[0]?.createdAt
+          ? parseFloat(insertResult.rows[0].createdAt)
+          : undefined;
 
         const projectResult = await query('SELECT client_id FROM projects WHERE id = $1', [
           projectIdResult.value,
@@ -305,6 +314,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           revenue: revenueVal,
           notes: notes || null,
           isDisabled: false,
+          createdAt: taskCreatedAt,
         });
       } catch (err) {
         const error = err as DatabaseError;
@@ -537,7 +547,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  revenue = COALESCE($11, revenue),
                  notes = COALESCE($12, notes)
              WHERE id = $1
-             RETURNING *`,
+              RETURNING id, name, project_id, description, is_recurring,
+                        recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
+                        expected_effort, revenue, notes, is_disabled,
+                        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
         [
           idResult.value,
           name || null,
@@ -605,6 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
         notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
+        createdAt: t.createdAt ? parseFloat(t.createdAt as string) : undefined,
       };
     },
   );

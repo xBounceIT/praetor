@@ -722,6 +722,7 @@ const App: React.FC = () => {
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+  const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -810,7 +811,10 @@ const App: React.FC = () => {
     ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
-  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId]);
+    if (activeView !== 'accounting/clients-orders' && clientsOrderFilterId) {
+      React.startTransition(() => setClientsOrderFilterId(null));
+    }
+  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId, clientsOrderFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -2634,7 +2638,7 @@ const App: React.FC = () => {
           ? availableColors[Math.floor(Math.random() * availableColors.length)]
           : COLORS[Math.floor(Math.random() * COLORS.length)];
 
-      const project = await api.projects.create(name, clientId, description, color);
+      const project = await api.projects.create({ name, clientId, description, color, orderId });
       setProjects((prev) => [...prev, project]);
 
       if (draftTasks && draftTasks.length > 0) {
@@ -3261,6 +3265,7 @@ const App: React.FC = () => {
                     setActiveView('sales/client-offers');
                   }}
                   offerFilterId={clientOfferFilterId}
+                  orderFilterId={clientsOrderFilterId}
                 />
               )}
 
@@ -3383,6 +3388,10 @@ const App: React.FC = () => {
                     console.error('Failed to delete task:', err);
                   }
                 }}
+                onViewOrder={(orderId) => {
+                  setClientsOrderFilterId(orderId);
+                  setActiveView('accounting/clients-orders');
+                }}
               />
             )}
 
@@ -3394,6 +3403,7 @@ const App: React.FC = () => {
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
                 roles={roles}
+                currency={generalSettings.currency}
                 onAddTask={addProjectTask}
                 onUpdateTask={handleUpdateTask}
                 onDeleteTask={async (id) => {
@@ -3404,6 +3414,10 @@ const App: React.FC = () => {
                     console.error('Failed to delete task:', err);
                     alert('Failed to delete task');
                   }
+                }}
+                onViewOrder={(orderId) => {
+                  setClientsOrderFilterId(orderId);
+                  setActiveView('accounting/clients-orders');
                 }}
               />
             )}

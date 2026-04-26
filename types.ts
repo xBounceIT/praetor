@@ -143,6 +143,8 @@ export interface Project {
   color: string;
   description?: string;
   isDisabled?: boolean;
+  createdAt?: number;
+  orderId?: string;
 }
 
 export interface ProjectTask {
@@ -159,6 +161,7 @@ export interface ProjectTask {
   revenue?: number;
   notes?: string;
   isDisabled?: boolean;
+  createdAt?: number;
 }
 
 export interface TimeEntry {
