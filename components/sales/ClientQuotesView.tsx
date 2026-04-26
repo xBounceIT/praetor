@@ -18,6 +18,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { getLinkedFieldStatus } from '../../utils/fieldStatus';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -1236,15 +1237,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.client')}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.client', {
-                        defaultValue: 'Select the client for this document',
-                      })}
-                      status={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
                   </label>
                   <CustomSelect
                     options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
@@ -1260,15 +1254,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.quoteCode', {
-                        defaultValue: 'Unique identifier for this quote',
-                      })}
-                      status={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
                   </label>
                   <input
                     type="text"
@@ -1294,15 +1281,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.paymentTerms')}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.paymentTerms', {
-                        defaultValue: 'Payment terms and conditions',
-                      })}
-                      status={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
                   </label>
                   <CustomSelect
                     options={paymentTermsOptions}
@@ -1315,15 +1295,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.expirationDateLabel')}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.expirationDate', {
-                        defaultValue: 'Date until which this document is valid',
-                      })}
-                      status={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
                   </label>
                   <input
                     type="date"
@@ -1359,13 +1332,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 >
                   <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                 </button>
-                <FieldTooltip
-                  description={t('sales:fieldInfo.addItem', {
-                    defaultValue: 'Add a new line item',
-                  })}
-                  status={readOnlyStatus}
-                  statusLabel={statusLabel}
-                />
               </div>
               {errors.items && (
                 <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
@@ -1423,11 +1389,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const lineMargin = lineSalePrice - lineCost;
 
                     const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                    const linkedFieldStatus = isReadOnly
-                      ? readOnlyReason
-                      : isLinkedToSupplierQuote
-                        ? supplierLockedReason
-                        : statusEditable;
+                    const linkedFieldStatus = getLinkedFieldStatus(
+                      isReadOnly,
+                      isLinkedToSupplierQuote,
+                      readOnlyReason,
+                      supplierLockedReason,
+                      statusEditable,
+                    );
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
