@@ -5,6 +5,7 @@ import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -385,41 +386,22 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                <Trans
-                  i18nKey="tasks.deleteConfirmDesc"
-                  ns="projects"
-                  values={{ name: editingTask?.name }}
-                  components={{ span: <span className="font-bold text-slate-800" /> }}
-                />
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('tasks.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={cancelDelete}
+        onConfirm={handleDelete}
+        title={t('tasks.deleteTaskTitle')}
+        description={
+          <Trans
+            i18nKey="tasks.deleteConfirmDesc"
+            ns="projects"
+            values={{ name: editingTask?.name }}
+            components={{ span: <span className="font-bold text-slate-800" /> }}
+          />
+        }
+        cancelLabel={t('common:buttons.cancel')}
+        confirmLabel={t('tasks.yesDelete')}
+      />
 
       {/* User Assignment Modal */}
       <UserAssignmentModal

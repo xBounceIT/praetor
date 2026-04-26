@@ -7,6 +7,7 @@ import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -966,71 +967,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('projects:projects.deleteProjectTitle', { name: projectToDelete?.name })}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('projects:projects.deleteConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={closeModal}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.noGoBack')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={closeModal}
+        onConfirm={handleDelete}
+        title={t('projects:projects.deleteProjectTitle', { name: projectToDelete?.name })}
+        description={t('projects:projects.deleteConfirm')}
+      />
 
-      {/* Task Delete Confirmation Modal */}
-      <Modal isOpen={isTaskDeleteConfirmOpen} onClose={() => setIsTaskDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('projects:projects.deleteTaskTitle', { name: taskToDelete?.name })}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('projects:projects.deleteTaskConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsTaskDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.noGoBack')}
-              </button>
-              <button
-                onClick={handleDeleteTask}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isTaskDeleteConfirmOpen}
+        onClose={() => setIsTaskDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteTask}
+        title={t('projects:projects.deleteTaskTitle', { name: taskToDelete?.name })}
+        description={t('projects:projects.deleteTaskConfirm')}
+      />
 
       {/* User Assignment Modal */}
       <UserAssignmentModal
