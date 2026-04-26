@@ -25,7 +25,7 @@ const FieldTooltip: React.FC<FieldTooltipProps> = ({
         </div>
       }
       position="top"
-      tooltipClassName="whitespace-normal max-w-56"
+      tooltipClassName="whitespace-normal max-w-72"
       wrapperClassName={className}
     >
       {() => (

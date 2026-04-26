@@ -217,13 +217,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const readOnlyReason = t('sales:clientOffers.readOnlyStatus', {
-    defaultValue: 'Non-draft offers are read-only. Change status from the list actions.',
+    defaultValue: 'Read-only due to non-draft status',
   });
   const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
-    defaultValue: 'Client cannot be changed because this offer is linked to a quote.',
+    defaultValue: 'Locked due to linked quote',
   });
   const supplierLockedReason = t('sales:clientQuotes.fieldLockedBySupplierQuote', {
-    defaultValue: 'Locked because this item is linked to a supplier quote.',
+    defaultValue: 'Locked due to linked supplier quote',
   });
   const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
   const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
@@ -783,8 +783,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
                   {t('sales:clientOffers.readOnlyStatus', {
-                    defaultValue:
-                      'Non-draft offers are read-only. Change status from the list actions.',
+                    defaultValue: 'Read-only due to non-draft status',
                   })}
                 </span>
               </div>

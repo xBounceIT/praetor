@@ -51,8 +51,8 @@
     "convertToOffer": "Convert to Offer",
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "{{status}} quotes are read-only",
-    "readOnlyBecauseOffer": "This quote is read-only because an offer was created from it.",
-    "readOnlyBecauseFinal": "This quote is read-only because it was already accepted or denied.",
+    "readOnlyBecauseOffer": "Read-only due to linked offer",
+    "readOnlyBecauseFinal": "Read-only due to finalized status",
     "linkedOffer": "Linked Offer",
     "linkedOfferInfo": "Offer #{{number}}",
     "offerDetailsReadOnly": "(Quote details are read-only)",
@@ -116,7 +116,7 @@
     "unit": "Unit",
     "units": "Units",
     "supplierQuoteBadge": "Supplier",
-    "fieldLockedBySupplierQuote": "Locked because this item is linked to a supplier quote.",
+    "fieldLockedBySupplierQuote": "Locked due to linked supplier quote",
     "createYourFirstQuote": "Create your first quote",
     "quotesTitle": "Quotes",
     "quotesSubtitle": "Manage client quotes and proposals",
@@ -161,7 +161,7 @@
     "addOffer": "Add offer",
     "sourceQuote": "Source quote",
     "viewQuote": "View quote",
-    "readOnlyStatus": "Non-draft offers are read-only. Change status from the list actions.",
+    "readOnlyStatus": "Read-only due to non-draft status",
     "clientInformation": "Client Information",
     "client": "Client",
     "clientColumn": "Client",
@@ -202,7 +202,7 @@
     "markAccepted": "Mark as accepted",
     "markDenied": "Mark as denied",
     "createOrder": "Create sale order",
-    "clientLockedByQuote": "Client cannot be changed because this offer is linked to a quote."
+    "clientLockedByQuote": "Locked due to linked quote"
   },
   "supplierQuotes": {
     "title": "Supplier Quotes",

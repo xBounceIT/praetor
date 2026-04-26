@@ -176,13 +176,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const readOnlyReason = editingQuote?.linkedOfferId
     ? t('sales:clientQuotes.readOnlyBecauseOffer', {
-        defaultValue: 'This quote is read-only because an offer was created from it.',
+        defaultValue: 'Read-only due to linked offer',
       })
     : t('sales:clientQuotes.readOnlyBecauseFinal', {
-        defaultValue: 'This quote is read-only because it was already accepted or denied.',
+        defaultValue: 'Read-only due to finalized status',
       });
   const supplierLockedReason = t('sales:clientQuotes.fieldLockedBySupplierQuote', {
-    defaultValue: 'Locked because this item is linked to a supplier quote.',
+    defaultValue: 'Locked due to linked supplier quote',
   });
   const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
   const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
@@ -1179,12 +1179,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <span className="text-amber-700 text-xs font-bold">
                   {editingQuote?.linkedOfferId
                     ? t('sales:clientQuotes.readOnlyBecauseOffer', {
-                        defaultValue:
-                          'This quote is read-only because an offer was created from it.',
+                        defaultValue: 'Read-only due to linked offer',
                       })
                     : t('sales:clientQuotes.readOnlyBecauseFinal', {
-                        defaultValue:
-                          'This quote is read-only because it was already accepted or denied.',
+                        defaultValue: 'Read-only due to finalized status',
                       })}
                 </span>
               </div>

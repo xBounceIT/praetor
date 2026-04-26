@@ -51,8 +51,8 @@
     "convertToOffer": "Converti in Offerta",
     "convertConfirm": "Convertire questo preventivo in una vendita?",
     "readOnlyStatus": "I preventivi in stato {{status}} sono in sola lettura",
-    "readOnlyBecauseOffer": "Questo preventivo è in sola lettura perché è stata creata un'offerta da esso.",
-    "readOnlyBecauseFinal": "Questo preventivo è in sola lettura perché è già stato accettato o rifiutato.",
+    "readOnlyBecauseOffer": "Sola lettura per offerta collegata",
+    "readOnlyBecauseFinal": "Sola lettura per stato finalizzato",
     "linkedOffer": "Offerta Collegata",
     "linkedOfferInfo": "Offerta #{{number}}",
     "offerDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
@@ -116,7 +116,7 @@
     "unit": "Unità",
     "units": "Unità",
     "supplierQuoteBadge": "Fornitore",
-    "fieldLockedBySupplierQuote": "Bloccato perché questa voce è collegata a un preventivo fornitore.",
+    "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
     "quotesTitle": "Preventivi",
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",
@@ -161,7 +161,7 @@
     "addOffer": "Aggiungi offerta",
     "sourceQuote": "Preventivo di origine",
     "viewQuote": "Vedi preventivo",
-    "readOnlyStatus": "Le offerte non in bozza sono in sola lettura. Cambia lo stato dalle azioni nella lista.",
+    "readOnlyStatus": "Sola lettura per stato non bozza",
     "clientInformation": "Informazioni Cliente",
     "client": "Cliente",
     "clientColumn": "Cliente",
@@ -202,7 +202,7 @@
     "markAccepted": "Segna come accettata",
     "markDenied": "Segna come rifiutata",
     "createOrder": "Crea ordine di vendita",
-    "clientLockedByQuote": "Il cliente non può essere modificato perché questa offerta è collegata a un preventivo."
+    "clientLockedByQuote": "Bloccato per preventivo collegato"
   },
   "supplierQuotes": {
     "title": "Preventivi Fornitori",
