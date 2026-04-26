@@ -161,6 +161,7 @@ export interface ProjectTask {
   revenue?: number;
   notes?: string;
   isDisabled?: boolean;
+  createdAt?: number;
 }
 
 export interface TimeEntry {

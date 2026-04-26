@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -149,6 +150,16 @@ const TasksView: React.FC<TasksViewProps> = ({
         },
       },
       {
+        header: t('projects:projects.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (task) => task.createdAt ?? 0,
+        cell: ({ row }) => (
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+          </span>
+        ),
+      },
+      {
         header: t('tasks.project'),
         accessorFn: (task) => {
           const project = projects.find((p) => p.id === task.projectId);
@@ -164,8 +175,10 @@ const TasksView: React.FC<TasksViewProps> = ({
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
-                className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                  isProjectDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'
+                className={`text-sm font-bold ${
+                  isProjectDisabled
+                    ? 'text-slate-600 line-through decoration-slate-300'
+                    : 'text-slate-800'
                 }`}
               >
                 {project?.name || t('projects.unknown')}
@@ -582,6 +595,14 @@ const TasksView: React.FC<TasksViewProps> = ({
         data={paginatedTasks}
         columns={columns}
         defaultRowsPerPage={rowsPerPage}
+        onRowClick={canUpdateTasks ? openEditModal : undefined}
+        rowClassName={(row) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          return row.isDisabled || project?.isDisabled || client?.isDisabled
+            ? 'opacity-70 grayscale hover:grayscale-0'
+            : '';
+        }}
         footer={
           <>
             <div className="flex items-center gap-3">

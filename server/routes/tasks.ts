@@ -52,6 +52,7 @@ const taskSchema = {
     revenue: { type: 'number' },
     notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    createdAt: { type: 'number' },
   },
   required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
 } as const;
@@ -138,7 +139,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let queryText = `
             SELECT id, name, project_id, description, is_recurring,
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-                   expected_effort, revenue, notes, is_disabled
+                   expected_effort, revenue, notes, is_disabled,
+                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
             FROM tasks ORDER BY name
         `;
       let queryParams: string[] = [];
@@ -147,7 +149,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
-                       t.expected_effort, t.revenue, t.notes, t.is_disabled
+                       t.expected_effort, t.revenue, t.notes, t.is_disabled,
+                       EXTRACT(EPOCH FROM t.created_at) * 1000 as "createdAt"
                 FROM tasks t
                 INNER JOIN user_tasks ut ON t.id = ut.task_id
                 WHERE ut.user_id = $1
@@ -173,6 +176,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
         notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
+        createdAt: t.createdAt ? parseFloat(t.createdAt) : undefined,
       }));
 
       return value;
