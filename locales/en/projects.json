@@ -109,6 +109,8 @@
     "taskHeader": "Task: {{name}}",
     "noUsersFound": "No users found.",
     "inheritedFromDisabledProject": "Inherited from disabled Project: {{projectName}}",
+    "disableTask": "Disable Task",
+    "enableTask": "Enable Task",
     "createNewTask": "Create New Task",
     "searchPlaceholder": "Search tasks, descriptions, or projects...",
     "tasksDirectory": "Tasks Directory",

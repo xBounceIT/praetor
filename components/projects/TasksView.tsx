@@ -391,9 +391,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                   </Tooltip>
                   {!isInheritedDisabled && (
                     <Tooltip
-                      label={
-                        isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
-                      }
+                      label={isTaskDisabled ? t('tasks.enableTask') : t('tasks.disableTask')}
                     >
                       {() => (
                         <button
