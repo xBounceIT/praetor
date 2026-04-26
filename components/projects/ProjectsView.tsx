@@ -649,6 +649,23 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6">
+            {editingProject?.orderId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('projects:projects.linkedOrder')}
+                    </div>
+                    <div className="text-xs text-praetor">
+                      {formatOrderId(editingProject.orderId)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-4">
               {/* Order selector (create only) / Client selector (edit only) */}
               {editingProject ? (
@@ -746,19 +763,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     {errors.name && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
                     )}
-                  </div>
-                </div>
-              )}
-
-              {editingProject && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('projects:projects.linkedOrder')}
-                  </label>
-                  <div className="text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500">
-                    {editingProject.orderId
-                      ? formatOrderId(editingProject.orderId)
-                      : t('projects:projects.noOrderLinked')}
                   </div>
                 </div>
               )}
@@ -1085,6 +1089,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               },
             },
             {
+              header: t('projects:projects.tableHeaders.insertDate'),
+              id: 'createdAt',
+              accessorFn: (row) => row.createdAt ?? 0,
+              cell: ({ row }) => (
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+                </span>
+              ),
+            },
+            {
               header: t('projects:projects.tableHeaders.projectName'),
               accessorKey: 'name',
               cell: ({ row }) => (
@@ -1116,16 +1130,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
-              ),
-            },
-            {
-              header: t('projects:projects.tableHeaders.insertDate'),
-              id: 'createdAt',
-              accessorFn: (row) => row.createdAt ?? 0,
-              cell: ({ row }) => (
-                <span className="text-xs text-slate-500 whitespace-nowrap">
-                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
-                </span>
               ),
             },
             {
