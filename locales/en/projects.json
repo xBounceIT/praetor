@@ -61,10 +61,13 @@
     "noTasksAdded": "No tasks added yet.",
     "progress": "Progress",
     "deleteTaskConfirm": "Delete this task? This action cannot be undone.",
+    "linkedOrder": "Linked Order",
+    "noOrderLinked": "No order linked",
     "tableHeaders": {
       "client": "Client",
       "projectName": "Project Name",
       "description": "Description",
+      "insertDate": "Insert Date",
       "progress": "Progress",
       "status": "Status",
       "actions": "Actions"

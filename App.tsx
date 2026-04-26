@@ -2634,7 +2634,7 @@ const App: React.FC = () => {
           ? availableColors[Math.floor(Math.random() * availableColors.length)]
           : COLORS[Math.floor(Math.random() * COLORS.length)];
 
-      const project = await api.projects.create(name, clientId, description, color);
+      const project = await api.projects.create({ name, clientId, description, color, orderId });
       setProjects((prev) => [...prev, project]);
 
       if (draftTasks && draftTasks.length > 0) {

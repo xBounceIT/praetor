@@ -143,6 +143,8 @@ export interface Project {
   color: string;
   description?: string;
   isDisabled?: boolean;
+  createdAt?: number;
+  orderId?: string;
 }
 
 export interface ProjectTask {

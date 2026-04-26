@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
 import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -15,6 +16,8 @@ import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
+
+const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 type DraftTask = {
   _id: string;
@@ -523,7 +526,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     .filter((o) => o.status === 'confirmed')
     .map((o) => ({
       id: o.id,
-      name: `${o.clientName} — #${o.id.replace('co-', '')}`,
+      name: `${o.clientName} — ${formatOrderId(o.id)}`,
     }));
 
   const selectedOrder = orders.find((o) => o.id === orderId);
@@ -743,6 +746,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     {errors.name && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {editingProject && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('projects:projects.linkedOrder')}
+                  </label>
+                  <div className="text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500">
+                    {editingProject.orderId
+                      ? formatOrderId(editingProject.orderId)
+                      : t('projects:projects.noOrderLinked')}
                   </div>
                 </div>
               )}
@@ -1050,23 +1066,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               cell: ({ row }) => {
                 const client = clients.find((c: Client) => c.id === row.clientId);
                 const isClientDisabled = client?.isDisabled || false;
-                return (
+                return client ? (
                   <span
-                    className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                    className={`text-sm font-bold ${
                       isClientDisabled
-                        ? 'text-amber-600 bg-amber-50 border-amber-100'
+                        ? 'text-amber-500'
                         : row.isDisabled
                           ? 'text-slate-400'
-                          : 'text-praetor'
+                          : 'text-slate-700'
                     }`}
                   >
-                    {client?.name || t('projects:projects.unknown')}
-                    {isClientDisabled && (
-                      <span className="ml-1 text-[8px]">
-                        {t('projects:projects.disabledLabel')}
-                      </span>
-                    )}
+                    {client.name}
+                    {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
                   </span>
+                ) : (
+                  <span className="text-xs text-slate-400 italic">—</span>
                 );
               },
             },
@@ -1102,6 +1116,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
+              ),
+            },
+            {
+              header: t('projects:projects.tableHeaders.insertDate'),
+              id: 'createdAt',
+              accessorFn: (row) => row.createdAt ?? 0,
+              cell: ({ row }) => (
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+                </span>
               ),
             },
             {

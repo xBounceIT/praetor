@@ -61,10 +61,13 @@
     "noTasksAdded": "Nessuna attività aggiunta.",
     "progress": "Avanzamento",
     "deleteTaskConfirm": "Eliminare questa attività? L'azione non è reversibile.",
+    "linkedOrder": "Ordine Collegato",
+    "noOrderLinked": "Nessun ordine collegato",
     "tableHeaders": {
       "client": "Cliente",
       "projectName": "Nome Progetto",
       "description": "Descrizione",
+      "insertDate": "Data Inserimento",
       "progress": "Avanzamento",
       "status": "Stato",
       "actions": "Azioni"

@@ -50,6 +50,8 @@ const projectSchema = {
     color: { type: 'string' },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    createdAt: { type: 'number' },
+    orderId: { type: ['string', 'null'] },
   },
   required: ['id', 'name', 'clientId', 'color', 'isDisabled'],
 } as const;
@@ -61,6 +63,7 @@ const projectCreateBodySchema = {
     clientId: { type: 'string' },
     description: { type: 'string' },
     color: { type: 'string' },
+    orderId: { type: 'string' },
   },
   required: ['name', 'clientId'],
 } as const;
@@ -163,14 +166,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAll = hasPermission(request, 'projects.manage_all.view');
       let queryText = `
-            SELECT id, name, client_id, color, description, is_disabled 
+            SELECT id, name, client_id, color, description, is_disabled,
+                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                   order_id
             FROM projects ORDER BY name
         `;
       let queryParams: string[] = [];
 
       if (!canViewAll) {
         queryText = `
-                SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
+                SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled,
+                       EXTRACT(EPOCH FROM p.created_at) * 1000 as "createdAt",
+                       p.order_id
                 FROM projects p
                 INNER JOIN user_projects up ON p.id = up.project_id
                 WHERE up.user_id = $1
@@ -187,6 +194,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         color: p.color,
         description: p.description,
         isDisabled: p.is_disabled,
+        createdAt: p.createdAt,
+        orderId: p.order_id,
       }));
 
       return value;
@@ -209,11 +218,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, clientId, description, color } = request.body as {
+      const { name, clientId, description, color, orderId } = request.body as {
         name: string;
         clientId: string;
         description?: string;
         color?: string;
+        orderId?: string;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -230,10 +240,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const projectColor = (colorResult as { ok: true; value: string } | null)?.value || '#3b82f6';
 
       try {
-        await query(
-          `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, nameResult.value, clientIdResult.value, projectColor, description || null, false],
+        const insertResult = await query(
+          `INSERT INTO projects (id, name, client_id, color, description, is_disabled, order_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
+          [
+            id,
+            nameResult.value,
+            clientIdResult.value,
+            projectColor,
+            description || null,
+            false,
+            orderId || null,
+          ],
         );
 
         if (request.user?.id) {
@@ -259,6 +278,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           color: projectColor,
           description,
           isDisabled: false,
+          createdAt: insertResult.rows[0].createdAt,
+          orderId: orderId || null,
         });
       } catch (err) {
         const error = err as DatabaseError;
@@ -409,7 +430,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                        description = COALESCE($4, description),
                        is_disabled = COALESCE($5, is_disabled)
                    WHERE id = $6
-                   RETURNING id, name, client_id, color, description, is_disabled`,
+                   RETURNING id, name, client_id, color, description, is_disabled,
+                             EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                             order_id`,
             [
               name || null,
               clientId || null,
@@ -427,6 +450,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             color: string;
             description: string | null;
             is_disabled: boolean;
+            createdAt: number;
+            order_id: string | null;
           };
 
           if (clientChanged) {
@@ -486,6 +511,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         color: updatedProject.updated.color,
         description: updatedProject.updated.description,
         isDisabled: updatedProject.updated.is_disabled,
+        createdAt: updatedProject.updated.createdAt,
+        orderId: updatedProject.updated.order_id,
       };
     },
   );
