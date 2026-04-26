@@ -722,6 +722,7 @@ const App: React.FC = () => {
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+  const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -810,7 +811,10 @@ const App: React.FC = () => {
     ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
-  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId]);
+    if (activeView !== 'accounting/clients-orders' && clientsOrderFilterId) {
+      React.startTransition(() => setClientsOrderFilterId(null));
+    }
+  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId, clientsOrderFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -3261,6 +3265,7 @@ const App: React.FC = () => {
                     setActiveView('sales/client-offers');
                   }}
                   offerFilterId={clientOfferFilterId}
+                  orderFilterId={clientsOrderFilterId}
                 />
               )}
 
@@ -3382,6 +3387,10 @@ const App: React.FC = () => {
                   } catch (err) {
                     console.error('Failed to delete task:', err);
                   }
+                }}
+                onViewOrder={(orderId) => {
+                  setClientsOrderFilterId(orderId);
+                  setActiveView('accounting/clients-orders');
                 }}
               />
             )}

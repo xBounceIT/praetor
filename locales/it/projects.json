@@ -63,6 +63,7 @@
     "deleteTaskConfirm": "Eliminare questa attività? L'azione non è reversibile.",
     "linkedOrder": "Ordine Collegato",
     "noOrderLinked": "Nessun ordine collegato",
+    "viewOrder": "Vedi Ordine",
     "tableHeaders": {
       "client": "Cliente",
       "projectName": "Nome Progetto",

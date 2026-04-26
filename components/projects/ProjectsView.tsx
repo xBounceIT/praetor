@@ -59,6 +59,7 @@ export interface ProjectsViewProps {
   ) => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onDeleteTask: (id: string) => void | Promise<void>;
+  onViewOrder?: (orderId: string) => void;
 }
 
 const ProjectsView: React.FC<ProjectsViewProps> = ({
@@ -76,6 +77,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onAddTask,
   onUpdateTask,
   onDeleteTask,
+  onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasPermission(
@@ -664,6 +666,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     </div>
                   </div>
                 </div>
+                {onViewOrder && (
+                  <button
+                    type="button"
+                    onClick={() => onViewOrder(editingProject.orderId!)}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                  >
+                    {t('projects:projects.viewOrder')}
+                  </button>
+                )}
               </div>
             )}
             <div className="space-y-4">

@@ -63,6 +63,7 @@
     "deleteTaskConfirm": "Delete this task? This action cannot be undone.",
     "linkedOrder": "Linked Order",
     "noOrderLinked": "No order linked",
+    "viewOrder": "View Order",
     "tableHeaders": {
       "client": "Client",
       "projectName": "Project Name",
