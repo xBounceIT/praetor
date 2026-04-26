@@ -31,6 +31,7 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
+import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -183,6 +184,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const supplierLockedReason = t('sales:clientQuotes.fieldLockedBySupplierQuote', {
     defaultValue: 'Locked because this item is linked to a supplier quote.',
   });
+  const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
+  const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
+
+  const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
 
   const formTotals = useMemo(() => {
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
@@ -1226,93 +1231,103 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
                     {t('sales:clientQuotes.client')}
+                    <FieldTooltip
+                      description={t('sales:fieldInfo.client', {
+                        defaultValue: 'Select the client for this document',
+                      })}
+                      status={readOnlyStatus}
+                      statusLabel={statusLabel}
+                    />
                   </label>
-                  <Tooltip label={isReadOnly ? readOnlyReason : ''} wrapperClassName="w-full">
-                    {() => (
-                      <CustomSelect
-                        options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                        value={formData.clientId || ''}
-                        onChange={(val) => handleClientChange(val as string)}
-                        placeholder={t('sales:clientQuotes.selectAClient')}
-                        searchable={true}
-                        disabled={isReadOnly}
-                        className={errors.clientId ? 'border-red-300' : ''}
-                      />
-                    )}
-                  </Tooltip>
+                  <CustomSelect
+                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                    value={formData.clientId || ''}
+                    onChange={(val) => handleClientChange(val as string)}
+                    placeholder={t('sales:clientQuotes.selectAClient')}
+                    searchable={true}
+                    disabled={isReadOnly}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
                   {errors.clientId && (
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
                     {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+                    <FieldTooltip
+                      description={t('sales:fieldInfo.quoteCode', {
+                        defaultValue: 'Unique identifier for this quote',
+                      })}
+                      status={readOnlyStatus}
+                      statusLabel={statusLabel}
+                    />
                   </label>
-                  <Tooltip label={isReadOnly ? readOnlyReason : ''} wrapperClassName="w-full">
-                    {() => (
-                      <input
-                        type="text"
-                        value={formData.id || ''}
-                        onChange={(e) => {
-                          setFormData({ ...formData, id: e.target.value });
-                          if (errors.id) {
-                            setErrors((prev) => {
-                              const next = { ...prev };
-                              delete next.id;
-                              return next;
-                            });
-                          }
-                        }}
-                        placeholder="Q0000"
-                        disabled={isReadOnly}
-                        className={`w-full rounded-xl border ${
-                          errors.id ? 'border-red-300' : 'border-slate-200'
-                        } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
-                      />
-                    )}
-                  </Tooltip>
+                  <input
+                    type="text"
+                    value={formData.id || ''}
+                    onChange={(e) => {
+                      setFormData({ ...formData, id: e.target.value });
+                      if (errors.id) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.id;
+                          return next;
+                        });
+                      }
+                    }}
+                    placeholder="Q0000"
+                    disabled={isReadOnly}
+                    className={`w-full rounded-xl border ${
+                      errors.id ? 'border-red-300' : 'border-slate-200'
+                    } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
+                  />
                   {errors.id && (
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
                     {t('sales:clientQuotes.paymentTerms')}
+                    <FieldTooltip
+                      description={t('sales:fieldInfo.paymentTerms', {
+                        defaultValue: 'Payment terms and conditions',
+                      })}
+                      status={readOnlyStatus}
+                      statusLabel={statusLabel}
+                    />
                   </label>
-                  <Tooltip label={isReadOnly ? readOnlyReason : ''} wrapperClassName="w-full">
-                    {() => (
-                      <CustomSelect
-                        options={paymentTermsOptions}
-                        value={formData.paymentTerms || 'immediate'}
-                        onChange={(val) =>
-                          setFormData({ ...formData, paymentTerms: val as Quote['paymentTerms'] })
-                        }
-                        searchable={false}
-                        disabled={isReadOnly}
-                      />
-                    )}
-                  </Tooltip>
+                  <CustomSelect
+                    options={paymentTermsOptions}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(val) =>
+                      setFormData({ ...formData, paymentTerms: val as Quote['paymentTerms'] })
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-slate-500 ml-1 flex items-center gap-1">
                     {t('sales:clientQuotes.expirationDateLabel')}
+                    <FieldTooltip
+                      description={t('sales:fieldInfo.expirationDate', {
+                        defaultValue: 'Date until which this document is valid',
+                      })}
+                      status={readOnlyStatus}
+                      statusLabel={statusLabel}
+                    />
                   </label>
-                  <Tooltip label={isReadOnly ? readOnlyReason : ''} wrapperClassName="w-full">
-                    {() => (
-                      <input
-                        type="date"
-                        required
-                        value={formData.expirationDate}
-                        onChange={(e) =>
-                          setFormData({ ...formData, expirationDate: e.target.value })
-                        }
-                        disabled={isReadOnly}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                    )}
-                  </Tooltip>
+                  <input
+                    type="date"
+                    required
+                    value={formData.expirationDate}
+                    onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                    disabled={isReadOnly}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
                 </div>
               </div>
             </div>
@@ -1324,18 +1339,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.productsServices')}
                 </h4>
-                <Tooltip label={isReadOnly ? readOnlyReason : ''}>
-                  {() => (
-                    <button
-                      type="button"
-                      onClick={addProductRow}
-                      disabled={isReadOnly}
-                      className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
-                    </button>
-                  )}
-                </Tooltip>
+                <button
+                  type="button"
+                  onClick={addProductRow}
+                  disabled={isReadOnly}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.addItem', {
+                      defaultValue: 'Add a new line item',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
+                </button>
               </div>
               {errors.items && (
                 <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
@@ -1393,12 +1411,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const lineMargin = lineSalePrice - lineCost;
 
                     const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                    const lockReasonForLinkedField = isReadOnly
+                    const linkedFieldStatus = isReadOnly
                       ? readOnlyReason
                       : isLinkedToSupplierQuote
                         ? supplierLockedReason
-                        : '';
-                    const lockReasonForReadOnlyOnly = isReadOnly ? readOnlyReason : '';
+                        : statusEditable;
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly || isLinkedToSupplierQuote) return;
@@ -1418,157 +1435,156 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <div className="lg:hidden flex items-start gap-3">
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.supplierQuoteColumn')}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.supplierQuote', {
+                                    defaultValue:
+                                      'Link this item to a supplier quote for cost tracking',
+                                  })}
+                                  status={readOnlyStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
-                              <Tooltip label={lockReasonForReadOnlyOnly} wrapperClassName="w-full">
-                                {() => (
-                                  <CustomSelect
-                                    options={[
-                                      {
-                                        id: 'none',
-                                        name: t('sales:clientQuotes.noSupplierQuote'),
-                                      },
-                                      ...supplierQuoteItemOptions.map((o) => ({
-                                        id: o.id,
-                                        name: o.name,
-                                      })),
-                                    ]}
-                                    value={item.supplierQuoteItemId || 'none'}
-                                    onChange={(val) =>
-                                      updateProductRow(
-                                        index,
-                                        'supplierQuoteItemId',
-                                        val === 'none' ? '' : (val as string),
-                                      )
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                    displayValue={getSupplierQuoteItemDisplayValue(
-                                      item.supplierQuoteItemId,
-                                    )}
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                  />
+                              <CustomSelect
+                                options={[
+                                  {
+                                    id: 'none',
+                                    name: t('sales:clientQuotes.noSupplierQuote'),
+                                  },
+                                  ...supplierQuoteItemOptions.map((o) => ({
+                                    id: o.id,
+                                    name: o.name,
+                                  })),
+                                ]}
+                                value={item.supplierQuoteItemId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'supplierQuoteItemId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                displayValue={getSupplierQuoteItemDisplayValue(
+                                  item.supplierQuoteItemId,
                                 )}
-                              </Tooltip>
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
                             </div>
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.productsServices')}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.product', {
+                                    defaultValue: 'Select a product or service for this line item',
+                                  })}
+                                  status={linkedFieldStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
-                              <Tooltip label={lockReasonForLinkedField} wrapperClassName="w-full">
-                                {() =>
-                                  renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
-                                  })
-                                }
-                              </Tooltip>
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
                           </div>
-                          <Tooltip label={lockReasonForReadOnlyOnly}>
-                            {() => (
-                              <button
-                                type="button"
-                                onClick={() => removeProductRow(index)}
-                                disabled={isReadOnly}
-                                className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            )}
-                          </Tooltip>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                           <div>
-                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('sales:clientQuotes.qty')}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.qty', {
+                                  defaultValue: 'Quantity of items or hours',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
-                              <Tooltip
-                                label={lockReasonForLinkedField}
-                                wrapperClassName="flex-1 min-w-0"
-                              >
-                                {() => (
-                                  <ValidatedNumberInput
-                                    step="0.01"
-                                    min="0"
-                                    required
-                                    placeholder={t('sales:clientQuotes.qty')}
-                                    value={item.quantity}
-                                    onValueChange={(value) => {
-                                      const parsed = parseFloat(value);
-                                      updateProductRow(
-                                        index,
-                                        'quantity',
-                                        value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                      );
-                                    }}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </Tooltip>
+                              <ValidatedNumberInput
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder={t('sales:clientQuotes.qty')}
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateProductRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
+                                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                              />
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
                                 /
                               </span>
-                              <Tooltip label={lockReasonForLinkedField}>
-                                {() => (
-                                  <UnitTypeSelector
-                                    value={(item.unitType || 'hours') as SupplierUnitType}
-                                    onChange={(val) => handleUnitTypeChange(index, val)}
-                                    isSupply={isSupply}
-                                    quantity={Number(item.quantity) || 0}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
-                                  />
-                                )}
-                              </Tooltip>
+                              <UnitTypeSelector
+                                value={(item.unitType || 'hours') as SupplierUnitType}
+                                onChange={(val) => handleUnitTypeChange(index, val)}
+                                isSupply={isSupply}
+                                quantity={Number(item.quantity) || 0}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
+                              />
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('crm:internalListing.cost')}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.cost', {
+                                  defaultValue: 'Unit cost for this item',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
-                              <Tooltip
-                                label={lockReasonForLinkedField}
-                                wrapperClassName="flex-1 min-w-0"
-                              >
-                                {() => (
-                                  <ValidatedNumberInput
-                                    value={cost.toFixed(2)}
-                                    onValueChange={handleCostChange}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </Tooltip>
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 {currency}
                               </span>
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               MOL (%)
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.mol', {
+                                  defaultValue: 'Margin overhead loading percentage',
+                                })}
+                                status={readOnlyStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
-                              <Tooltip
-                                label={lockReasonForReadOnlyOnly}
-                                wrapperClassName="flex-1 min-w-0"
-                              >
-                                {() => (
-                                  <ValidatedNumberInput
-                                    value={molPercentage.toFixed(1)}
-                                    onValueChange={handleMolChange}
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </Tooltip>
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 %
                               </span>
@@ -1604,124 +1620,91 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <div className="hidden lg:flex gap-2 items-center">
                           <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
                             <div className="col-span-3 min-w-0">
-                              <Tooltip label={lockReasonForReadOnlyOnly} wrapperClassName="w-full">
-                                {() => (
-                                  <CustomSelect
-                                    options={[
-                                      {
-                                        id: 'none',
-                                        name: t('sales:clientQuotes.noSupplierQuote'),
-                                      },
-                                      ...supplierQuoteItemOptions.map((o) => ({
-                                        id: o.id,
-                                        name: o.name,
-                                      })),
-                                    ]}
-                                    value={item.supplierQuoteItemId || 'none'}
-                                    onChange={(val) =>
-                                      updateProductRow(
-                                        index,
-                                        'supplierQuoteItemId',
-                                        val === 'none' ? '' : (val as string),
-                                      )
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                    displayValue={getSupplierQuoteItemDisplayValue(
-                                      item.supplierQuoteItemId,
-                                    )}
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                  />
+                              <CustomSelect
+                                options={[
+                                  {
+                                    id: 'none',
+                                    name: t('sales:clientQuotes.noSupplierQuote'),
+                                  },
+                                  ...supplierQuoteItemOptions.map((o) => ({
+                                    id: o.id,
+                                    name: o.name,
+                                  })),
+                                ]}
+                                value={item.supplierQuoteItemId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'supplierQuoteItemId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                displayValue={getSupplierQuoteItemDisplayValue(
+                                  item.supplierQuoteItemId,
                                 )}
-                              </Tooltip>
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
                             </div>
                             <div className="col-span-3 min-w-0">
-                              <Tooltip label={lockReasonForLinkedField} wrapperClassName="w-full">
-                                {() =>
-                                  renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
-                                  })
-                                }
-                              </Tooltip>
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
                             <div className="col-span-2">
                               <div className="flex items-center gap-1">
-                                <Tooltip
-                                  label={lockReasonForLinkedField}
-                                  wrapperClassName="flex-1 min-w-0"
-                                >
-                                  {() => (
-                                    <ValidatedNumberInput
-                                      step="0.01"
-                                      min="0"
-                                      required
-                                      placeholder={t('sales:clientQuotes.qty')}
-                                      value={item.quantity}
-                                      onValueChange={(value) => {
-                                        const parsed = parseFloat(value);
-                                        updateProductRow(
-                                          index,
-                                          'quantity',
-                                          value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                        );
-                                      }}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
-                                      className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                  )}
-                                </Tooltip>
+                                <ValidatedNumberInput
+                                  step="0.01"
+                                  min="0"
+                                  required
+                                  placeholder={t('sales:clientQuotes.qty')}
+                                  value={item.quantity}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateProductRow(
+                                      index,
+                                      'quantity',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
+                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
                                   /
                                 </span>
-                                <Tooltip label={lockReasonForLinkedField}>
-                                  {() => (
-                                    <UnitTypeSelector
-                                      value={(item.unitType || 'hours') as SupplierUnitType}
-                                      onChange={(val) => handleUnitTypeChange(index, val)}
-                                      isSupply={isSupply}
-                                      quantity={Number(item.quantity) || 0}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    />
-                                  )}
-                                </Tooltip>
+                                <UnitTypeSelector
+                                  value={(item.unitType || 'hours') as SupplierUnitType}
+                                  onChange={(val) => handleUnitTypeChange(index, val)}
+                                  isSupply={isSupply}
+                                  quantity={Number(item.quantity) || 0}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
+                                />
                               </div>
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
-                              <Tooltip
-                                label={lockReasonForLinkedField}
-                                wrapperClassName="flex-1 min-w-0"
-                              >
-                                {() => (
-                                  <ValidatedNumberInput
-                                    value={cost.toFixed(2)}
-                                    onValueChange={handleCostChange}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </Tooltip>
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 {currency}
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
-                              <Tooltip
-                                label={lockReasonForReadOnlyOnly}
-                                wrapperClassName="flex-1 min-w-0"
-                              >
-                                {() => (
-                                  <ValidatedNumberInput
-                                    value={molPercentage.toFixed(1)}
-                                    onValueChange={handleMolChange}
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </Tooltip>
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 %
                               </span>
@@ -1744,32 +1727,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </span>
                             </div>
                           </div>
-                          <Tooltip label={lockReasonForReadOnlyOnly}>
-                            {() => (
-                              <button
-                                type="button"
-                                onClick={() => removeProductRow(index)}
-                                disabled={isReadOnly}
-                                className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            )}
-                          </Tooltip>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
                         <div>
-                          <Tooltip label={lockReasonForReadOnlyOnly} wrapperClassName="w-full">
-                            {() => (
-                              <input
-                                type="text"
-                                placeholder={t('form:placeholderNotes')}
-                                value={item.note || ''}
-                                onChange={(e) => updateProductRow(index, 'note', e.target.value)}
-                                disabled={isReadOnly}
-                                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            )}
-                          </Tooltip>
+                          <input
+                            type="text"
+                            placeholder={t('form:placeholderNotes')}
+                            value={item.note || ''}
+                            onChange={(e) => updateProductRow(index, 'note', e.target.value)}
+                            disabled={isReadOnly}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
                         </div>
                       </div>
                     );
@@ -1788,19 +1763,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.notesLabel')}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.notes', {
+                      defaultValue: 'Additional notes for the entire document',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
-                <Tooltip label={isReadOnly ? readOnlyReason : ''} wrapperClassName="w-full">
-                  {() => (
-                    <textarea
-                      rows={4}
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                      disabled={isReadOnly}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  )}
-                </Tooltip>
+                <textarea
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
+                  disabled={isReadOnly}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                />
               </div>
 
               <div className="w-full md:w-1/3">
@@ -1861,23 +1839,26 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               >
                 {t('common:buttons.cancel')}
               </button>
-              <Tooltip label={isReadOnly ? readOnlyReason : ''}>
-                {() => (
-                  <button
-                    type="submit"
-                    disabled={isReadOnly}
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isReadOnly
-                      ? t('sales:clientQuotes.statusQuote', {
-                          status: getStatusLabel(editingQuote?.status || ''),
-                        })
-                      : editingQuote
-                        ? t('sales:clientQuotes.updateQuote')
-                        : t('sales:clientQuotes.createQuote')}
-                  </button>
-                )}
-              </Tooltip>
+              <button
+                type="submit"
+                disabled={isReadOnly}
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isReadOnly
+                  ? t('sales:clientQuotes.statusQuote', {
+                      status: getStatusLabel(editingQuote?.status || ''),
+                    })
+                  : editingQuote
+                    ? t('sales:clientQuotes.updateQuote')
+                    : t('sales:clientQuotes.createQuote')}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.submit', {
+                    defaultValue: 'Submit or update this document',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
+              </button>
             </div>
           </form>
         </div>

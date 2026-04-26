@@ -1,4 +1,21 @@
 {
+  "fieldInfo": {
+    "statusEditable": "Modificabile",
+    "client": "Seleziona il cliente per questo documento",
+    "quoteCode": "Identificativo univoco di questo preventivo",
+    "offerCode": "Identificativo univoco di questa offerta",
+    "paymentTerms": "Termini e condizioni di pagamento",
+    "expirationDate": "Data di validità di questo documento",
+    "supplierQuote": "Collega questa voce a un preventivo fornitore per il tracciamento dei costi",
+    "product": "Seleziona un prodotto o servizio per questa voce",
+    "qty": "Quantità di articoli o ore",
+    "cost": "Costo unitario per questa voce",
+    "mol": "Percentuale margine e oneri",
+    "addItem": "Aggiungi una nuova voce",
+    "notes": "Note aggiuntive per l'intero documento",
+    "submit": "Invia o aggiornare questo documento",
+    "statusLabel": "Stato:"
+  },
   "clientQuotes": {
     "title": "Preventivi",
     "subtitle": "Crea e gestisci preventivi clienti",

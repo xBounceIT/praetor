@@ -1,4 +1,21 @@
 {
+  "fieldInfo": {
+    "statusEditable": "Editable",
+    "client": "Select the client for this document",
+    "quoteCode": "Unique identifier for this quote",
+    "offerCode": "Unique identifier for this offer",
+    "paymentTerms": "Payment terms and conditions",
+    "expirationDate": "Date until which this document is valid",
+    "supplierQuote": "Link this item to a supplier quote for cost tracking",
+    "product": "Select a product or service for this line item",
+    "qty": "Quantity of items or hours",
+    "cost": "Unit cost for this item",
+    "mol": "Margin overhead loading percentage",
+    "addItem": "Add a new line item",
+    "notes": "Additional notes for the entire document",
+    "submit": "Submit or update this document",
+    "statusLabel": "Status:"
+  },
   "clientQuotes": {
     "title": "Quotes",
     "subtitle": "Create and manage client quotes",

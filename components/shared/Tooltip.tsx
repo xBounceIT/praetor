@@ -37,7 +37,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   tooltipClassName = '',
   children,
 }) => {
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const hasFlippedRef = useRef(false);
   const clampAppliedRef = useRef(false);
@@ -188,7 +188,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   }
 
   return (
-    <div
+    <span
       ref={wrapperRef}
       className={`relative inline-flex ${wrapperClassName}`}
       onMouseEnter={handleShow}
@@ -213,7 +213,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             document.body,
           )
         : null}
-    </div>
+    </span>
   );
 };
 
