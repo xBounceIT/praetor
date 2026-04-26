@@ -182,7 +182,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     : t('sales:clientQuotes.readOnlyBecauseFinal', {
         defaultValue: 'Read-only due to finalized status',
       });
-  const supplierLockedReason = t('sales:clientQuotes.fieldLockedBySupplierQuote', {
+  const supplierLockedReason = t('sales:fieldInfo.fieldLockedBySupplierQuote', {
     defaultValue: 'Locked due to linked supplier quote',
   });
   const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
@@ -1372,10 +1372,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedSupplierQuote = item.supplierQuoteItemId
-                      ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
-                      : undefined;
-
                     const {
                       unitCost: cost,
                       molPercentage,
@@ -1389,13 +1385,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const lineMargin = lineSalePrice - lineCost;
 
                     const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                    const linkedFieldStatus = getLinkedFieldStatus(
+                    const linkedFieldStatus = getLinkedFieldStatus({
                       isReadOnly,
                       isLinkedToSupplierQuote,
                       readOnlyReason,
                       supplierLockedReason,
                       statusEditable,
-                    );
+                    });
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;

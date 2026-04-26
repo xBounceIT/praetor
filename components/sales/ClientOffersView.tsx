@@ -223,7 +223,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
     defaultValue: 'Locked due to linked quote',
   });
-  const supplierLockedReason = t('sales:clientQuotes.fieldLockedBySupplierQuote', {
+  const supplierLockedReason = t('sales:fieldInfo.fieldLockedBySupplierQuote', {
     defaultValue: 'Locked due to linked supplier quote',
   });
   const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
@@ -939,9 +939,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedSupplierQuote = item.supplierQuoteItemId
-                      ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
-                      : undefined;
                     const isSupply =
                       products.find((p) => p.id === item.productId)?.type === 'supply';
 
@@ -956,13 +953,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     const lineMargin = lineSalePrice - lineCost;
 
                     const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                    const linkedFieldStatus = getLinkedFieldStatus(
+                    const linkedFieldStatus = getLinkedFieldStatus({
                       isReadOnly,
                       isLinkedToSupplierQuote,
                       readOnlyReason,
                       supplierLockedReason,
                       statusEditable,
-                    );
+                    });
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
@@ -1145,9 +1142,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.revenue')}
                             </div>
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                            >
+                            <div className="text-sm font-semibold whitespace-nowrap text-slate-800">
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -1243,9 +1238,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                              >
+                              <span className="text-xs font-semibold whitespace-nowrap text-slate-800">
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
                             </div>

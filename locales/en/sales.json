@@ -1,22 +1,17 @@
 {
   "fieldInfo": {
     "statusEditable": "Editable",
-    "client": "Select the client for this document",
-    "quoteCode": "Unique identifier for this quote",
-    "offerCode": "Unique identifier for this offer",
-    "paymentTerms": "Payment terms and conditions",
-    "expirationDate": "Date until which this document is valid",
     "supplierQuote": "Link this item to a supplier quote for cost tracking",
     "product": "Select a product or service for this line item",
     "qty": "Quantity of items or hours",
     "cost": "Unit cost for this item",
     "mol": "Margin overhead loading percentage",
-    "addItem": "Add a new line item",
     "notes": "Additional notes for the entire document",
     "clientInformation": "Client and document details",
     "productsServices": "Products and services for this quote",
     "items": "Line items for this offer",
-    "statusLabel": "Status:"
+    "statusLabel": "Status:",
+    "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
   "clientQuotes": {
     "title": "Quotes",
@@ -118,7 +113,6 @@
     "unit": "Unit",
     "units": "Units",
     "supplierQuoteBadge": "Supplier",
-    "fieldLockedBySupplierQuote": "Locked due to linked supplier quote",
     "createYourFirstQuote": "Create your first quote",
     "quotesTitle": "Quotes",
     "quotesSubtitle": "Manage client quotes and proposals",

@@ -1,22 +1,17 @@
 {
   "fieldInfo": {
     "statusEditable": "Modificabile",
-    "client": "Seleziona il cliente per questo documento",
-    "quoteCode": "Identificativo univoco di questo preventivo",
-    "offerCode": "Identificativo univoco di questa offerta",
-    "paymentTerms": "Termini e condizioni di pagamento",
-    "expirationDate": "Data di validità di questo documento",
     "supplierQuote": "Collega questa voce a un preventivo fornitore per il tracciamento dei costi",
     "product": "Seleziona un prodotto o servizio per questa voce",
     "qty": "Quantità di articoli o ore",
     "cost": "Costo unitario per questa voce",
     "mol": "Percentuale margine e oneri",
-    "addItem": "Aggiungi una nuova voce",
     "notes": "Note aggiuntive per l'intero documento",
     "clientInformation": "Dettagli cliente e documento",
     "productsServices": "Prodotti e servizi per questo preventivo",
     "items": "Voci per questa offerta",
-    "statusLabel": "Stato:"
+    "statusLabel": "Stato:",
+    "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
   "clientQuotes": {
     "title": "Preventivi",
@@ -118,7 +113,6 @@
     "unit": "Unità",
     "units": "Unità",
     "supplierQuoteBadge": "Fornitore",
-    "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
     "quotesTitle": "Preventivi",
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",

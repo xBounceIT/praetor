@@ -8,7 +8,7 @@ export interface FieldTooltipProps {
   className?: string;
 }
 
-const FIELD_TOOLTIP_ICON = (
+const renderTooltipIcon = () => (
   <i className="fa-solid fa-circle-question text-slate-300 hover:text-slate-500 text-[10px] cursor-help transition-colors" />
 );
 
@@ -32,7 +32,7 @@ const FieldTooltip: React.FC<FieldTooltipProps> = ({
       tooltipClassName="whitespace-normal max-w-72"
       wrapperClassName={className}
     >
-      {() => FIELD_TOOLTIP_ICON}
+      {renderTooltipIcon}
     </Tooltip>
   );
 };
