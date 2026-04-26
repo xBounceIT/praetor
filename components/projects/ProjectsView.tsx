@@ -18,6 +18,14 @@ import type { RecurringConfig } from './TasksView';
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
 
+const normalizeHex = (v: string): string => {
+  let h = v.trim();
+  if (h && !h.startsWith('#')) h = '#' + h;
+  const m = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(h);
+  if (m) h = `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+  return h;
+};
+
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 type DraftTask = {
@@ -134,10 +142,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     Record<string, number>
   > | null>(null);
   const [hexInput, setHexInput] = useState('');
+  const skipPickerRef = useRef(false);
 
   const commitHexInput = () => {
-    if (isValidHex(hexInput)) {
-      setColor(hexInput);
+    skipPickerRef.current = true;
+    const norm = normalizeHex(hexInput);
+    if (isValidHex(norm)) {
+      setColor(norm);
+      setHexInput(norm);
     } else {
       setHexInput(color);
     }
@@ -670,7 +682,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 {onViewOrder && (
                   <button
                     type="button"
-                    onClick={() => onViewOrder(editingProject.orderId!)}
+                    onClick={() => onViewOrder(editingProject?.orderId ?? '')}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('projects:projects.viewOrder')}
@@ -872,7 +884,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     <input
                       type="color"
                       value={color}
+                      onFocus={() => {
+                        skipPickerRef.current = false;
+                      }}
                       onChange={(e) => {
+                        if (skipPickerRef.current) return;
                         setColor(e.target.value);
                         setHexInput(e.target.value);
                       }}
