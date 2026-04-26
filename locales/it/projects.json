@@ -60,6 +60,7 @@
     "taskNotes": "Note",
     "noTasksAdded": "Nessuna attività aggiunta.",
     "progress": "Avanzamento",
+    "deleteProjectTitle": "Elimina Progetto: {{name}}?",
     "deleteTaskConfirm": "Eliminare questa attività? L'azione non è reversibile.",
     "linkedOrder": "Ordine Collegato",
     "noOrderLinked": "Nessun ordine collegato",

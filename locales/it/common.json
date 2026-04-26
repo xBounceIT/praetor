@@ -31,7 +31,9 @@
     "send": "Invia",
     "manage": "Gestisci",
     "saving": "Salvataggio...",
-    "discard": "Abbandona"
+    "discard": "Abbandona",
+    "noGoBack": "No, torna indietro",
+    "yesDelete": "Sì, Elimina"
   },
   "labels": {
     "name": "Nome",

@@ -975,10 +975,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
+                {t('projects:projects.deleteProjectTitle', { name: projectToDelete?.name })}
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
                 {t('projects:projects.deleteConfirm')}
               </p>
             </div>
@@ -987,13 +986,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 onClick={closeModal}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('common:buttons.cancel')}
+                {t('common:buttons.noGoBack')}
               </button>
               <button
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('common:buttons.delete')}
+                {t('common:buttons.yesDelete')}
               </button>
             </div>
           </div>
@@ -1020,13 +1019,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 onClick={() => setIsTaskDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('common:buttons.cancel')}
+                {t('common:buttons.noGoBack')}
               </button>
               <button
                 onClick={handleDeleteTask}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('common:buttons.delete')}
+                {t('common:buttons.yesDelete')}
               </button>
             </div>
           </div>
