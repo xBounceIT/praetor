@@ -1622,9 +1622,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.revenue')}
                             </div>
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                            >
+                            <div className="text-sm font-semibold whitespace-nowrap text-slate-800">
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -1732,9 +1730,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                              >
+                              <span className="text-xs font-semibold whitespace-nowrap text-slate-800">
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
                             </div>
