@@ -161,6 +161,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     index: number,
     selectProps: { className?: string; buttonClassName?: string },
   ) => {
+    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
     if (isLinkedProductMissing(item)) {
       return (
         <input
@@ -180,7 +181,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           defaultValue: 'Select product',
         })}
         searchable={true}
-        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        disabled={isReadOnly || isLinkedToSupplierQuote}
         className={selectProps.className}
         buttonClassName={selectProps.buttonClassName}
       />
