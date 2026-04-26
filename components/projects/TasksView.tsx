@@ -390,7 +390,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={cancelDelete}
         onConfirm={handleDelete}
-        title={t('tasks.deleteTaskTitle')}
+        title={t('tasks.deleteTaskTitle', { name: editingTask?.name })}
         description={
           <Trans
             i18nKey="tasks.deleteConfirmDesc"
@@ -399,8 +399,6 @@ const TasksView: React.FC<TasksViewProps> = ({
             components={{ span: <span className="font-bold text-slate-800" /> }}
           />
         }
-        cancelLabel={t('common:buttons.cancel')}
-        confirmLabel={t('tasks.yesDelete')}
       />
 
       {/* User Assignment Modal */}

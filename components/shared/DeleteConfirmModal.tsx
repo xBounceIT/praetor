@@ -8,8 +8,6 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   title: React.ReactNode;
   description?: React.ReactNode;
-  cancelLabel?: string;
-  confirmLabel?: string;
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -18,8 +16,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onConfirm,
   title,
   description,
-  cancelLabel,
-  confirmLabel,
 }) => {
   const { t } = useTranslation('common');
   return (
@@ -40,13 +36,13 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               onClick={onClose}
               className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
             >
-              {cancelLabel ?? t('buttons.noGoBack')}
+              {t('buttons.noGoBack')}
             </button>
             <button
               onClick={onConfirm}
               className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
             >
-              {confirmLabel ?? t('buttons.yesDelete')}
+              {t('buttons.yesDelete')}
             </button>
           </div>
         </div>
