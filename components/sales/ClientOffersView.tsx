@@ -925,14 +925,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 >
                   <i className="fa-solid fa-plus"></i>{' '}
                   {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
-                  <FieldTooltip
-                    description={t('sales:fieldInfo.addItem', {
-                      defaultValue: 'Add a new line item',
-                    })}
-                    status={readOnlyStatus}
-                    statusLabel={statusLabel}
-                  />
                 </button>
+                <FieldTooltip
+                  description={t('sales:fieldInfo.addItem', {
+                    defaultValue: 'Add a new line item',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
               </div>
               {errors.items && (
                 <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
@@ -997,7 +997,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         : statusEditable;
 
                     const handleCostChange = (value: string) => {
-                      if (isReadOnly || isLinkedToSupplierQuote) return;
+                      if (isReadOnly) return;
                       setFormData(makeCostUpdater<Partial<ClientOffer>>(index, value));
                     };
 

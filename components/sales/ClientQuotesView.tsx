@@ -1358,14 +1358,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
-                  <FieldTooltip
-                    description={t('sales:fieldInfo.addItem', {
-                      defaultValue: 'Add a new line item',
-                    })}
-                    status={readOnlyStatus}
-                    statusLabel={statusLabel}
-                  />
                 </button>
+                <FieldTooltip
+                  description={t('sales:fieldInfo.addItem', {
+                    defaultValue: 'Add a new line item',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
               </div>
               {errors.items && (
                 <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
@@ -1430,7 +1430,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         : statusEditable;
 
                     const handleCostChange = (value: string) => {
-                      if (isReadOnly || isLinkedToSupplierQuote) return;
+                      if (isReadOnly) return;
                       setFormData(makeCostUpdater<Partial<Quote>>(index, value));
                     };
 
