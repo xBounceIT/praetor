@@ -547,7 +547,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  revenue = COALESCE($11, revenue),
                  notes = COALESCE($12, notes)
              WHERE id = $1
-             RETURNING *`,
+              RETURNING id, name, project_id, description, is_recurring,
+                        recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
+                        expected_effort, revenue, notes, is_disabled,
+                        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
         [
           idResult.value,
           name || null,
@@ -615,7 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
         notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
-        createdAt: t.created_at ? new Date(t.created_at as string).getTime() : undefined,
+        createdAt: t.createdAt ? parseFloat(t.createdAt as string) : undefined,
       };
     },
   );

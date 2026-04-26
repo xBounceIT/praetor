@@ -3415,6 +3415,10 @@ const App: React.FC = () => {
                     alert('Failed to delete task');
                   }
                 }}
+                onViewOrder={(orderId) => {
+                  setClientsOrderFilterId(orderId);
+                  setActiveView('accounting/clients-orders');
+                }}
               />
             )}
 

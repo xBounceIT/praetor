@@ -14,6 +14,8 @@ import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 
+const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
+
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
 export interface TasksViewProps {
@@ -32,6 +34,7 @@ export interface TasksViewProps {
   ) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
+  onViewOrder?: (orderId: string) => void;
 }
 
 const TasksView: React.FC<TasksViewProps> = ({
@@ -45,6 +48,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   onAddTask,
   onUpdateTask,
   onDeleteTask,
+  onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
   const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
@@ -546,6 +550,34 @@ const TasksView: React.FC<TasksViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {(() => {
+              const project = projects.find((p) => p.id === projectId);
+              return editingTask && project?.orderId ? (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                      <i className="fa-solid fa-link"></i>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {t('projects:projects.linkedOrder')}
+                      </div>
+                      <div className="text-xs text-praetor">{formatOrderId(project.orderId!)}</div>
+                    </div>
+                  </div>
+                  {onViewOrder && (
+                    <button
+                      type="button"
+                      onClick={() => onViewOrder(project.orderId!)}
+                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                    >
+                      {t('projects:projects.viewOrder')}
+                    </button>
+                  )}
+                </div>
+              ) : null;
+            })()}
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.project')}</label>
               <CustomSelect
