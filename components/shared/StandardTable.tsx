@@ -12,6 +12,9 @@ const getStorageKey = (t: string, suffix: string) =>
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
+const darkBtnBase =
+  'flex items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 transition-colors';
+
 export type Column<T> = {
   header: string;
   accessorKey?: keyof T;
@@ -370,7 +373,7 @@ const StandardTable = <T extends object>({
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3">
-        <span className="text-xs font-bold text-slate-500">{t('pagination.rowsPerPage')}</span>
+        <span className="text-xs font-bold text-white/80">{t('pagination.rowsPerPage')}</span>
         <CustomSelect
           options={[
             { id: '5', name: '5' },
@@ -388,10 +391,10 @@ const StandardTable = <T extends object>({
             }
           }}
           className="w-20"
-          buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+          buttonClassName="px-2 py-1 bg-white/10 border border-white/20 text-xs font-bold text-white rounded-lg"
           searchable={false}
         />
-        <span className="text-xs font-bold text-slate-400 ml-2">
+        <span className="text-xs font-bold text-white/70 ml-2">
           {t('pagination.showing')
             .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
             .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
@@ -407,7 +410,7 @@ const StandardTable = <T extends object>({
             setCurrentPage((prev) => Math.max(1, prev - 1));
           }}
           disabled={currentPage === 1}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className={`w-8 h-8 ${darkBtnBase}`}
         >
           <i className="fa-solid fa-chevron-left text-xs"></i>
         </button>
@@ -419,7 +422,7 @@ const StandardTable = <T extends object>({
             )
             .map((page, i, arr) => (
               <div key={page} className="flex items-center">
-                {i > 0 && page - arr[i - 1] > 1 && <span className="text-slate-400 mx-1">...</span>}
+                {i > 0 && page - arr[i - 1] > 1 && <span className="text-white/50 mx-1">...</span>}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -428,8 +431,8 @@ const StandardTable = <T extends object>({
                   }}
                   className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
                     currentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                      : 'text-slate-500 hover:bg-slate-100'
+                      ? 'bg-white text-praetor shadow-md shadow-black/20'
+                      : 'text-white/70 hover:bg-white/20'
                   }`}
                 >
                   {page}
@@ -444,7 +447,7 @@ const StandardTable = <T extends object>({
             setCurrentPage((prev) => Math.min(totalPages, prev + 1));
           }}
           disabled={currentPage === totalPages || totalPages === 0}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className={`w-8 h-8 ${darkBtnBase}`}
         >
           <i className="fa-solid fa-chevron-right text-xs"></i>
         </button>
@@ -457,13 +460,13 @@ const StandardTable = <T extends object>({
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
     >
-      <div className="px-3 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
+      <div className="px-3 py-3 bg-praetor border-b border-white/10 flex justify-between items-center rounded-t-3xl">
         <div className="flex items-center gap-3">
-          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
+          <h4 className="font-black text-white/80 uppercase text-[10px] tracking-widest">
             {title}
           </h4>
           {typeof totalItems === 'number' && (
-            <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
+            <span className="bg-white/20 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase">
               {totalItems} {totalLabel || t('table.total')}
             </span>
           )}
@@ -481,7 +484,7 @@ const StandardTable = <T extends object>({
                         handleDecreaseFontSize();
                       }}
                       disabled={fontSize === 'xs'}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                      className={`w-7 h-7 ${darkBtnBase}`}
                     >
                       <i className="fa-solid fa-minus text-[10px]"></i>
                     </button>
@@ -496,7 +499,7 @@ const StandardTable = <T extends object>({
                         handleIncreaseFontSize();
                       }}
                       disabled={fontSize === 'base'}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                      className={`w-7 h-7 ${darkBtnBase}`}
                     >
                       <i className="fa-solid fa-plus text-[10px]"></i>
                     </button>
@@ -512,7 +515,7 @@ const StandardTable = <T extends object>({
                           e.stopPropagation();
                           setGearOpen((prev) => !prev);
                         }}
-                        className={`w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white transition-colors ${gearOpen ? 'text-praetor bg-slate-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                        className={`w-7 h-7 ${darkBtnBase} ${gearOpen ? 'bg-white/20' : ''}`}
                       >
                         <i className="fa-solid fa-gear text-[10px]"></i>
                       </button>
@@ -763,7 +766,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
+          className={`px-3 py-2 bg-praetor border-t border-white/10 rounded-b-3xl ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
