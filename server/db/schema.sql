@@ -492,15 +492,11 @@ CREATE TABLE IF NOT EXISTS projects (
     color VARCHAR(20) NOT NULL DEFAULT '#3b82f6',
     description TEXT,
     is_disabled BOOLEAN DEFAULT FALSE,
-    order_id VARCHAR(100) REFERENCES sales(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
-
--- Ensure order_id column exists for existing installations
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS order_id VARCHAR(100) REFERENCES sales(id) ON DELETE SET NULL;
 
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
@@ -1091,6 +1087,9 @@ BEGIN
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
+
+-- Ensure order_id column exists for projects (added after sales table is created)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS order_id VARCHAR(100) REFERENCES sales(id) ON DELETE SET NULL;
 
 -- Sale items table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sale_items (

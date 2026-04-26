@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
@@ -23,6 +23,7 @@ export interface TasksViewProps {
   permissions: string[];
   users: User[];
   roles: Role[];
+  currency: string;
   onAddTask: (
     name: string,
     projectId: string,
@@ -40,6 +41,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   permissions,
   users,
   roles,
+  currency,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
@@ -58,7 +60,39 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
 
-  // Pagination State
+  const [taskHours, setTaskHours] = useState<Record<string, Record<string, number>> | null>(null);
+  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const fetchHoursGenRef = useRef(0);
+
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+
+  useEffect(() => {
+    if (projectIds.length === 0) {
+      setTaskHours({});
+      return;
+    }
+    const gen = ++fetchHoursGenRef.current;
+    const abortController = new AbortController();
+    setTaskHours(null);
+    setHoursLoadState('loading');
+    (async () => {
+      try {
+        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
+        if (fetchHoursGenRef.current !== gen) return;
+        setTaskHours(map);
+        setHoursLoadState('idle');
+      } catch (e) {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load task hours', e);
+        if (fetchHoursGenRef.current !== gen) return;
+        setTaskHours({});
+        setHoursLoadState('error');
+      }
+    })();
+    return () => {
+      abortController.abort();
+    };
+  }, [projectIds]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -218,6 +252,71 @@ const TasksView: React.FC<TasksViewProps> = ({
         },
       },
       {
+        header: t('projects:projects.expectedEffort'),
+        id: 'expectedEffort',
+        accessorFn: (task) => task.expectedEffort ?? 0,
+        cell: ({ row }) => {
+          const effort = row.expectedEffort;
+          if (!effort) return <span className="text-xs text-slate-400">—</span>;
+          return <span className="text-xs font-bold text-slate-600 tabular-nums">{effort}h</span>;
+        },
+      },
+      {
+        header: `${t('projects:projects.taskRevenue')} (${currency})`,
+        id: 'revenue',
+        accessorFn: (task) => task.revenue ?? 0,
+        cell: ({ row }) => {
+          const rev = row.revenue;
+          if (!rev) return <span className="text-xs text-slate-400">—</span>;
+          return (
+            <span className="text-xs font-bold text-slate-600 tabular-nums">
+              {currency}
+              {rev.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('projects:projects.progress'),
+        id: 'progress',
+        disableFiltering: true,
+        disableSorting: true,
+        cell: ({ row }) => {
+          if (hoursLoadState === 'loading' || taskHours === null) {
+            return (
+              <span className="text-slate-400 text-xs">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+              </span>
+            );
+          }
+          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+          const projectHours = taskHours[row.projectId] ?? {};
+          const logged = projectHours[row.name] ?? 0;
+          const expected = row.expectedEffort ?? 0;
+          if (!expected) return <span className="text-slate-400 text-xs">—</span>;
+          const pct = Math.round((logged / expected) * 100);
+          const overBudget = logged > expected;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(pct, 100)}%` }}
+                />
+              </div>
+              <span
+                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+              >
+                {pct}%
+              </span>
+            </div>
+          );
+        },
+      },
+      {
         header: t('projects.tableHeaders.status'),
         accessorFn: (task) => {
           const project = projects.find((p) => p.id === task.projectId);
@@ -349,6 +448,9 @@ const TasksView: React.FC<TasksViewProps> = ({
       confirmDelete,
       openAssignments,
       openEditModal,
+      currency,
+      taskHours,
+      hoursLoadState,
     ],
   );
 

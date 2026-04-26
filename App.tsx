@@ -3403,6 +3403,7 @@ const App: React.FC = () => {
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
                 roles={roles}
+                currency={generalSettings.currency}
                 onAddTask={addProjectTask}
                 onUpdateTask={handleUpdateTask}
                 onDeleteTask={async (id) => {

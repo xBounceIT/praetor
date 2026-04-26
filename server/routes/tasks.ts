@@ -250,9 +250,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = 't-' + crypto.randomUUID();
 
       try {
-        await query(
+        const insertResult = await query(
           `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           RETURNING EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
           [
             id,
             nameResult.value,
@@ -268,6 +269,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             false,
           ],
         );
+
+        const taskCreatedAt = insertResult.rows[0]?.createdAt
+          ? parseFloat(insertResult.rows[0].createdAt)
+          : undefined;
 
         const projectResult = await query('SELECT client_id FROM projects WHERE id = $1', [
           projectIdResult.value,
@@ -309,6 +314,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           revenue: revenueVal,
           notes: notes || null,
           isDisabled: false,
+          createdAt: taskCreatedAt,
         });
       } catch (err) {
         const error = err as DatabaseError;
@@ -609,6 +615,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
         notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
+        createdAt: t.created_at ? new Date(t.created_at as string).getTime() : undefined,
       };
     },
   );
