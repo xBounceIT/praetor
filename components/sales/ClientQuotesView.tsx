@@ -1226,6 +1226,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientQuotes.clientInformation')}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.clientInformation', {
+                    defaultValue: 'Client and document details',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -1336,6 +1343,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.productsServices')}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.productsServices', {
+                      defaultValue: 'Products and services for this quote',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <button
                   type="button"
@@ -1840,7 +1854,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <button
                 type="submit"
                 disabled={isReadOnly}
-                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isReadOnly
                   ? t('sales:clientQuotes.statusQuote', {
@@ -1849,13 +1863,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   : editingQuote
                     ? t('sales:clientQuotes.updateQuote')
                     : t('sales:clientQuotes.createQuote')}
-                <FieldTooltip
-                  description={t('sales:fieldInfo.submit', {
-                    defaultValue: 'Submit or update this document',
-                  })}
-                  status={readOnlyStatus}
-                  statusLabel={statusLabel}
-                />
               </button>
             </div>
           </form>

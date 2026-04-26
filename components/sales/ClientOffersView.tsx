@@ -794,6 +794,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientOffers.clientInformation', { defaultValue: 'Client Information' })}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.clientInformation', {
+                    defaultValue: 'Client and document details',
+                  })}
+                  status={clientStatus}
+                  statusLabel={statusLabel}
+                />
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -902,6 +909,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientOffers.items', { defaultValue: 'Items' })}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.items', {
+                      defaultValue: 'Line items for this offer',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <button
                   type="button"

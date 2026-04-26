@@ -13,7 +13,9 @@
     "mol": "Margin overhead loading percentage",
     "addItem": "Add a new line item",
     "notes": "Additional notes for the entire document",
-    "submit": "Submit or update this document",
+    "clientInformation": "Client and document details",
+    "productsServices": "Products and services for this quote",
+    "items": "Line items for this offer",
     "statusLabel": "Status:"
   },
   "clientQuotes": {

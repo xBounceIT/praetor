@@ -13,7 +13,9 @@
     "mol": "Percentuale margine e oneri",
     "addItem": "Aggiungi una nuova voce",
     "notes": "Note aggiuntive per l'intero documento",
-    "submit": "Invia o aggiornare questo documento",
+    "clientInformation": "Dettagli cliente e documento",
+    "productsServices": "Prodotti e servizi per questo preventivo",
+    "items": "Voci per questa offerta",
     "statusLabel": "Stato:"
   },
   "clientQuotes": {
