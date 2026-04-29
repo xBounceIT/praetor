@@ -23,7 +23,6 @@ import {
   formatDiscountValue,
   getItemPricingContext,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -197,7 +196,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       items[index] = {
         ...items[index],
         unitType: newType,
-        unitPrice: roundToTwoDecimals(adjustedPrice),
+        unitPrice: adjustedPrice,
       };
       return { ...prev, items };
     });
@@ -600,7 +599,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           current.productName = product.name;
-          current.unitPrice = roundToTwoDecimals(calcProductSalePrice(Number(product.costo), mol));
+          current.unitPrice = calcProductSalePrice(Number(product.costo), mol);
           current.productCost = Number(product.costo);
           current.productMolPercentage = product.molPercentage;
           current.supplierQuoteId = null;
@@ -620,9 +619,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           const product = products.find((p) => p.id === current.productId);
           if (product) {
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            current.unitPrice = roundToTwoDecimals(
-              calcProductSalePrice(Number(product.costo), mol),
-            );
+            current.unitPrice = calcProductSalePrice(Number(product.costo), mol);
             current.productCost = Number(product.costo);
             current.productMolPercentage = product.molPercentage;
           }
@@ -661,7 +658,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          current.unitPrice = roundToTwoDecimals(salePrice);
+          current.unitPrice = salePrice;
         }
       }
 
@@ -1023,7 +1020,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             )}
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={cost.toFixed(2)}
+                                value={cost}
+                                formatDecimals={2}
                                 onValueChange={handleCostChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1039,7 +1037,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1140,7 +1139,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               )}
                               <div className="flex items-center gap-1 w-full">
                                 <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
+                                  value={cost}
+                                  formatDecimals={2}
                                   onValueChange={handleCostChange}
                                   disabled={isReadOnly}
                                   className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1152,7 +1152,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"

@@ -25,7 +25,6 @@ import {
   formatDiscountValue,
   getItemPricingContext,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -350,12 +349,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             const cost = Number(product.costo);
-            let unitPrice = convertUnitPrice(
+            const unitPrice = convertUnitPrice(
               calcProductSalePrice(cost, mol),
               'hours',
               item.unitType || 'hours',
             );
-            unitPrice = roundToTwoDecimals(unitPrice);
 
             return {
               ...item,
@@ -492,12 +490,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].unitType = 'hours';
         }
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = roundToTwoDecimals(
-          convertUnitPrice(
-            calcProductSalePrice(Number(product.costo), mol),
-            'hours',
-            newItems[index].unitType || 'hours',
-          ),
+        newItems[index].unitPrice = convertUnitPrice(
+          calcProductSalePrice(Number(product.costo), mol),
+          'hours',
+          newItems[index].unitType || 'hours',
         );
         newItems[index].productCost = Number(product.costo);
         newItems[index].productMolPercentage = product.molPercentage;
@@ -518,12 +514,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             newItems[index].unitType = 'hours';
           }
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = roundToTwoDecimals(
-            convertUnitPrice(
-              calcProductSalePrice(Number(product.costo), mol),
-              'hours',
-              newItems[index].unitType || 'hours',
-            ),
+          newItems[index].unitPrice = convertUnitPrice(
+            calcProductSalePrice(Number(product.costo), mol),
+            'hours',
+            newItems[index].unitType || 'hours',
           );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -566,8 +560,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].productCost = netCost;
           newItems[index].productMolPercentage = null;
         }
-        newItems[index].unitPrice = roundToTwoDecimals(
-          convertUnitPrice(salePrice, 'hours', newItems[index].unitType || 'hours'),
+        newItems[index].unitPrice = convertUnitPrice(
+          salePrice,
+          'hours',
+          newItems[index].unitType || 'hours',
         );
       } else {
         // Supplier quote item not found - clear supplier quote and revert
@@ -684,7 +680,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: roundToTwoDecimals(adjustedPrice),
+      unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -1472,7 +1468,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             )}
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={cost.toFixed(2)}
+                                value={cost}
+                                formatDecimals={2}
                                 onValueChange={handleCostChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1488,7 +1485,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1600,7 +1598,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               )}
                               <div className="flex items-center gap-1 w-full">
                                 <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
+                                  value={cost}
+                                  formatDecimals={2}
                                   onValueChange={handleCostChange}
                                   disabled={isReadOnly}
                                   className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1612,7 +1611,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"

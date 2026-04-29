@@ -60,6 +60,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
               min="0"
               max={globalDiscount.type === 'percentage' ? '100' : undefined}
               value={globalDiscount.value}
+              formatDecimals={2}
               onValueChange={globalDiscount.onChange}
               disabled={globalDiscount.disabled}
               className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
@@ -114,6 +115,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
             <div className="flex items-center gap-2">
               <ValidatedNumberInput
                 value={amountPaid.value}
+                formatDecimals={2}
                 onValueChange={amountPaid.onChange}
                 className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
               />

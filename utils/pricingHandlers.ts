@@ -6,7 +6,6 @@ import {
   getEffectiveMol,
   type PricingItem,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from './numbers';
 
 export const makeCostUpdater =
@@ -32,10 +31,10 @@ export const makeCostUpdater =
     const updated = [...items];
     updated[index] = {
       ...cur,
-      unitPrice: roundToTwoDecimals(newUnitPrice),
+      unitPrice: newUnitPrice,
       ...(cur.supplierQuoteItemId
-        ? { supplierQuoteUnitPrice: roundToTwoDecimals(hourlyCost) }
-        : { productCost: roundToTwoDecimals(hourlyCost) }),
+        ? { supplierQuoteUnitPrice: hourlyCost }
+        : { productCost: hourlyCost }),
     };
     return { ...prev, items: updated };
   };
@@ -62,8 +61,8 @@ export const makeMolUpdater =
     const updated = [...items];
     updated[index] = {
       ...cur,
-      unitPrice: roundToTwoDecimals(newUnitPrice),
-      productMolPercentage: roundToTwoDecimals(newMol),
+      unitPrice: newUnitPrice,
+      productMolPercentage: newMol,
     };
     return { ...prev, items: updated };
   };

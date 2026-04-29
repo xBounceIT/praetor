@@ -23,7 +23,6 @@ import {
   getItemPricingContext,
   type PricingTotals,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -56,7 +55,7 @@ const pillBadgeClass =
   'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
-  roundToTwoDecimals(convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE));
+  convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE);
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
@@ -299,7 +298,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: roundToTwoDecimals(adjustedPrice),
+      unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -906,7 +905,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 )}
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
-                                    value={unitCost.toFixed(2)}
+                                    value={unitCost}
+                                    formatDecimals={2}
                                     onValueChange={handleCostChange}
                                     disabled={isReadOnly}
                                     className={compactInputClass}
@@ -923,7 +923,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               </label>
                               <div className="flex items-center justify-center min-h-[42px] gap-1">
                                 <ValidatedNumberInput
-                                  value={molPercentage.toFixed(1)}
+                                  value={molPercentage}
+                                  formatDecimals={1}
                                   onValueChange={handleMolChange}
                                   disabled={isReadOnly}
                                   className={compactInputClass}
