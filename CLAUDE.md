@@ -58,6 +58,14 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - `clients.ts` → `/api/clients`
 - Pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
 
+### Repositories (data access)
+SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers. Migration is incremental — `notificationsRepo.ts` is the reference implementation; new SQL should follow this pattern, and existing inline SQL should move when its route file is touched.
+
+- Each function takes an optional `QueryExecutor` parameter (default `pool`) so it works both standalone and inside `withTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/index.ts`.
+- Row types and any `mapXxxRow` helpers live in the repo file alongside the SQL they belong to.
+- Routes import the repo as a namespace: `import * as notificationsRepo from '../repositories/notificationsRepo.ts'`.
+- Repos return domain shapes (camelCase, parsed numbers, mapped enums); they do not touch `request`, `reply`, validation, or HTTP status codes.
+
 ### Component Naming
 - Views: PascalCase `*View.tsx` (e.g., `ClientsView.tsx`, `SalesView.tsx`)
 - Utilities: camelCase (e.g., `geminiService.ts`)
