@@ -4,7 +4,7 @@ export const getPasswordHash = async (
   userId: string,
   exec: QueryExecutor = pool,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ passwordHash: string }>(
+  const { rows } = await exec.query<{ passwordHash: string | null }>(
     `SELECT password_hash as "passwordHash" FROM users WHERE id = $1`,
     [userId],
   );

@@ -76,7 +76,7 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
 - **CDN dependencies**: React, Recharts
 - **Test accounts**: admin/password, manager/password, user/password
-- **No automated tests**: Manual testing only
+- **Tests**: `bun test server/test` covers the repository layer (fakes; no DB required). Other layers still rely on manual testing.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: App runs on remote Docker containers - do not run commands locally for testing
 - **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
