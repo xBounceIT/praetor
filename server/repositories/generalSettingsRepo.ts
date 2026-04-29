@@ -94,5 +94,8 @@ export const update = async (
       patch.defaultLocation,
     ],
   );
+  if (rows.length === 0) {
+    throw new Error('general_settings row (id=1) not found; seed missing');
+  }
   return mapRow(rows[0]);
 };

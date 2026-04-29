@@ -76,5 +76,8 @@ export const update = async (
       patch.roleMappings === undefined ? null : JSON.stringify(patch.roleMappings),
     ],
   );
+  if (rows.length === 0) {
+    throw new Error('ldap_config row (id=1) not found; seed missing');
+  }
   return rows[0];
 };

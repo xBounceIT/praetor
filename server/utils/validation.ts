@@ -323,7 +323,7 @@ export function optionalDateString(
  */
 export function validateEnum(
   value: unknown,
-  allowedValues: string[],
+  allowedValues: readonly string[],
   fieldName: string = 'value',
 ): { ok: true; value: string } | { ok: false; message: string } {
   if (typeof value !== 'string') {
@@ -350,7 +350,7 @@ export function optionalEnum<T extends string>(
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
-  const result = validateEnum(value, allowedValues as readonly string[] as string[], fieldName);
+  const result = validateEnum(value, allowedValues, fieldName);
   if (!result.ok) {
     return { ok: false, message: result.message };
   }
