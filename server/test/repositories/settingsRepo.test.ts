@@ -36,6 +36,16 @@ describe('getOrCreateForUser', () => {
     expect(exec.calls[1].sql).toContain('INSERT INTO settings');
     expect(exec.calls[1].params).toEqual(['user-2', 'Bob', 'b@x']);
   });
+
+  test('coerces null language from an existing row to DEFAULT_LANGUAGE', async () => {
+    exec.enqueue({ rows: [{ fullName: 'Eve', email: 'e@x', language: null }] });
+    const result = await settingsRepo.getOrCreateForUser(
+      'user-6',
+      { fullName: 'Eve', email: 'e@x' },
+      exec,
+    );
+    expect(result.language).toBe(settingsRepo.DEFAULT_LANGUAGE);
+  });
 });
 
 describe('upsertForUser', () => {
@@ -77,5 +87,15 @@ describe('upsertForUser', () => {
       exec,
     );
     expect(result).toEqual(row);
+  });
+
+  test('coerces null language from RETURNING to DEFAULT_LANGUAGE', async () => {
+    exec.enqueue({ rows: [{ fullName: 'F', email: 'f@x', language: null }] });
+    const result = await settingsRepo.upsertForUser(
+      'user-7',
+      { fullName: 'F', email: 'f@x', language: null },
+      exec,
+    );
+    expect(result.language).toBe(settingsRepo.DEFAULT_LANGUAGE);
   });
 });
