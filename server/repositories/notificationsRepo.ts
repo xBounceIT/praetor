@@ -24,7 +24,7 @@ export const listForUser = async (
         message,
         data,
         is_read as "isRead",
-        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+        (EXTRACT(EPOCH FROM created_at) * 1000)::float8 as "createdAt"
       FROM notifications
       WHERE user_id = $1
       ORDER BY created_at DESC

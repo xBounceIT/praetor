@@ -342,19 +342,19 @@ export function validateEnum(
 /**
  * Validate optional enum
  */
-export function optionalEnum(
+export function optionalEnum<T extends string>(
   value: unknown,
-  allowedValues: string[],
+  allowedValues: readonly T[],
   fieldName: string,
-): { ok: true; value: string | null } | { ok: false; message: string } {
+): { ok: true; value: T | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
-  const result = validateEnum(value, allowedValues, fieldName);
+  const result = validateEnum(value, allowedValues as readonly string[] as string[], fieldName);
   if (!result.ok) {
     return { ok: false, message: result.message };
   }
-  return result;
+  return { ok: true, value: result.value as T };
 }
 
 /**

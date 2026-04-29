@@ -100,13 +100,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      const languageResult = optionalEnum(language, [...settingsRepo.LANGUAGES], 'language');
+      const languageResult = optionalEnum(language, settingsRepo.LANGUAGES, 'language');
       if (!languageResult.ok) return badRequest(reply, languageResult.message);
 
       return settingsRepo.upsertForUser(request.user.id, {
         fullName: fullNameResult.value,
         email: emailResult.value,
-        language: languageResult.value as settingsRepo.Language | null,
+        language: languageResult.value,
       });
     },
   );

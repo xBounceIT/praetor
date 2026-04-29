@@ -47,7 +47,7 @@ export const list = async (
         al.entity_type as "entityType",
         al.entity_id as "entityId",
         al.ip_address as "ipAddress",
-        EXTRACT(EPOCH FROM al.created_at) * 1000 as "createdAt",
+        (EXTRACT(EPOCH FROM al.created_at) * 1000)::float8 as "createdAt",
         CASE WHEN jsonb_typeof(al.details) = 'object' THEN al.details ELSE NULL END as "details"
       FROM audit_logs al
       JOIN users u ON u.id = al.user_id${whereClause}
