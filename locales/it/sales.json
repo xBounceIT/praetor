@@ -1,4 +1,18 @@
 {
+  "fieldInfo": {
+    "statusEditable": "Modificabile",
+    "supplierQuote": "Collega questa voce a un preventivo fornitore per il tracciamento dei costi",
+    "product": "Seleziona un prodotto o servizio per questa voce",
+    "qty": "Quantità di articoli o ore",
+    "cost": "Costo unitario per questa voce",
+    "mol": "Percentuale margine e oneri",
+    "notes": "Note aggiuntive per l'intero documento",
+    "clientInformation": "Dettagli cliente e documento",
+    "productsServices": "Prodotti e servizi per questo preventivo",
+    "items": "Voci per questa offerta",
+    "statusLabel": "Stato:",
+    "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
+  },
   "clientQuotes": {
     "title": "Preventivi",
     "subtitle": "Crea e gestisci preventivi clienti",
@@ -34,8 +48,8 @@
     "convertToOffer": "Converti in Offerta",
     "convertConfirm": "Convertire questo preventivo in una vendita?",
     "readOnlyStatus": "I preventivi in stato {{status}} sono in sola lettura",
-    "readOnlyBecauseOffer": "Questo preventivo è in sola lettura perché è stata creata un'offerta da esso.",
-    "readOnlyBecauseFinal": "Questo preventivo è in sola lettura perché è già stato accettato o rifiutato.",
+    "readOnlyBecauseOffer": "Sola lettura per offerta collegata",
+    "readOnlyBecauseFinal": "Sola lettura per stato finalizzato",
     "linkedOffer": "Offerta Collegata",
     "linkedOfferInfo": "Offerta #{{number}}",
     "offerDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
@@ -143,7 +157,7 @@
     "addOffer": "Aggiungi offerta",
     "sourceQuote": "Preventivo di origine",
     "viewQuote": "Vedi preventivo",
-    "readOnlyStatus": "Le offerte non in bozza sono in sola lettura. Cambia lo stato dalle azioni nella lista.",
+    "readOnlyStatus": "Sola lettura per stato non bozza",
     "clientInformation": "Informazioni Cliente",
     "client": "Cliente",
     "clientColumn": "Cliente",
@@ -183,7 +197,8 @@
     "markSent": "Segna come inviata",
     "markAccepted": "Segna come accettata",
     "markDenied": "Segna come rifiutata",
-    "createOrder": "Crea ordine di vendita"
+    "createOrder": "Crea ordine di vendita",
+    "clientLockedByQuote": "Bloccato per preventivo collegato"
   },
   "supplierQuotes": {
     "title": "Preventivi Fornitori",

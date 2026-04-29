@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
 import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -15,6 +17,16 @@ import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
+
+const normalizeHex = (v: string): string => {
+  let h = v.trim();
+  if (h && !h.startsWith('#')) h = '#' + h;
+  const m = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(h);
+  if (m) h = `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+  return h;
+};
+
+const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 type DraftTask = {
   _id: string;
@@ -56,6 +68,7 @@ export interface ProjectsViewProps {
   ) => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onDeleteTask: (id: string) => void | Promise<void>;
+  onViewOrder?: (orderId: string) => void;
 }
 
 const ProjectsView: React.FC<ProjectsViewProps> = ({
@@ -73,6 +86,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onAddTask,
   onUpdateTask,
   onDeleteTask,
+  onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasPermission(
@@ -128,10 +142,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     Record<string, number>
   > | null>(null);
   const [hexInput, setHexInput] = useState('');
+  const skipPickerRef = useRef(false);
 
   const commitHexInput = () => {
-    if (isValidHex(hexInput)) {
-      setColor(hexInput);
+    skipPickerRef.current = true;
+    const norm = normalizeHex(hexInput);
+    if (isValidHex(norm)) {
+      setColor(norm);
+      setHexInput(norm);
     } else {
       setHexInput(color);
     }
@@ -523,7 +541,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     .filter((o) => o.status === 'confirmed')
     .map((o) => ({
       id: o.id,
-      name: `${o.clientName} — #${o.id.replace('co-', '')}`,
+      name: `${o.clientName} — ${formatOrderId(o.id)}`,
     }));
 
   const selectedOrder = orders.find((o) => o.id === orderId);
@@ -646,6 +664,32 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6">
+            {editingProject?.orderId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('projects:projects.linkedOrder')}
+                    </div>
+                    <div className="text-xs text-praetor">
+                      {formatOrderId(editingProject.orderId)}
+                    </div>
+                  </div>
+                </div>
+                {onViewOrder && (
+                  <button
+                    type="button"
+                    onClick={() => onViewOrder(editingProject?.orderId ?? '')}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                  >
+                    {t('projects:projects.viewOrder')}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="space-y-4">
               {/* Order selector (create only) / Client selector (edit only) */}
               {editingProject ? (
@@ -840,7 +884,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     <input
                       type="color"
                       value={color}
+                      onFocus={() => {
+                        skipPickerRef.current = false;
+                      }}
                       onChange={(e) => {
+                        if (skipPickerRef.current) return;
                         setColor(e.target.value);
                         setHexInput(e.target.value);
                       }}
@@ -935,72 +983,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
-                {t('projects:projects.deleteConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={closeModal}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={closeModal}
+        onConfirm={handleDelete}
+        title={t('projects:projects.deleteProjectTitle', { name: projectToDelete?.name })}
+        description={t('projects:projects.deleteConfirm')}
+      />
 
-      {/* Task Delete Confirmation Modal */}
-      <Modal isOpen={isTaskDeleteConfirmOpen} onClose={() => setIsTaskDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('common:messages.deleteConfirmNamed', { name: taskToDelete?.name })}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('projects:projects.deleteTaskConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsTaskDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDeleteTask}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isTaskDeleteConfirmOpen}
+        onClose={() => setIsTaskDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteTask}
+        title={t('projects:projects.deleteTaskTitle', { name: taskToDelete?.name })}
+        description={t('projects:projects.deleteTaskConfirm')}
+      />
 
       {/* User Assignment Modal */}
       <UserAssignmentModal
@@ -1050,25 +1047,33 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               cell: ({ row }) => {
                 const client = clients.find((c: Client) => c.id === row.clientId);
                 const isClientDisabled = client?.isDisabled || false;
-                return (
+                return client ? (
                   <span
-                    className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                    className={`text-sm font-bold ${
                       isClientDisabled
-                        ? 'text-amber-600 bg-amber-50 border-amber-100'
+                        ? 'text-amber-500'
                         : row.isDisabled
                           ? 'text-slate-400'
-                          : 'text-praetor'
+                          : 'text-slate-700'
                     }`}
                   >
-                    {client?.name || t('projects:projects.unknown')}
-                    {isClientDisabled && (
-                      <span className="ml-1 text-[8px]">
-                        {t('projects:projects.disabledLabel')}
-                      </span>
-                    )}
+                    {client.name}
+                    {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
                   </span>
+                ) : (
+                  <span className="text-xs text-slate-400 italic">—</span>
                 );
               },
+            },
+            {
+              header: t('projects:projects.tableHeaders.insertDate'),
+              id: 'createdAt',
+              accessorFn: (row) => row.createdAt ?? 0,
+              cell: ({ row }) => (
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+                </span>
+              ),
             },
             {
               header: t('projects:projects.tableHeaders.projectName'),

@@ -44,6 +44,7 @@ export interface ClientsOrdersViewProps {
   onViewOffer?: (offerId: string) => void;
   currency: string;
   offerFilterId?: string | null;
+  orderFilterId?: string | null;
 }
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
@@ -124,6 +125,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onViewOffer,
   currency,
   offerFilterId,
+  orderFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -308,6 +310,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const isLinkedOffer = Boolean(formData.linkedOfferId);
   const isReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
+
+  const tableInitialFilterState = useMemo(() => {
+    if (orderFilterId) {
+      return { id: [orderFilterId] };
+    }
+    return undefined;
+  }, [orderFilterId]);
 
   // Filter orders by offerFilterId if provided
   const filteredOrders = useMemo(() => {
@@ -1121,6 +1130,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}
+        initialFilterState={tableInitialFilterState}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
           isHistoryRow(row.status) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'

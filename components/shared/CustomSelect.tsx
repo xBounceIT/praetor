@@ -267,7 +267,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             >
               {() => (
                 <span
-                  className={`block w-full truncate ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
+                  className={`w-full truncate ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
                 >
                   {buttonLabel}
                 </span>

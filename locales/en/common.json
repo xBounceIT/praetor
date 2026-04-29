@@ -31,7 +31,9 @@
     "send": "Send",
     "manage": "Manage",
     "saving": "Saving...",
-    "discard": "Discard"
+    "discard": "Discard",
+    "noGoBack": "No, go back",
+    "yesDelete": "Yes, Delete"
   },
   "labels": {
     "name": "Name",
