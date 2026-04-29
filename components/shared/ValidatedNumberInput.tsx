@@ -76,7 +76,7 @@ const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberI
 
     const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
-      setInternalValue(formatForDisplay(value));
+      setInternalValue(formatForDisplay(value, formatDecimals));
       onFocus?.(event);
     };
 
