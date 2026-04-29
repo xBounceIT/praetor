@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as auditLogsRepo from '../repositories/auditLogsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 
 const auditLogDetailsSchema = {
@@ -46,19 +46,6 @@ const auditLogQuerySchema = {
   },
 } as const;
 
-const parseAuditLogDetails = (value: unknown) => {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-
-  return typeof value === 'object' ? (value as Record<string, unknown>) : null;
-};
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/audit',
@@ -77,42 +64,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const { startDate, endDate } = request.query as { startDate?: string; endDate?: string };
 
-      let sql = `SELECT al.id, al.user_id, al.action, al.entity_type, al.entity_id, al.ip_address, al.created_at, al.details, u.name, u.username
-         FROM audit_logs al
-         JOIN users u ON u.id = al.user_id`;
-      const params: unknown[] = [];
-      const conditions: string[] = [];
-
-      if (startDate) {
-        params.push(new Date(startDate));
-        conditions.push(`al.created_at >= $${params.length}::timestamptz`);
-      }
-
-      if (endDate) {
-        params.push(new Date(endDate));
-        conditions.push(`al.created_at <= $${params.length}::timestamptz`);
-      }
-
-      if (conditions.length > 0) {
-        sql += ` WHERE ${conditions.join(' AND ')}`;
-      }
-
-      sql += ` ORDER BY al.created_at DESC LIMIT 500`;
-
-      const result = await query(sql, params);
-
-      return result.rows.map((row) => ({
-        id: row.id as string,
-        userId: row.user_id as string,
-        userName: row.name as string,
-        username: row.username as string,
-        action: row.action as string,
-        entityType: (row.entity_type as string) ?? null,
-        entityId: (row.entity_id as string) ?? null,
-        ipAddress: row.ip_address as string,
-        createdAt: new Date(row.created_at as string).getTime(),
-        details: parseAuditLogDetails(row.details),
-      }));
+      return auditLogsRepo.list({ startDate, endDate });
     },
   );
 }
