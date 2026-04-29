@@ -58,6 +58,14 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - `clients.ts` → `/api/clients`
 - Pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
 
+### Repositories (data access)
+SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers. Migration is incremental — `notificationsRepo.ts` is the reference implementation; new SQL should follow this pattern, and existing inline SQL should move when its route file is touched.
+
+- Each function takes an optional `QueryExecutor` parameter (default `pool`) so it works both standalone and inside `withTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/index.ts`.
+- Row types and any `mapXxxRow` helpers live in the repo file alongside the SQL they belong to.
+- Routes import the repo as a namespace: `import * as notificationsRepo from '../repositories/notificationsRepo.ts'`.
+- Repos return domain shapes (camelCase, parsed numbers, mapped enums); they do not touch `request`, `reply`, validation, or HTTP status codes.
+
 ### Component Naming
 - Views: PascalCase `*View.tsx` (e.g., `ClientsView.tsx`, `SalesView.tsx`)
 - Utilities: camelCase (e.g., `geminiService.ts`)
@@ -68,7 +76,7 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
 - **CDN dependencies**: React, Recharts
 - **Test accounts**: admin/password, manager/password, user/password
-- **No automated tests**: Manual testing only
+- **Tests**: `bun test server/test` covers the repository layer (fakes; no DB required). Other layers still rely on manual testing.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: App runs on remote Docker containers - do not run commands locally for testing
 - **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.

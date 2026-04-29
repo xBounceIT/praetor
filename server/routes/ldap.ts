@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as ldapRepo from '../repositories/ldapRepo.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
@@ -80,40 +81,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request, _reply) => {
-      const result = await query(
-        `SELECT enabled, server_url, base_dn, bind_dn, bind_password, 
-              user_filter, group_base_dn, group_filter, role_mappings
-       FROM ldap_config WHERE id = 1`,
-      );
-
-      if (result.rows.length === 0) {
-        return {
-          enabled: false,
-          serverUrl: 'ldap://ldap.example.com:389',
-          baseDn: 'dc=example,dc=com',
-          bindDn: 'cn=read-only-admin,dc=example,dc=com',
-          bindPassword: '',
-          userFilter: '(uid={0})',
-          groupBaseDn: 'ou=groups,dc=example,dc=com',
-          groupFilter: '(member={0})',
-          roleMappings: [],
-        };
-      }
-
-      const c = result.rows[0];
-      return {
-        enabled: c.enabled,
-        serverUrl: c.server_url,
-        baseDn: c.base_dn,
-        bindDn: c.bind_dn,
-        bindPassword: c.bind_password,
-        userFilter: c.user_filter,
-        groupBaseDn: c.group_base_dn,
-        groupFilter: c.group_filter,
-        roleMappings: c.role_mappings || [],
-      };
-    },
+    async (_request, _reply) => (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG,
   );
 
   // PUT /config - Update LDAP configuration (admin only)
@@ -178,7 +146,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!groupFilterResult.ok) return badRequest(reply, groupFilterResult.message);
       }
 
-      // bindDn and bindPassword must be provided together or not at all
       const hasBindDn = bindDn !== undefined && bindDn !== null && bindDn !== '';
       const hasBindPassword =
         bindPassword !== undefined && bindPassword !== null && bindPassword !== '';
@@ -186,12 +153,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'bindDn and bindPassword must be provided together or not at all');
       }
 
-      // Validate roleMappings if provided
+      let validatedMappings: ldapRepo.LdapRoleMapping[] | undefined;
       if (roleMappings !== undefined && roleMappings !== null) {
         if (!Array.isArray(roleMappings)) {
           return badRequest(reply, 'roleMappings must be an array');
         }
-        const roleIds: string[] = [];
+        validatedMappings = [];
         for (let i = 0; i < roleMappings.length; i++) {
           const mapping = roleMappings[i];
           if (typeof mapping !== 'object' || mapping === null) {
@@ -204,70 +171,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!ldapGroupResult.ok) return badRequest(reply, ldapGroupResult.message);
           const roleResult = requireNonEmptyString(mapping.role, `roleMappings[${i}].role`);
           if (!roleResult.ok) return badRequest(reply, roleResult.message);
-          roleIds.push(roleResult.value);
+          validatedMappings.push({
+            ldapGroup: ldapGroupResult.value,
+            role: roleResult.value,
+          });
         }
 
-        if (roleIds.length > 0) {
-          const uniqueRoleIds = Array.from(new Set(roleIds));
-          const roleResult = await query('SELECT id FROM roles WHERE id = ANY($1::text[])', [
-            uniqueRoleIds,
-          ]);
-          const roleSet = new Set(roleResult.rows.map((row) => row.id));
+        const uniqueRoleIds = new Set(validatedMappings.map((m) => m.role));
+        if (uniqueRoleIds.size > 0) {
+          const existing = await rolesRepo.findExistingIds([...uniqueRoleIds]);
           for (const roleId of uniqueRoleIds) {
-            if (!roleSet.has(roleId)) {
+            if (!existing.has(roleId)) {
               return badRequest(reply, `roleMappings role '${roleId}' does not exist`);
             }
           }
         }
       }
 
-      const result = await query(
-        `UPDATE ldap_config SET
-         enabled = COALESCE($1, enabled),
-         server_url = COALESCE($2, server_url),
-         base_dn = COALESCE($3, base_dn),
-         bind_dn = COALESCE($4, bind_dn),
-         bind_password = COALESCE($5, bind_password),
-         user_filter = COALESCE($6, user_filter),
-         group_base_dn = COALESCE($7, group_base_dn),
-         group_filter = COALESCE($8, group_filter),
-         role_mappings = COALESCE($9, role_mappings),
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = 1
-       RETURNING *`,
-        [
-          enabledValue,
-          serverUrl,
-          baseDn,
-          bindDn,
-          bindPassword,
-          normalizedUserFilter,
-          groupBaseDn,
-          groupFilter,
-          JSON.stringify(roleMappings || []),
-        ],
-      );
+      const updated = await ldapRepo.update({
+        enabled: enabledValue,
+        serverUrl,
+        baseDn,
+        bindDn,
+        bindPassword,
+        userFilter: normalizedUserFilter,
+        groupBaseDn,
+        groupFilter,
+        roleMappings: validatedMappings,
+      });
 
-      const c = result.rows[0];
       await logAudit({
         request,
         action: 'ldap_config.updated',
         entityType: 'ldap_config',
         details: {
-          secondaryLabel: (c.server_url as string | null) ?? undefined,
+          secondaryLabel: updated.serverUrl,
         },
       });
-      return {
-        enabled: c.enabled,
-        serverUrl: c.server_url,
-        baseDn: c.base_dn,
-        bindDn: c.bind_dn,
-        bindPassword: c.bind_password,
-        userFilter: c.user_filter,
-        groupBaseDn: c.group_base_dn,
-        groupFilter: c.group_filter,
-        roleMappings: c.role_mappings || [],
-      };
+      return updated;
     },
   );
 

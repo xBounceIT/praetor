@@ -321,11 +321,11 @@ export function optionalDateString(
 /**
  * Validate enum values
  */
-export function validateEnum(
+export function validateEnum<T extends string>(
   value: unknown,
-  allowedValues: string[],
+  allowedValues: readonly T[],
   fieldName: string = 'value',
-): { ok: true; value: string } | { ok: false; message: string } {
+): { ok: true; value: T } | { ok: false; message: string } {
   if (typeof value !== 'string') {
     return { ok: false, message: `${fieldName} must be a string` };
   }
@@ -333,28 +333,24 @@ export function validateEnum(
   if (trimmed === '') {
     return { ok: false, message: `${fieldName} cannot be empty` };
   }
-  if (!allowedValues.includes(trimmed)) {
+  if (!allowedValues.includes(trimmed as T)) {
     return { ok: false, message: `${fieldName} must be one of: ${allowedValues.join(', ')}` };
   }
-  return { ok: true, value: trimmed };
+  return { ok: true, value: trimmed as T };
 }
 
 /**
  * Validate optional enum
  */
-export function optionalEnum(
+export function optionalEnum<T extends string>(
   value: unknown,
-  allowedValues: string[],
+  allowedValues: readonly T[],
   fieldName: string,
-): { ok: true; value: string | null } | { ok: false; message: string } {
+): { ok: true; value: T | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
-  const result = validateEnum(value, allowedValues, fieldName);
-  if (!result.ok) {
-    return { ok: false, message: result.message };
-  }
-  return result;
+  return validateEnum(value, allowedValues, fieldName);
 }
 
 /**

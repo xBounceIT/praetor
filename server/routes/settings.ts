@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
+import * as settingsRepo from '../repositories/settingsRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -12,6 +13,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalEmail,
+  optionalEnum,
   optionalNonEmptyString,
   requireNonEmptyString,
 } from '../utils/validation.ts';
@@ -21,7 +23,7 @@ const settingsSchema = {
   properties: {
     fullName: { type: 'string' },
     email: { type: 'string' },
-    language: { type: 'string', enum: ['en', 'it', 'auto'] },
+    language: { type: 'string', enum: [...settingsRepo.LANGUAGES] },
   },
   required: ['fullName', 'email', 'language'],
 } as const;
@@ -31,7 +33,7 @@ const settingsUpdateBodySchema = {
   properties: {
     fullName: { type: 'string' },
     email: { type: 'string' },
-    language: { type: 'string', enum: ['en', 'it', 'auto'] },
+    language: { type: 'string', enum: [...settingsRepo.LANGUAGES] },
   },
 } as const;
 
@@ -62,40 +64,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const userId = request.user.id;
-
-      const result = await query(
-        `SELECT full_name, email, language
-         FROM settings WHERE user_id = $1`,
-        [userId],
-      );
-
-      let value: { fullName: string; email: string; language: string };
-      if (result.rows.length === 0) {
-        // Create default settings if none exist
-        const insertResult = await query(
-          `INSERT INTO settings (user_id, full_name, email)
-           VALUES ($1, $2, $3)
-           RETURNING *`,
-          [userId, request.user?.name, `${request.user?.username}@example.com`],
-        );
-
-        const s = insertResult.rows[0];
-        value = {
-          fullName: s.full_name,
-          email: s.email,
-          language: s.language || 'auto',
-        };
-      } else {
-        const s = result.rows[0];
-        value = {
-          fullName: s.full_name,
-          email: s.email,
-          language: s.language || 'auto',
-        };
-      }
-
-      return value;
+      return settingsRepo.getOrCreateForUser(request.user.id, {
+        fullName: request.user.name ?? null,
+        email: `${request.user.username}@example.com`,
+      });
     },
   );
 
@@ -115,53 +87,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { fullName, email, language } = request.body as {
         fullName?: string;
         email?: string;
         language?: string;
       };
       const fullNameResult = optionalNonEmptyString(fullName, 'fullName');
-      if (!fullNameResult.ok)
-        return badRequest(reply, (fullNameResult as { ok: false; message: string }).message);
+      if (!fullNameResult.ok) return badRequest(reply, fullNameResult.message);
 
       const emailResult = optionalEmail(email, 'email');
-      if (!emailResult.ok)
-        return badRequest(reply, (emailResult as { ok: false; message: string }).message);
+      if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      // Validate language if provided
-      if (
-        language !== undefined &&
-        language !== null &&
-        language !== 'en' &&
-        language !== 'it' &&
-        language !== 'auto'
-      ) {
-        return badRequest(reply, 'Language must be "en", "it", or "auto"');
-      }
+      const languageResult = optionalEnum(language, settingsRepo.LANGUAGES, 'language');
+      if (!languageResult.ok) return badRequest(reply, languageResult.message);
 
-      const result = await query(
-        `INSERT INTO settings (user_id, full_name, email, language)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id) DO UPDATE SET
-         full_name = COALESCE($2, settings.full_name),
-         email = COALESCE($3, settings.email),
-         language = COALESCE($4, settings.language),
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING full_name, email, language`,
-        [
-          request.user?.id,
-          (fullNameResult as { ok: true; value: string | null }).value,
-          (emailResult as { ok: true; value: string | null }).value,
-          language || 'auto',
-        ],
-      );
-
-      const s = result.rows[0];
-      return {
-        fullName: s.full_name,
-        email: s.email,
-        language: s.language || 'auto',
-      };
+      return settingsRepo.upsertForUser(request.user.id, {
+        fullName: fullNameResult.value,
+        email: emailResult.value,
+        language: languageResult.value,
+      });
     },
   );
 
@@ -181,48 +127,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { currentPassword, newPassword } = request.body as {
         currentPassword: string;
         newPassword: string;
       };
       const currentPasswordResult = requireNonEmptyString(currentPassword, 'currentPassword');
-      if (!currentPasswordResult.ok)
-        return badRequest(reply, (currentPasswordResult as { ok: false; message: string }).message);
+      if (!currentPasswordResult.ok) return badRequest(reply, currentPasswordResult.message);
 
       const newPasswordResult = requireNonEmptyString(newPassword, 'newPassword');
-      if (!newPasswordResult.ok)
-        return badRequest(reply, (newPasswordResult as { ok: false; message: string }).message);
+      if (!newPasswordResult.ok) return badRequest(reply, newPasswordResult.message);
 
-      if ((newPasswordResult as { ok: true; value: string }).value.length < 8) {
+      if (newPasswordResult.value.length < 8) {
         return badRequest(reply, 'New password must be at least 8 characters long');
       }
 
-      // Get user's current password hash
-      const userRes = await query('SELECT password_hash FROM users WHERE id = $1', [
-        request.user?.id,
-      ]);
-      if (userRes.rows.length === 0) {
+      const passwordHash = await usersRepo.getPasswordHash(request.user.id);
+      if (passwordHash === null) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const { password_hash } = userRes.rows[0];
-
-      const isMatch = await bcrypt.compare(
-        (currentPasswordResult as { ok: true; value: string }).value,
-        password_hash,
-      );
+      const isMatch = await bcrypt.compare(currentPasswordResult.value, passwordHash);
       if (!isMatch) {
         return badRequest(reply, 'Incorrect current password');
       }
 
-      // Hash new password
-      const newHash = await bcrypt.hash(
-        (newPasswordResult as { ok: true; value: string }).value,
-        12,
-      );
+      const newHash = await bcrypt.hash(newPasswordResult.value, 12);
 
-      // Update password
-      await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, request.user?.id]);
+      await usersRepo.updatePasswordHash(request.user.id, newHash);
 
       return { message: 'Password updated successfully' };
     },

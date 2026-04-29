@@ -1,11 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
   successResponseSchema,
 } from '../schemas/common.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -62,36 +63,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      const userId = request.user?.id;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
 
-      const result = await query(
-        `SELECT 
-        id,
-        user_id as "userId",
-        type,
-        title,
-        message,
-        data,
-        is_read as "isRead",
-        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-      FROM notifications
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 50`,
-        [userId],
-      );
+      const [notifications, unreadCount] = await Promise.all([
+        notificationsRepo.listForUser(userId),
+        notificationsRepo.countUnreadForUser(userId),
+      ]);
 
-      // Get unread count
-      const countResult = await query(
-        `SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = FALSE`,
-        [userId],
-      );
-
-      return {
-        notifications: result.rows,
-        unreadCount: parseInt(countResult.rows[0].count, 10),
-      };
+      return { notifications, unreadCount };
     },
   );
 
@@ -111,21 +92,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
-      const userId = request.user?.id;
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query(
-        `UPDATE notifications 
-       SET is_read = TRUE 
-       WHERE id = $1 AND user_id = $2
-       RETURNING id`,
-        [idResult.value, userId],
-      );
+      const found = await notificationsRepo.markReadForUser(idResult.value, request.user.id);
 
-      if (result.rows.length === 0) {
+      if (!found) {
         return reply.code(404).send({ error: 'Notification not found' });
       }
 
@@ -147,10 +122,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      const userId = request.user?.id;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
 
-      await query(`UPDATE notifications SET is_read = TRUE WHERE user_id = $1`, [userId]);
+      await notificationsRepo.markAllReadForUser(request.user.id);
 
       return { success: true };
     },
@@ -172,18 +147,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
-      const userId = request.user?.id;
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query(
-        `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING id`,
-        [idResult.value, userId],
-      );
+      const found = await notificationsRepo.deleteForUser(idResult.value, request.user.id);
 
-      if (result.rows.length === 0) {
+      if (!found) {
         return reply.code(404).send({ error: 'Notification not found' });
       }
 

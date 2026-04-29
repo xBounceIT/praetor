@@ -635,7 +635,7 @@ CREATE TABLE IF NOT EXISTS settings (
     user_id VARCHAR(50) UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     full_name VARCHAR(255),
     email VARCHAR(255),
-    language VARCHAR(10) DEFAULT 'auto' CHECK (language IN ('en', 'it', 'auto')),
+    language VARCHAR(10) DEFAULT 'auto' NOT NULL CHECK (language IN ('en', 'it', 'auto')),
     daily_goal DECIMAL(4, 2) DEFAULT 8.00,
     start_of_week VARCHAR(10) DEFAULT 'Monday' CHECK (start_of_week IN ('Monday', 'Sunday')),
     compact_view BOOLEAN DEFAULT FALSE,
@@ -647,10 +647,12 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'auto
 
 DO $$
 BEGIN
+    UPDATE settings SET language = 'auto' WHERE language IS NULL;
     ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_language_check;
     ALTER TABLE settings ADD CONSTRAINT settings_language_check
         CHECK (language IN ('en', 'it', 'auto'));
     ALTER TABLE settings ALTER COLUMN language SET DEFAULT 'auto';
+    ALTER TABLE settings ALTER COLUMN language SET NOT NULL;
 END $$;
 
 -- LDAP administration table (single row)
