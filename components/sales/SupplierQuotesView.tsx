@@ -15,7 +15,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
@@ -218,7 +218,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: roundToTwoDecimals(adjustedPrice),
+      unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -862,6 +862,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', parseNumberInputValue(value))
                                 }
@@ -915,6 +916,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             <div className="col-span-3 flex items-center gap-1.5">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', parseNumberInputValue(value))
                                 }

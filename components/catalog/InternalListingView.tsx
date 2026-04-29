@@ -1409,13 +1409,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </label>
                   <div className="flex gap-2">
                     <ValidatedNumberInput
-                      value={formData.costo !== undefined ? Number(formData.costo).toFixed(2) : ''}
+                      value={formData.costo ?? ''}
+                      formatDecimals={2}
                       onValueChange={handleNumericValueChange('costo')}
-                      onBlur={() => {
-                        if (formData.costo !== undefined) {
-                          // Ensure internal state consistency if needed, though toFixed(2) above handles display
-                        }
-                      }}
                       className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                     />
                   </div>
@@ -1431,6 +1427,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <div className="flex gap-2">
                     <ValidatedNumberInput
                       value={formData.molPercentage ?? ''}
+                      formatDecimals={2}
                       onValueChange={handleNumericValueChange('molPercentage')}
                       className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                     />

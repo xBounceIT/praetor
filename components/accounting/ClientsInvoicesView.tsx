@@ -664,6 +664,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               step="0.01"
                               required
                               value={item.unitPrice}
+                              formatDecimals={2}
                               onValueChange={(value) => {
                                 const parsed = parseFloat(value);
                                 updateItemRow(
@@ -683,6 +684,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               min="0"
                               max="100"
                               value={item.discount || 0}
+                              formatDecimals={2}
                               onValueChange={(value) => {
                                 const parsed = parseFloat(value);
                                 updateItemRow(

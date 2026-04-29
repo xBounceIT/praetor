@@ -503,6 +503,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                               </label>
                               <ValidatedNumberInput
                                 value={item.unitPrice}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                 }
@@ -515,6 +516,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                               </label>
                               <ValidatedNumberInput
                                 value={item.discount || 0}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                 }
@@ -575,6 +577,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                             <div className="lg:col-span-2">
                               <ValidatedNumberInput
                                 value={item.unitPrice}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                 }
@@ -584,6 +587,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                             <div className="lg:col-span-1">
                               <ValidatedNumberInput
                                 value={item.discount || 0}
+                                formatDecimals={2}
                                 onValueChange={(value) =>
                                   updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                 }

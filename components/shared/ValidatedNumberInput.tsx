@@ -10,21 +10,22 @@ type ValidatedNumberInputProps = Omit<
 > & {
   value?: string | number;
   onValueChange: (value: string) => void;
+  formatDecimals?: number;
+};
+
+const formatForDisplay = (value: string | number | undefined | null, decimals?: number) => {
+  if (value === undefined || value === null || value === '') return '';
+  const n = typeof value === 'number' ? value : Number(normalizeNumberInput(String(value)));
+  if (!Number.isFinite(n)) return '';
+  return decimals === undefined ? String(value) : n.toFixed(decimals);
 };
 
 const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberInputProps>(
-  ({ value, onValueChange, onKeyDown, onFocus, onBlur, ...rest }, ref) => {
-    const [internalValue, setInternalValue] = useState<string>(
-      value === undefined || value === null ? '' : String(value),
-    );
+  ({ value, onValueChange, onKeyDown, onFocus, onBlur, formatDecimals, ...rest }, ref) => {
+    const [internalValue, setInternalValue] = useState('');
     const [isFocused, setIsFocused] = useState(false);
 
-    // Derive display value from props when not focused
-    const displayValue = isFocused
-      ? internalValue
-      : value === undefined || value === null
-        ? ''
-        : String(value);
+    const displayValue = isFocused ? internalValue : formatForDisplay(value, formatDecimals);
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.ctrlKey || event.metaKey) {
@@ -75,13 +76,12 @@ const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberI
 
     const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
-      setInternalValue(value === undefined || value === null ? '' : String(value));
+      setInternalValue(formatForDisplay(value, formatDecimals));
       onFocus?.(event);
     };
 
     const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(false);
-      setInternalValue(value === undefined || value === null ? '' : String(value));
       onBlur?.(event);
     };
 
