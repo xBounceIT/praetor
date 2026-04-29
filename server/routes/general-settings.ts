@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
@@ -64,8 +64,40 @@ const generalSettingsUpdateBodySchema = {
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
+const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
+  currency: 'EUR',
+  dailyLimit: 8.0,
+  startOfWeek: 'Monday',
+  treatSaturdayAsHoliday: true,
+  enableAiReporting: false,
+  geminiApiKey: null,
+  aiProvider: 'gemini',
+  openrouterApiKey: null,
+  geminiModelId: null,
+  openrouterModelId: null,
+  allowWeekendSelection: true,
+  defaultLocation: 'remote',
+};
+
+const maskApiKey = (value: string | null, reveal: boolean) =>
+  reveal ? (value ?? '') : value ? '********' : '';
+
+const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
+  currency: settings.currency,
+  dailyLimit: settings.dailyLimit,
+  startOfWeek: settings.startOfWeek,
+  treatSaturdayAsHoliday: settings.treatSaturdayAsHoliday,
+  enableAiReporting: settings.enableAiReporting ?? false,
+  geminiApiKey: maskApiKey(settings.geminiApiKey, revealApiKeys),
+  aiProvider: settings.aiProvider || 'gemini',
+  openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealApiKeys),
+  geminiModelId: settings.geminiModelId || '',
+  openrouterModelId: settings.openrouterModelId || '',
+  allowWeekendSelection: settings.allowWeekendSelection ?? true,
+  defaultLocation: settings.defaultLocation || 'remote',
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // GET / - Get global settings (available to all authenticated users)
   fastify.get(
     '/',
     {
@@ -80,56 +112,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const apiKeyVisible = hasPermission(request, 'administration.general.update') ? 'yes' : 'no';
-      const result = await query(
-        'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_reporting, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
+      const settings = await generalSettingsRepo.get();
+      return toResponse(
+        settings ?? DEFAULT_SETTINGS,
+        hasPermission(request, 'administration.general.update'),
       );
-      if (result.rows.length === 0) {
-        return {
-          currency: 'EUR',
-          dailyLimit: 8.0,
-          startOfWeek: 'Monday',
-          treatSaturdayAsHoliday: true,
-          enableAiReporting: false,
-          geminiApiKey: '',
-          aiProvider: 'gemini',
-          openrouterApiKey: '',
-          geminiModelId: '',
-          openrouterModelId: '',
-          allowWeekendSelection: true,
-          defaultLocation: 'remote',
-        };
-      }
-      const s = result.rows[0];
-      const geminiApiKey =
-        apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
-      const openrouterApiKey =
-        apiKeyVisible === 'yes'
-          ? s.openrouter_api_key || ''
-          : s.openrouter_api_key
-            ? '********'
-            : '';
-
-      const value = {
-        currency: s.currency,
-        dailyLimit: parseFloat(s.daily_limit),
-        startOfWeek: s.start_of_week,
-        treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-        enableAiReporting: s.enable_ai_reporting ?? false,
-        geminiApiKey,
-        aiProvider: s.ai_provider || 'gemini',
-        openrouterApiKey,
-        geminiModelId: s.gemini_model_id || '',
-        openrouterModelId: s.openrouter_model_id || '',
-        allowWeekendSelection: s.allow_weekend_selection ?? true,
-        defaultLocation: s.default_location || 'remote',
-      };
-
-      return value;
     },
   );
 
-  // PUT / - Update global settings (Admin only)
   fastify.put(
     '/',
     {
@@ -173,16 +163,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         defaultLocation?: string;
       };
       const currencyResult = optionalNonEmptyString(currency, 'currency');
-      if (!currencyResult.ok)
-        return badRequest(reply, (currencyResult as { ok: false; message: string }).message);
+      if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
 
       const dailyLimitResult = optionalLocalizedNonNegativeNumber(dailyLimit, 'dailyLimit');
-      if (!dailyLimitResult.ok)
-        return badRequest(reply, (dailyLimitResult as { ok: false; message: string }).message);
+      if (!dailyLimitResult.ok) return badRequest(reply, dailyLimitResult.message);
 
       const aiProviderResult = optionalEnum(aiProvider, ['gemini', 'openrouter'], 'aiProvider');
-      if (!aiProviderResult.ok)
-        return badRequest(reply, (aiProviderResult as { ok: false; message: string }).message);
+      if (!aiProviderResult.ok) return badRequest(reply, aiProviderResult.message);
 
       if (
         geminiModelId !== undefined &&
@@ -209,62 +196,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const enableAiReportingValue = parseBoolean(enableAiReporting);
       const allowWeekendSelectionValue = parseBoolean(allowWeekendSelection);
 
-      const result = await query(
-        `UPDATE general_settings
-             SET currency = COALESCE($1, currency),
-                 daily_limit = COALESCE($2, daily_limit),
-                 start_of_week = COALESCE($3, start_of_week),
-                 treat_saturday_as_holiday = COALESCE($4, treat_saturday_as_holiday),
-                 enable_ai_reporting = COALESCE($5, enable_ai_reporting),
-                 gemini_api_key = COALESCE($6, gemini_api_key),
-                 ai_provider = COALESCE($7, ai_provider),
-                 openrouter_api_key = COALESCE($8, openrouter_api_key),
-                 gemini_model_id = COALESCE($9, gemini_model_id),
-                 openrouter_model_id = COALESCE($10, openrouter_model_id),
-                 allow_weekend_selection = COALESCE($11, allow_weekend_selection),
-                 default_location = COALESCE($12, default_location),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = 1
-             RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_reporting, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location`,
-        [
-          (currencyResult as { ok: true; value: string | null }).value,
-          (dailyLimitResult as { ok: true; value: number | null }).value,
-          startOfWeek,
-          treatSaturdayAsHolidayValue,
-          enableAiReportingValue,
-          geminiApiKey,
-          (aiProviderResult as { ok: true; value: string | null }).value,
-          openrouterApiKey,
-          geminiModelId,
-          openrouterModelId,
-          allowWeekendSelectionValue,
-          defaultLocation,
-        ],
-      );
+      const settings = await generalSettingsRepo.update({
+        currency: currencyResult.value,
+        dailyLimit: dailyLimitResult.value,
+        startOfWeek,
+        treatSaturdayAsHoliday: treatSaturdayAsHolidayValue,
+        enableAiReporting: enableAiReportingValue,
+        geminiApiKey,
+        aiProvider: aiProviderResult.value,
+        openrouterApiKey,
+        geminiModelId,
+        openrouterModelId,
+        allowWeekendSelection: allowWeekendSelectionValue,
+        defaultLocation,
+      });
 
-      const s = result.rows[0];
       await logAudit({
         request,
         action: 'settings.updated',
         entityType: 'settings',
         details: {
-          secondaryLabel: (s.ai_provider as string | null) ?? undefined,
+          secondaryLabel: settings.aiProvider ?? undefined,
         },
       });
-      return {
-        currency: s.currency,
-        dailyLimit: parseFloat(s.daily_limit),
-        startOfWeek: s.start_of_week,
-        treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-        enableAiReporting: s.enable_ai_reporting ?? false,
-        geminiApiKey: s.gemini_api_key || '',
-        aiProvider: s.ai_provider || 'gemini',
-        openrouterApiKey: s.openrouter_api_key || '',
-        geminiModelId: s.gemini_model_id || '',
-        openrouterModelId: s.openrouter_model_id || '',
-        allowWeekendSelection: s.allow_weekend_selection ?? true,
-        defaultLocation: s.default_location || 'remote',
-      };
+      return toResponse(settings, true);
     },
   );
 }
