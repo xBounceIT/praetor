@@ -3,6 +3,7 @@ import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -803,7 +804,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Category with this name already exists for this type');
       }
 
-      const id = 'ipc-' + crypto.randomUUID();
+      const id = generatePrefixedId('ipc');
       const costUnit = await getCostUnitForType(typeResult.value);
       const result = await query(
         `INSERT INTO internal_product_categories (id, name, type, cost_unit) 
@@ -1167,7 +1168,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Create the subcategory
-      const id = 'ips-' + crypto.randomUUID();
+      const id = generatePrefixedId('ips');
       const result = await query(
         `INSERT INTO internal_product_subcategories (id, category_id, name)
          VALUES ($1, $2, $3)
@@ -1544,7 +1545,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Product type with this name already exists');
       }
 
-      const id = 'pt-' + crypto.randomUUID();
+      const id = generatePrefixedId('pt');
       const result = await query(
         `INSERT INTO product_types (id, name, cost_unit)
          VALUES ($1, $2, $3)

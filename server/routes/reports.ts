@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -2653,7 +2653,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
 
-      const id = `rpt-chat-${randomUUID()}`;
+      const id = generatePrefixedId('rpt-chat');
       await query(
         `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
          VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
@@ -2875,7 +2875,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
         shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
       } else {
-        resolvedSessionId = `rpt-chat-${randomUUID()}`;
+        resolvedSessionId = generatePrefixedId('rpt-chat');
         await query(
           `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
@@ -2884,12 +2884,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         shouldAutoTitle = true;
       }
 
-      const assistantMessageId = `rpt-msg-${randomUUID()}`;
+      const assistantMessageId = generatePrefixedId('rpt-msg');
 
       try {
         const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
         if (!isRetryRewrite) {
-          const userMessageId = `rpt-msg-${randomUUID()}`;
+          const userMessageId = generatePrefixedId('rpt-msg');
           await query(
             `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
              VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
@@ -3212,7 +3212,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         messageIdResult.value,
       ]);
 
-      const assistantMessageId = `rpt-msg-${randomUUID()}`;
+      const assistantMessageId = generatePrefixedId('rpt-msg');
 
       try {
         // Build context from messages up to and including the edited message
@@ -3464,7 +3464,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
         shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
       } else {
-        resolvedSessionId = `rpt-chat-${randomUUID()}`;
+        resolvedSessionId = generatePrefixedId('rpt-chat');
         await query(
           `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
@@ -3476,7 +3476,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
         if (!isRetryRewrite) {
-          const userMessageId = `rpt-msg-${randomUUID()}`;
+          const userMessageId = generatePrefixedId('rpt-msg');
           await query(
             `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
              VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
@@ -3555,7 +3555,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const assistantText = cleaned || 'No response.';
         const assistantThoughtContent = String(thoughtContent || '').trim();
 
-        const assistantMessageId = `rpt-msg-${randomUUID()}`;
+        const assistantMessageId = generatePrefixedId('rpt-msg');
         await query(
           `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
            VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,

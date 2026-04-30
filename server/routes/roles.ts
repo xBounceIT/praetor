@@ -1,9 +1,9 @@
-import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   ADMIN_BASE_PERMISSIONS,
   ADMINISTRATION_PERMISSIONS,
@@ -169,7 +169,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `Non-admin roles cannot include administration permissions: ${forbiddenPermission}`,
         );
       }
-      const id = `role-${randomUUID()}`;
+      const id = generatePrefixedId('role');
 
       const forbiddenTopManagerPermission = findForbiddenTopManagerOnlyPermission(
         id,

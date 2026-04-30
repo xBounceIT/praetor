@@ -10,6 +10,7 @@ import {
 } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -380,7 +381,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (effectiveEmployeeType === 'internal' || effectiveEmployeeType === 'external') {
         // Internal/external employees: generate dummy username, placeholder password, user role
-        usernameValue = `emp-${randomUUID()}`;
+        usernameValue = generatePrefixedId('emp');
         passwordHash = await bcrypt.hash(randomUUID(), 12); // Random unguessable password
         roleValue = 'user'; // Internal/external employees have user role but cannot login
       } else {

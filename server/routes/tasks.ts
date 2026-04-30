@@ -9,6 +9,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   assignClientToTopManagers,
@@ -243,7 +244,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         start = recurrenceStartResult.value || todayLocalDateOnly();
       }
 
-      const id = 't-' + crypto.randomUUID();
+      const id = generatePrefixedId('t');
 
       try {
         await query(
