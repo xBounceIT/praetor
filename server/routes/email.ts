@@ -6,11 +6,10 @@ import emailService from '../services/email.ts';
 import { logAudit } from '../utils/audit.ts';
 import { encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 
-const emailConfigProperties = {
+const sharedConfigProperties = {
   enabled: { type: 'boolean' },
   smtpHost: { type: 'string' },
   smtpPort: { type: 'number' },
-  smtpEncryption: { type: 'string', enum: [...emailRepo.SMTP_ENCRYPTIONS] },
   smtpRejectUnauthorized: { type: 'boolean' },
   smtpUser: { type: 'string' },
   smtpPassword: { type: 'string' },
@@ -18,15 +17,27 @@ const emailConfigProperties = {
   fromName: { type: 'string' },
 } as const;
 
+// Response tolerates any smtpEncryption string so legacy DB values (older
+// versions accepted any string) still load — otherwise the admin UI can't
+// reach the form to correct them. EmailService falls back to STARTTLS for
+// unknown values. Writes are still constrained by the body schema below.
+const emailConfigResponseProperties = {
+  ...sharedConfigProperties,
+  smtpEncryption: { type: 'string' },
+} as const;
+
 const emailConfigSchema = {
   type: 'object',
-  properties: emailConfigProperties,
-  required: Object.keys(emailConfigProperties),
+  properties: emailConfigResponseProperties,
+  required: Object.keys(emailConfigResponseProperties),
 } as const;
 
 const emailConfigUpdateBodySchema = {
   type: 'object',
-  properties: emailConfigProperties,
+  properties: {
+    ...sharedConfigProperties,
+    smtpEncryption: { type: 'string', enum: [...emailRepo.SMTP_ENCRYPTIONS] },
+  },
 } as const;
 
 const emailTestBodySchema = {
