@@ -30,6 +30,7 @@ describe('parseNullableDbNumber', () => {
 
   test('returns null for non-finite input rather than coercing to 0', () => {
     expect(parseNullableDbNumber('abc')).toBeNull();
+    expect(parseNullableDbNumber('')).toBeNull();
     expect(parseNullableDbNumber(Number.NaN)).toBeNull();
     expect(parseNullableDbNumber(Number.POSITIVE_INFINITY)).toBeNull();
   });

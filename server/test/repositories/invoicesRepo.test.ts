@@ -134,6 +134,11 @@ describe('findDates', () => {
     exec.enqueue({ rows: [] });
     expect(await invoicesRepo.findDates('INV-X', exec)).toBeNull();
   });
+
+  test('throws if a column comes back null (schema invariant: NOT NULL)', async () => {
+    exec.enqueue({ rows: [{ issueDate: '2026-04-01', dueDate: null }] });
+    await expect(invoicesRepo.findDates('INV-1', exec)).rejects.toThrow(/dueDate/);
+  });
 });
 
 describe('findIdConflict', () => {
