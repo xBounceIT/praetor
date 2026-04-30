@@ -723,6 +723,9 @@ UPDATE general_settings SET currency = '$' WHERE currency = 'USD';
 CREATE INDEX IF NOT EXISTS idx_time_entries_user_id ON time_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(date);
 CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);
+-- Supports cursor-paginated listing on (created_at DESC, id DESC) — both global (admin) and per-user.
+CREATE INDEX IF NOT EXISTS idx_time_entries_created_at_id ON time_entries(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_time_entries_user_id_created_at_id ON time_entries(user_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 

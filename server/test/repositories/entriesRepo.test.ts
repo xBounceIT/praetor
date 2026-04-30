@@ -217,33 +217,59 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('returns the mapped domain row when found', async () => {
+  test('only sets provided fields, id is the last param', async () => {
     exec.enqueue({ rows: [rawRow] });
     const result = await entriesRepo.update('e-1', { duration: 2 }, exec);
-    expect(result).not.toBeNull();
     expect(result?.id).toBe('e-1');
     expect(result?.userId).toBe('u-1');
     expect(result?.duration).toBe(1.5);
     expect(result?.hourlyCost).toBe(100);
     expect(result?.isPlaceholder).toBe(false);
-    expect(exec.calls[0].params).toEqual(['e-1', 2, undefined, undefined, undefined, undefined]);
+    expect(exec.calls[0].sql).toContain('SET duration = $1');
+    expect(exec.calls[0].sql).toContain('WHERE id = $2');
+    expect(exec.calls[0].params).toEqual([2, 'e-1']);
   });
 
-  test('passes taskId through as $6 when set', async () => {
+  test('builds SET list in column order from defined fields', async () => {
+    exec.enqueue({ rows: [rawRow] });
+    await entriesRepo.update(
+      'e-1',
+      { duration: 2, notes: 'updated', isPlaceholder: true, location: 'office', taskId: 't-2' },
+      exec,
+    );
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('duration = $1');
+    expect(sql).toContain('notes = $2');
+    expect(sql).toContain('is_placeholder = $3');
+    expect(sql).toContain('location = $4');
+    expect(sql).toContain('task_id = $5');
+    expect(sql).toContain('WHERE id = $6');
+    expect(exec.calls[0].params).toEqual([2, 'updated', true, 'office', 't-2', 'e-1']);
+  });
+
+  test('passes taskId through when set, omitting other fields', async () => {
     exec.enqueue({ rows: [rawRow] });
     await entriesRepo.update('e-1', { taskId: 't-2' }, exec);
-    expect(exec.calls[0].params).toEqual([
-      'e-1',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      't-2',
-    ]);
-    expect(exec.calls[0].sql).toContain('task_id = COALESCE($6, task_id)');
+    expect(exec.calls[0].sql).toContain('SET task_id = $1');
+    expect(exec.calls[0].sql).toContain('WHERE id = $2');
+    expect(exec.calls[0].params).toEqual(['t-2', 'e-1']);
   });
 
-  test('returns null when no row updated', async () => {
+  test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
+    exec.enqueue({ rows: [rawRow] });
+    const result = await entriesRepo.update('e-1', {}, exec);
+    expect(exec.calls[0].sql).not.toContain('UPDATE');
+    expect(exec.calls[0].sql).toContain('SELECT');
+    expect(exec.calls[0].params).toEqual(['e-1']);
+    expect(result?.id).toBe('e-1');
+  });
+
+  test('returns null when no row matched (UPDATE path)', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await entriesRepo.update('e-x', { duration: 2 }, exec)).toBeNull();
+  });
+
+  test('returns null when no row matched (SELECT fallback path)', async () => {
     exec.enqueue({ rows: [] });
     expect(await entriesRepo.update('e-x', {}, exec)).toBeNull();
   });

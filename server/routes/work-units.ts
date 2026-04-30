@@ -134,9 +134,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         await workUnitsRepo.addManagers(id, managerIdsResult.value, tx);
         await workUnitsRepo.addUsersToUnit(id, managerIdsResult.value, tx);
-        return workUnitsRepo.findById(id, tx);
+        const created = await workUnitsRepo.findById(id, tx);
+        // The row was inserted moments ago in this same transaction; null here would mean a
+        // concurrent DELETE inside the tx, which doesn't happen on this path.
+        if (!created) throw new Error(`work_units row ${id} missing after insert`);
+        return created;
       });
-      if (!w) return reply.code(500).send({ error: 'Work unit not found after create' });
 
       await logAudit({
         request,
@@ -222,7 +225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!w) return reply.code(404).send({ error: 'Work unit not found' });
 
       const action = deriveToggleAction(
-        getAuditChangedFields({ name, managerIds, description, isDisabled }) ?? [],
+        getAuditChangedFields({ name, managerIds, description, isDisabled }),
         'isDisabled',
         'work_unit.updated',
         'work_unit.disabled',

@@ -333,7 +333,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           const action = deriveToggleAction(
-            getAuditChangedFields(body) ?? [],
+            getAuditChangedFields(body),
             'isDisabled',
             'project.updated',
             'project.disabled',

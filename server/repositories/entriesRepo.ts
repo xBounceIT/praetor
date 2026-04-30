@@ -251,10 +251,12 @@ export const create = async (entry: NewEntry, exec: QueryExecutor = pool): Promi
 
 export type EntryUpdate = {
   duration?: number;
+  /** `null` clears the column (the schema allows NULL); `undefined` leaves it untouched. */
   notes?: string | null;
   isPlaceholder?: boolean;
   location?: string;
-  taskId?: string | null;
+  /** Backfill-only: pass the resolved task FK on legacy rows. `undefined` leaves it untouched. */
+  taskId?: string;
 };
 
 export const update = async (
@@ -262,16 +264,35 @@ export const update = async (
   patch: EntryUpdate,
   exec: QueryExecutor = pool,
 ): Promise<TimeEntry | null> => {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+  const fields: Array<[string, unknown]> = [
+    ['duration', patch.duration],
+    ['notes', patch.notes],
+    ['is_placeholder', patch.isPlaceholder],
+    ['location', patch.location],
+    ['task_id', patch.taskId],
+  ];
+  for (const [col, value] of fields) {
+    if (value !== undefined) {
+      sets.push(`${col} = $${idx++}`);
+      params.push(value);
+    }
+  }
+
+  if (sets.length === 0) {
+    const { rows } = await exec.query<TimeEntryRow>(
+      `SELECT ${ENTRY_COLUMNS} FROM time_entries WHERE id = $1`,
+      [id],
+    );
+    return rows[0] ? mapRow(rows[0]) : null;
+  }
+
+  params.push(id);
   const { rows } = await exec.query<TimeEntryRow>(
-    `UPDATE time_entries
-        SET duration = COALESCE($2, duration),
-            notes = COALESCE($3, notes),
-            is_placeholder = COALESCE($4, is_placeholder),
-            location = COALESCE($5, location),
-            task_id = COALESCE($6, task_id)
-      WHERE id = $1
-      RETURNING ${ENTRY_COLUMNS}`,
-    [id, patch.duration, patch.notes, patch.isPlaceholder, patch.location, patch.taskId],
+    `UPDATE time_entries SET ${sets.join(', ')} WHERE id = $${idx} RETURNING ${ENTRY_COLUMNS}`,
+    params,
   );
   return rows[0] ? mapRow(rows[0]) : null;
 };

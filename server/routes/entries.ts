@@ -341,9 +341,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         parsedDuration = durationResult.value;
       }
 
+      let validatedNotes: string | null | undefined;
       if (notes !== undefined) {
         const notesResult = optionalNonEmptyString(notes, 'notes');
         if (!notesResult.ok) return badRequest(reply, notesResult.message);
+        validatedNotes = notesResult.value;
       }
 
       const context = await entriesRepo.findContext(idResult.value);
@@ -361,17 +363,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const resolvedTaskId =
-        context.taskId === null
-          ? await tasksRepo.findIdByProjectAndName(context.projectId, context.task)
-          : null;
+      // Backfill task_id only when missing — entries created before the FK column existed (or
+      // before the matching task row existed) carry task_id NULL. Don't touch the FK on rows that
+      // already have it set.
+      let backfilledTaskId: string | undefined;
+      if (context.taskId === null) {
+        const found = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
+        backfilledTaskId = found ?? undefined;
+      }
 
       const updated = await entriesRepo.update(idResult.value, {
         duration: parsedDuration,
-        notes,
+        notes: validatedNotes,
         isPlaceholder,
         location,
-        taskId: resolvedTaskId,
+        taskId: backfilledTaskId,
       });
 
       if (!updated) {
