@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { isForeignKeyViolation, isUniqueViolation } from '../utils/db-errors.ts';
+import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -134,43 +135,22 @@ const invoiceUpdateBodySchema = {
   },
 } as const;
 
-const toRequiredDateOnly = (value: unknown, fieldName: string) => {
-  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
-  if (!normalizedDate) {
-    throw new TypeError(`Invalid date value for ${fieldName}`);
-  }
-  return normalizedDate;
+type NormalizedInvoiceItemInput = {
+  productId: string | null;
+  description: string;
+  unitOfMeasure: 'unit' | 'hours';
+  quantity: number;
+  unitPrice: number;
+  discount: number;
 };
 
-const generateInvoiceId = async (issueDate: string) => {
-  const year = issueDate.split('-')[0];
-  const result = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
-     FROM invoices
-     WHERE id ~ $1`,
-    [`^INV-${year}-[0-9]+$`],
-  );
-  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
-  return `INV-${year}-${String(nextSequence).padStart(4, '0')}`;
-};
+const generateInvoiceItemId = () => generateItemId('inv-item-');
 
-const formatInvoiceItem = (item: Record<string, unknown>) => ({
-  ...item,
-  unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
-  quantity: parseFloat(String(item.quantity ?? 0)),
-  unitPrice: parseFloat(String(item.unitPrice ?? 0)),
-  discount: parseFloat(String(item.discount ?? 0)),
-});
-
-const getInvoiceClientId = async (invoiceId: string) => {
-  const result = await query(`SELECT client_id as "clientId" FROM invoices WHERE id = $1`, [
-    invoiceId,
-  ]);
-  return (result.rows[0]?.clientId as string | undefined) ?? null;
-};
-
-const validateAndNormalizeItems = async (items: unknown[], reply: FastifyReply) => {
-  const normalizedItems = [];
+const validateAndNormalizeItems = async (
+  items: unknown[],
+  reply: FastifyReply,
+): Promise<NormalizedInvoiceItemInput[] | null> => {
+  const normalizedItems: NormalizedInvoiceItemInput[] = [];
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
@@ -221,10 +201,9 @@ const validateAndNormalizeItems = async (items: unknown[], reply: FastifyReply) 
     }
 
     normalizedItems.push({
-      ...item,
-      productId: productIdResult.value,
+      productId: productIdResult.value || null,
       description: descriptionResult.value,
-      unitOfMeasure: unitOfMeasureResult.value,
+      unitOfMeasure: unitOfMeasureResult.value as 'unit' | 'hours',
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
@@ -234,18 +213,16 @@ const validateAndNormalizeItems = async (items: unknown[], reply: FastifyReply) 
   return normalizedItems;
 };
 
-const formatInvoiceResponse = (
-  invoice: Record<string, unknown>,
-  items: Record<string, unknown>[],
-) => ({
-  ...invoice,
-  issueDate: toRequiredDateOnly(invoice.issueDate, 'invoice.issueDate'),
-  dueDate: toRequiredDateOnly(invoice.dueDate, 'invoice.dueDate'),
-  subtotal: parseFloat(String(invoice.subtotal ?? 0)),
-  total: parseFloat(String(invoice.total ?? 0)),
-  amountPaid: parseFloat(String(invoice.amountPaid ?? 0)),
-  items: items.map(formatInvoiceItem),
-});
+const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.NewInvoiceItem[] =>
+  items.map((item) => ({
+    id: generateInvoiceItemId(),
+    productId: item.productId,
+    description: item.description,
+    unitOfMeasure: item.unitOfMeasure,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    discount: item.discount,
+  }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All invoices routes require authentication
@@ -269,59 +246,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
-      // Get all invoices
-      const invoicesResult = await query(
-        `SELECT 
-                id, 
-                linked_sale_id as "linkedSaleId",
-                client_id as "clientId", 
-                client_name as "clientName", 
-                issue_date as "issueDate",
-                due_date as "dueDate",
-                status, 
-                subtotal,
-                total,
-                amount_paid as "amountPaid",
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM invoices 
-            ORDER BY created_at DESC`,
-      );
-
-      // Get all invoice items
-      const itemsResult = await query(
-        `SELECT 
-                id,
-                invoice_id as "invoiceId",
-                product_id as "productId",
-                description,
-                unit_of_measure as "unitOfMeasure",
-                quantity,
-                unit_price as "unitPrice",
-                discount
-            FROM invoice_items
-            ORDER BY created_at ASC`,
-      );
-
-      // Group items by invoice
-      const itemsByInvoice: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item: { invoiceId: string }) => {
-        if (!itemsByInvoice[item.invoiceId]) {
-          itemsByInvoice[item.invoiceId] = [];
-        }
-        itemsByInvoice[item.invoiceId].push(item);
-      });
-
-      // Attach items to invoices
-      const invoices = invoicesResult.rows.map((invoice) =>
-        formatInvoiceResponse(
-          invoice as Record<string, unknown>,
-          (itemsByInvoice[invoice.id] || []) as Record<string, unknown>[],
-        ),
-      );
-
-      return invoices;
+      return invoicesRepo.listAllWithItems();
     },
   );
 
@@ -402,44 +327,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      const invoiceId = nextIdResult.value || (await generateInvoiceId(issueDateResult.value));
+      const issueDateYear = issueDateResult.value.split('-')[0];
+      const invoiceId = nextIdResult.value || (await invoicesRepo.generateNextId(issueDateYear));
 
-      let invoiceResult: Awaited<ReturnType<typeof query>>;
+      let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] };
       try {
-        invoiceResult = await query(
-          `INSERT INTO invoices (
-                      id, linked_sale_id, client_id, client_name, issue_date, due_date, 
-                      status, subtotal, total, amount_paid, notes
-                  ) 
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-                  RETURNING 
-                      id, 
-                      linked_sale_id as "linkedSaleId",
-                      client_id as "clientId", 
-                      client_name as "clientName", 
-                      issue_date as "issueDate",
-                      due_date as "dueDate",
-                      status, 
-                      subtotal,
-                      total,
-                      amount_paid as "amountPaid",
-                      notes,
-                      EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                      EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            invoiceId,
-            linkedSaleId || null,
-            clientIdResult.value,
-            clientNameResult.value,
-            issueDateResult.value,
-            dueDateResult.value,
-            status || 'draft',
-            subtotalResult.value || 0,
-            totalResult.value || 0,
-            amountPaidResult.value || 0,
-            notes,
-          ],
-        );
+        result = await withTransaction(async (tx) => {
+          const invoice = await invoicesRepo.create(
+            {
+              id: invoiceId,
+              linkedSaleId: (linkedSaleId as string | null | undefined) || null,
+              clientId: clientIdResult.value,
+              clientName: clientNameResult.value,
+              issueDate: issueDateResult.value,
+              dueDate: dueDateResult.value,
+              status: (status as string) || 'draft',
+              subtotal: subtotalResult.value || 0,
+              total: totalResult.value || 0,
+              amountPaid: amountPaidResult.value || 0,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          const items = await invoicesRepo.insertItems(
+            invoice.id,
+            buildItemsForInsert(normalizedItems),
+            tx,
+          );
+          return { invoice, items };
+        });
       } catch (error) {
         if (
           isUniqueViolation(error) &&
@@ -450,52 +366,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      // Insert invoice items
-      const createdItems = [];
-      for (const item of normalizedItems) {
-        const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-        const itemResult = await query(
-          `INSERT INTO invoice_items (
-                        id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount
-                    ) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-                    RETURNING 
-                        id,
-                        invoice_id as "invoiceId",
-                        product_id as "productId",
-                        description,
-                        unit_of_measure as "unitOfMeasure",
-                        quantity,
-                        unit_price as "unitPrice",
-                        discount`,
-          [
-            itemId,
-            invoiceId,
-            item.productId || null,
-            item.description,
-            item.unitOfMeasure,
-            item.quantity,
-            item.unitPrice,
-            item.discount || 0,
-          ],
-        );
-        createdItems.push(itemResult.rows[0]);
-      }
+      const invoice = result.invoice;
+      const createdItems = result.items;
 
       await logAudit({
         request,
         action: 'invoice.created',
         entityType: 'invoice',
-        entityId: invoiceId,
+        entityId: invoice.id,
         details: {
-          targetLabel: invoiceId,
+          targetLabel: invoice.id,
           secondaryLabel: clientNameResult.value,
         },
       });
-      const invoice = invoiceResult.rows[0];
-      return reply
-        .code(201)
-        .send(formatInvoiceResponse(invoice as Record<string, unknown>, createdItems));
+      return reply.code(201).send({ ...invoice, items: createdItems });
     },
   );
 
@@ -545,127 +429,120 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existingClientId = items ? await getInvoiceClientId(idResult.value) : null;
-      if (items && !existingClientId) {
-        return reply.code(404).send({ error: 'Invoice not found' });
-      }
+      const patch: invoicesRepo.InvoiceUpdate = {};
 
-      let clientIdValue = clientId;
       if (clientId !== undefined) {
         const clientIdResult = optionalNonEmptyString(clientId, 'clientId');
         if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
-        clientIdValue = clientIdResult.value;
+        if (clientIdResult.value) patch.clientId = clientIdResult.value;
       }
 
-      let clientNameValue = clientName;
       if (clientName !== undefined) {
         const clientNameResult = optionalNonEmptyString(clientName, 'clientName');
         if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
-        clientNameValue = clientNameResult.value;
+        if (clientNameResult.value) patch.clientName = clientNameResult.value;
       }
 
-      let nextIdValue = nextId;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-        nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
-          const existingIdResult = await query(
-            'SELECT id FROM invoices WHERE id = $1 AND id <> $2',
-            [nextIdResult.value, idResult.value],
-          );
-          if (existingIdResult.rows.length > 0) {
+          if (await invoicesRepo.findIdConflict(nextIdResult.value, idResult.value)) {
             return reply.code(409).send({ error: 'Invoice ID already exists' });
           }
+          patch.id = nextIdResult.value;
         }
       }
 
-      let issueDateValue = issueDate;
+      let nextIssueDate: string | undefined;
       if (issueDate !== undefined) {
         const issueDateResult = optionalDateString(issueDate, 'issueDate');
         if (!issueDateResult.ok) return badRequest(reply, issueDateResult.message);
-        issueDateValue = issueDateResult.value;
+        if (issueDateResult.value) {
+          patch.issueDate = issueDateResult.value;
+          nextIssueDate = issueDateResult.value;
+        }
       }
 
-      let dueDateValue = dueDate;
+      let nextDueDate: string | undefined;
       if (dueDate !== undefined) {
         const dueDateResult = optionalDateString(dueDate, 'dueDate');
         if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
-        dueDateValue = dueDateResult.value;
+        if (dueDateResult.value) {
+          patch.dueDate = dueDateResult.value;
+          nextDueDate = dueDateResult.value;
+        }
       }
 
-      if (issueDate && dueDate) {
-        if ((dueDate as string) < (issueDate as string)) {
+      if (nextIssueDate !== undefined || nextDueDate !== undefined) {
+        let effectiveIssueDate = nextIssueDate;
+        let effectiveDueDate = nextDueDate;
+        if (effectiveIssueDate === undefined || effectiveDueDate === undefined) {
+          const persisted = await invoicesRepo.findDates(idResult.value);
+          if (!persisted) {
+            return reply.code(404).send({ error: 'Invoice not found' });
+          }
+          effectiveIssueDate = effectiveIssueDate ?? persisted.issueDate;
+          effectiveDueDate = effectiveDueDate ?? persisted.dueDate;
+        }
+        if (effectiveDueDate < effectiveIssueDate) {
           return badRequest(reply, 'dueDate must be on or after issueDate');
         }
       }
 
-      let subtotalValue = subtotal;
       if (subtotal !== undefined) {
         const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
         if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-        subtotalValue = subtotalResult.value;
+        if (subtotalResult.value !== null && subtotalResult.value !== undefined) {
+          patch.subtotal = subtotalResult.value;
+        }
       }
 
-      let totalValue = total;
       if (total !== undefined) {
         const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
         if (!totalResult.ok) return badRequest(reply, totalResult.message);
-        totalValue = totalResult.value;
+        if (totalResult.value !== null && totalResult.value !== undefined) {
+          patch.total = totalResult.value;
+        }
       }
 
-      let amountPaidValue = amountPaid;
       if (amountPaid !== undefined) {
         const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-        amountPaidValue = amountPaidResult.value;
+        if (amountPaidResult.value !== null && amountPaidResult.value !== undefined) {
+          patch.amountPaid = amountPaidResult.value;
+        }
       }
 
-      // Update invoice
-      let invoiceResult: Awaited<ReturnType<typeof query>>;
+      if (status !== undefined) patch.status = status as string;
+      if (notes !== undefined) patch.notes = notes as string | null;
+
+      let normalizedItemsForUpdate: NormalizedInvoiceItemInput[] | null = null;
+      if (items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
+        }
+        normalizedItemsForUpdate = await validateAndNormalizeItems(items, reply);
+        if (!normalizedItemsForUpdate) return;
+      }
+
+      let result: {
+        invoice: invoicesRepo.Invoice | null;
+        items: invoicesRepo.InvoiceItem[];
+      };
       try {
-        invoiceResult = await query(
-          `UPDATE invoices 
-                  SET id = COALESCE($1, id),
-                      client_id = COALESCE($2, client_id),
-                      client_name = COALESCE($3, client_name),
-                      issue_date = COALESCE($4, issue_date),
-                      due_date = COALESCE($5, due_date),
-                      status = COALESCE($6, status),
-                      subtotal = COALESCE($7, subtotal),
-                      total = COALESCE($8, total),
-                      amount_paid = COALESCE($9, amount_paid),
-                      notes = COALESCE($10, notes),
-                      updated_at = CURRENT_TIMESTAMP
-                  WHERE id = $11 
-                  RETURNING 
-                      id, 
-                      linked_sale_id as "linkedSaleId",
-                      client_id as "clientId", 
-                      client_name as "clientName", 
-                      issue_date as "issueDate",
-                      due_date as "dueDate",
-                      status, 
-                      subtotal,
-                      total,
-                      amount_paid as "amountPaid",
-                      notes,
-                      EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                      EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            clientIdValue,
-            clientNameValue,
-            issueDateValue,
-            dueDateValue,
-            status,
-            subtotalValue,
-            totalValue,
-            amountPaidValue,
-            notes,
-            idResult.value,
-          ],
-        );
+        result = await withTransaction(async (tx) => {
+          const updated = await invoicesRepo.update(idResult.value, patch, tx);
+          if (!updated) return { invoice: null, items: [] };
+          const itemsOut = normalizedItemsForUpdate
+            ? await invoicesRepo.replaceItems(
+                updated.id,
+                buildItemsForInsert(normalizedItemsForUpdate),
+                tx,
+              )
+            : await invoicesRepo.findItemsForInvoice(updated.id, tx);
+          return { invoice: updated, items: itemsOut };
+        });
       } catch (error) {
         if (
           isUniqueViolation(error) &&
@@ -676,88 +553,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (invoiceResult.rows.length === 0) {
+      const invoice = result.invoice;
+      const updatedItems = result.items;
+      if (!invoice) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
 
-      const updatedInvoiceId = String(invoiceResult.rows[0].id);
-
-      // If items are provided, update them
-      let updatedItems = [];
-      if (items) {
-        if (!Array.isArray(items) || items.length === 0) {
-          return badRequest(reply, 'Items must be a non-empty array');
-        }
-        const normalizedItems = await validateAndNormalizeItems(items, reply);
-        if (!normalizedItems) return;
-        // Delete existing items
-        await query('DELETE FROM invoice_items WHERE invoice_id = $1', [updatedInvoiceId]);
-
-        // Insert new items
-        for (const item of normalizedItems) {
-          const itemId =
-            'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          const itemResult = await query(
-            `INSERT INTO invoice_items (
-                            id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount
-                        ) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-                        RETURNING 
-                            id,
-                            invoice_id as "invoiceId",
-                            product_id as "productId",
-                            description,
-                            unit_of_measure as "unitOfMeasure",
-                            quantity,
-                            unit_price as "unitPrice",
-                            discount`,
-            [
-              itemId,
-              updatedInvoiceId,
-              item.productId || null,
-              item.description,
-              item.unitOfMeasure,
-              item.quantity,
-              item.unitPrice,
-              item.discount || 0,
-            ],
-          );
-          updatedItems.push(itemResult.rows[0]);
-        }
-      } else {
-        // Fetch existing items
-        const itemsResult = await query(
-          `SELECT 
-                        id,
-                        invoice_id as "invoiceId",
-                        product_id as "productId",
-                        description,
-                        unit_of_measure as "unitOfMeasure",
-                        quantity,
-                        unit_price as "unitPrice",
-                        discount
-                    FROM invoice_items
-                    WHERE invoice_id = $1`,
-          [updatedInvoiceId],
-        );
-        updatedItems = itemsResult.rows;
-      }
-
-      const invoice = invoiceResult.rows[0];
       await logAudit({
         request,
         action: 'invoice.updated',
         entityType: 'invoice',
-        entityId: updatedInvoiceId,
+        entityId: invoice.id,
         details: {
-          targetLabel: updatedInvoiceId,
-          secondaryLabel: String(invoice.clientName),
+          targetLabel: invoice.id,
+          secondaryLabel: invoice.clientName,
         },
       });
-      return formatInvoiceResponse(
-        invoice as Record<string, unknown>,
-        updatedItems as Record<string, unknown>[],
-      );
+      return { ...invoice, items: updatedItems };
     },
   );
 
@@ -783,12 +595,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await query(
-          'DELETE FROM invoices WHERE id = $1 RETURNING id, client_name as "clientName"',
-          [idResult.value],
-        );
+        const result = await invoicesRepo.deleteById(idResult.value);
 
-        if (result.rows.length === 0) {
+        if (!result) {
           return reply.code(404).send({ error: 'Invoice not found' });
         }
 
@@ -799,12 +608,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
           details: {
             targetLabel: idResult.value,
-            secondaryLabel: String(result.rows[0].clientName ?? ''),
+            secondaryLabel: result.clientName ?? '',
           },
         });
         return reply.code(204).send();
       } catch (err) {
-        console.error('DELETE INVOICE ERROR:', err);
         if (isForeignKeyViolation(err)) {
           return reply.code(409).send({
             error: 'Cannot delete invoice because it is referenced by other records',

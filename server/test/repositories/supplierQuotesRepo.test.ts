@@ -157,6 +157,49 @@ describe('replaceItems', () => {
   });
 });
 
+describe('getQuoteItemSnapshots', () => {
+  test('returns empty Map when given no ids without issuing a query', async () => {
+    const result = await supplierQuotesRepo.getQuoteItemSnapshots([], exec);
+    expect(result.size).toBe(0);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('deduplicates ids and filters falsy values', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.getQuoteItemSnapshots(['', 'a', 'a', 'b'], exec);
+    expect(exec.calls[0].params).toEqual([['a', 'b']]);
+  });
+
+  test('joins on supplier_quotes filtered to status=accepted', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.getQuoteItemSnapshots(['a'], exec);
+    expect(exec.calls[0].sql).toContain('JOIN supplier_quotes sq ON sq.id = sqi.quote_id');
+    expect(exec.calls[0].sql).toContain("sq.status = 'accepted'");
+  });
+
+  test('maps row fields into snapshot shape with netCost mirroring unitPrice', async () => {
+    exec.enqueue({
+      rows: [
+        {
+          itemId: 'sqi-1',
+          quoteId: 'sq-1',
+          supplierName: 'Acme',
+          productId: 'p-1',
+          unitPrice: '12.5',
+        },
+      ],
+    });
+    const result = await supplierQuotesRepo.getQuoteItemSnapshots(['sqi-1'], exec);
+    expect(result.get('sqi-1')).toEqual({
+      supplierQuoteId: 'sq-1',
+      supplierName: 'Acme',
+      productId: 'p-1',
+      unitPrice: 12.5,
+      netCost: 12.5,
+    });
+  });
+});
+
 describe('deleteById', () => {
   test('returns supplierName when row deleted', async () => {
     exec.enqueue({ rows: [{ supplier_name: 'Acme' }] });

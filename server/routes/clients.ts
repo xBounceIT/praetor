@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -21,14 +23,9 @@ import {
   validateClientIdentifier,
 } from '../utils/validation.ts';
 
-const PROFILE_OPTION_CATEGORIES = [
-  'sector',
-  'numberOfEmployees',
-  'revenue',
-  'officeCountRange',
-] as const;
-
-type ProfileOptionCategory = (typeof PROFILE_OPTION_CATEGORIES)[number];
+const PROFILE_OPTION_CATEGORIES = clientProfileOptionsRepo.PROFILE_OPTION_CATEGORIES;
+type ProfileOptionCategory = clientProfileOptionsRepo.ProfileOptionCategory;
+const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
 
 type ClientContactInput = {
   fullName: unknown;
@@ -37,14 +34,7 @@ type ClientContactInput = {
   phone?: unknown;
 };
 
-type ClientContact = {
-  fullName: string;
-  role?: string;
-  email?: string;
-  phone?: string;
-};
-
-const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
+type ClientContact = clientsRepo.ClientContact;
 
 const idParamSchema = {
   type: 'object',
@@ -194,18 +184,6 @@ const clientUpdateBodySchema = {
   },
 } as const;
 
-const toNumber = (v: unknown): number | undefined => {
-  if (v === null || v === undefined) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-};
-
-const toOptionalTrimmedString = (
-  value: unknown,
-  fieldName: string,
-): { ok: true; value: string | null } | { ok: false; message: string } =>
-  optionalNonEmptyString(value, fieldName);
-
 const isValidProfileOptionCategory = (value: unknown): value is ProfileOptionCategory =>
   typeof value === 'string' && PROFILE_OPTION_CATEGORY_SET.has(value);
 
@@ -272,126 +250,6 @@ const parseContacts = (
   return { ok: true, value: normalized };
 };
 
-const parseContactsFromDb = (value: unknown): ClientContact[] => {
-  if (!Array.isArray(value)) return [];
-
-  const contacts: ClientContact[] = [];
-  for (const raw of value) {
-    if (!raw || typeof raw !== 'object') continue;
-    const item = raw as Record<string, unknown>;
-    const fullName =
-      typeof item.fullName === 'string'
-        ? item.fullName.trim()
-        : typeof item.name === 'string'
-          ? item.name.trim()
-          : '';
-    if (!fullName) continue;
-
-    const role = typeof item.role === 'string' ? item.role.trim() : '';
-    const email = typeof item.email === 'string' ? item.email.trim() : '';
-    const phone = typeof item.phone === 'string' ? item.phone.trim() : '';
-
-    contacts.push({
-      fullName,
-      role: role || undefined,
-      email: email || undefined,
-      phone: phone || undefined,
-    });
-  }
-
-  return contacts;
-};
-
-const formatAddress = ({
-  civicNumber,
-  line,
-  cap,
-  state,
-  province,
-  country,
-}: {
-  civicNumber: string | null;
-  line: string | null;
-  cap: string | null;
-  state: string | null;
-  province: string | null;
-  country: string | null;
-}) => {
-  const street = [line, civicNumber].filter(Boolean).join(' ').trim();
-  const locality = [cap, state].filter(Boolean).join(' ').trim();
-  const provinceChunk = province ? `(${province})` : '';
-  return [street, [locality, provinceChunk].filter(Boolean).join(' ').trim(), country]
-    .filter((chunk) => chunk && chunk.trim().length > 0)
-    .join(', ');
-};
-
-const getPrimaryContact = (contacts: ClientContact[]) => contacts[0] ?? null;
-
-const mapClientRow = (c: Record<string, unknown>) => {
-  const fiscalCode = (c.fiscal_code as string | null) || null;
-  const createdAt = c.created_at ? new Date(c.created_at as string).getTime() : undefined;
-  const contacts = parseContactsFromDb(c.contacts);
-  const primaryContact = getPrimaryContact(contacts);
-
-  const addressCountry = (c.address_country as string | null) || null;
-  const addressState = (c.address_state as string | null) || null;
-  const addressCap = (c.address_cap as string | null) || null;
-  const addressProvince = (c.address_province as string | null) || null;
-  const addressCivicNumber = (c.address_civic_number as string | null) || null;
-  const addressLine = (c.address_line as string | null) || null;
-
-  const computedAddress = formatAddress({
-    civicNumber: addressCivicNumber,
-    line: addressLine,
-    cap: addressCap,
-    state: addressState,
-    province: addressProvince,
-    country: addressCountry,
-  });
-
-  return {
-    id: c.id,
-    name: c.name,
-    description: c.description,
-    isDisabled: c.is_disabled,
-    type: c.type,
-    contacts,
-    contactName: (c.contact_name as string | null) || primaryContact?.fullName || null,
-    clientCode: c.client_code,
-    email: (c.email as string | null) || primaryContact?.email || null,
-    phone: (c.phone as string | null) || primaryContact?.phone || null,
-    address: (c.address as string | null) || computedAddress || null,
-    addressCountry,
-    addressState,
-    addressCap,
-    addressProvince,
-    addressCivicNumber,
-    addressLine,
-    atecoCode: c.ateco_code,
-    website: c.website,
-    sector: c.sector,
-    numberOfEmployees: c.number_of_employees,
-    revenue: c.revenue,
-    fiscalCode,
-    officeCountRange: c.office_count_range,
-    totalSentQuotes: toNumber(c.total_sent_quotes),
-    totalAcceptedOrders: toNumber(c.total_accepted_orders),
-    vatNumber: fiscalCode,
-    taxCode: fiscalCode,
-    createdAt,
-  };
-};
-
-const mapProfileOptionRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  category: String(row.category),
-  value: String(row.value),
-  sortOrder: Number(row.sort_order ?? 0),
-  usageCount: Number(row.usage_count ?? 0),
-  createdAt: row.created_at ? new Date(String(row.created_at)).getTime() : null,
-  updatedAt: row.updated_at ? new Date(String(row.updated_at)).getTime() : null,
-});
-
 const resolveFiscalCode = ({
   vatNumber,
   fiscalCode,
@@ -403,27 +261,12 @@ const resolveFiscalCode = ({
 }) => vatNumber || fiscalCode || taxCode || null;
 
 const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
-  const primary = getPrimaryContact(contacts);
+  const primary = contacts[0] ?? null;
   return {
     contactName: primary?.fullName ?? null,
     email: primary?.email ?? null,
     phone: primary?.phone ?? null,
   };
-};
-
-const getUsageCountExpression = (category: ProfileOptionCategory) => {
-  switch (category) {
-    case 'sector':
-      return '(SELECT COUNT(*) FROM clients c WHERE c.sector = o.value)';
-    case 'numberOfEmployees':
-      return '(SELECT COUNT(*) FROM clients c WHERE c.number_of_employees = o.value)';
-    case 'revenue':
-      return '(SELECT COUNT(*) FROM clients c WHERE c.revenue = o.value)';
-    case 'officeCountRange':
-      return '(SELECT COUNT(*) FROM clients c WHERE c.office_count_range = o.value)';
-    default:
-      return '0';
-  }
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -465,67 +308,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
 
-      let queryText = `
-        SELECT c.*,
-          COALESCE(sq.total_sent_quotes, 0) as total_sent_quotes,
-          COALESCE(so.total_accepted_orders, 0) as total_accepted_orders
-        FROM clients c
-        LEFT JOIN (
-          SELECT q.client_id,
-            SUM(
-              (SELECT COALESCE(SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)), 0)
-               FROM quote_items qi WHERE qi.quote_id = q.id)
-              * (1 - COALESCE(q.discount, 0) / 100.0)
-            ) as total_sent_quotes
-          FROM quotes q
-          WHERE q.status = 'sent'
-          GROUP BY q.client_id
-        ) sq ON sq.client_id = c.id
-        LEFT JOIN (
-          SELECT s.client_id,
-            SUM(
-              (SELECT COALESCE(SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)), 0)
-               FROM sale_items si WHERE si.sale_id = s.id)
-              * (1 - COALESCE(s.discount, 0) / 100.0)
-            ) as total_accepted_orders
-          FROM sales s
-          WHERE s.status = 'confirmed'
-          GROUP BY s.client_id
-        ) so ON so.client_id = c.id
-        ORDER BY c.name
-      `;
+      const clients = await clientsRepo.list(
+        canViewAllClients
+          ? { canViewAllClients: true }
+          : { canViewAllClients: false, userId: request.user.id },
+      );
 
-      const queryParams: (string | null)[] = [];
-
-      if (!canViewAllClients) {
-        queryText = `
-          SELECT c.id, c.name, c.description, c.is_disabled, c.type,
-            c.contacts, c.contact_name, c.client_code, c.email, c.phone, c.address,
-            c.address_country, c.address_state, c.address_cap, c.address_province,
-            c.address_civic_number, c.address_line,
-            c.ateco_code, c.website, c.sector, c.number_of_employees,
-            c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
-            NULL::numeric as total_sent_quotes,
-            NULL::numeric as total_accepted_orders
-          FROM clients c
-          INNER JOIN user_clients uc ON c.id = uc.client_id
-          WHERE uc.user_id = $1
-          ORDER BY c.name
-        `;
-        queryParams.push(request.user.id);
-      }
-
-      const result = await query(queryText, queryParams);
-      return result.rows.map((row) => {
+      return clients.map((client) => {
         if (!canViewClientDetails) {
           return {
-            id: row.id,
-            name: row.name,
+            id: client.id,
+            name: client.name,
             description: null,
           };
         }
-
-        return mapClientRow(row);
+        return client;
       });
     },
   );
@@ -597,22 +394,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       if (!resolvedFiscalCode) return badRequest(reply, 'Fiscal code is required');
 
-      const addressResult = toOptionalTrimmedString(address, 'address');
+      const addressResult = optionalNonEmptyString(address, 'address');
       if (!addressResult.ok) return badRequest(reply, addressResult.message);
-      const addressCountryResult = toOptionalTrimmedString(addressCountry, 'addressCountry');
+      const addressCountryResult = optionalNonEmptyString(addressCountry, 'addressCountry');
       if (!addressCountryResult.ok) return badRequest(reply, addressCountryResult.message);
-      const addressStateResult = toOptionalTrimmedString(addressState, 'addressState');
+      const addressStateResult = optionalNonEmptyString(addressState, 'addressState');
       if (!addressStateResult.ok) return badRequest(reply, addressStateResult.message);
-      const addressCapResult = toOptionalTrimmedString(addressCap, 'addressCap');
+      const addressCapResult = optionalNonEmptyString(addressCap, 'addressCap');
       if (!addressCapResult.ok) return badRequest(reply, addressCapResult.message);
-      const addressProvinceResult = toOptionalTrimmedString(addressProvince, 'addressProvince');
+      const addressProvinceResult = optionalNonEmptyString(addressProvince, 'addressProvince');
       if (!addressProvinceResult.ok) return badRequest(reply, addressProvinceResult.message);
-      const addressCivicNumberResult = toOptionalTrimmedString(
+      const addressCivicNumberResult = optionalNonEmptyString(
         addressCivicNumber,
         'addressCivicNumber',
       );
       if (!addressCivicNumberResult.ok) return badRequest(reply, addressCivicNumberResult.message);
-      const addressLineResult = toOptionalTrimmedString(addressLine, 'addressLine');
+      const addressLineResult = optionalNonEmptyString(addressLine, 'addressLine');
       if (!addressLineResult.ok) return badRequest(reply, addressLineResult.message);
 
       const descriptionResult = optionalNonEmptyString(description, 'description');
@@ -649,21 +446,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const explicitPhoneResult = optionalNonEmptyString(phone, 'phone');
       if (!explicitPhoneResult.ok) return badRequest(reply, explicitPhoneResult.message);
 
-      const existingFiscalCode = await query(
-        'SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1)',
-        [resolvedFiscalCode],
-      );
-      if (existingFiscalCode.rows.length > 0) {
+      const [fiscalCodeConflict, clientCodeConflict] = await Promise.all([
+        clientsRepo.findByFiscalCode(resolvedFiscalCode, null),
+        clientCodeResult.value
+          ? clientsRepo.findByClientCode(clientCodeResult.value, null)
+          : Promise.resolve(false),
+      ]);
+      if (fiscalCodeConflict) {
         return badRequest(reply, 'Fiscal code already exists');
       }
-
-      if (clientCodeResult.value) {
-        const existingCode = await query('SELECT id FROM clients WHERE client_code = $1', [
-          clientCodeResult.value,
-        ]);
-        if (existingCode.rows.length > 0) {
-          return badRequest(reply, 'Client ID already exists');
-        }
+      if (clientCodeConflict) {
+        return badRequest(reply, 'Client ID already exists');
       }
 
       const id = 'c-' + Date.now();
@@ -671,52 +464,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const primaryFromContacts = buildPrimaryFieldsFromContacts(contactsValue);
 
       try {
-        const created = await query(
-          `
-            INSERT INTO clients (
-                id, name, is_disabled, type, contacts, contact_name, client_code,
-                email, phone, address, address_country, address_state, address_cap,
-                address_province, address_civic_number, address_line,
-                description, ateco_code, website, sector,
-                number_of_employees, revenue, fiscal_code, office_count_range
-            ) VALUES (
-                $1, $2, $3, $4, $5::jsonb, $6, $7,
-                $8, $9, $10, $11, $12, $13,
-                $14, $15, $16,
-                $17, $18, $19, $20,
-                $21, $22, $23, $24
-            )
-            RETURNING *
-          `,
-          [
-            id,
-            nameResult.value,
-            false,
-            type || 'company',
-            JSON.stringify(contactsValue),
-            explicitContactNameResult.value ?? primaryFromContacts.contactName,
-            clientCodeResult.value,
-            explicitEmailResult.value ?? primaryFromContacts.email,
-            explicitPhoneResult.value ?? primaryFromContacts.phone,
-            addressResult.value,
-            addressCountryResult.value,
-            addressStateResult.value,
-            addressCapResult.value,
-            addressProvinceResult.value,
-            addressCivicNumberResult.value,
-            addressLineResult.value,
-            descriptionResult.value,
-            atecoCodeResult.value,
-            websiteResult.value,
-            sectorResult.value,
-            numberOfEmployeesResult.value,
-            revenueResult.value,
-            resolvedFiscalCode,
-            officeCountRangeResult.value,
-          ],
-        );
-
-        const c = created.rows[0];
+        const client = await clientsRepo.create({
+          id,
+          name: nameResult.value,
+          type: typeof type === 'string' && type ? type : 'company',
+          contacts: contactsValue,
+          contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
+          clientCode: clientCodeResult.value,
+          email: explicitEmailResult.value ?? primaryFromContacts.email,
+          phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
+          address: addressResult.value,
+          addressCountry: addressCountryResult.value,
+          addressState: addressStateResult.value,
+          addressCap: addressCapResult.value,
+          addressProvince: addressProvinceResult.value,
+          addressCivicNumber: addressCivicNumberResult.value,
+          addressLine: addressLineResult.value,
+          description: descriptionResult.value,
+          atecoCode: atecoCodeResult.value,
+          website: websiteResult.value,
+          sector: sectorResult.value,
+          numberOfEmployees: numberOfEmployeesResult.value,
+          revenue: revenueResult.value,
+          fiscalCode: resolvedFiscalCode,
+          officeCountRange: officeCountRangeResult.value,
+        });
 
         if (request.user?.id) {
           await assignClientToUser(request.user.id, id);
@@ -728,11 +500,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client',
           entityId: id,
           details: {
-            targetLabel: c.name as string,
-            secondaryLabel: (c.client_code as string | null) ?? undefined,
+            targetLabel: client.name,
+            secondaryLabel: client.clientCode ?? undefined,
           },
         });
-        return reply.code(201).send(mapClientRow(c));
+        return reply.code(201).send(client);
       } catch (err) {
         if (isUniqueViolation(err)) {
           if (err.constraint === 'idx_clients_fiscal_code_unique') {
@@ -910,36 +682,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!officeCountRangeResult.ok) return badRequest(reply, officeCountRangeResult.message);
 
-      if (resolvedFiscalCode) {
-        const existingFiscalCode = await query(
-          'SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1) AND id <> $2',
-          [resolvedFiscalCode, idResult.value],
-        );
-        if (existingFiscalCode.rows.length > 0) {
-          return badRequest(reply, 'Fiscal code already exists');
-        }
+      const [fiscalCodeConflict, clientCodeConflict, current] = await Promise.all([
+        resolvedFiscalCode
+          ? clientsRepo.findByFiscalCode(resolvedFiscalCode, idResult.value)
+          : Promise.resolve(false),
+        clientCodeValue
+          ? clientsRepo.findByClientCode(clientCodeValue, idResult.value)
+          : Promise.resolve(false),
+        clientsRepo.findContactsForUpdate(idResult.value),
+      ]);
+      if (fiscalCodeConflict) {
+        return badRequest(reply, 'Fiscal code already exists');
       }
-
-      if (clientCodeValue) {
-        const existingCode = await query(
-          'SELECT id FROM clients WHERE client_code = $1 AND id <> $2',
-          [clientCodeValue, idResult.value],
-        );
-        if (existingCode.rows.length > 0) {
-          return badRequest(reply, 'Client ID already exists');
-        }
+      if (clientCodeConflict) {
+        return badRequest(reply, 'Client ID already exists');
       }
-
-      const currentResult = await query(
-        'SELECT contacts, contact_name, email, phone FROM clients WHERE id = $1',
-        [idResult.value],
-      );
-      if (currentResult.rows.length === 0) {
+      if (!current) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
-      const currentContacts = parseContactsFromDb(currentResult.rows[0].contacts);
-      const effectiveContacts = hasContacts ? contactsResult.value : currentContacts;
+      const effectiveContacts = hasContacts ? contactsResult.value : current.contacts;
       const primaryFromContacts = buildPrimaryFieldsFromContacts(effectiveContacts);
 
       const finalContactName = hasContactName
@@ -962,71 +724,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const shouldUpdatePhone = hasPhone || hasContacts;
 
       try {
-        const result = await query(
-          `
-            UPDATE clients SET
-                name = COALESCE($1, name),
-                is_disabled = COALESCE($2, is_disabled),
-                type = COALESCE($3, type),
-                contacts = COALESCE($4::jsonb, contacts),
-                contact_name = CASE WHEN $25 THEN $5 ELSE contact_name END,
-                client_code = COALESCE($6, client_code),
-                email = CASE WHEN $26 THEN $7 ELSE email END,
-                phone = CASE WHEN $27 THEN $8 ELSE phone END,
-                address = COALESCE($9, address),
-                address_country = COALESCE($10, address_country),
-                address_state = COALESCE($11, address_state),
-                address_cap = COALESCE($12, address_cap),
-                address_province = COALESCE($13, address_province),
-                address_civic_number = COALESCE($14, address_civic_number),
-                address_line = COALESCE($15, address_line),
-                description = COALESCE($16, description),
-                ateco_code = COALESCE($17, ateco_code),
-                website = COALESCE($18, website),
-                sector = CASE WHEN $28 THEN $19 ELSE sector END,
-                number_of_employees = CASE WHEN $29 THEN $20 ELSE number_of_employees END,
-                revenue = CASE WHEN $30 THEN $21 ELSE revenue END,
-                fiscal_code = COALESCE($22, fiscal_code),
-                office_count_range = CASE WHEN $31 THEN $23 ELSE office_count_range END
-            WHERE id = $24
-            RETURNING *
-          `,
-          [
-            hasName ? nameValue : null,
-            hasIsDisabled ? body.isDisabled : null,
-            hasType ? body.type : null,
-            hasContacts ? JSON.stringify(effectiveContacts) : null,
-            finalContactName,
-            hasClientCode ? clientCodeValue : null,
-            finalEmail,
-            finalPhone,
-            hasAddress ? addressResult.value : null,
-            hasAddressCountry ? addressCountryResult.value : null,
-            hasAddressState ? addressStateResult.value : null,
-            hasAddressCap ? addressCapResult.value : null,
-            hasAddressProvince ? addressProvinceResult.value : null,
-            hasAddressCivicNumber ? addressCivicNumberResult.value : null,
-            hasAddressLine ? addressLineResult.value : null,
-            hasDescription ? descriptionResult.value : null,
-            hasAtecoCode ? atecoCodeResult.value : null,
-            hasWebsite ? websiteResult.value : null,
-            hasSector ? sectorResult.value : null,
-            hasNumberOfEmployees ? numberOfEmployeesResult.value : null,
-            hasRevenue ? revenueResult.value : null,
-            hasFiscalUpdate ? resolvedFiscalCode : null,
-            hasOfficeCountRange ? officeCountRangeResult.value : null,
-            idResult.value,
-            shouldUpdateContactName,
-            shouldUpdateEmail,
-            shouldUpdatePhone,
-            hasSector,
-            hasNumberOfEmployees,
-            hasRevenue,
-            hasOfficeCountRange,
-          ],
-        );
+        const client = await clientsRepo.update(idResult.value, {
+          name: hasName ? nameValue : null,
+          isDisabled: hasIsDisabled ? (body.isDisabled as boolean | null) : null,
+          type: hasType ? (body.type as string | null) : null,
+          contacts: hasContacts ? effectiveContacts : null,
+          clientCode: hasClientCode ? clientCodeValue : null,
+          address: hasAddress ? addressResult.value : null,
+          addressCountry: hasAddressCountry ? addressCountryResult.value : null,
+          addressState: hasAddressState ? addressStateResult.value : null,
+          addressCap: hasAddressCap ? addressCapResult.value : null,
+          addressProvince: hasAddressProvince ? addressProvinceResult.value : null,
+          addressCivicNumber: hasAddressCivicNumber ? addressCivicNumberResult.value : null,
+          addressLine: hasAddressLine ? addressLineResult.value : null,
+          description: hasDescription ? descriptionResult.value : null,
+          atecoCode: hasAtecoCode ? atecoCodeResult.value : null,
+          website: hasWebsite ? websiteResult.value : null,
+          fiscalCode: hasFiscalUpdate ? resolvedFiscalCode : null,
+          contactName: finalContactName,
+          contactNameProvided: shouldUpdateContactName,
+          email: finalEmail,
+          emailProvided: shouldUpdateEmail,
+          phone: finalPhone,
+          phoneProvided: shouldUpdatePhone,
+          sector: hasSector ? sectorResult.value : null,
+          sectorProvided: hasSector,
+          numberOfEmployees: hasNumberOfEmployees ? numberOfEmployeesResult.value : null,
+          numberOfEmployeesProvided: hasNumberOfEmployees,
+          revenue: hasRevenue ? revenueResult.value : null,
+          revenueProvided: hasRevenue,
+          officeCountRange: hasOfficeCountRange ? officeCountRangeResult.value : null,
+          officeCountRangeProvided: hasOfficeCountRange,
+        });
 
-        const c = result.rows[0];
+        if (!client) {
+          return reply.code(404).send({ error: 'Client not found' });
+        }
+
         const changedFields = [
           hasName ? 'name' : null,
           hasIsDisabled ? 'isDisabled' : null,
@@ -1064,11 +798,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client',
           entityId: idResult.value,
           details: {
-            targetLabel: c.name as string,
-            secondaryLabel: (c.client_code as string | null) ?? undefined,
+            targetLabel: client.name,
+            secondaryLabel: client.clientCode ?? undefined,
           },
         });
-        return mapClientRow(c);
+        return client;
       } catch (err) {
         if (isUniqueViolation(err)) {
           if (err.constraint === 'idx_clients_fiscal_code_unique') {
@@ -1106,11 +840,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query(
-        'DELETE FROM clients WHERE id = $1 RETURNING id, name, client_code',
-        [idResult.value],
-      );
-      if (result.rows.length === 0) {
+      const deleted = await clientsRepo.deleteById(idResult.value);
+      if (!deleted) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
@@ -1120,8 +851,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'client',
         entityId: idResult.value,
         details: {
-          targetLabel: result.rows[0].name as string,
-          secondaryLabel: (result.rows[0].client_code as string | null) ?? undefined,
+          targetLabel: deleted.name,
+          secondaryLabel: deleted.clientCode ?? undefined,
         },
       });
       return { message: 'Client deleted' };
@@ -1152,23 +883,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
-      const usageCountExpr = getUsageCountExpression(categoryResult.value);
-      const result = await query(
-        `SELECT
-           o.id,
-           o.category,
-           o.value,
-           o.sort_order,
-           o.created_at,
-           o.updated_at,
-           ${usageCountExpr} as usage_count
-         FROM client_profile_options o
-         WHERE o.category = $1
-         ORDER BY o.sort_order ASC, o.value ASC`,
-        [categoryResult.value],
-      );
-
-      return result.rows.map(mapProfileOptionRow);
+      return clientProfileOptionsRepo.listByCategory(categoryResult.value);
     },
   );
 
@@ -1199,27 +914,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!valueResult.ok) return badRequest(reply, valueResult.message);
 
       const sortOrderValue = Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : null;
-      const existing = await query(
-        'SELECT id FROM client_profile_options WHERE category = $1 AND LOWER(value) = LOWER($2)',
-        [categoryResult.value, valueResult.value],
-      );
-      if (existing.rows.length > 0) {
+
+      const [valueExists, nextSortOrder] = await Promise.all([
+        clientProfileOptionsRepo.findByCategoryAndValue(
+          categoryResult.value,
+          valueResult.value,
+          null,
+        ),
+        clientProfileOptionsRepo.getNextSortOrder(categoryResult.value),
+      ]);
+      if (valueExists) {
         return badRequest(reply, 'Option with this value already exists for this category');
       }
-
-      const computedSortOrderResult = await query(
-        'SELECT COALESCE(MAX(sort_order), 0) + 1 as next_sort_order FROM client_profile_options WHERE category = $1',
-        [categoryResult.value],
-      );
-      const nextSortOrder = Number(computedSortOrderResult.rows[0]?.next_sort_order ?? 1);
       const id = generatePrefixedId('cpo');
 
-      const insertResult = await query(
-        `INSERT INTO client_profile_options (id, category, value, sort_order)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, category, value, sort_order, created_at, updated_at`,
-        [id, categoryResult.value, valueResult.value, sortOrderValue ?? nextSortOrder],
-      );
+      const option = await clientProfileOptionsRepo.create({
+        id,
+        category: categoryResult.value,
+        value: valueResult.value,
+        sortOrder: sortOrderValue ?? nextSortOrder,
+      });
 
       await logAudit({
         request,
@@ -1232,7 +946,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return reply.code(201).send(mapProfileOptionRow({ ...insertResult.rows[0], usage_count: 0 }));
+      return reply.code(201).send(option);
     },
   );
 
@@ -1270,66 +984,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const valueResult = requireNonEmptyString(value, 'value');
       if (!valueResult.ok) return badRequest(reply, valueResult.message);
 
-      const existingResult = await query(
-        'SELECT id, value FROM client_profile_options WHERE id = $1 AND category = $2',
-        [idResult.value, categoryResult.value],
+      const existing = await clientProfileOptionsRepo.findByCategoryAndId(
+        categoryResult.value,
+        idResult.value,
       );
-      if (existingResult.rows.length === 0) {
+      if (!existing) {
         return reply.code(404).send({ error: 'Profile option not found' });
       }
 
-      const duplicateResult = await query(
-        `SELECT id
-         FROM client_profile_options
-         WHERE category = $1 AND LOWER(value) = LOWER($2) AND id <> $3`,
-        [categoryResult.value, valueResult.value, idResult.value],
-      );
-      if (duplicateResult.rows.length > 0) {
+      if (
+        await clientProfileOptionsRepo.findByCategoryAndValue(
+          categoryResult.value,
+          valueResult.value,
+          idResult.value,
+        )
+      ) {
         return badRequest(reply, 'Option with this value already exists for this category');
       }
 
       const sortOrderValue = Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : null;
-      await query(
-        `UPDATE client_profile_options
-         SET value = $1,
-             sort_order = COALESCE($2, sort_order),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3 AND category = $4`,
-        [valueResult.value, sortOrderValue, idResult.value, categoryResult.value],
+      const updated = await withTransaction((tx) =>
+        clientProfileOptionsRepo.update(
+          categoryResult.value,
+          idResult.value,
+          {
+            value: valueResult.value,
+            sortOrder: sortOrderValue,
+            previousValue: existing.value,
+          },
+          tx,
+        ),
       );
 
-      const valueFieldByCategory: Record<ProfileOptionCategory, string> = {
-        sector: 'sector',
-        numberOfEmployees: 'number_of_employees',
-        revenue: 'revenue',
-        officeCountRange: 'office_count_range',
-      };
-
-      const previousValue = String(existingResult.rows[0].value);
-      if (previousValue !== valueResult.value) {
-        const fieldName = valueFieldByCategory[categoryResult.value];
-        await query(
-          `UPDATE clients
-           SET ${fieldName} = $1
-           WHERE ${fieldName} = $2`,
-          [valueResult.value, previousValue],
-        );
+      if (!updated) {
+        return reply.code(404).send({ error: 'Profile option not found' });
       }
-
-      const usageCountExpr = getUsageCountExpression(categoryResult.value);
-      const updatedResult = await query(
-        `SELECT
-           o.id,
-           o.category,
-           o.value,
-           o.sort_order,
-           o.created_at,
-           o.updated_at,
-           ${usageCountExpr} as usage_count
-         FROM client_profile_options o
-         WHERE o.id = $1`,
-        [idResult.value],
-      );
 
       await logAudit({
         request,
@@ -1342,7 +1031,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return mapProfileOptionRow(updatedResult.rows[0]);
+      return updated;
     },
   );
 
@@ -1375,29 +1064,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(params.id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existingResult = await query(
-        'SELECT id, category, value FROM client_profile_options WHERE id = $1 AND category = $2',
-        [idResult.value, categoryResult.value],
+      const existing = await clientProfileOptionsRepo.findByCategoryAndId(
+        categoryResult.value,
+        idResult.value,
       );
-      if (existingResult.rows.length === 0) {
+      if (!existing) {
         return reply.code(404).send({ error: 'Profile option not found' });
       }
 
-      const usageCountExpr = getUsageCountExpression(categoryResult.value);
-      const usageResult = await query(
-        `SELECT ${usageCountExpr} as usage_count
-         FROM client_profile_options o
-         WHERE o.id = $1`,
-        [idResult.value],
+      const usageCount = await clientProfileOptionsRepo.getUsageCount(
+        categoryResult.value,
+        idResult.value,
       );
-      const usageCount = Number(usageResult.rows[0]?.usage_count ?? 0);
       if (usageCount > 0) {
         return reply.code(409).send({
-          error: `Cannot delete option "${existingResult.rows[0].value}" because it is used by ${usageCount} client(s)`,
+          error: `Cannot delete option "${existing.value}" because it is used by ${usageCount} client(s)`,
         });
       }
 
-      await query('DELETE FROM client_profile_options WHERE id = $1', [idResult.value]);
+      await clientProfileOptionsRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -1405,7 +1090,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'client_profile_option',
         entityId: idResult.value,
         details: {
-          targetLabel: String(existingResult.rows[0].value),
+          targetLabel: existing.value,
           secondaryLabel: categoryResult.value,
         },
       });

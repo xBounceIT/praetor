@@ -1,10 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as productsRepo from '../repositories/productsRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
+import { isPastLocalDate } from '../utils/date.ts';
 import { isUniqueViolation } from '../utils/db-errors.ts';
+import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
@@ -35,7 +39,6 @@ type IncomingQuoteItem = {
 type QuoteItemSnapshot = {
   productCost: number;
   productMolPercentage: number | null;
-  // Supplier quote snapshot fields
   supplierQuoteId: string | null;
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
@@ -144,90 +147,6 @@ const calculateQuoteTotals = (
   return { total, subtotal };
 };
 
-const getProductSnapshots = async (productIds: string[]) => {
-  const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
-  if (uniqueIds.length === 0) return new Map<string, QuoteItemSnapshot>();
-
-  const result = await query(
-    `SELECT
-        id,
-        costo,
-        mol_percentage as "molPercentage"
-     FROM products
-     WHERE id = ANY($1)`,
-    [uniqueIds],
-  );
-
-  const snapshots = new Map<string, QuoteItemSnapshot>();
-  result.rows.forEach((row) => {
-    snapshots.set(row.id, {
-      productCost: Number(row.costo ?? 0),
-      productMolPercentage:
-        row.molPercentage === undefined || row.molPercentage === null
-          ? null
-          : Number(row.molPercentage),
-      supplierQuoteId: null,
-      supplierQuoteItemId: null,
-      supplierQuoteSupplierName: null,
-      supplierQuoteUnitPrice: null,
-    });
-  });
-  return snapshots;
-};
-
-// New function to get supplier quote item snapshots
-const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => {
-  const uniqueIds = Array.from(new Set(supplierQuoteItemIds.filter(Boolean)));
-  if (uniqueIds.length === 0) {
-    return new Map<
-      string,
-      {
-        supplierQuoteId: string;
-        supplierName: string;
-        productId: string | null;
-        unitPrice: number;
-        netCost: number;
-      }
-    >();
-  }
-
-  const result = await query(
-    `SELECT
-        sqi.id as "itemId",
-        sq.id as "quoteId",
-        sq.supplier_name as "supplierName",
-        sqi.product_id as "productId",
-        sqi.unit_price as "unitPrice"
-     FROM supplier_quote_items sqi
-     JOIN supplier_quotes sq ON sq.id = sqi.quote_id
-     WHERE sqi.id = ANY($1) AND sq.status = 'accepted'`,
-    [uniqueIds],
-  );
-
-  const snapshots = new Map<
-    string,
-    {
-      supplierQuoteId: string;
-      supplierName: string;
-      productId: string | null;
-      unitPrice: number;
-      netCost: number;
-    }
-  >();
-  result.rows.forEach((row) => {
-    const netCost = Number(row.unitPrice ?? 0);
-
-    snapshots.set(row.itemId, {
-      supplierQuoteId: row.quoteId,
-      supplierName: row.supplierName,
-      productId: normalizeNullableString(row.productId),
-      unitPrice: Number(row.unitPrice ?? 0),
-      netCost,
-    });
-  });
-  return snapshots;
-};
-
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
@@ -246,7 +165,7 @@ const resolveQuoteItemSnapshots = async (
     );
   });
 
-  const supplierQuoteSnapshots = await getSupplierQuoteItemSnapshots(
+  const supplierQuoteSnapshots = await supplierQuotesRepo.getQuoteItemSnapshots(
     itemsNeedingRecalc
       .map((item) => normalizeNullableString(item.supplierQuoteItemId))
       .filter((id): id is string => id !== null),
@@ -263,7 +182,7 @@ const resolveQuoteItemSnapshots = async (
       productIds.add(supplierQuoteSnapshot.productId);
     }
   }
-  const productSnapshots = await getProductSnapshots(Array.from(productIds));
+  const productSnapshots = await productsRepo.getSnapshots(Array.from(productIds));
 
   const resolvedItems: ResolvedQuoteItem[] = [];
   for (const item of items) {
@@ -294,7 +213,6 @@ const resolveQuoteItemSnapshots = async (
       }
     }
 
-    // Supplier quote snapshot fields
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
@@ -369,7 +287,6 @@ const quoteItemSchema = {
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
     productMolPercentage: { type: ['number', 'null'] },
-    // Supplier quote fields
     supplierQuoteId: { type: ['string', 'null'] },
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
@@ -474,66 +391,27 @@ const quoteUpdateBodySchema = {
   },
 } as const;
 
-const toFiniteNumber = (value: unknown, fieldName: string) => {
-  const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue)) {
-    throw new TypeError(`Invalid numeric value for ${fieldName}`);
-  }
-  return parsedValue;
-};
+const generateQuoteItemId = () => generateItemId('qi-');
 
-const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
-  if (value === undefined || value === null) return null;
-  return toFiniteNumber(value, fieldName);
-};
-
-const toNullableString = (value: unknown) => {
-  if (value === undefined || value === null) return null;
-  return String(value);
-};
-
-const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  quoteId: String(row.quoteId),
-  productId: toNullableString(row.productId) || '',
-  productName: String(row.productName),
-  quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
-  unitPrice: toFiniteNumber(row.unitPrice, 'quoteItem.unitPrice'),
-  productCost: toFiniteNumber(row.productCost, 'quoteItem.productCost'),
-  productMolPercentage: toNullableFiniteNumber(
-    row.productMolPercentage,
-    'quoteItem.productMolPercentage',
-  ),
-  // Supplier quote fields
-  supplierQuoteId: toNullableString(row.supplierQuoteId),
-  supplierQuoteItemId: toNullableString(row.supplierQuoteItemId),
-  supplierQuoteSupplierName: toNullableString(row.supplierQuoteSupplierName),
-  supplierQuoteUnitPrice: toNullableFiniteNumber(
-    row.supplierQuoteUnitPrice,
-    'quoteItem.supplierQuoteUnitPrice',
-  ),
-  discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
-  note: toNullableString(row.note),
-  unitType: normalizeUnitType(row.unitType),
-});
-
-const normalizeQuoteRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  linkedOfferId: toNullableString(row.linkedOfferId),
-  clientId: String(row.clientId),
-  clientName: String(row.clientName),
-  paymentTerms: toNullableString(row.paymentTerms),
-  discount: toFiniteNumber(row.discount, 'quote.discount'),
-  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
-  status: String(row.status),
-  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
-  notes: toNullableString(row.notes),
-  createdAt: toFiniteNumber(row.createdAt, 'quote.createdAt'),
-  updatedAt: toFiniteNumber(row.updatedAt, 'quote.updatedAt'),
-});
+const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewClientQuoteItem[] =>
+  items.map((item) => ({
+    id: generateQuoteItemId(),
+    productId: item.productId || null,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost ?? 0,
+    productMolPercentage: item.productMolPercentage ?? null,
+    discount: item.discount || 0,
+    note: item.note || null,
+    supplierQuoteId: item.supplierQuoteId ?? null,
+    supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice ?? null,
+    unitType: item.unitType ?? 'hours',
+  }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All quote routes require authentication
   fastify.addHook('onRequest', authenticateToken);
 
   const isQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
@@ -560,78 +438,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
-      // Get all quotes
-      const quotesResult = await query(
-        `SELECT
-                id,
-                (
-                  SELECT co.id
-                  FROM customer_offers co
-                  WHERE co.linked_quote_id = quotes.id
-                  LIMIT 1
-                ) as "linkedOfferId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                discount_type as "discountType",
-                status,
-                expiration_date as "expirationDate",
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM quotes
-            ORDER BY created_at DESC`,
-        [],
-      );
+      const [quotes, items] = await Promise.all([
+        clientQuotesRepo.listAll(),
+        clientQuotesRepo.listAllItems(),
+      ]);
 
-      // Get all quote items
-      const itemsResult = await query(
-        `SELECT
-                id,
-                quote_id as "quoteId",
-                product_id as "productId",
-                product_name as "productName",
-                quantity,
-                unit_price as "unitPrice",
-                product_cost as "productCost",
-                product_mol_percentage as "productMolPercentage",
-                supplier_quote_id as "supplierQuoteId",
-                supplier_quote_item_id as "supplierQuoteItemId",
-                supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                discount,
-                note,
-                unit_type as "unitType"
-            FROM quote_items
-            ORDER BY created_at ASC`,
-        [],
-      );
+      const itemsByQuote = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+      for (const item of items) {
+        const list = itemsByQuote.get(item.quoteId);
+        if (list) list.push(item);
+        else itemsByQuote.set(item.quoteId, [item]);
+      }
 
-      const normalizedQuoteItems = itemsResult.rows.map((item) =>
-        normalizeQuoteItemRow(item as Record<string, unknown>),
-      );
-      const normalizedQuotes = quotesResult.rows.map((quote) =>
-        normalizeQuoteRow(quote as Record<string, unknown>),
-      );
-
-      // Group items by quote
-      const itemsByQuote: Record<string, ReturnType<typeof normalizeQuoteItemRow>[]> = {};
-      normalizedQuoteItems.forEach((item) => {
-        if (!itemsByQuote[item.quoteId]) {
-          itemsByQuote[item.quoteId] = [];
-        }
-        itemsByQuote[item.quoteId].push(item);
-      });
-
-      // Attach items to quotes
-      const quotes = normalizedQuotes.map((quote) => ({
+      return quotes.map((quote) => ({
         ...quote,
-        items: itemsByQuote[quote.id] || [],
+        items: itemsByQuote.get(quote.id) ?? [],
         isExpired: isQuoteExpired(quote.status, quote.expirationDate),
       }));
-
-      return quotes;
     },
   );
 
@@ -677,12 +500,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = requireNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      const existingQuote = await query('SELECT id FROM quotes WHERE id = $1', [
-        nextIdResult.value,
-      ]);
-      if (existingQuote.rows.length > 0) {
-        return reply.code(409).send({ error: 'Quote ID already exists' });
-      }
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -719,87 +536,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const quoteResult = await query(
-          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                 RETURNING
-                    id,
-                    null::varchar as "linkedOfferId",
-                    client_id as "clientId",
-                    client_name as "clientName",
-                    payment_terms as "paymentTerms",
-                    discount,
-                    discount_type as "discountType",
-                    status,
-                    expiration_date as "expirationDate",
-                    notes,
-                    EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                    EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdResult.value,
-            clientIdResult.value,
-            clientNameResult.value,
-            paymentTerms || 'immediate',
-            discountValue,
-            discountTypeValue,
-            status || 'draft',
-            expirationDateResult.value,
-            notes,
-          ],
-        );
-
-        // Insert quote items
-        const createdItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
-        for (const item of resolvedItems) {
-          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          const itemResult = await query(
-            `INSERT INTO quote_items (
-              id, quote_id, product_id, product_name,
-              quantity, unit_price, product_cost, product_mol_percentage,
-              discount, note,
-              supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price,
-              unit_type
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING
-              id,
-              quote_id as "quoteId",
-              product_id as "productId",
-              product_name as "productName",
-              quantity,
-              unit_price as "unitPrice",
-              product_cost as "productCost",
-              product_mol_percentage as "productMolPercentage",
-              discount,
-              note,
-              supplier_quote_id as "supplierQuoteId",
-              supplier_quote_item_id as "supplierQuoteItemId",
-              supplier_quote_supplier_name as "supplierQuoteSupplierName",
-              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              unit_type as "unitType"`,
-            [
-              itemId,
-              nextIdResult.value,
-              item.productId || null,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.productCost,
-              item.productMolPercentage ?? null,
-              item.discount || 0,
-              item.note || null,
-              item.supplierQuoteId ?? null,
-              item.supplierQuoteItemId ?? null,
-              item.supplierQuoteSupplierName ?? null,
-              item.supplierQuoteUnitPrice ?? null,
-              item.unitType || 'hours',
-            ],
+        const { quote, createdItems } = await withTransaction(async (tx) => {
+          const created = await clientQuotesRepo.create(
+            {
+              id: nextIdResult.value,
+              clientId: clientIdResult.value,
+              clientName: clientNameResult.value,
+              paymentTerms:
+                typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
+              discount: discountValue,
+              discountType: discountTypeValue,
+              status: typeof status === 'string' && status ? status : 'draft',
+              expirationDate: expirationDateResult.value,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
           );
-          createdItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
-        }
-
-        const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
+          const items = await clientQuotesRepo.insertItems(
+            created.id,
+            buildItemsForInsert(resolvedItems),
+            tx,
+          );
+          return { quote: created, createdItems: items };
+        });
 
         await logAudit({
           request,
@@ -812,9 +571,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           },
         });
         return reply.code(201).send({
-          ...normalizedQuote,
+          ...quote,
           items: createdItems,
-          isExpired: isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
+          isExpired: isQuoteExpired(quote.status, quote.expirationDate),
         });
       } catch (err) {
         if (
@@ -823,8 +582,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
-        console.error('CRITICAL ERROR creating quote:', err);
-        // Return the specific error message to the frontend for debugging
+        request.log.error({ err }, 'CRITICAL ERROR creating quote');
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
       }
     },
@@ -889,26 +647,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes === undefined &&
         isExpiredOverride === undefined;
 
-      const linkedOfferResult = await query(
-        'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedOfferResult.rows.length > 0 && !isIdOnlyUpdate) {
+      const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
+      if (linkedOfferId && !isIdOnlyUpdate) {
         return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
       }
 
-      const currentStatusResult = await query(
-        'SELECT status, discount, discount_type FROM quotes WHERE id = $1',
-        [idResult.value],
-      );
-      if (currentStatusResult.rows.length === 0) {
+      const current = await clientQuotesRepo.findCurrentForUpdate(idResult.value);
+      if (!current) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
-      const currentStatus = currentStatusResult.rows[0].status;
-      const existingDiscountRaw = parseFloat(currentStatusResult.rows[0].discount || 0);
-      const existingDiscount = Number.isFinite(existingDiscountRaw) ? existingDiscountRaw : 0;
-      const existingDiscountType: 'percentage' | 'currency' =
-        currentStatusResult.rows[0].discount_type === 'currency' ? 'currency' : 'percentage';
+      const currentStatus = current.status;
+      const existingDiscount = current.discount;
+      const existingDiscountType = current.discountType;
       const hasNonStatusOrIdUpdates =
         clientId !== undefined ||
         clientName !== undefined ||
@@ -928,12 +678,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const nextIdResult = requireNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
-
-        const existingQuote = await query('SELECT id FROM quotes WHERE id = $1 AND id <> $2', [
-          nextIdValue,
-          idResult.value,
-        ]);
-        if (existingQuote.rows.length > 0) {
+        if (await clientQuotesRepo.findIdConflict(nextIdValue, idResult.value)) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
       }
@@ -966,39 +711,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
-      const discountTypeValue =
-        discountType === 'currency'
-          ? 'currency'
-          : discountType !== undefined
-            ? 'percentage'
-            : undefined;
+      const discountTypeValue: 'currency' | 'percentage' | undefined =
+        discountType === undefined
+          ? undefined
+          : discountType === 'currency'
+            ? 'currency'
+            : 'percentage';
 
       const effectiveDiscount = discountValue ?? existingDiscount;
       const isRestore = status === 'quoted' && isExpiredOverride === false;
 
       if (isRestore) {
-        const nonDraftSalesResult = await query(
-          'SELECT id FROM sales WHERE linked_quote_id = $1 AND status <> $2 LIMIT 1',
-          [idResult.value, 'draft'],
-        );
-        if (nonDraftSalesResult.rows.length > 0) {
+        if (await clientQuotesRepo.findNonDraftLinkedSale(idResult.value)) {
           return reply.code(409).send({
             error: 'Restore is only possible when linked sale orders are in draft status',
           });
         }
-
-        await query('DELETE FROM sales WHERE linked_quote_id = $1 AND status = $2 RETURNING id', [
-          idResult.value,
-          'draft',
-        ]);
+        await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value);
       }
 
       if (status === 'quoted') {
-        const linkedSaleResult = await query(
-          'SELECT id FROM sales WHERE linked_quote_id = $1 LIMIT 1',
-          [idResult.value],
-        );
-        if (linkedSaleResult.rows.length > 0) {
+        if (await clientQuotesRepo.findAnyLinkedSale(idResult.value)) {
           return reply.code(409).send({ error: 'Cannot revert quote with existing sale orders' });
         }
       }
@@ -1012,46 +745,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!itemsResult.ok) return badRequest(reply, itemsResult.message);
         const incomingItems = itemsResult.items;
 
-        const existingItemsResult = await query(
-          `SELECT
-              id,
-              product_id as "productId",
-              product_cost as "productCost",
-              product_mol_percentage as "productMolPercentage",
-              supplier_quote_id as "supplierQuoteId",
-              supplier_quote_item_id as "supplierQuoteItemId",
-              supplier_quote_supplier_name as "supplierQuoteSupplierName",
-               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               unit_type as "unitType"
-           FROM quote_items
-           WHERE quote_id = $1`,
-
-          [idResult.value],
-        );
+        const existingSnapshots = await clientQuotesRepo.findItemSnapshotsForQuote(idResult.value);
         const existingItemsById = new Map<string, IncomingQuoteItem & QuoteItemSnapshot>();
-        existingItemsResult.rows.forEach((item) => {
-          existingItemsById.set(item.id, {
-            id: item.id,
-            productId: normalizeNullableString(item.productId),
+        for (const snap of existingSnapshots) {
+          existingItemsById.set(snap.id, {
+            id: snap.id,
+            productId: snap.productId,
             productName: '',
             quantity: 0,
             unitPrice: 0,
             discount: 0,
-            productCost: Number(item.productCost ?? 0),
-            productMolPercentage:
-              item.productMolPercentage === undefined || item.productMolPercentage === null
-                ? null
-                : Number(item.productMolPercentage),
-            supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
-            supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
-            supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
-            supplierQuoteUnitPrice:
-              item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
-                ? null
-                : Number(item.supplierQuoteUnitPrice),
-            unitType: normalizeUnitType(item.unitType),
+            productCost: snap.productCost,
+            productMolPercentage: snap.productMolPercentage,
+            supplierQuoteId: snap.supplierQuoteId,
+            supplierQuoteItemId: snap.supplierQuoteItemId,
+            supplierQuoteSupplierName: snap.supplierQuoteSupplierName,
+            supplierQuoteUnitPrice: snap.supplierQuoteUnitPrice,
+            unitType: snap.unitType,
           });
-        });
+        }
 
         try {
           normalizedItems = await resolveQuoteItemSnapshots(incomingItems, existingItemsById);
@@ -1069,23 +781,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, 'Total must be greater than 0');
         }
       } else if (discount !== undefined) {
-        const itemsResult = await query(
-          `SELECT
-                    quantity,
-                    unit_price as "unitPrice",
-                    discount
-                FROM quote_items
-                WHERE quote_id = $1`,
-          [idResult.value],
-        );
-        const itemsForTotal = itemsResult.rows.map((row) => ({
-          quantity: parseFloat(row.quantity),
-          unitPrice: parseFloat(row.unitPrice),
-          discount: parseFloat(row.discount || 0),
-        }));
+        const itemTotals = await clientQuotesRepo.findItemTotals(idResult.value);
         const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
         const totals = calculateQuoteTotals(
-          itemsForTotal,
+          itemTotals,
           effectiveDiscount as number,
           effectiveDiscountType,
         );
@@ -1094,48 +793,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Update quote
-      let quoteResult: Awaited<ReturnType<typeof query>>;
+      let result: {
+        quote: clientQuotesRepo.ClientQuote | null;
+        items: clientQuotesRepo.ClientQuoteItem[];
+      };
       try {
-        quoteResult = await query(
-          `UPDATE quotes
-             SET id = COALESCE($1, id),
-                 client_id = COALESCE($2, client_id),
-                 client_name = COALESCE($3, client_name),
-                 payment_terms = COALESCE($4, payment_terms),
-                 discount = COALESCE($5, discount),
-                 discount_type = COALESCE($6, discount_type),
-                 status = COALESCE($7, status),
-                 expiration_date = COALESCE($8, expiration_date),
-                 notes = COALESCE($9, notes),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $10
-             RETURNING
-                id,
-                null::varchar as "linkedOfferId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                discount_type as "discountType",
-                status,
-                expiration_date as "expirationDate",
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            clientIdValue,
-            clientNameValue,
-            paymentTerms,
-            discountValue,
-            discountTypeValue,
-            status,
-            expirationDateValue,
-            notes,
+        result = await withTransaction(async (tx) => {
+          const quote = await clientQuotesRepo.update(
             idResult.value,
-          ],
-        );
+            {
+              id: nextIdValue ?? null,
+              clientId: (clientIdValue as string | null | undefined) ?? null,
+              clientName: (clientNameValue as string | null | undefined) ?? null,
+              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
+              discount: (discountValue as number | null | undefined) ?? null,
+              discountType: discountTypeValue ?? null,
+              status: (status as string | null | undefined) ?? null,
+              expirationDate: (expirationDateValue as string | null | undefined) ?? null,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          if (!quote) return { quote: null, items: [] };
+          const items = normalizedItems
+            ? await clientQuotesRepo.replaceItems(
+                quote.id,
+                buildItemsForInsert(normalizedItems),
+                tx,
+              )
+            : await clientQuotesRepo.findItemsForQuote(quote.id, tx);
+          return { quote, items };
+        });
       } catch (err) {
         if (
           isUniqueViolation(err) &&
@@ -1146,102 +834,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      if (quoteResult.rows.length === 0) {
+      const updatedQuote = result.quote;
+      const updatedItems = result.items;
+      if (!updatedQuote) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
 
-      const updatedQuoteId = String(quoteResult.rows[0].id);
+      const updatedQuoteId = updatedQuote.id;
 
-      // If items are provided, update them
-      let updatedItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
-      if (normalizedItems) {
-        // Delete existing items
-        await query('DELETE FROM quote_items WHERE quote_id = $1', [updatedQuoteId]);
-
-        // Insert new items
-        for (const item of normalizedItems) {
-          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          const itemResult = await query(
-            `INSERT INTO quote_items (
-              id, quote_id, product_id, product_name,
-              quantity, unit_price, product_cost, product_mol_percentage,
-              discount, note,
-              supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-              supplier_quote_unit_price,
-              unit_type
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING
-              id,
-              quote_id as "quoteId",
-              product_id as "productId",
-              product_name as "productName",
-              quantity,
-              unit_price as "unitPrice",
-              product_cost as "productCost",
-              product_mol_percentage as "productMolPercentage",
-              discount,
-              note,
-              supplier_quote_id as "supplierQuoteId",
-              supplier_quote_item_id as "supplierQuoteItemId",
-              supplier_quote_supplier_name as "supplierQuoteSupplierName",
-              supplier_quote_unit_price as "supplierQuoteUnitPrice",
-              unit_type as "unitType"`,
-            [
-              itemId,
-              updatedQuoteId,
-              item.productId || null,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.productCost,
-              item.productMolPercentage ?? null,
-              item.discount || 0,
-              item.note || null,
-              item.supplierQuoteId ?? null,
-              item.supplierQuoteItemId ?? null,
-              item.supplierQuoteSupplierName ?? null,
-              item.supplierQuoteUnitPrice ?? null,
-              item.unitType || 'hours',
-            ],
-          );
-          updatedItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
-        }
-      } else {
-        // Fetch existing items
-        const itemsResult = await query(
-          `SELECT
-                    id,
-                    quote_id as "quoteId",
-                    product_id as "productId",
-                    product_name as "productName",
-                    quantity,
-                    unit_price as "unitPrice",
-                    product_cost as "productCost",
-                    product_mol_percentage as "productMolPercentage",
-                    supplier_quote_id as "supplierQuoteId",
-                    supplier_quote_item_id as "supplierQuoteItemId",
-                    supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    discount,
-                    note,
-                    unit_type as "unitType"
-                FROM quote_items
-                WHERE quote_id = $1`,
-          [updatedQuoteId],
-        );
-        updatedItems = itemsResult.rows.map((item) =>
-          normalizeQuoteItemRow(item as Record<string, unknown>),
-        );
-      }
-
-      const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
-      const nextStatus = typeof status === 'string' ? status : normalizedQuote.status;
+      const nextStatus = typeof status === 'string' ? status : updatedQuote.status;
       const didStatusChange = status !== undefined && currentStatus !== nextStatus;
-
-      // Invalidate client cache if quote status affects sent quotes totals
-      if (didStatusChange && (currentStatus === 'sent' || nextStatus === 'sent')) {
-      }
 
       await logAudit({
         request,
@@ -1250,18 +852,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: updatedQuoteId,
         details: {
           targetLabel: updatedQuoteId,
-          secondaryLabel: normalizedQuote.clientName,
+          secondaryLabel: updatedQuote.clientName,
           fromValue: didStatusChange ? String(currentStatus) : undefined,
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
       return {
-        ...normalizedQuote,
+        ...updatedQuote,
         items: updatedItems,
         isExpired:
           typeof isExpiredOverride === 'boolean'
             ? isExpiredOverride
-            : isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
+            : isQuoteExpired(updatedQuote.status, updatedQuote.expirationDate),
       };
     },
   );
@@ -1286,29 +888,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const linkedOfferResult = await query(
-        'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedOfferResult.rows.length > 0) {
+      if (await clientQuotesRepo.findLinkedOfferId(idResult.value)) {
         return reply
           .code(409)
           .send({ error: 'Cannot delete a quote once an offer has been created from it' });
       }
 
-      const statusResult = await query(
-        'SELECT status, client_name as "clientName" FROM quotes WHERE id = $1',
-        [idResult.value],
-      );
-      if (statusResult.rows.length === 0) {
+      const status = await clientQuotesRepo.findStatusAndClientName(idResult.value);
+      if (!status) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
-      if (statusResult.rows[0].status === 'confirmed') {
+      if (status.status === 'confirmed') {
         return reply.code(409).send({ error: 'Cannot delete a confirmed quote' });
       }
 
-      // Items will be deleted automatically via CASCADE
-      await query('DELETE FROM quotes WHERE id = $1 RETURNING id', [idResult.value]);
+      await clientQuotesRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -1317,7 +911,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(statusResult.rows[0].clientName ?? ''),
+          secondaryLabel: status.clientName ?? '',
         },
       });
       return reply.code(204).send();

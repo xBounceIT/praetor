@@ -6,3 +6,9 @@ export const parseDbNumber = <T extends number | undefined>(
   const n = typeof value === 'string' ? Number.parseFloat(value) : value;
   return Number.isFinite(n) ? n : fallback;
 };
+
+export const parseNullableDbNumber = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === 'string' ? Number.parseFloat(value) : value;
+  return Number.isFinite(n) ? n : null;
+};

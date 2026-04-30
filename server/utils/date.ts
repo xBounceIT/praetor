@@ -19,6 +19,12 @@ export const normalizeNullableDateOnly = (value: unknown, fieldName: string) => 
   throw new TypeError(`Invalid date value for ${fieldName}`);
 };
 
+export const requireDateOnly = (value: unknown, fieldName: string): string => {
+  const normalized = normalizeNullableDateOnly(value, fieldName);
+  if (!normalized) throw new TypeError(`Invalid date value for ${fieldName}`);
+  return normalized;
+};
+
 export const todayLocalDateOnly = (now: Date = new Date()) => formatLocalDateOnly(now);
 
 export const isPastLocalDate = (dateOnly: string, now: Date = new Date()) =>

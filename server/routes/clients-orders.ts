@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query, withTransaction } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isUniqueViolation } from '../utils/db-errors.ts';
@@ -10,7 +12,7 @@ import {
   generateSupplierOrderId,
 } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import { normalizeUnitType } from '../utils/unit-type.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
@@ -142,72 +144,155 @@ const clientOrderUpdateBodySchema = {
   },
 } as const;
 
-const toFiniteNumber = (value: unknown, fieldName: string) => {
-  const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue)) {
-    throw new TypeError(`Invalid numeric value for ${fieldName}`);
+type NormalizedOrderItem = {
+  id?: string;
+  productId: string | null;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  productCost: number;
+  productMolPercentage: number | null;
+  supplierQuoteId: string | null;
+  supplierQuoteItemId: string | null;
+  supplierQuoteSupplierName: string | null;
+  supplierQuoteUnitPrice: number | null;
+  supplierSaleId: string | null;
+  supplierSaleItemId: string | null;
+  supplierSaleSupplierName: string | null;
+  unitType: UnitType;
+  note: string | null;
+  discount: number;
+};
+
+const normalizeIncomingItems = (
+  items: unknown[],
+  reply: FastifyReply,
+): NormalizedOrderItem[] | null => {
+  const normalized: NormalizedOrderItem[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] as Record<string, unknown>;
+    const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+    if (!productNameResult.ok) {
+      badRequest(reply, productNameResult.message);
+      return null;
+    }
+    const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
+    if (!quantityResult.ok) {
+      badRequest(reply, quantityResult.message);
+      return null;
+    }
+    const unitPriceResult = parseLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!unitPriceResult.ok) {
+      badRequest(reply, unitPriceResult.message);
+      return null;
+    }
+    const itemDiscountResult = optionalLocalizedNonNegativeNumber(
+      item.discount,
+      `items[${i}].discount`,
+    );
+    if (!itemDiscountResult.ok) {
+      badRequest(reply, itemDiscountResult.message);
+      return null;
+    }
+    const toNullableString = (value: unknown) =>
+      value === null || value === undefined ? null : String(value);
+    const toNullableNumber = (value: unknown) =>
+      value === null || value === undefined ? null : Number(value);
+    normalized.push({
+      id: typeof item.id === 'string' ? item.id : undefined,
+      productId: toNullableString(item.productId),
+      productName: productNameResult.value,
+      quantity: quantityResult.value,
+      unitPrice: unitPriceResult.value,
+      productCost: Number(item.productCost ?? 0),
+      productMolPercentage: toNullableNumber(item.productMolPercentage),
+      supplierQuoteId: toNullableString(item.supplierQuoteId),
+      supplierQuoteItemId: toNullableString(item.supplierQuoteItemId),
+      supplierQuoteSupplierName: toNullableString(item.supplierQuoteSupplierName),
+      supplierQuoteUnitPrice: toNullableNumber(item.supplierQuoteUnitPrice),
+      supplierSaleId: toNullableString(item.supplierSaleId),
+      supplierSaleItemId: toNullableString(item.supplierSaleItemId),
+      supplierSaleSupplierName: toNullableString(item.supplierSaleSupplierName),
+      unitType: normalizeUnitType(item.unitType),
+      note: toNullableString(item.note),
+      discount: itemDiscountResult.value || 0,
+    });
   }
-  return parsedValue;
+  return normalized;
 };
 
-const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
-  if (value === undefined || value === null) return null;
-  return toFiniteNumber(value, fieldName);
+const buildItemsForInsert = (
+  items: NormalizedOrderItem[],
+): clientsOrdersRepo.NewClientOrderItem[] =>
+  items.map((item) => ({
+    id: generateItemId('si-'),
+    productId: item.productId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    supplierSaleId: item.supplierSaleId,
+    supplierSaleItemId: item.supplierSaleItemId,
+    supplierSaleSupplierName: item.supplierSaleSupplierName,
+    unitType: item.unitType,
+  }));
+
+const normalizeNotesValue = (value: unknown) => String(value ?? '');
+
+const normalizeItemsForComparison = (itemsToNormalize: Array<Record<string, unknown>>) =>
+  itemsToNormalize
+    .map((item) => {
+      const normalized = {
+        id: item.id ? String(item.id) : '',
+        productId: item.productId ? String(item.productId) : '',
+        productName: item.productName ? String(item.productName) : '',
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discount: item.discount !== undefined && item.discount !== null ? Number(item.discount) : 0,
+      };
+      const sortKey =
+        normalized.id ||
+        `${normalized.productId}|${normalized.productName}|${normalized.quantity}|${normalized.unitPrice}|${normalized.discount}`;
+      return { ...normalized, sortKey };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+const itemsMatch = (
+  leftItems: Array<Record<string, unknown>>,
+  rightItems: Array<Record<string, unknown>>,
+) => {
+  if (leftItems.length !== rightItems.length) return false;
+  for (let i = 0; i < leftItems.length; i++) {
+    const leftItem = leftItems[i];
+    const rightItem = rightItems[i];
+    if (
+      leftItem.id !== rightItem.id ||
+      leftItem.productId !== rightItem.productId ||
+      leftItem.productName !== rightItem.productName ||
+      leftItem.quantity !== rightItem.quantity ||
+      leftItem.unitPrice !== rightItem.unitPrice ||
+      leftItem.discount !== rightItem.discount
+    ) {
+      return false;
+    }
+  }
+  return true;
 };
-
-const toNullableString = (value: unknown) => {
-  if (value === undefined || value === null) return null;
-  return String(value);
-};
-
-const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  orderId: String(row.orderId),
-  productId: toNullableString(row.productId),
-  productName: String(row.productName),
-  quantity: toFiniteNumber(row.quantity, 'clientOrderItem.quantity'),
-  unitPrice: toFiniteNumber(row.unitPrice, 'clientOrderItem.unitPrice'),
-  productCost: toFiniteNumber(row.productCost, 'clientOrderItem.productCost'),
-  productMolPercentage: toNullableFiniteNumber(
-    row.productMolPercentage,
-    'clientOrderItem.productMolPercentage',
-  ),
-  supplierQuoteId: toNullableString(row.supplierQuoteId),
-  supplierQuoteItemId: toNullableString(row.supplierQuoteItemId),
-  supplierQuoteSupplierName: toNullableString(row.supplierQuoteSupplierName),
-  supplierQuoteUnitPrice: toNullableFiniteNumber(
-    row.supplierQuoteUnitPrice,
-    'clientOrderItem.supplierQuoteUnitPrice',
-  ),
-  supplierSaleId: toNullableString(row.supplierSaleId),
-  supplierSaleItemId: toNullableString(row.supplierSaleItemId),
-  supplierSaleSupplierName: toNullableString(row.supplierSaleSupplierName),
-  unitType: normalizeUnitType(row.unitType),
-  note: toNullableString(row.note),
-  discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
-});
-
-const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  linkedQuoteId: toNullableString(row.linkedQuoteId),
-  linkedOfferId: toNullableString(row.linkedOfferId),
-  clientId: String(row.clientId),
-  clientName: String(row.clientName),
-  paymentTerms: toNullableString(row.paymentTerms),
-  discount: toFiniteNumber(row.discount, 'clientOrder.discount'),
-  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
-  status: String(row.status),
-  notes: toNullableString(row.notes),
-  createdAt: toFiniteNumber(row.createdAt, 'clientOrder.createdAt'),
-  updatedAt: toFiniteNumber(row.updatedAt, 'clientOrder.updatedAt'),
-});
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All clients_orders routes require authentication
   fastify.addHook('onRequest', authenticateToken);
   // API path is clients-orders for backward compatibility; data is stored in sales/sale_items.
 
-  // GET / - List all clients_orders with their items
   fastify.get(
     '/',
     {
@@ -225,73 +310,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
-      // Get all clients_orders
-      const clients_ordersResult = await query(
-        `SELECT
-                id,
-                linked_quote_id as "linkedQuoteId",
-                linked_offer_id as "linkedOfferId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                discount_type as "discountType",
-                status,
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM sales
-            ORDER BY created_at DESC`,
-      );
+      const [orders, items] = await Promise.all([
+        clientsOrdersRepo.listAll(),
+        clientsOrdersRepo.listAllItems(),
+      ]);
 
-      // Get all order items
-      const itemsResult = await query(
-        `SELECT
-                id,
-                sale_id as "orderId",
-                product_id as "productId",
-                product_name as "productName",
-                quantity,
-                unit_price as "unitPrice",
-                product_cost as "productCost",
-                product_mol_percentage as "productMolPercentage",
-                supplier_quote_id as "supplierQuoteId",
-                supplier_quote_item_id as "supplierQuoteItemId",
-                supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                supplier_sale_id as "supplierSaleId",
-                supplier_sale_item_id as "supplierSaleItemId",
-                supplier_sale_supplier_name as "supplierSaleSupplierName",
-                unit_type as "unitType",
-                note,
-                discount
-            FROM sale_items
-            ORDER BY created_at ASC`,
-      );
-
-      const normalizedOrders = clients_ordersResult.rows.map((order) =>
-        normalizeClientOrderRow(order as Record<string, unknown>),
-      );
-      const normalizedItems = itemsResult.rows.map((item) =>
-        normalizeClientOrderItemRow(item as Record<string, unknown>),
-      );
-
-      // Group items by order
-      const itemsByOrder: Record<string, ReturnType<typeof normalizeClientOrderItemRow>[]> = {};
-      normalizedItems.forEach((item) => {
-        if (!itemsByOrder[item.orderId]) {
-          itemsByOrder[item.orderId] = [];
-        }
-        itemsByOrder[item.orderId].push(item);
-      });
-
-      // Attach items to clients_orders
-      const clients_orders = normalizedOrders.map((order) => ({
+      const itemsByOrder = new Map<string, clientsOrdersRepo.ClientOrderItem[]>();
+      for (const item of items) {
+        const list = itemsByOrder.get(item.orderId);
+        if (list) list.push(item);
+        else itemsByOrder.set(item.orderId, [item]);
+      }
+      return orders.map((order) => ({
         ...order,
-        items: itemsByOrder[order.id] || [],
+        items: itemsByOrder.get(order.id) ?? [],
       }));
-
-      return clients_orders;
     },
   );
 
@@ -354,40 +387,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const productNameResult = requireNonEmptyString(
-          item.productName,
-          `items[${i}].productName`,
-        );
-        if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-        const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
-        if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-        const unitPriceResult = parseLocalizedNonNegativeNumber(
-          item.unitPrice,
-          `items[${i}].unitPrice`,
-        );
-        if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-          item.discount,
-          `items[${i}].discount`,
-        );
-        if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
-        normalizedItems.push({
-          ...item,
-          productName: productNameResult.value,
-          quantity: quantityResult.value,
-          unitPrice: unitPriceResult.value,
-          productCost: Number(item.productCost ?? 0),
-          productMolPercentage:
-            item.productMolPercentage === undefined || item.productMolPercentage === null
-              ? null
-              : Number(item.productMolPercentage),
-          unitType: normalizeUnitType(item.unitType),
-          discount: itemDiscountResult.value || 0,
-        });
-      }
+      const normalizedItems = normalizeIncomingItems(items, reply);
+      if (!normalizedItems) return;
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
@@ -395,70 +396,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
       if (linkedOfferIdResult.value) {
-        const offerResult = await query(
-          'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
-          [linkedOfferIdResult.value],
-        );
-        if (offerResult.rows.length === 0) {
+        const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdResult.value);
+        if (!offer) {
           return reply.code(404).send({ error: 'Source offer not found' });
         }
-        if (offerResult.rows[0].status !== 'accepted') {
+        if (offer.status !== 'accepted') {
           return reply
             .code(409)
             .send({ error: 'Sale orders can only be created from accepted offers' });
         }
 
-        const existingOrderResult = await query(
-          'SELECT id FROM sales WHERE linked_offer_id = $1 LIMIT 1',
-          [linkedOfferIdResult.value],
-        );
-        if (existingOrderResult.rows.length > 0) {
+        if (await clientsOrdersRepo.findExistingForOffer(linkedOfferIdResult.value)) {
           return reply.code(409).send({ error: 'A sale order already exists for this offer' });
         }
 
         if (
           linkedQuoteIdResult.value !== null &&
-          linkedQuoteIdResult.value !== offerResult.rows[0].linkedQuoteId
+          linkedQuoteIdResult.value !== offer.linkedQuoteId
         ) {
           return reply.code(409).send({ error: 'linkedQuoteId must match the source offer quote' });
         }
 
-        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
+        linkedQuoteIdValue = offer.linkedQuoteId || null;
       }
 
       const orderId = nextIdResult.value || (await generateClientOrderId());
 
-      let orderResult: Awaited<ReturnType<typeof query>>;
+      let createdOrder: clientsOrdersRepo.ClientOrder;
+      let insertedItems: clientsOrdersRepo.ClientOrderItem[];
       try {
-        orderResult = await query(
-          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, discount_type, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-               RETURNING
-                  id,
-                  linked_quote_id as "linkedQuoteId",
-                  linked_offer_id as "linkedOfferId",
-                  client_id as "clientId",
-                  client_name as "clientName",
-                  payment_terms as "paymentTerms",
-                  discount,
-                  discount_type as "discountType",
-                  status,
-                  notes,
-                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
+        const result = await withTransaction(async (tx) => {
+          const order = await clientsOrdersRepo.create(
+            {
+              id: orderId,
+              linkedQuoteId: linkedQuoteIdValue,
+              linkedOfferId: linkedOfferIdResult.value || null,
+              clientId: clientIdResult.value,
+              clientName: clientNameResult.value,
+              paymentTerms:
+                typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
+              discount: discountResult.value || 0,
+              discountType: discountTypeValue,
+              status: typeof status === 'string' && status ? status : 'draft',
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          const items = await clientsOrdersRepo.insertItems(
             orderId,
-            linkedQuoteIdValue,
-            linkedOfferIdResult.value || null,
-            clientIdResult.value,
-            clientNameResult.value,
-            paymentTerms || 'immediate',
-            discountResult.value || 0,
-            discountTypeValue,
-            status || 'draft',
-            notes,
-          ],
-        );
+            buildItemsForInsert(normalizedItems),
+            tx,
+          );
+          return { order, items };
+        });
+        createdOrder = result.order;
+        insertedItems = result.items;
       } catch (error) {
         if (isUniqueViolation(error)) {
           if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
@@ -474,54 +466,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      // Insert order items
-      for (const item of normalizedItems) {
-        const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-        const _itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, quantity, unit_price, product_cost, product_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, unit_type)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-                 RETURNING
-                    id,
-                    sale_id as "orderId",
-                    product_id as "productId",
-                    product_name as "productName",
-                    quantity,
-                    unit_price as "unitPrice",
-                    product_cost as "productCost",
-                    product_mol_percentage as "productMolPercentage",
-                    supplier_quote_id as "supplierQuoteId",
-                    supplier_quote_item_id as "supplierQuoteItemId",
-                    supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_sale_id as "supplierSaleId",
-                    supplier_sale_item_id as "supplierSaleItemId",
-                    supplier_sale_supplier_name as "supplierSaleSupplierName",
-                    unit_type as "unitType",
-                    discount,
-                    note`,
-          [
-            itemId,
-            orderId,
-            item.productId,
-            item.productName,
-            item.quantity,
-            item.unitPrice,
-            item.productCost,
-            item.productMolPercentage ?? null,
-            item.discount || 0,
-            item.note || null,
-            item.supplierQuoteId ?? null,
-            item.supplierQuoteItemId ?? null,
-            item.supplierQuoteSupplierName ?? null,
-            item.supplierQuoteUnitPrice ?? null,
-            item.supplierSaleId ?? null,
-            item.supplierSaleItemId ?? null,
-            item.supplierSaleSupplierName ?? null,
-            item.unitType || 'hours',
-          ],
-        );
-      }
-
       const supplierQuoteIds = [
         ...new Set(
           normalizedItems
@@ -531,103 +475,71 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ];
 
       const supplierOrderWarnings: string[] = [];
+      let didAutoCreate = false;
 
       for (const sqId of supplierQuoteIds) {
         try {
-          const [sqResult, existingSupplierOrder, sqItems] = await Promise.all([
-            query(
-              `SELECT id, supplier_id as "supplierId", supplier_name as "supplierName",
-                      payment_terms as "paymentTerms", notes, status
-               FROM supplier_quotes WHERE id = $1`,
-              [sqId],
-            ),
-            query('SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1', [sqId]),
-            query(
-              `SELECT id, product_id as "productId", product_name as "productName",
-                      quantity, unit_price as "unitPrice", note
-               FROM supplier_quote_items WHERE quote_id = $1`,
-              [sqId],
-            ),
+          const [supplierQuote, existingSupplierOrderId, supplierItems] = await Promise.all([
+            supplierQuotesRepo.findById(sqId),
+            supplierQuotesRepo.findLinkedOrderId(sqId),
+            supplierQuotesRepo.findItemsForQuote(sqId),
           ]);
 
-          if (sqResult.rows.length === 0 || sqResult.rows[0].status !== 'accepted') continue;
-          if (existingSupplierOrder.rows.length > 0) continue;
-
-          const sq = sqResult.rows[0];
-          const items = sqItems.rows;
+          if (!supplierQuote || supplierQuote.status !== 'accepted') continue;
+          if (existingSupplierOrderId) continue;
 
           await withTransaction(async (tx) => {
             const supplierOrderId = await generateSupplierOrderId(tx);
-            await tx.query(
-              `INSERT INTO supplier_sales
-                (id, linked_quote_id, supplier_id, supplier_name, payment_terms, status, notes)
-               VALUES ($1, $2, $3, $4, $5, 'draft', $6)`,
-              [
-                supplierOrderId,
-                sqId,
-                sq.supplierId,
-                sq.supplierName,
-                sq.paymentTerms || 'immediate',
-                sq.notes,
-              ],
+            await clientsOrdersRepo.createSupplierOrder(
+              {
+                id: supplierOrderId,
+                linkedQuoteId: sqId,
+                supplierId: supplierQuote.supplierId,
+                supplierName: supplierQuote.supplierName,
+                paymentTerms: supplierQuote.paymentTerms || 'immediate',
+                notes: supplierQuote.notes,
+              },
+              tx,
             );
 
             const insertedSupplierItemIds: { quoteItemId: string; saleItemId: string }[] = [];
+            const supplierItemRecords = supplierItems.map((item) => {
+              const saleItemId = generateItemId('ssi-');
+              insertedSupplierItemIds.push({ quoteItemId: item.id, saleItemId });
+              return {
+                id: saleItemId,
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                note: item.note,
+              };
+            });
 
-            if (items.length > 0) {
-              const placeholders = items
-                .map(
-                  (_, i) =>
-                    `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`,
-                )
-                .join(', ');
-              const params = items.flatMap((item) => {
-                const saleItemId = generateItemId('ssi-');
-                insertedSupplierItemIds.push({ quoteItemId: item.id, saleItemId });
-                return [
-                  saleItemId,
-                  supplierOrderId,
-                  item.productId,
-                  item.productName,
-                  item.quantity,
-                  item.unitPrice,
-                  item.note,
-                ];
-              });
-              await tx.query(
-                `INSERT INTO supplier_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, note)
-                 VALUES ${placeholders}`,
-                params,
-              );
-            }
-
-            await tx.query(
-              `UPDATE sale_items
-                 SET supplier_sale_id = $1,
-                     supplier_sale_supplier_name = $2
-               WHERE sale_id = $3 AND supplier_quote_id = $4`,
-              [supplierOrderId, sq.supplierName, orderId, sqId],
+            await clientsOrdersRepo.bulkInsertSupplierOrderItems(
+              supplierOrderId,
+              supplierItemRecords,
+              tx,
             );
 
-            // Map each supplier_sale_item back to its sale_item via quote_item_id.
-            // Safe because each supplier quote item maps 1:1 to a sale item within
-            // (sale_id, supplier_quote_id) — duplicates prevented by business logic.
-            if (insertedSupplierItemIds.length > 0) {
-              const valuesPlaceholders = insertedSupplierItemIds
-                .map((_, i) => `($${i * 2 + 3}, $${i * 2 + 4})`)
-                .join(', ');
-              const mappingParams = insertedSupplierItemIds.flatMap(
-                ({ quoteItemId, saleItemId }) => [quoteItemId, saleItemId],
-              );
-              await tx.query(
-                `UPDATE sale_items si
-                   SET supplier_sale_item_id = v.sale_item_id
-                 FROM (VALUES ${valuesPlaceholders}) v(quote_item_id, sale_item_id)
-                 WHERE si.sale_id = $1 AND si.supplier_quote_id = $2
-                   AND si.supplier_quote_item_id = v.quote_item_id`,
-                [orderId, sqId, ...mappingParams],
-              );
-            }
+            await clientsOrdersRepo.linkSaleItemsToSupplierOrder(
+              {
+                orderId,
+                supplierQuoteId: sqId,
+                supplierOrderId,
+                supplierName: supplierQuote.supplierName,
+              },
+              tx,
+            );
+
+            await clientsOrdersRepo.mapSaleItemsToSupplierItems(
+              {
+                orderId,
+                supplierQuoteId: sqId,
+                mappings: insertedSupplierItemIds,
+              },
+              tx,
+            );
 
             await logAudit({
               request,
@@ -636,42 +548,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               entityId: supplierOrderId,
               details: {
                 targetLabel: supplierOrderId,
-                secondaryLabel: `${sq.supplierName} (from client order ${orderId}, supplier quote ${sqId})`,
+                secondaryLabel: `${supplierQuote.supplierName} (from client order ${orderId}, supplier quote ${sqId})`,
               },
             });
           });
+          didAutoCreate = true;
         } catch (err) {
           request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
           supplierOrderWarnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
         }
       }
 
-      // Re-fetch items to pick up supplier_sale_* fields set during auto-creation
-      const refreshedItems = await query(
-        `SELECT
-                id,
-                sale_id as "orderId",
-                product_id as "productId",
-                product_name as "productName",
-                quantity,
-                unit_price as "unitPrice",
-                product_cost as "productCost",
-                product_mol_percentage as "productMolPercentage",
-                supplier_quote_id as "supplierQuoteId",
-                supplier_quote_item_id as "supplierQuoteItemId",
-                supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                supplier_sale_id as "supplierSaleId",
-                supplier_sale_item_id as "supplierSaleItemId",
-                supplier_sale_supplier_name as "supplierSaleSupplierName",
-                unit_type as "unitType",
-                note,
-                discount
-            FROM sale_items
-            WHERE sale_id = $1
-            ORDER BY created_at ASC`,
-        [orderId],
-      );
+      const refreshedItems = didAutoCreate
+        ? await clientsOrdersRepo.findItemsForOrder(orderId)
+        : insertedItems;
 
       await logAudit({
         request,
@@ -684,10 +574,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
       return reply.code(201).send({
-        ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
-        items: refreshedItems.rows.map((item) =>
-          normalizeClientOrderItemRow(item as Record<string, unknown>),
-        ),
+        ...createdOrder,
+        items: refreshedItems,
         ...(supplierOrderWarnings.length > 0 ? { warnings: supplierOrderWarnings } : {}),
       });
     },
@@ -737,192 +625,68 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      let nextIdValue = nextId;
+      let nextIdValue: string | null = null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
-          const existingIdResult = await query('SELECT id FROM sales WHERE id = $1 AND id <> $2', [
-            nextIdResult.value,
-            idResult.value,
-          ]);
-          if (existingIdResult.rows.length > 0) {
+          if (await clientsOrdersRepo.findIdConflict(nextIdResult.value, idResult.value)) {
             return reply.code(409).send({ error: 'Order ID already exists' });
           }
         }
       }
 
-      let clientIdValue = clientId;
+      let clientIdValue: string | null | undefined = clientId as string | null | undefined;
       if (clientId !== undefined) {
         const clientIdResult = optionalNonEmptyString(clientId, 'clientId');
         if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
         clientIdValue = clientIdResult.value;
       }
 
-      let clientNameValue = clientName;
+      let clientNameValue: string | null | undefined = clientName as string | null | undefined;
       if (clientName !== undefined) {
         const clientNameResult = optionalNonEmptyString(clientName, 'clientName');
         if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
         clientNameValue = clientNameResult.value;
       }
 
-      let discountValue = discount;
+      let discountValue: number | null | undefined = discount as number | null | undefined;
       if (discount !== undefined) {
         const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
       }
 
-      const discountTypeValue =
-        discountType !== undefined
-          ? discountType === 'currency'
-            ? 'currency'
-            : 'percentage'
-          : undefined;
+      let discountTypeValue: 'currency' | 'percentage' | undefined;
+      if (discountType !== undefined) {
+        discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
+      }
 
-      let linkedOfferIdValue = linkedOfferId;
+      let linkedOfferIdValue: string | null | undefined = linkedOfferId as
+        | string
+        | null
+        | undefined;
       if (linkedOfferId !== undefined) {
         const linkedOfferIdResult = optionalNonEmptyString(linkedOfferId, 'linkedOfferId');
         if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
         linkedOfferIdValue = linkedOfferIdResult.value;
       }
 
-      const normalizeNotesValue = (value: unknown) => String(value ?? '');
-      const normalizeItemsForUpdate = (itemsToNormalize: unknown[]) => {
-        if (!Array.isArray(itemsToNormalize) || itemsToNormalize.length === 0) {
-          badRequest(reply, 'Items must be a non-empty array');
-          return null;
-        }
-
-        const normalizedItems: Record<string, unknown>[] = [];
-        for (let i = 0; i < itemsToNormalize.length; i++) {
-          const item = itemsToNormalize[i] as Record<string, unknown>;
-          const productNameResult = requireNonEmptyString(
-            item.productName,
-            `items[${i}].productName`,
-          );
-          if (!productNameResult.ok) {
-            badRequest(reply, productNameResult.message);
-            return null;
-          }
-          const quantityResult = parseLocalizedPositiveNumber(
-            item.quantity,
-            `items[${i}].quantity`,
-          );
-          if (!quantityResult.ok) {
-            badRequest(reply, quantityResult.message);
-            return null;
-          }
-          const unitPriceResult = parseLocalizedNonNegativeNumber(
-            item.unitPrice,
-            `items[${i}].unitPrice`,
-          );
-          if (!unitPriceResult.ok) {
-            badRequest(reply, unitPriceResult.message);
-            return null;
-          }
-          const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-            item.discount,
-            `items[${i}].discount`,
-          );
-          if (!itemDiscountResult.ok) {
-            badRequest(reply, itemDiscountResult.message);
-            return null;
-          }
-          normalizedItems.push({
-            ...item,
-            productName: productNameResult.value,
-            quantity: quantityResult.value,
-            unitPrice: unitPriceResult.value,
-            productCost: Number(item.productCost ?? 0),
-            productMolPercentage:
-              item.productMolPercentage === undefined || item.productMolPercentage === null
-                ? null
-                : Number(item.productMolPercentage),
-            unitType: normalizeUnitType(item.unitType),
-            discount: itemDiscountResult.value || 0,
-          });
-        }
-
-        return normalizedItems;
-      };
-
-      const normalizeItemsForComparison = (itemsToNormalize: Record<string, unknown>[]) => {
-        return itemsToNormalize
-          .map((item) => {
-            const normalized = {
-              id: item.id ? String(item.id) : '',
-              productId: item.productId ? String(item.productId) : '',
-              productName: item.productName ? String(item.productName) : '',
-              quantity: Number(item.quantity),
-              unitPrice: Number(item.unitPrice),
-              discount:
-                item.discount !== undefined && item.discount !== null ? Number(item.discount) : 0,
-            };
-            const sortKey =
-              normalized.id ||
-              `${normalized.productId}|${normalized.productName}|${normalized.quantity}|${normalized.unitPrice}|${normalized.discount}`;
-            return { ...normalized, sortKey };
-          })
-          .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-      };
-
-      const itemsMatch = (
-        leftItems: Record<string, unknown>[],
-        rightItems: Record<string, unknown>[],
-      ) => {
-        if (leftItems.length !== rightItems.length) {
-          return false;
-        }
-        for (let i = 0; i < leftItems.length; i++) {
-          const leftItem = leftItems[i];
-          const rightItem = rightItems[i];
-          if (
-            leftItem.id !== rightItem.id ||
-            leftItem.productId !== rightItem.productId ||
-            leftItem.productName !== rightItem.productName ||
-            leftItem.quantity !== rightItem.quantity ||
-            leftItem.unitPrice !== rightItem.unitPrice ||
-            leftItem.discount !== rightItem.discount
-          ) {
-            return false;
-          }
-        }
-        return true;
-      };
-
-      let normalizedItems: Record<string, unknown>[] | null = null;
+      let normalizedItems: NormalizedOrderItem[] | null = null;
       if (items !== undefined) {
-        normalizedItems = normalizeItemsForUpdate(items as unknown[]);
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
+        }
+        normalizedItems = normalizeIncomingItems(items, reply);
         if (!normalizedItems) return;
       }
 
-      const existingOrderResult = await query(
-        `SELECT
-                    id,
-                    linked_quote_id as "linkedQuoteId",
-                    linked_offer_id as "linkedOfferId",
-                    client_id as "clientId",
-                    client_name as "clientName",
-                    payment_terms as "paymentTerms",
-                    discount,
-                    status,
-                    notes
-                FROM sales
-                WHERE id = $1`,
-        [idResult.value],
-      );
-
-      if (existingOrderResult.rows.length === 0) {
+      const existingOrder = await clientsOrdersRepo.findForUpdate(idResult.value);
+      if (!existingOrder) {
         return reply.code(404).send({ error: 'Order not found' });
       }
 
-      const existingOrder = existingOrderResult.rows[0];
-      let existingItems: Record<string, unknown>[] | null = null;
-
-      // Check if order is read-only (non-draft status)
-      // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
       const hasLockedFieldUpdates =
         linkedOfferId !== undefined ||
         clientIdValue !== undefined ||
@@ -943,6 +707,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const isSourceLinkedOrder = Boolean(
         existingOrder.linkedQuoteId || existingOrder.linkedOfferId,
       );
+
+      let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
 
       if (isSourceLinkedOrder) {
         const lockedFields: string[] = [];
@@ -987,37 +753,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         if (items !== undefined) {
-          const itemsResult = await query(
-            `SELECT
-                            id,
-                            sale_id as "orderId",
-                            product_id as "productId",
-                            product_name as "productName",
-                            quantity,
-                            unit_price as "unitPrice",
-                            product_cost as "productCost",
-                            product_mol_percentage as "productMolPercentage",
-                            supplier_quote_id as "supplierQuoteId",
-                            supplier_quote_item_id as "supplierQuoteItemId",
-                            supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                            supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_sale_id as "supplierSaleId",
-                    supplier_sale_item_id as "supplierSaleItemId",
-                    supplier_sale_supplier_name as "supplierSaleSupplierName",
-                            unit_type as "unitType",
-                            discount,
-                            note
-                        FROM sale_items
-                        WHERE sale_id = $1`,
-            [idResult.value],
-          );
-          existingItems = itemsResult.rows;
-
+          existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
           const normalizedExistingItems = normalizeItemsForComparison(
-            existingItems as Record<string, unknown>[],
+            existingItems as unknown as Array<Record<string, unknown>>,
           );
           const normalizedIncomingItems = normalizeItemsForComparison(
-            (normalizedItems ?? []) as Record<string, unknown>[],
+            (normalizedItems ?? []) as unknown as Array<Record<string, unknown>>,
           );
           if (!itemsMatch(normalizedExistingItems, normalizedIncomingItems)) {
             lockedFields.push('items');
@@ -1040,82 +781,68 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        const offerResult = await query(
-          'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
-          [linkedOfferIdValue],
-        );
-        if (offerResult.rows.length === 0) {
+        const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdValue);
+        if (!offer) {
           return reply.code(404).send({ error: 'Source offer not found' });
         }
-        if (offerResult.rows[0].status !== 'accepted') {
+        if (offer.status !== 'accepted') {
           return reply
             .code(409)
             .send({ error: 'Sale orders can only be created from accepted offers' });
         }
-        if (
-          existingOrder.linkedQuoteId &&
-          existingOrder.linkedQuoteId !== offerResult.rows[0].linkedQuoteId
-        ) {
+        if (existingOrder.linkedQuoteId && existingOrder.linkedQuoteId !== offer.linkedQuoteId) {
           return reply.code(409).send({
             error: 'The selected offer does not match the order quote link',
           });
         }
 
-        const existingLinkedOrderResult = await query(
-          'SELECT id FROM sales WHERE linked_offer_id = $1 AND id <> $2 LIMIT 1',
-          [linkedOfferIdValue, idResult.value],
-        );
-        if (existingLinkedOrderResult.rows.length > 0) {
+        if (await clientsOrdersRepo.findExistingForOffer(linkedOfferIdValue, idResult.value)) {
           return reply.code(409).send({ error: 'A sale order already exists for this offer' });
         }
 
-        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
+        linkedQuoteIdValue = offer.linkedQuoteId || null;
       }
 
-      // Update order
-      let orderResult: Awaited<ReturnType<typeof query>>;
+      const willReplaceItems = !isSourceLinkedOrder && items !== undefined;
+
+      let result: {
+        order: clientsOrdersRepo.ClientOrder | null;
+        items: clientsOrdersRepo.ClientOrderItem[];
+      };
       try {
-        orderResult = await query(
-          `UPDATE sales
-               SET id = COALESCE($1, id),
-                   linked_offer_id = COALESCE($2, linked_offer_id),
-                   linked_quote_id = COALESCE($3, linked_quote_id),
-                   client_id = COALESCE($4, client_id),
-                   client_name = COALESCE($5, client_name),
-                   payment_terms = COALESCE($6, payment_terms),
-                   discount = COALESCE($7, discount),
-                   discount_type = COALESCE($8, discount_type),
-                   status = COALESCE($9, status),
-                   notes = COALESCE($10, notes),
-                   updated_at = CURRENT_TIMESTAMP
-               WHERE id = $11
-               RETURNING
-                  id,
-                  linked_quote_id as "linkedQuoteId",
-                  linked_offer_id as "linkedOfferId",
-                  client_id as "clientId",
-                  client_name as "clientName",
-                  payment_terms as "paymentTerms",
-                  discount,
-                  discount_type as "discountType",
-                  status,
-                  notes,
-                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            linkedOfferIdValue,
-            linkedQuoteIdValue,
-            clientIdValue,
-            clientNameValue,
-            paymentTerms,
-            discountValue,
-            discountTypeValue,
-            status,
-            notes,
+        result = await withTransaction(async (tx) => {
+          const order = await clientsOrdersRepo.update(
             idResult.value,
-          ],
-        );
+            {
+              id: nextIdValue,
+              linkedOfferId: (linkedOfferIdValue as string | null | undefined) ?? null,
+              linkedQuoteId: linkedQuoteIdValue,
+              clientId: (clientIdValue as string | null | undefined) ?? null,
+              clientName: (clientNameValue as string | null | undefined) ?? null,
+              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
+              discount: (discountValue as number | null | undefined) ?? null,
+              discountType: discountTypeValue ?? null,
+              status: (status as string | null | undefined) ?? null,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          if (!order) return { order: null, items: [] };
+
+          let nextItems: clientsOrdersRepo.ClientOrderItem[];
+          if (isSourceLinkedOrder) {
+            nextItems = existingItems ?? (await clientsOrdersRepo.findItemsForOrder(order.id, tx));
+          } else if (willReplaceItems && normalizedItems) {
+            nextItems = await clientsOrdersRepo.replaceItems(
+              order.id,
+              buildItemsForInsert(normalizedItems),
+              tx,
+            );
+          } else {
+            nextItems = await clientsOrdersRepo.findItemsForOrder(order.id, tx);
+          }
+          return { order, items: nextItems };
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
@@ -1131,138 +858,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (orderResult.rows.length === 0) {
+      const updatedOrder = result.order;
+      const updatedItems = result.items;
+      if (!updatedOrder) {
         return reply.code(404).send({ error: 'Order not found' });
       }
 
-      const updatedOrderId = String(orderResult.rows[0].id);
+      const updatedOrderId = updatedOrder.id;
 
-      // If items are provided, update them
-      let updatedItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
-      if (isSourceLinkedOrder) {
-        if (existingItems) {
-          updatedItems = existingItems.map((item) =>
-            normalizeClientOrderItemRow(item as Record<string, unknown>),
-          );
-        } else {
-          const itemsResult = await query(
-            `SELECT
-                        id,
-                        sale_id as "orderId",
-                        product_id as "productId",
-                        product_name as "productName",
-                        quantity,
-                        unit_price as "unitPrice",
-                        product_cost as "productCost",
-                        product_mol_percentage as "productMolPercentage",
-                        supplier_quote_id as "supplierQuoteId",
-                        supplier_quote_item_id as "supplierQuoteItemId",
-                        supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_sale_id as "supplierSaleId",
-                    supplier_sale_item_id as "supplierSaleItemId",
-                    supplier_sale_supplier_name as "supplierSaleSupplierName",
-                        unit_type as "unitType",
-                        discount,
-                         note
-                     FROM sale_items
-                     WHERE sale_id = $1`,
-            [updatedOrderId],
-          );
-          updatedItems = itemsResult.rows.map((item) =>
-            normalizeClientOrderItemRow(item as Record<string, unknown>),
-          );
-        }
-      } else if (items !== undefined) {
-        if (!normalizedItems) return;
-        // Delete existing items
-        await query('DELETE FROM sale_items WHERE sale_id = $1', [updatedOrderId]);
-
-        // Insert new items
-        for (const item of normalizedItems) {
-          const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          const itemResult = await query(
-            `INSERT INTO sale_items (id, sale_id, product_id, product_name, quantity, unit_price, product_cost, product_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, unit_type)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-                     RETURNING
-                        id,
-                        sale_id as "orderId",
-                        product_id as "productId",
-                        product_name as "productName",
-                        quantity,
-                        unit_price as "unitPrice",
-                        product_cost as "productCost",
-                        product_mol_percentage as "productMolPercentage",
-                        supplier_quote_id as "supplierQuoteId",
-                        supplier_quote_item_id as "supplierQuoteItemId",
-                        supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                        supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_sale_id as "supplierSaleId",
-                    supplier_sale_item_id as "supplierSaleItemId",
-                    supplier_sale_supplier_name as "supplierSaleSupplierName",
-                        unit_type as "unitType",
-                        discount,
-                         note`,
-            [
-              itemId,
-              updatedOrderId,
-              item.productId,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.productCost,
-              item.productMolPercentage ?? null,
-              item.discount || 0,
-              item.note || null,
-              item.supplierQuoteId ?? null,
-              item.supplierQuoteItemId ?? null,
-              item.supplierQuoteSupplierName ?? null,
-              item.supplierQuoteUnitPrice ?? null,
-              item.supplierSaleId ?? null,
-              item.supplierSaleItemId ?? null,
-              item.supplierSaleSupplierName ?? null,
-              item.unitType || 'hours',
-            ],
-          );
-          updatedItems.push(
-            normalizeClientOrderItemRow(itemResult.rows[0] as Record<string, unknown>),
-          );
-        }
-      } else {
-        // Fetch existing items
-        const itemsResult = await query(
-          `SELECT
-                    id,
-                    sale_id as "orderId",
-                    product_id as "productId",
-                    product_name as "productName",
-                    quantity,
-                    unit_price as "unitPrice",
-                    product_cost as "productCost",
-                    product_mol_percentage as "productMolPercentage",
-                    supplier_quote_id as "supplierQuoteId",
-                    supplier_quote_item_id as "supplierQuoteItemId",
-                    supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                    supplier_sale_id as "supplierSaleId",
-                    supplier_sale_item_id as "supplierSaleItemId",
-                    supplier_sale_supplier_name as "supplierSaleSupplierName",
-                    unit_type as "unitType",
-                    discount,
-                    note
-                FROM sale_items
-                WHERE sale_id = $1`,
-          [updatedOrderId],
-        );
-        updatedItems = itemsResult.rows.map((item) =>
-          normalizeClientOrderItemRow(item as Record<string, unknown>),
-        );
-      }
-
-      const nextStatus =
-        typeof status === 'string'
-          ? status
-          : String(orderResult.rows[0].status ?? existingOrder.status);
+      const nextStatus = typeof status === 'string' ? status : updatedOrder.status;
       const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
 
       await logAudit({
@@ -1272,15 +876,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: updatedOrderId,
         details: {
           targetLabel: updatedOrderId,
-          secondaryLabel: String(orderResult.rows[0].clientName ?? ''),
-          fromValue: didStatusChange ? String(existingOrder.status) : undefined,
+          secondaryLabel: updatedOrder.clientName,
+          fromValue: didStatusChange ? existingOrder.status : undefined,
           toValue: didStatusChange ? nextStatus : undefined,
         },
       });
-      return {
-        ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
-        items: updatedItems,
-      };
+      return { ...updatedOrder, items: updatedItems };
     },
   );
 
@@ -1304,17 +905,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      // Check if order exists and is in draft status
-      const orderResult = await query(
-        'SELECT id, status, client_name as "clientName" FROM sales WHERE id = $1',
-        [idResult.value],
-      );
-
-      if (orderResult.rows.length === 0) {
+      const order = await clientsOrdersRepo.findStatusAndClientName(idResult.value);
+      if (!order) {
         return reply.code(404).send({ error: 'Order not found' });
       }
-
-      const order = orderResult.rows[0];
       if (order.status !== 'draft') {
         return reply.code(409).send({
           error: 'Only draft clients_orders can be deleted',
@@ -1322,8 +916,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Items will be deleted automatically via CASCADE
-      await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
+      await clientsOrdersRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -1332,7 +925,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(order.clientName ?? ''),
+          secondaryLabel: order.clientName ?? '',
         },
       });
       return reply.code(204).send();
