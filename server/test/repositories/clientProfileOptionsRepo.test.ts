@@ -122,7 +122,8 @@ describe('update', () => {
     // Only 2 calls (UPDATE option, SELECT) — no cascade UPDATE
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql).toContain('UPDATE client_profile_options');
-    expect(exec.calls[1].sql).toContain('SELECT');
+    expect(exec.calls[1].sql).toContain('o.id = $1 AND o.category = $2');
+    expect(exec.calls[1].params).toEqual(['cpo-1', 'sector']);
     expect(result?.value).toBe('tech');
   });
 
@@ -156,16 +157,17 @@ describe('update', () => {
     );
   });
 
-  test('returns null when SELECT returns no rows', async () => {
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [] });
+  test('returns null and skips cascade/select when option UPDATE matched no rows', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 }); // UPDATE option matched nothing (e.g., concurrent delete)
     const result = await repo.update(
       'sector',
       'cpo-x',
-      { value: 'tech', sortOrder: null, previousValue: 'tech' },
+      { value: 'finance', sortOrder: null, previousValue: 'tech' },
       exec,
     );
     expect(result).toBeNull();
+    // Cascade UPDATE clients and final SELECT both skipped
+    expect(exec.calls).toHaveLength(1);
   });
 });
 

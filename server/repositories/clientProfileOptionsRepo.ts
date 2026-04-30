@@ -142,7 +142,7 @@ export const update = async (
   patch: { value: string; sortOrder: number | null; previousValue: string },
   exec: QueryExecutor = pool,
 ): Promise<ProfileOption | null> => {
-  await exec.query(
+  const updateResult = await exec.query(
     `UPDATE client_profile_options
        SET value = $1,
            sort_order = COALESCE($2, sort_order),
@@ -150,6 +150,8 @@ export const update = async (
        WHERE id = $3 AND category = $4`,
     [patch.value, patch.sortOrder, id, category],
   );
+
+  if ((updateResult.rowCount ?? 0) === 0) return null;
 
   if (patch.previousValue !== patch.value) {
     const fieldName = VALUE_FIELD_BY_CATEGORY[category];
@@ -170,8 +172,8 @@ export const update = async (
        o.updated_at,
        ${usageCountExpr} as usage_count
      FROM client_profile_options o
-     WHERE o.id = $1`,
-    [id],
+     WHERE o.id = $1 AND o.category = $2`,
+    [id, category],
   );
   return rows[0] ? mapRow(rows[0]) : null;
 };
