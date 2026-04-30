@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as supplierInvoicesRepo from '../repositories/supplierInvoicesRepo.ts';
+import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DatabaseError, isUniqueViolation } from '../utils/db-errors.ts';
+import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -148,8 +150,11 @@ type SupplierInvoiceItemInput = {
   discount?: string | number;
 };
 
-const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) => {
-  const normalizedItems: Array<Record<string, unknown>> = [];
+const normalizeItems = (
+  items: SupplierInvoiceItemInput[],
+  reply: FastifyReply,
+): supplierInvoicesRepo.NewSupplierInvoiceItem[] | null => {
+  const normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const descriptionResult = requireNonEmptyString(item.description, `items[${i}].description`);
@@ -179,6 +184,7 @@ const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) 
       return null;
     }
     normalizedItems.push({
+      id: generateItemId('sinv-item-'),
       productId: item.productId || null,
       description: descriptionResult.value,
       quantity: quantityResult.value,
@@ -189,49 +195,12 @@ const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) 
   return normalizedItems;
 };
 
-const toRequiredDateOnly = (value: unknown, fieldName: string) => {
-  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
-  if (!normalizedDate) {
-    throw new TypeError(`Invalid date value for ${fieldName}`);
-  }
-  return normalizedDate;
-};
-
 const generateSupplierInvoiceId = async (issueDate: string) => {
   const year = issueDate.split('-')[0];
-  const matchingInvoicesResult = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
-     FROM supplier_invoices
-     WHERE id ~ $1`,
-    [`^SINV-${year}-[0-9]+$`],
-  );
-  const nextSequence = Number(matchingInvoicesResult.rows[0]?.maxSequence ?? 0) + 1;
+  const maxSequence = await supplierInvoicesRepo.maxSequenceForYear(year);
+  const nextSequence = maxSequence + 1;
   return `SINV-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
-
-const formatInvoiceResponse = (
-  invoice: {
-    issueDate: string | Date;
-    dueDate: string | Date;
-    subtotal: string | number;
-    total: string | number;
-    amountPaid: string | number;
-  } & Record<string, unknown>,
-  items: Array<Record<string, unknown>>,
-) => ({
-  ...invoice,
-  issueDate: toRequiredDateOnly(invoice.issueDate, 'supplierInvoice.issueDate'),
-  dueDate: toRequiredDateOnly(invoice.dueDate, 'supplierInvoice.dueDate'),
-  subtotal: Number(invoice.subtotal ?? 0),
-  total: Number(invoice.total ?? 0),
-  amountPaid: Number(invoice.amountPaid ?? 0),
-  items: items.map((item) => ({
-    ...item,
-    quantity: Number(item.quantity ?? 0),
-    unitPrice: Number(item.unitPrice ?? 0),
-    discount: Number(item.discount ?? 0),
-  })),
-});
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
@@ -253,58 +222,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async () => {
-      const invoicesResult = await query(
-        `SELECT
-            si.id,
-            si.linked_sale_id as "linkedSaleId",
-            si.supplier_id as "supplierId",
-            si.supplier_name as "supplierName",
-            si.issue_date as "issueDate",
-            si.due_date as "dueDate",
-            si.status,
-            si.subtotal,
-            si.total,
-            si.amount_paid as "amountPaid",
-            si.notes,
-            EXTRACT(EPOCH FROM si.created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM si.updated_at) * 1000 as "updatedAt"
-         FROM supplier_invoices si
-         ORDER BY si.created_at DESC`,
-      );
-
-      const itemsResult = await query(
-        `SELECT
-            id,
-            invoice_id as "invoiceId",
-            product_id as "productId",
-            description,
-            quantity,
-            unit_price as "unitPrice",
-            discount
-         FROM supplier_invoice_items
-         ORDER BY created_at ASC`,
-      );
-
-      const itemsByInvoice: Record<string, Array<Record<string, unknown>>> = {};
-      itemsResult.rows.forEach((item: { invoiceId: string } & Record<string, unknown>) => {
-        if (!itemsByInvoice[item.invoiceId]) {
-          itemsByInvoice[item.invoiceId] = [];
-        }
+      const [invoices, items] = await Promise.all([
+        supplierInvoicesRepo.listAll(),
+        supplierInvoicesRepo.listAllItems(),
+      ]);
+      const itemsByInvoice: Record<string, supplierInvoicesRepo.SupplierInvoiceItem[]> = {};
+      for (const item of items) {
+        if (!itemsByInvoice[item.invoiceId]) itemsByInvoice[item.invoiceId] = [];
         itemsByInvoice[item.invoiceId].push(item);
-      });
-
-      return invoicesResult.rows.map(
-        (
-          invoice: {
-            id: string;
-            issueDate: string | Date;
-            dueDate: string | Date;
-            subtotal: string | number;
-            total: string | number;
-            amountPaid: string | number;
-          } & Record<string, unknown>,
-        ) => formatInvoiceResponse(invoice, itemsByInvoice[invoice.id] || []),
-      );
+      }
+      return invoices.map((invoice) => ({
+        ...invoice,
+        items: itemsByInvoice[invoice.id] || [],
+      }));
     },
   );
 
@@ -387,69 +317,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
 
       if (linkedSaleIdResult.value) {
-        const orderResult = await query('SELECT id, status FROM supplier_sales WHERE id = $1', [
-          linkedSaleIdResult.value,
+        const [sourceOrder, existingInvoiceId] = await Promise.all([
+          supplierOrdersRepo.findById(linkedSaleIdResult.value),
+          supplierInvoicesRepo.findInvoiceForLinkedSale(linkedSaleIdResult.value),
         ]);
-        if (orderResult.rows.length === 0) {
+        if (!sourceOrder) {
           return reply.code(404).send({ error: 'Source order not found' });
         }
-        if (orderResult.rows[0].status !== 'sent') {
+        if (sourceOrder.status !== 'sent') {
           return reply.code(409).send({ error: 'Invoices can only be created from sent orders' });
         }
-
-        const existingInvoiceResult = await query(
-          'SELECT id FROM supplier_invoices WHERE linked_sale_id = $1 LIMIT 1',
-          [linkedSaleIdResult.value],
-        );
-        if (existingInvoiceResult.rows.length > 0) {
+        if (existingInvoiceId) {
           return reply.code(409).send({ error: 'An invoice already exists for this order' });
         }
       }
 
       const maxInsertAttempts = nextIdResult.value ? 1 : 5;
 
-      try {
-        let invoiceResult: Awaited<ReturnType<typeof query>> | null = null;
-        let resolvedInvoiceId = nextIdResult.value;
+      let resolvedInvoiceId: string | null = nextIdResult.value;
+      let result: {
+        invoice: supplierInvoicesRepo.SupplierInvoice;
+        items: supplierInvoicesRepo.SupplierInvoiceItem[];
+      } | null = null;
 
+      try {
         for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
           if (!resolvedInvoiceId) {
             resolvedInvoiceId = await generateSupplierInvoiceId(issueDateResult.value);
           }
 
           try {
-            invoiceResult = await query(
-              `INSERT INTO supplier_invoices
-                (id, linked_sale_id, supplier_id, supplier_name, issue_date, due_date, status, subtotal, total, amount_paid, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-               RETURNING
-                  id,
-                  linked_sale_id as "linkedSaleId",
-                  supplier_id as "supplierId",
-                  supplier_name as "supplierName",
-                  issue_date as "issueDate",
-                  due_date as "dueDate",
-                  status,
-                  subtotal,
-                  total,
-                  amount_paid as "amountPaid",
-                  notes,
-                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-              [
-                resolvedInvoiceId,
-                linkedSaleIdResult.value || null,
-                supplierIdResult.value,
-                supplierNameResult.value,
-                issueDateResult.value,
-                dueDateResult.value,
-                status || 'draft',
-                subtotalResult.value || 0,
-                totalResult.value || 0,
-                amountPaidResult.value || 0,
-                notes || null,
-              ],
-            );
+            const idForAttempt = resolvedInvoiceId;
+            result = await withTransaction(async (tx) => {
+              const invoice = await supplierInvoicesRepo.create(
+                {
+                  id: idForAttempt,
+                  linkedSaleId: linkedSaleIdResult.value || null,
+                  supplierId: supplierIdResult.value,
+                  supplierName: supplierNameResult.value,
+                  issueDate: issueDateResult.value,
+                  dueDate: dueDateResult.value,
+                  status: typeof status === 'string' && status.length > 0 ? status : 'draft',
+                  subtotal: subtotalResult.value || 0,
+                  total: totalResult.value || 0,
+                  amountPaid: amountPaidResult.value || 0,
+                  notes: typeof notes === 'string' ? notes : null,
+                },
+                tx,
+              );
+              const createdItems = await supplierInvoicesRepo.replaceItems(
+                invoice.id,
+                normalizedItems,
+                tx,
+              );
+              return { invoice, items: createdItems };
+            });
             break;
           } catch (error) {
             if (
@@ -465,49 +387,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         }
 
-        if (!invoiceResult || !resolvedInvoiceId) {
+        if (!result) {
           return reply.code(409).send({ error: 'Invoice ID already exists' });
-        }
-
-        const createdItems: Array<Record<string, unknown>> = [];
-        for (const item of normalizedItems) {
-          const itemId = `sinv-item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-          const itemResult = await query(
-            `INSERT INTO supplier_invoice_items
-              (id, invoice_id, product_id, description, quantity, unit_price, discount)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING
-                id,
-                invoice_id as "invoiceId",
-                product_id as "productId",
-                description,
-                quantity,
-                unit_price as "unitPrice",
-                discount`,
-            [
-              itemId,
-              resolvedInvoiceId,
-              item.productId || null,
-              item.description,
-              item.quantity,
-              item.unitPrice,
-              item.discount || 0,
-            ],
-          );
-          createdItems.push(itemResult.rows[0]);
         }
 
         await logAudit({
           request,
           action: 'supplier_invoice.created',
           entityType: 'supplier_invoice',
-          entityId: resolvedInvoiceId,
+          entityId: result.invoice.id,
           details: {
-            targetLabel: resolvedInvoiceId,
-            secondaryLabel: supplierNameResult.value,
+            targetLabel: result.invoice.id,
+            secondaryLabel: result.invoice.supplierName,
           },
         });
-        return reply.code(201).send(formatInvoiceResponse(invoiceResult.rows[0], createdItems));
+        return reply.code(201).send({
+          ...result.invoice,
+          items: result.items,
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           return reply.code(409).send({ error: duplicateInvoiceError(error) });
@@ -563,65 +460,54 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      let supplierIdValue = supplierId;
+      const patch: supplierInvoicesRepo.SupplierInvoiceUpdate = {};
+
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
         if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
-        supplierIdValue = supplierIdResult.value;
+        if (supplierIdResult.value !== null) patch.supplierId = supplierIdResult.value;
       }
 
-      let supplierNameValue = supplierName;
       if (supplierName !== undefined) {
         const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
         if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-        supplierNameValue = supplierNameResult.value;
+        if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
       }
 
-      let nextIdValue = nextId;
+      let nextIdValue: string | null = null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
-        if (nextIdResult.value) {
-          const existingIdResult = await query(
-            'SELECT id FROM supplier_invoices WHERE id = $1 AND id <> $2',
-            [nextIdResult.value, idResult.value],
-          );
-          if (existingIdResult.rows.length > 0) {
-            return reply.code(409).send({ error: 'Invoice ID already exists' });
-          }
-        }
       }
 
-      let issueDateValue = issueDate;
       if (issueDate !== undefined) {
         const issueDateResult = optionalDateString(issueDate, 'issueDate');
         if (!issueDateResult.ok) return badRequest(reply, issueDateResult.message);
-        issueDateValue = issueDateResult.value;
+        if (issueDateResult.value !== null) patch.issueDate = issueDateResult.value;
       }
 
-      let dueDateValue = dueDate;
       if (dueDate !== undefined) {
         const dueDateResult = optionalDateString(dueDate, 'dueDate');
         if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
-        dueDateValue = dueDateResult.value;
+        if (dueDateResult.value !== null) patch.dueDate = dueDateResult.value;
       }
 
-      const existingInvoiceResult = await query(
-        `SELECT
-            id,
-            status,
-            issue_date as "issueDate",
-            due_date as "dueDate"
-         FROM supplier_invoices
-         WHERE id = $1`,
-        [idResult.value],
-      );
-      if (existingInvoiceResult.rows.length === 0) {
+      const [existingInvoice, idConflict] = await Promise.all([
+        supplierInvoicesRepo.findExistingForUpdate(idResult.value),
+        nextIdValue
+          ? supplierInvoicesRepo.findIdConflict(nextIdValue, idResult.value)
+          : Promise.resolve(false),
+      ]);
+
+      if (!existingInvoice) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
+      if (idConflict) {
+        return reply.code(409).send({ error: 'Invoice ID already exists' });
+      }
+      if (nextIdValue !== null) patch.id = nextIdValue;
 
-      const existingInvoice = existingInvoiceResult.rows[0];
       const hasLockedFieldUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
@@ -639,165 +525,86 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const effectiveIssueDate = toRequiredDateOnly(
-        issueDateValue ?? existingInvoiceResult.rows[0].issueDate,
-        'supplierInvoice.issueDate',
-      );
-      const effectiveDueDate = toRequiredDateOnly(
-        dueDateValue ?? existingInvoiceResult.rows[0].dueDate,
-        'supplierInvoice.dueDate',
-      );
+      const effectiveIssueDate = patch.issueDate ?? existingInvoice.issueDate;
+      const effectiveDueDate = patch.dueDate ?? existingInvoice.dueDate;
 
       if (effectiveDueDate < effectiveIssueDate) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 
-      let subtotalValue = subtotal;
       if (subtotal !== undefined) {
         const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
         if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-        subtotalValue = subtotalResult.value;
+        if (subtotalResult.value !== null) patch.subtotal = subtotalResult.value;
       }
 
-      let totalValue = total;
       if (total !== undefined) {
         const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
         if (!totalResult.ok) return badRequest(reply, totalResult.message);
-        totalValue = totalResult.value;
+        if (totalResult.value !== null) patch.total = totalResult.value;
       }
 
-      let amountPaidValue = amountPaid;
       if (amountPaid !== undefined) {
         const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-        amountPaidValue = amountPaidResult.value;
+        if (amountPaidResult.value !== null) patch.amountPaid = amountPaidResult.value;
       }
 
-      try {
-        const invoiceResult = await query(
-          `UPDATE supplier_invoices
-           SET id = COALESCE($1, id),
-               supplier_id = COALESCE($2, supplier_id),
-               supplier_name = COALESCE($3, supplier_name),
-               issue_date = COALESCE($4, issue_date),
-               due_date = COALESCE($5, due_date),
-               status = COALESCE($6, status),
-               subtotal = COALESCE($7, subtotal),
-               total = COALESCE($8, total),
-               amount_paid = COALESCE($9, amount_paid),
-               notes = COALESCE($10, notes),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $11
-           RETURNING
-              id,
-              linked_sale_id as "linkedSaleId",
-              supplier_id as "supplierId",
-              supplier_name as "supplierName",
-              issue_date as "issueDate",
-              due_date as "dueDate",
-              status,
-              subtotal,
-              total,
-              amount_paid as "amountPaid",
-              notes,
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            supplierIdValue,
-            supplierNameValue,
-            issueDateValue,
-            dueDateValue,
-            status,
-            subtotalValue,
-            totalValue,
-            amountPaidValue,
-            notes,
-            idResult.value,
-          ],
-        );
+      if (typeof status === 'string') patch.status = status;
+      if (typeof notes === 'string') patch.notes = notes;
 
-        const updatedInvoiceId = String(invoiceResult.rows[0].id);
-
-        let updatedItems: Array<Record<string, unknown>> = [];
-        if (items !== undefined) {
-          if (!Array.isArray(items) || items.length === 0) {
-            return badRequest(reply, 'Items must be a non-empty array');
-          }
-          const normalizedItems = normalizeItems(items, reply);
-          if (!normalizedItems) return;
-
-          await query('DELETE FROM supplier_invoice_items WHERE invoice_id = $1', [
-            updatedInvoiceId,
-          ]);
-
-          for (const item of normalizedItems) {
-            const itemId = `sinv-item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-            const itemResult = await query(
-              `INSERT INTO supplier_invoice_items
-                (id, invoice_id, product_id, description, quantity, unit_price, discount)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING
-                  id,
-                  invoice_id as "invoiceId",
-                  product_id as "productId",
-                  description,
-                  quantity,
-                  unit_price as "unitPrice",
-                  discount`,
-              [
-                itemId,
-                updatedInvoiceId,
-                item.productId || null,
-                item.description,
-                item.quantity,
-                item.unitPrice,
-                item.discount || 0,
-              ],
-            );
-            updatedItems.push(itemResult.rows[0]);
-          }
-        } else {
-          const itemsResult = await query(
-            `SELECT
-                id,
-                invoice_id as "invoiceId",
-                product_id as "productId",
-                description,
-                quantity,
-                unit_price as "unitPrice",
-                discount
-             FROM supplier_invoice_items
-             WHERE invoice_id = $1`,
-            [updatedInvoiceId],
-          );
-          updatedItems = itemsResult.rows;
+      let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
+      if (items !== undefined) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
         }
+        normalizedItems = normalizeItems(items, reply);
+        if (!normalizedItems) return;
+      }
 
-        const nextStatus =
-          typeof status === 'string'
-            ? status
-            : String(invoiceResult.rows[0].status ?? existingInvoice.status);
-        const didStatusChange = status !== undefined && existingInvoice.status !== nextStatus;
-        await logAudit({
-          request,
-          action: 'supplier_invoice.updated',
-          entityType: 'supplier_invoice',
-          entityId: updatedInvoiceId,
-          details: {
-            targetLabel: updatedInvoiceId,
-            secondaryLabel: String(invoiceResult.rows[0].supplierName ?? ''),
-            fromValue: didStatusChange ? String(existingInvoice.status) : undefined,
-            toValue: didStatusChange ? nextStatus : undefined,
-          },
+      let updated: supplierInvoicesRepo.SupplierInvoice | null;
+      let resultItems: supplierInvoicesRepo.SupplierInvoiceItem[];
+      try {
+        const txResult = await withTransaction(async (tx) => {
+          const invoice = await supplierInvoicesRepo.update(idResult.value, patch, tx);
+          if (!invoice)
+            return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
+          const finalItems = normalizedItems
+            ? await supplierInvoicesRepo.replaceItems(invoice.id, normalizedItems, tx)
+            : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
+          return { invoice, items: finalItems };
         });
-        return formatInvoiceResponse(invoiceResult.rows[0], updatedItems);
+        updated = txResult.invoice;
+        resultItems = txResult.items;
       } catch (error) {
         if (isUniqueViolation(error)) {
           return reply.code(409).send({ error: duplicateInvoiceError(error) });
         }
         throw error;
       }
+
+      if (!updated) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+
+      const didStatusChange =
+        typeof status === 'string' && existingInvoice.status !== updated.status;
+      await logAudit({
+        request,
+        action: 'supplier_invoice.updated',
+        entityType: 'supplier_invoice',
+        entityId: updated.id,
+        details: {
+          targetLabel: updated.id,
+          secondaryLabel: updated.supplierName,
+          fromValue: didStatusChange ? existingInvoice.status : undefined,
+          toValue: didStatusChange ? updated.status : undefined,
+        },
+      });
+      return {
+        ...updated,
+        items: resultItems,
+      };
     },
   );
 
@@ -820,18 +627,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const invoiceResult = await query(
-        'SELECT id, status, supplier_name as "supplierName" FROM supplier_invoices WHERE id = $1',
-        [idResult.value],
-      );
-      if (invoiceResult.rows.length === 0) {
+      const existing = await supplierInvoicesRepo.findStatusAndSupplierName(idResult.value);
+      if (!existing) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
-      if (invoiceResult.rows[0].status !== 'draft') {
+      if (existing.status !== 'draft') {
         return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
       }
 
-      await query('DELETE FROM supplier_invoices WHERE id = $1', [idResult.value]);
+      await supplierInvoicesRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -840,7 +644,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(invoiceResult.rows[0].supplierName ?? ''),
+          secondaryLabel: existing.supplierName,
         },
       });
       return reply.code(204).send();

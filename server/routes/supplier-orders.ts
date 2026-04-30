@@ -1,19 +1,24 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isUniqueViolation } from '../utils/db-errors.ts';
-import { generateSupplierOrderId } from '../utils/order-ids.ts';
+import { generateItemId, generateSupplierOrderId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
+  optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const SUPPLIER_ORDER_STATUSES = ['draft', 'sent'] as const;
 
 const idParamSchema = {
   type: 'object',
@@ -122,26 +127,11 @@ type SupplierOrderItemInput = {
   note?: string;
 };
 
-const parseSupplierOrderStatus = (status: unknown) => {
-  if (status === undefined || status === null || status === '') {
-    return { ok: true as const, value: undefined };
-  }
-
-  if (status !== 'draft' && status !== 'sent') {
-    return {
-      ok: false as const,
-      message: 'status must be one of: draft, sent',
-    };
-  }
-
-  return {
-    ok: true as const,
-    value: status,
-  };
-};
-
-const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) => {
-  const normalizedItems: Array<Record<string, unknown>> = [];
+const normalizeItems = (
+  items: SupplierOrderItemInput[],
+  reply: FastifyReply,
+): supplierOrdersRepo.NewSupplierOrderItem[] | null => {
+  const normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
@@ -171,6 +161,7 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
       return null;
     }
     normalizedItems.push({
+      id: generateItemId('ssi-'),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -202,46 +193,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async () => {
-      const ordersResult = await query(
-        `SELECT
-            id,
-            linked_quote_id as "linkedQuoteId",
-            supplier_id as "supplierId",
-            supplier_name as "supplierName",
-            payment_terms as "paymentTerms",
-            discount,
-            discount_type as "discountType",
-            status,
-            notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-         FROM supplier_sales
-         ORDER BY created_at DESC`,
-      );
-
-      const itemsResult = await query(
-        `SELECT
-            id,
-            sale_id as "orderId",
-            product_id as "productId",
-            product_name as "productName",
-            quantity,
-            unit_price as "unitPrice",
-            note,
-            discount
-         FROM supplier_sale_items
-         ORDER BY created_at ASC`,
-      );
-
-      const itemsByOrder: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item: { orderId: string }) => {
-        if (!itemsByOrder[item.orderId]) {
-          itemsByOrder[item.orderId] = [];
-        }
+      const [orders, items] = await Promise.all([
+        supplierOrdersRepo.listAll(),
+        supplierOrdersRepo.listAllItems(),
+      ]);
+      const itemsByOrder: Record<string, supplierOrdersRepo.SupplierOrderItem[]> = {};
+      for (const item of items) {
+        if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
         itemsByOrder[item.orderId].push(item);
-      });
-
-      return ordersResult.rows.map((order: { id: string }) => ({
+      }
+      return orders.map((order) => ({
         ...order,
         items: itemsByOrder[order.id] || [],
       }));
@@ -299,35 +260,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const quoteResult = await query(
-        `SELECT
-            id,
-            supplier_id as "supplierId",
-            supplier_name as "supplierName",
-            status
-         FROM supplier_quotes
-         WHERE id = $1`,
-        [linkedQuoteIdResult.value],
-      );
-      if (quoteResult.rows.length === 0) {
+      const [sourceQuote, existingOrderId] = await Promise.all([
+        supplierQuotesRepo.findById(linkedQuoteIdResult.value),
+        supplierOrdersRepo.findExistingByLinkedQuote(linkedQuoteIdResult.value),
+      ]);
+      if (!sourceQuote) {
         return reply.code(404).send({ error: 'Source quote not found' });
       }
-      if (quoteResult.rows[0].status !== 'accepted') {
+      if (sourceQuote.status !== 'accepted') {
         return reply
           .code(409)
           .send({ error: 'Supplier orders can only be created from accepted quotes' });
       }
-
-      const existingOrderResult = await query(
-        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
-        [linkedQuoteIdResult.value],
-      );
-      if (existingOrderResult.rows.length > 0) {
+      if (existingOrderId) {
         return reply.code(409).send({ error: 'A supplier order already exists for this quote' });
       }
       if (
-        supplierIdResult.value !== quoteResult.rows[0].supplierId ||
-        supplierNameResult.value !== quoteResult.rows[0].supplierName
+        supplierIdResult.value !== sourceQuote.supplierId ||
+        supplierNameResult.value !== sourceQuote.supplierName
       ) {
         return reply.code(409).send({ error: 'Supplier details must match the source quote' });
       }
@@ -335,42 +285,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
-      const statusResult = parseSupplierOrderStatus(status);
+      const statusResult = optionalEnum(status, SUPPLIER_ORDER_STATUSES, 'status');
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
       const orderId = nextIdResult.value || (await generateSupplierOrderId());
-      let createdOrderResult: Awaited<ReturnType<typeof query>>;
+
+      let result: {
+        order: supplierOrdersRepo.SupplierOrder;
+        items: supplierOrdersRepo.SupplierOrderItem[];
+      };
       try {
-        createdOrderResult = await query(
-          `INSERT INTO supplier_sales
-            (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, discount_type, status, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING
-              id,
-              linked_quote_id as "linkedQuoteId",
-              supplier_id as "supplierId",
-              supplier_name as "supplierName",
-              payment_terms as "paymentTerms",
-              discount,
-              discount_type as "discountType",
-              status,
-              notes,
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            orderId,
-            linkedQuoteIdResult.value,
-            supplierIdResult.value,
-            supplierNameResult.value,
-            paymentTerms || 'immediate',
-            discountResult.value || 0,
-            discountTypeValue,
-            statusResult.value || 'draft',
-            notes,
-          ],
-        );
+        result = await withTransaction(async (tx) => {
+          const order = await supplierOrdersRepo.create(
+            {
+              id: orderId,
+              linkedQuoteId: linkedQuoteIdResult.value,
+              supplierId: supplierIdResult.value,
+              supplierName: supplierNameResult.value,
+              paymentTerms:
+                typeof paymentTerms === 'string' && paymentTerms.length > 0
+                  ? paymentTerms
+                  : 'immediate',
+              discount: discountResult.value || 0,
+              discountType: discountTypeValue,
+              status: statusResult.value || 'draft',
+              notes: typeof notes === 'string' ? notes : null,
+            },
+            tx,
+          );
+          const createdItems = await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx);
+          return { order, items: createdItems };
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           if (error.constraint === 'supplier_sales_pkey' || error.detail?.includes('(id)')) {
@@ -388,49 +335,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      const createdItems: unknown[] = [];
-      for (const item of normalizedItems) {
-        const itemId = 'ssi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-        const itemResult = await query(
-          `INSERT INTO supplier_sale_items
-            (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING
-             id,
-             sale_id as "orderId",
-             product_id as "productId",
-             product_name as "productName",
-             quantity,
-             unit_price as "unitPrice",
-             discount,
-             note`,
-          [
-            itemId,
-            orderId,
-            item.productId,
-            item.productName,
-            item.quantity,
-            item.unitPrice,
-            item.discount,
-            item.note,
-          ],
-        );
-        createdItems.push(itemResult.rows[0]);
-      }
-
       await logAudit({
         request,
         action: 'supplier_order.created',
         entityType: 'supplier_order',
-        entityId: orderId,
+        entityId: result.order.id,
         details: {
-          targetLabel: orderId,
-          secondaryLabel: supplierNameResult.value,
+          targetLabel: result.order.id,
+          secondaryLabel: result.order.supplierName,
         },
       });
       return reply.code(201).send({
-        ...createdOrderResult.rows[0],
-        items: createdItems,
+        ...result.order,
+        items: result.items,
       });
     },
   );
@@ -477,34 +394,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      let nextIdValue = nextId;
+      const patch: supplierOrdersRepo.SupplierOrderUpdate = {};
+
+      let nextIdValue: string | null = null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
-        if (nextIdResult.value) {
-          const existingIdResult = await query(
-            'SELECT id FROM supplier_sales WHERE id = $1 AND id <> $2',
-            [nextIdResult.value, idResult.value],
-          );
-          if (existingIdResult.rows.length > 0) {
-            return reply.code(409).send({ error: 'Order ID already exists' });
-          }
-        }
       }
 
-      const existingOrderResult = await query(
-        `SELECT id,
-                linked_quote_id as "linkedQuoteId",
-                supplier_id as "supplierId", supplier_name as "supplierName", status
-         FROM supplier_sales WHERE id = $1`,
-        [idResult.value],
-      );
-      if (existingOrderResult.rows.length === 0) {
+      const [existingOrder, idConflict] = await Promise.all([
+        supplierOrdersRepo.findExistingForUpdate(idResult.value),
+        nextIdValue
+          ? supplierOrdersRepo.findIdConflict(nextIdValue, idResult.value)
+          : Promise.resolve(false),
+      ]);
+
+      if (!existingOrder) {
         return reply.code(404).send({ error: 'Order not found' });
       }
-
-      const existingOrder = existingOrderResult.rows[0];
+      if (idConflict) {
+        return reply.code(409).send({ error: 'Order ID already exists' });
+      }
+      if (nextIdValue !== null) patch.id = nextIdValue;
 
       const hasLockedFieldUpdates =
         supplierId !== undefined ||
@@ -521,34 +433,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      let supplierIdValue = supplierId;
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
         if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
-        supplierIdValue = supplierIdResult.value;
+        if (supplierIdResult.value !== null) patch.supplierId = supplierIdResult.value;
       }
 
-      let supplierNameValue = supplierName;
       if (supplierName !== undefined) {
         const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
         if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-        supplierNameValue = supplierNameResult.value;
+        if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
       }
 
       if (existingOrder.linkedQuoteId) {
         const lockedFields: string[] = [];
-        if (
-          supplierIdValue !== undefined &&
-          supplierIdValue !== null &&
-          supplierIdValue !== existingOrder.supplierId
-        ) {
+        if (patch.supplierId !== undefined && patch.supplierId !== existingOrder.supplierId) {
           lockedFields.push('supplierId');
         }
-        if (
-          supplierNameValue !== undefined &&
-          supplierNameValue !== null &&
-          supplierNameValue !== existingOrder.supplierName
-        ) {
+        if (patch.supplierName !== undefined && patch.supplierName !== existingOrder.supplierName) {
           lockedFields.push('supplierName');
         }
         if (lockedFields.length > 0) {
@@ -559,61 +461,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      let discountValue = discount;
       if (discount !== undefined) {
         const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
+        if (discountResult.value !== null) patch.discount = discountResult.value;
       }
 
-      const discountTypeValue =
-        discountType !== undefined
-          ? discountType === 'currency'
-            ? 'currency'
-            : 'percentage'
-          : undefined;
+      if (discountType !== undefined) {
+        patch.discountType = discountType === 'currency' ? 'currency' : 'percentage';
+      }
 
-      const statusResult = parseSupplierOrderStatus(status);
+      const statusResult = optionalEnum(status, SUPPLIER_ORDER_STATUSES, 'status');
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
+      if (statusResult.value !== null) patch.status = statusResult.value;
 
-      let updatedOrderResult: Awaited<ReturnType<typeof query>>;
+      if (typeof paymentTerms === 'string') patch.paymentTerms = paymentTerms;
+      if (typeof notes === 'string') patch.notes = notes;
+
+      let normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] | null = null;
+      if (items !== undefined) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
+        }
+        normalizedItems = normalizeItems(items, reply);
+        if (!normalizedItems) return;
+      }
+
+      let updated: supplierOrdersRepo.SupplierOrder | null;
+      let resultItems: supplierOrdersRepo.SupplierOrderItem[];
       try {
-        updatedOrderResult = await query(
-          `UPDATE supplier_sales
-           SET id = COALESCE($1, id),
-               supplier_id = COALESCE($2, supplier_id),
-               supplier_name = COALESCE($3, supplier_name),
-               payment_terms = COALESCE($4, payment_terms),
-               discount = COALESCE($5, discount),
-               discount_type = COALESCE($6, discount_type),
-               status = COALESCE($7, status),
-               notes = COALESCE($8, notes),
-               updated_at = CURRENT_TIMESTAMP
-            WHERE id = $9
-            RETURNING
-               id,
-               linked_quote_id as "linkedQuoteId",
-               supplier_id as "supplierId",
-               supplier_name as "supplierName",
-               payment_terms as "paymentTerms",
-              discount,
-              discount_type as "discountType",
-              status,
-              notes,
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            supplierIdValue,
-            supplierNameValue,
-            paymentTerms,
-            discountValue,
-            discountTypeValue,
-            statusResult.value,
-            notes,
-            idResult.value,
-          ],
-        );
+        const txResult = await withTransaction(async (tx) => {
+          const order = await supplierOrdersRepo.update(idResult.value, patch, tx);
+          if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+          const finalItems = normalizedItems
+            ? await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx)
+            : await supplierOrdersRepo.findItemsForOrder(order.id, tx);
+          return { order, items: finalItems };
+        });
+        updated = txResult.order;
+        resultItems = txResult.items;
       } catch (error) {
         if (
           isUniqueViolation(error) &&
@@ -624,84 +510,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (updatedOrderResult.rows.length === 0) {
+      if (!updated) {
         return reply.code(404).send({ error: 'Order not found' });
       }
 
-      const updatedOrderId = String(updatedOrderResult.rows[0].id);
-
-      let updatedItems: unknown[] = [];
-      if (items !== undefined) {
-        if (!Array.isArray(items) || items.length === 0) {
-          return badRequest(reply, 'Items must be a non-empty array');
-        }
-        const normalizedItems = normalizeItems(items, reply);
-        if (!normalizedItems) return;
-        await query('DELETE FROM supplier_sale_items WHERE sale_id = $1', [updatedOrderId]);
-        for (const item of normalizedItems) {
-          const itemId = 'ssi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-          const itemResult = await query(
-            `INSERT INTO supplier_sale_items
-              (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING
-               id,
-               sale_id as "orderId",
-               product_id as "productId",
-               product_name as "productName",
-               quantity,
-               unit_price as "unitPrice",
-               discount,
-               note`,
-            [
-              itemId,
-              updatedOrderId,
-              item.productId,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.discount,
-              item.note,
-            ],
-          );
-          updatedItems.push(itemResult.rows[0]);
-        }
-      } else {
-        const itemsResult = await query(
-          `SELECT
-              id,
-              sale_id as "orderId",
-              product_id as "productId",
-              product_name as "productName",
-              quantity,
-              unit_price as "unitPrice",
-              discount,
-              note
-           FROM supplier_sale_items
-           WHERE sale_id = $1`,
-          [updatedOrderId],
-        );
-        updatedItems = itemsResult.rows;
-      }
-
-      const nextStatus = String(updatedOrderResult.rows[0].status ?? existingOrder.status);
       const didStatusChange =
-        statusResult.value !== undefined && existingOrder.status !== nextStatus;
+        statusResult.value !== null && existingOrder.status !== updated.status;
       await logAudit({
         request,
         action: 'supplier_order.updated',
         entityType: 'supplier_order',
-        entityId: updatedOrderId,
+        entityId: updated.id,
         details: {
-          targetLabel: updatedOrderId,
-          secondaryLabel: String(updatedOrderResult.rows[0].supplierName ?? ''),
-          fromValue: didStatusChange ? String(existingOrder.status) : undefined,
-          toValue: didStatusChange ? nextStatus : undefined,
+          targetLabel: updated.id,
+          secondaryLabel: updated.supplierName,
+          fromValue: didStatusChange ? existingOrder.status : undefined,
+          toValue: didStatusChange ? updated.status : undefined,
         },
       });
       return {
-        ...updatedOrderResult.rows[0],
-        items: updatedItems,
+        ...updated,
+        items: resultItems,
       };
     },
   );
@@ -725,24 +554,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const linkedInvoiceResult = await query(
-        'SELECT id FROM supplier_invoices WHERE linked_sale_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedInvoiceResult.rows.length > 0) {
+      const [linkedInvoiceId, existing] = await Promise.all([
+        supplierOrdersRepo.findLinkedInvoiceId(idResult.value),
+        supplierOrdersRepo.findStatusAndSupplierName(idResult.value),
+      ]);
+      if (linkedInvoiceId) {
         return reply
           .code(409)
           .send({ error: 'Cannot delete an order once an invoice has been created from it' });
       }
-
-      const orderResult = await query(
-        'SELECT id, status, supplier_name as "supplierName" FROM supplier_sales WHERE id = $1',
-        [idResult.value],
-      );
-      if (orderResult.rows.length === 0) {
+      if (!existing) {
         return reply.code(404).send({ error: 'Order not found' });
       }
-      if (orderResult.rows[0].status !== 'draft') {
+      if (existing.status !== 'draft') {
         return reply.code(409).send({ error: 'Only draft orders can be deleted' });
       }
 
@@ -753,10 +577,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(orderResult.rows[0].supplierName ?? ''),
+          secondaryLabel: existing.supplierName,
         },
       });
-      await query('DELETE FROM supplier_sales WHERE id = $1', [idResult.value]);
+      await supplierOrdersRepo.deleteById(idResult.value);
       return reply.code(204).send();
     },
   );

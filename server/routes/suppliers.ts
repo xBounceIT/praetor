@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -99,24 +99,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async () => {
-      const result = await query('SELECT * FROM suppliers ORDER BY name');
-      return result.rows.map((s) => ({
-        id: s.id,
-        name: s.name,
-        isDisabled: s.is_disabled,
-        supplierCode: s.supplier_code,
-        contactName: s.contact_name,
-        email: s.email,
-        phone: s.phone,
-        address: s.address,
-        vatNumber: s.vat_number,
-        taxCode: s.tax_code,
-        paymentTerms: s.payment_terms,
-        notes: s.notes,
-        createdAt: s.created_at ? new Date(s.created_at).getTime() : undefined,
-      }));
-    },
+    async () => suppliersRepo.listAll(),
   );
 
   fastify.post(
@@ -190,42 +173,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const now = Date.now();
       const id = 's-' + now;
-      await query(
-        `INSERT INTO suppliers (
-        id, name, is_disabled, supplier_code, contact_name, email, phone,
-        address, vat_number, tax_code, payment_terms, notes, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, to_timestamp($13 / 1000.0))`,
-        [
-          id,
-          nameResult.value,
-          false,
-          supplierCodeResult.value,
-          contactNameResult.value,
-          emailResult.value,
-          phoneResult.value,
-          addressResult.value,
-          vatNumberResult.value,
-          taxCodeResult.value,
-          paymentTermsResult.value,
-          notesResult.value,
-          now,
-        ],
-      );
-
-      await logAudit({
-        request,
-        action: 'supplier.created',
-        entityType: 'supplier',
-        entityId: id,
-        details: {
-          targetLabel: nameResult.value,
-          secondaryLabel: supplierCodeResult.value ?? undefined,
-        },
-      });
-      return reply.code(201).send({
+      const created = await suppliersRepo.create({
         id,
         name: nameResult.value,
-        isDisabled: false,
         supplierCode: supplierCodeResult.value,
         contactName: contactNameResult.value,
         email: emailResult.value,
@@ -237,6 +187,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: notesResult.value,
         createdAt: now,
       });
+
+      await logAudit({
+        request,
+        action: 'supplier.created',
+        entityType: 'supplier',
+        entityId: id,
+        details: {
+          targetLabel: nameResult.value,
+          secondaryLabel: supplierCodeResult.value ?? undefined,
+        },
+      });
+      return reply.code(201).send(created);
     },
   );
 
@@ -319,38 +281,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
 
-      const result = await query(
-        `UPDATE suppliers SET
-        name = COALESCE($1, name),
-        is_disabled = COALESCE($2, is_disabled),
-        supplier_code = COALESCE($3, supplier_code),
-        contact_name = COALESCE($4, contact_name),
-        email = COALESCE($5, email),
-        phone = COALESCE($6, phone),
-        address = COALESCE($7, address),
-        vat_number = COALESCE($8, vat_number),
-        tax_code = COALESCE($9, tax_code),
-        payment_terms = COALESCE($10, payment_terms),
-        notes = COALESCE($11, notes)
-       WHERE id = $12
-       RETURNING *`,
-        [
-          nameResult.value,
-          isDisabledValue,
-          supplierCodeResult.value,
-          contactNameResult.value,
-          emailResult.value,
-          phoneResult.value,
-          addressResult.value,
-          vatNumberResult.value,
-          taxCodeResult.value,
-          paymentTermsResult.value,
-          notesResult.value,
-          idResult.value,
-        ],
-      );
+      const patch: suppliersRepo.SupplierUpdate = {};
+      if (Object.hasOwn(body, 'name') && nameResult.value !== null) patch.name = nameResult.value;
+      if (isDisabledValue !== undefined) patch.isDisabled = isDisabledValue;
+      if (Object.hasOwn(body, 'supplierCode') && supplierCodeResult.value !== null)
+        patch.supplierCode = supplierCodeResult.value;
+      if (Object.hasOwn(body, 'contactName') && contactNameResult.value !== null)
+        patch.contactName = contactNameResult.value;
+      if (Object.hasOwn(body, 'email') && emailResult.value !== null)
+        patch.email = emailResult.value;
+      if (Object.hasOwn(body, 'phone') && phoneResult.value !== null)
+        patch.phone = phoneResult.value;
+      if (Object.hasOwn(body, 'address') && addressResult.value !== null)
+        patch.address = addressResult.value;
+      if (Object.hasOwn(body, 'vatNumber') && vatNumberResult.value !== null)
+        patch.vatNumber = vatNumberResult.value;
+      if (Object.hasOwn(body, 'taxCode') && taxCodeResult.value !== null)
+        patch.taxCode = taxCodeResult.value;
+      if (Object.hasOwn(body, 'paymentTerms') && paymentTermsResult.value !== null)
+        patch.paymentTerms = paymentTermsResult.value;
+      if (Object.hasOwn(body, 'notes') && notesResult.value !== null)
+        patch.notes = notesResult.value;
 
-      if (result.rows.length === 0) {
+      const updated = await suppliersRepo.update(idResult.value, patch);
+      if (!updated) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }
 
@@ -368,9 +322,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         Object.hasOwn(body, 'notes') ? 'notes' : null,
       ].filter((field): field is string => field !== null);
 
-      const s = result.rows[0];
-
-      // Determine specific action based on what changed
       let action = 'supplier.updated';
       if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
         action = body.isDisabled ? 'supplier.disabled' : 'supplier.enabled';
@@ -382,25 +333,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'supplier',
         entityId: idResult.value,
         details: {
-          targetLabel: s.name as string,
-          secondaryLabel: (s.supplier_code as string | null) ?? undefined,
+          targetLabel: updated.name,
+          secondaryLabel: updated.supplierCode ?? undefined,
         },
       });
-      return {
-        id: s.id,
-        name: s.name,
-        isDisabled: s.is_disabled,
-        supplierCode: s.supplier_code,
-        contactName: s.contact_name,
-        email: s.email,
-        phone: s.phone,
-        address: s.address,
-        vatNumber: s.vat_number,
-        taxCode: s.tax_code,
-        paymentTerms: s.payment_terms,
-        notes: s.notes,
-        createdAt: s.created_at ? new Date(s.created_at).getTime() : undefined,
-      };
+      return updated;
     },
   );
 
@@ -422,12 +359,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query(
-        'DELETE FROM suppliers WHERE id = $1 RETURNING id, name, supplier_code',
-        [idResult.value],
-      );
 
-      if (result.rows.length === 0) {
+      const deleted = await suppliersRepo.deleteById(idResult.value);
+      if (!deleted) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }
 
@@ -437,8 +371,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'supplier',
         entityId: idResult.value,
         details: {
-          targetLabel: result.rows[0].name as string,
-          secondaryLabel: (result.rows[0].supplier_code as string | null) ?? undefined,
+          targetLabel: deleted.name,
+          secondaryLabel: deleted.supplierCode ?? undefined,
         },
       });
       return reply.code(204).send();

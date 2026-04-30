@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { isUniqueViolation } from '../utils/db-errors.ts';
+import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -30,7 +31,19 @@ const normalizeUnitType = (value: unknown): 'hours' | 'days' | 'unit' => {
   return 'unit';
 };
 
-const normalizeSupplierQuoteItemRow = (item: Record<string, unknown>) => ({
+const normalizeSupplierQuoteStatus = (status: string) => {
+  if (status === 'received') return 'sent';
+  if (status === 'approved') return 'accepted';
+  if (status === 'rejected') return 'denied';
+  return status;
+};
+
+const projectQuote = (quote: supplierQuotesRepo.SupplierQuote) => ({
+  ...quote,
+  status: normalizeSupplierQuoteStatus(quote.status),
+});
+
+const projectItem = (item: supplierQuotesRepo.SupplierQuoteItem) => ({
   ...item,
   unitType: normalizeUnitType(item.unitType),
 });
@@ -110,21 +123,55 @@ const supplierQuoteUpdateBodySchema = {
   },
 } as const;
 
+type ItemBody = {
+  productId?: string;
+  productName?: string;
+  quantity?: string | number;
+  unitPrice?: string | number;
+  note?: string;
+  unitType?: 'hours' | 'days' | 'unit';
+};
+
+const validateAndNormalizeItems = (
+  items: ItemBody[],
+  reply: FastifyReply,
+): supplierQuotesRepo.NewSupplierQuoteItem[] | null => {
+  const result: supplierQuotesRepo.NewSupplierQuoteItem[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+    if (!productNameResult.ok) {
+      badRequest(reply, productNameResult.message);
+      return null;
+    }
+    const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
+    if (!quantityResult.ok) {
+      badRequest(reply, quantityResult.message);
+      return null;
+    }
+    const unitPriceResult = parseLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!unitPriceResult.ok) {
+      badRequest(reply, unitPriceResult.message);
+      return null;
+    }
+    result.push({
+      id: generateItemId('sqi-'),
+      productId: item.productId || null,
+      productName: productNameResult.value,
+      quantity: quantityResult.value,
+      unitPrice: unitPriceResult.value,
+      note: item.note || null,
+      unitType: normalizeUnitType(item.unitType),
+    });
+  }
+  return result;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
-
-  const normalizeSupplierQuoteStatus = (status: string) => {
-    if (status === 'received') return 'sent';
-    if (status === 'approved') return 'accepted';
-    if (status === 'rejected') return 'denied';
-    return status;
-  };
-
-  const normalizeSupplierQuoteRow = (quote: Record<string, unknown>) => ({
-    ...quote,
-    status: normalizeSupplierQuoteStatus(String(quote.status)),
-    expirationDate: normalizeNullableDateOnly(quote.expirationDate, 'supplierQuote.expirationDate'),
-  });
 
   fastify.get(
     '/',
@@ -143,52 +190,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async () => {
-      const quotesResult = await query(
-        `SELECT
-        id,
-        supplier_id as "supplierId",
-        supplier_name as "supplierName",
-        payment_terms as "paymentTerms",
-        status,
-        expiration_date as "expirationDate",
-        (
-          SELECT ss.id
-          FROM supplier_sales ss
-          WHERE ss.linked_quote_id = supplier_quotes.id
-          LIMIT 1
-        ) as "linkedOrderId",
-        notes,
-        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-        EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-       FROM supplier_quotes
-       ORDER BY created_at DESC`,
-      );
-
-      const itemsResult = await query(
-        `SELECT
-        id,
-        quote_id as "quoteId",
-        product_id as "productId",
-        product_name as "productName",
-        quantity,
-        unit_price as "unitPrice",
-        note,
-        unit_type as "unitType"
-       FROM supplier_quote_items
-       ORDER BY created_at ASC`,
-      );
-
-      const itemsByQuote: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item) => {
-        const quoteId = (item as { quoteId: string }).quoteId;
-        if (!itemsByQuote[quoteId]) {
-          itemsByQuote[quoteId] = [];
-        }
-        itemsByQuote[quoteId].push(normalizeSupplierQuoteItemRow(item as Record<string, unknown>));
-      });
-
-      return quotesResult.rows.map((quote) => ({
-        ...normalizeSupplierQuoteRow(quote as Record<string, unknown>),
+      const [quotes, items] = await Promise.all([
+        supplierQuotesRepo.listAll(),
+        supplierQuotesRepo.listAllItems(),
+      ]);
+      const itemsByQuote: Record<string, ReturnType<typeof projectItem>[]> = {};
+      for (const item of items) {
+        if (!itemsByQuote[item.quoteId]) itemsByQuote[item.quoteId] = [];
+        itemsByQuote[item.quoteId].push(projectItem(item));
+      }
+      return quotes.map((quote) => ({
+        ...projectQuote(quote),
         items: itemsByQuote[quote.id] || [],
       }));
     },
@@ -222,14 +234,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         supplierId?: string;
         supplierName?: string;
-        items?: Array<{
-          productId?: string;
-          productName?: string;
-          quantity?: string | number;
-          unitPrice?: string | number;
-          note?: string;
-          unitType?: 'hours' | 'days' | 'unit';
-        }>;
+        items?: ItemBody[];
         paymentTerms?: string;
         status?: string;
         expirationDate?: string;
@@ -248,60 +253,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const productNameResult = requireNonEmptyString(
-          item.productName,
-          `items[${i}].productName`,
-        );
-        if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-        const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
-        if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-        const unitPriceResult = parseLocalizedNonNegativeNumber(
-          item.unitPrice,
-          `items[${i}].unitPrice`,
-        );
-        if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        normalizedItems.push({
-          ...item,
-          productName: productNameResult.value,
-          quantity: quantityResult.value,
-          unitPrice: unitPriceResult.value,
-          unitType: normalizeUnitType(item.unitType),
-        });
-      }
+      const normalizedItems = validateAndNormalizeItems(items, reply);
+      if (!normalizedItems) return;
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
 
-      let quoteResult: Awaited<ReturnType<typeof query>>;
+      let result: {
+        quote: supplierQuotesRepo.SupplierQuote;
+        items: supplierQuotesRepo.SupplierQuoteItem[];
+      };
       try {
-        quoteResult = await query(
-          `INSERT INTO supplier_quotes (
-          id, supplier_id, supplier_name, payment_terms, status, expiration_date, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING
-          id,
-          supplier_id as "supplierId",
-          supplier_name as "supplierName",
-          payment_terms as "paymentTerms",
-          status,
-          expiration_date as "expirationDate",
-          null::varchar as "linkedOrderId",
-          notes,
-          EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-          EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdResult.value,
-            supplierIdResult.value,
-            supplierNameResult.value,
-            paymentTerms || 'immediate',
-            status || 'draft',
-            expirationDateResult.value,
-            notes,
-          ],
-        );
+        result = await withTransaction(async (tx) => {
+          const quote = await supplierQuotesRepo.create(
+            {
+              id: nextIdResult.value,
+              supplierId: supplierIdResult.value,
+              supplierName: supplierNameResult.value,
+              paymentTerms: paymentTerms || 'immediate',
+              status: status || 'draft',
+              expirationDate: expirationDateResult.value,
+              notes: notes ?? null,
+            },
+            tx,
+          );
+          const createdItems = await supplierQuotesRepo.replaceItems(quote.id, normalizedItems, tx);
+          return { quote, items: createdItems };
+        });
       } catch (error) {
         if (
           isUniqueViolation(error) &&
@@ -312,51 +290,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      const createdItems = [];
-      for (const item of normalizedItems) {
-        const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-        const itemResult = await query(
-          `INSERT INTO supplier_quote_items (
-          id, quote_id, product_id, product_name, quantity, unit_price, note, unit_type
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING
-          id,
-          quote_id as "quoteId",
-          product_id as "productId",
-          product_name as "productName",
-          quantity,
-          unit_price as "unitPrice",
-          note,
-          unit_type as "unitType"`,
-          [
-            itemId,
-            nextIdResult.value,
-            item.productId || null,
-            item.productName,
-            item.quantity,
-            item.unitPrice,
-            item.note || null,
-            item.unitType || 'unit',
-          ],
-        );
-        createdItems.push(
-          normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
-        );
-      }
-
       await logAudit({
         request,
         action: 'supplier_quote.created',
         entityType: 'supplier_quote',
-        entityId: nextIdResult.value,
+        entityId: result.quote.id,
         details: {
-          targetLabel: nextIdResult.value,
-          secondaryLabel: supplierNameResult.value,
+          targetLabel: result.quote.id,
+          secondaryLabel: result.quote.supplierName,
         },
       });
       return reply.code(201).send({
-        ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
-        items: createdItems,
+        ...projectQuote(result.quote),
+        items: result.items.map(projectItem),
       });
     },
   );
@@ -391,14 +337,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         supplierId?: string;
         supplierName?: string;
-        items?: Array<{
-          productId?: string;
-          productName?: string;
-          quantity?: string | number;
-          unitPrice?: string | number;
-          note?: string;
-          unitType?: 'hours' | 'days' | 'unit';
-        }>;
+        items?: ItemBody[];
         paymentTerms?: string;
         status?: string;
         expirationDate?: string;
@@ -418,86 +357,75 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate === undefined &&
         notes === undefined;
 
-      const linkedOrderResult = await query(
-        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedOrderResult.rows.length > 0 && !isIdOnlyUpdate) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
-      }
+      const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
-      let supplierIdValue: string | undefined | null = supplierId;
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
         if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
-        supplierIdValue = supplierIdResult.value;
+        if (supplierIdResult.value !== null) patch.supplierId = supplierIdResult.value;
       }
 
-      let supplierNameValue: string | undefined | null = supplierName;
       if (supplierName !== undefined) {
         const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
         if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-        supplierNameValue = supplierNameResult.value;
+        if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
       }
 
-      let nextIdValue: string | undefined | null = nextId;
+      let nextIdValue: string | null = null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
-        if (nextIdResult.value) {
-          const existingIdResult = await query(
-            'SELECT id FROM supplier_quotes WHERE id = $1 AND id <> $2',
-            [nextIdResult.value, idResult.value],
-          );
-          if (existingIdResult.rows.length > 0) {
-            return reply.code(409).send({ error: 'Quote ID already exists' });
-          }
-        }
       }
 
-      let expirationDateValue: string | undefined | null = expirationDate;
+      if (paymentTerms !== undefined) patch.paymentTerms = paymentTerms;
+      if (status !== undefined) patch.status = status;
+      if (notes !== undefined) patch.notes = notes;
+
       if (expirationDate !== undefined) {
         const expirationDateResult = optionalDateString(expirationDate, 'expirationDate');
         if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
-        expirationDateValue = expirationDateResult.value;
+        if (expirationDateResult.value !== null) patch.expirationDate = expirationDateResult.value;
       }
 
-      let quoteResult: Awaited<ReturnType<typeof query>>;
+      let normalizedItems: supplierQuotesRepo.NewSupplierQuoteItem[] | null = null;
+      if (items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
+        }
+        normalizedItems = validateAndNormalizeItems(items, reply);
+        if (!normalizedItems) return;
+      }
+
+      const [linkedOrderId, idConflict] = await Promise.all([
+        isIdOnlyUpdate
+          ? Promise.resolve(null)
+          : supplierQuotesRepo.findLinkedOrderId(idResult.value),
+        nextIdValue
+          ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
+          : Promise.resolve(false),
+      ]);
+      if (linkedOrderId && !isIdOnlyUpdate) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      }
+      if (idConflict) {
+        return reply.code(409).send({ error: 'Quote ID already exists' });
+      }
+      if (nextIdValue !== null) patch.id = nextIdValue;
+
+      let updated: supplierQuotesRepo.SupplierQuote | null;
+      let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
-        quoteResult = await query(
-          `UPDATE supplier_quotes
-         SET id = COALESCE($1, id),
-             supplier_id = COALESCE($2, supplier_id),
-             supplier_name = COALESCE($3, supplier_name),
-             payment_terms = COALESCE($4, payment_terms),
-             status = COALESCE($5, status),
-             expiration_date = COALESCE($6, expiration_date),
-             notes = COALESCE($7, notes),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8
-         RETURNING
-          id,
-          supplier_id as "supplierId",
-           supplier_name as "supplierName",
-           payment_terms as "paymentTerms",
-           status,
-           expiration_date as "expirationDate",
-           null::varchar as "linkedOrderId",
-           notes,
-          EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-          EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            supplierIdValue,
-            supplierNameValue,
-            paymentTerms,
-            status,
-            expirationDateValue,
-            notes,
-            idResult.value,
-          ],
-        );
+        const txResult = await withTransaction(async (tx) => {
+          const quote = await supplierQuotesRepo.update(idResult.value, patch, tx);
+          if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+          const finalItems = normalizedItems
+            ? await supplierQuotesRepo.replaceItems(quote.id, normalizedItems, tx)
+            : await supplierQuotesRepo.findItemsForQuote(quote.id, tx);
+          return { quote, items: finalItems };
+        });
+        updated = txResult.quote;
+        resultItems = txResult.items;
       } catch (error) {
         if (
           isUniqueViolation(error) &&
@@ -508,109 +436,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (quoteResult.rows.length === 0) {
+      if (!updated) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
-      }
-
-      const updatedQuoteId = String(quoteResult.rows[0].id);
-
-      let updatedItems = [];
-      if (items) {
-        if (!Array.isArray(items) || items.length === 0) {
-          return badRequest(reply, 'Items must be a non-empty array');
-        }
-        const normalizedItems = [];
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          const productNameResult = requireNonEmptyString(
-            item.productName,
-            `items[${i}].productName`,
-          );
-          if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-          const quantityResult = parseLocalizedPositiveNumber(
-            item.quantity,
-            `items[${i}].quantity`,
-          );
-          if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-          const unitPriceResult = parseLocalizedNonNegativeNumber(
-            item.unitPrice,
-            `items[${i}].unitPrice`,
-          );
-          if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-          normalizedItems.push({
-            ...item,
-            productName: productNameResult.value,
-            quantity: quantityResult.value,
-            unitPrice: unitPriceResult.value,
-            unitType: normalizeUnitType(item.unitType),
-          });
-        }
-
-        await query('DELETE FROM supplier_quote_items WHERE quote_id = $1', [updatedQuoteId]);
-
-        for (const item of normalizedItems) {
-          const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          const itemResult = await query(
-            `INSERT INTO supplier_quote_items (
-            id, quote_id, product_id, product_name, quantity, unit_price, note, unit_type
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING
-            id,
-            quote_id as "quoteId",
-            product_id as "productId",
-            product_name as "productName",
-            quantity,
-            unit_price as "unitPrice",
-            note,
-            unit_type as "unitType"`,
-            [
-              itemId,
-              updatedQuoteId,
-              item.productId || null,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.note || null,
-              item.unitType || 'unit',
-            ],
-          );
-          updatedItems.push(
-            normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
-          );
-        }
-      } else {
-        const itemsResult = await query(
-          `SELECT
-          id,
-          quote_id as "quoteId",
-          product_id as "productId",
-          product_name as "productName",
-          quantity,
-          unit_price as "unitPrice",
-          note,
-          unit_type as "unitType"
-         FROM supplier_quote_items
-         WHERE quote_id = $1`,
-          [updatedQuoteId],
-        );
-        updatedItems = itemsResult.rows.map((item) =>
-          normalizeSupplierQuoteItemRow(item as Record<string, unknown>),
-        );
       }
 
       await logAudit({
         request,
         action: 'supplier_quote.updated',
         entityType: 'supplier_quote',
-        entityId: updatedQuoteId,
+        entityId: updated.id,
         details: {
-          targetLabel: updatedQuoteId,
-          secondaryLabel: String(quoteResult.rows[0].supplierName ?? ''),
+          targetLabel: updated.id,
+          secondaryLabel: updated.supplierName,
         },
       });
       return {
-        ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
-        items: updatedItems,
+        ...projectQuote(updated),
+        items: resultItems.map(projectItem),
       };
     },
   );
@@ -633,21 +475,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const linkedOrderResult = await query(
-        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedOrderResult.rows.length > 0) {
+
+      const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);
+      if (linkedOrderId) {
         return reply
           .code(409)
           .send({ error: 'Cannot delete a quote once an order has been created from it' });
       }
-      const result = await query(
-        'DELETE FROM supplier_quotes WHERE id = $1 RETURNING id, supplier_name as "supplierName"',
-        [idResult.value],
-      );
 
-      if (result.rows.length === 0) {
+      const deleted = await supplierQuotesRepo.deleteById(idResult.value);
+      if (!deleted) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
       }
 
@@ -658,7 +495,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(result.rows[0].supplierName ?? ''),
+          secondaryLabel: deleted.supplierName,
         },
       });
       return reply.code(204).send();
