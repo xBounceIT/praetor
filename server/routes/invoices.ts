@@ -349,7 +349,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const items = await invoicesRepo.replaceItems(
+          const items = await invoicesRepo.insertItems(
             invoice.id,
             buildItemsForInsert(normalizedItems),
             tx,
@@ -429,11 +429,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existingClientId = items ? await invoicesRepo.findClientId(idResult.value) : null;
-      if (items && !existingClientId) {
-        return reply.code(404).send({ error: 'Invoice not found' });
-      }
-
       const patch: invoicesRepo.InvoiceUpdate = {};
 
       if (clientId !== undefined) {
@@ -459,20 +454,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      let nextIssueDate: string | undefined;
       if (issueDate !== undefined) {
         const issueDateResult = optionalDateString(issueDate, 'issueDate');
         if (!issueDateResult.ok) return badRequest(reply, issueDateResult.message);
-        if (issueDateResult.value) patch.issueDate = issueDateResult.value;
+        if (issueDateResult.value) {
+          patch.issueDate = issueDateResult.value;
+          nextIssueDate = issueDateResult.value;
+        }
       }
 
+      let nextDueDate: string | undefined;
       if (dueDate !== undefined) {
         const dueDateResult = optionalDateString(dueDate, 'dueDate');
         if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
-        if (dueDateResult.value) patch.dueDate = dueDateResult.value;
+        if (dueDateResult.value) {
+          patch.dueDate = dueDateResult.value;
+          nextDueDate = dueDateResult.value;
+        }
       }
 
-      if (issueDate && dueDate) {
-        if ((dueDate as string) < (issueDate as string)) {
+      if (nextIssueDate !== undefined || nextDueDate !== undefined) {
+        let effectiveIssueDate = nextIssueDate;
+        let effectiveDueDate = nextDueDate;
+        if (effectiveIssueDate === undefined || effectiveDueDate === undefined) {
+          const persisted = await invoicesRepo.findDates(idResult.value);
+          if (!persisted) {
+            return reply.code(404).send({ error: 'Invoice not found' });
+          }
+          effectiveIssueDate = effectiveIssueDate ?? persisted.issueDate;
+          effectiveDueDate = effectiveDueDate ?? persisted.dueDate;
+        }
+        if (effectiveDueDate < effectiveIssueDate) {
           return badRequest(reply, 'dueDate must be on or after issueDate');
         }
       }

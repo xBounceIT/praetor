@@ -392,7 +392,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await clientOffersRepo.replaceItems(
+          const createdItems = await clientOffersRepo.insertItems(
             offer.id,
             buildItemsForInsert(normalizedItems),
             tx,

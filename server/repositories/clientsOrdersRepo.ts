@@ -543,9 +543,7 @@ export const mapSaleItemsToSupplierItems = async (
   exec: QueryExecutor,
 ): Promise<void> => {
   if (args.mappings.length === 0) return;
-  const valuesPlaceholders = args.mappings
-    .map((_, i) => `($${i * 2 + 3}, $${i * 2 + 4})`)
-    .join(', ');
+  const valuesPlaceholders = buildBulkInsertPlaceholders(args.mappings.length, 2, 3);
   const mappingParams = args.mappings.flatMap(({ quoteItemId, saleItemId }) => [
     quoteItemId,
     saleItemId,

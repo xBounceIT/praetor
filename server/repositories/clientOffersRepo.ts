@@ -340,12 +340,11 @@ export type NewClientOfferItem = {
   unitType: UnitType;
 };
 
-export const replaceItems = async (
+export const insertItems = async (
   offerId: string,
   items: NewClientOfferItem[],
   exec: QueryExecutor = pool,
 ): Promise<ClientOfferItem[]> => {
-  await exec.query(`DELETE FROM customer_offer_items WHERE offer_id = $1`, [offerId]);
   if (items.length === 0) return [];
   const placeholders = buildBulkInsertPlaceholders(items.length, 15);
   const params = items.flatMap((item) => [
@@ -376,6 +375,15 @@ export const replaceItems = async (
     params,
   );
   return rows.map(mapItem);
+};
+
+export const replaceItems = async (
+  offerId: string,
+  items: NewClientOfferItem[],
+  exec: QueryExecutor = pool,
+): Promise<ClientOfferItem[]> => {
+  await exec.query(`DELETE FROM customer_offer_items WHERE offer_id = $1`, [offerId]);
+  return insertItems(offerId, items, exec);
 };
 
 export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {

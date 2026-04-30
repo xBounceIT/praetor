@@ -552,7 +552,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const items = await clientQuotesRepo.replaceItems(
+          const items = await clientQuotesRepo.insertItems(
             created.id,
             buildItemsForInsert(resolvedItems),
             tx,

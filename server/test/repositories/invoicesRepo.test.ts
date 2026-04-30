@@ -116,15 +116,23 @@ describe('listAllWithItems', () => {
   });
 });
 
-describe('findClientId', () => {
-  test('returns clientId when found', async () => {
-    exec.enqueue({ rows: [{ clientId: 'c-1' }] });
-    expect(await invoicesRepo.findClientId('INV-1', exec)).toBe('c-1');
+describe('findDates', () => {
+  test('returns normalized issueDate/dueDate when found', async () => {
+    exec.enqueue({
+      rows: [
+        {
+          issueDate: '2026-04-01T00:00:00Z',
+          dueDate: new Date('2026-04-30T00:00:00Z'),
+        },
+      ],
+    });
+    const result = await invoicesRepo.findDates('INV-1', exec);
+    expect(result).toEqual({ issueDate: '2026-04-01', dueDate: '2026-04-30' });
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await invoicesRepo.findClientId('INV-X', exec)).toBeNull();
+    expect(await invoicesRepo.findDates('INV-X', exec)).toBeNull();
   });
 });
 

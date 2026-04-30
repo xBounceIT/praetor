@@ -804,7 +804,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const willReplaceItems = !isSourceLinkedOrder && items !== undefined;
-      if (willReplaceItems && !normalizedItems) return;
 
       let result: {
         order: clientsOrdersRepo.ClientOrder | null;

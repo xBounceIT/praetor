@@ -151,15 +151,21 @@ export const listAllWithItems = async (exec: QueryExecutor = pool): Promise<Invo
   }));
 };
 
-export const findClientId = async (
+export const findDates = async (
   invoiceId: string,
   exec: QueryExecutor = pool,
-): Promise<string | null> => {
-  const { rows } = await exec.query<{ clientId: string }>(
-    `SELECT client_id as "clientId" FROM invoices WHERE id = $1`,
-    [invoiceId],
-  );
-  return rows[0]?.clientId ?? null;
+): Promise<{ issueDate: string; dueDate: string } | null> => {
+  const { rows } = await exec.query<{
+    issueDate: string | Date | null;
+    dueDate: string | Date | null;
+  }>(`SELECT issue_date as "issueDate", due_date as "dueDate" FROM invoices WHERE id = $1`, [
+    invoiceId,
+  ]);
+  if (!rows[0]) return null;
+  return {
+    issueDate: requireDateOnly(rows[0].issueDate, 'invoice.issueDate'),
+    dueDate: requireDateOnly(rows[0].dueDate, 'invoice.dueDate'),
+  };
 };
 
 export const findIdConflict = async (
@@ -283,12 +289,11 @@ export type NewInvoiceItem = {
   discount: number;
 };
 
-export const replaceItems = async (
+export const insertItems = async (
   invoiceId: string,
   items: NewInvoiceItem[],
   exec: QueryExecutor = pool,
 ): Promise<InvoiceItem[]> => {
-  await exec.query(`DELETE FROM invoice_items WHERE invoice_id = $1`, [invoiceId]);
   if (items.length === 0) return [];
   const placeholders = buildBulkInsertPlaceholders(items.length, 8);
   const params = items.flatMap((item) => [
@@ -309,6 +314,15 @@ export const replaceItems = async (
     params,
   );
   return rows.map(mapItem);
+};
+
+export const replaceItems = async (
+  invoiceId: string,
+  items: NewInvoiceItem[],
+  exec: QueryExecutor = pool,
+): Promise<InvoiceItem[]> => {
+  await exec.query(`DELETE FROM invoice_items WHERE invoice_id = $1`, [invoiceId]);
+  return insertItems(invoiceId, items, exec);
 };
 
 export const deleteById = async (
