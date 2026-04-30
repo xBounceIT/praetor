@@ -10,9 +10,13 @@ import {
 } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import {
+  requestHasPermission as hasPermission,
+  TOP_MANAGER_ROLE_ID,
+} from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
@@ -132,9 +136,6 @@ const userRolesUpdateBodySchema = {
   required: ['roleIds', 'primaryRoleId'],
 } as const;
 
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
-
 const canViewUserEmails = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
   hasPermission(request, 'administration.user_management.view');
@@ -172,12 +173,6 @@ const mapUserResponse = (
   hasTopManagerRole,
   isAdminOnly,
 });
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List users
@@ -342,13 +337,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
 
       // Validate employee type if provided
-      const employeeTypeResult = employeeType
-        ? validateEnum(employeeType, ['app_user', 'internal', 'external'], 'employeeType')
-        : { ok: true, value: 'app_user' };
-      if (!employeeTypeResult.ok)
-        return badRequest(reply, (employeeTypeResult as { ok: false; message: string }).message);
+      const employeeTypeResult: { ok: true; value: string } | { ok: false; message: string } =
+        employeeType
+          ? validateEnum(employeeType, ['app_user', 'internal', 'external'], 'employeeType')
+          : { ok: true, value: 'app_user' };
+      if (!employeeTypeResult.ok) return badRequest(reply, employeeTypeResult.message);
 
-      const effectiveEmployeeType = (employeeTypeResult as { ok: true; value: string }).value;
+      const effectiveEmployeeType = employeeTypeResult.value;
 
       const canCreateAppUser = hasPermission(request, 'administration.user_management.create');
       const canCreateInternal = hasPermission(request, 'hr.internal.create');
@@ -370,8 +365,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
       const emailResult = optionalEmail(email, 'email');
-      if (!emailResult.ok)
-        return badRequest(reply, (emailResult as { ok: false; message: string }).message);
+      if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
@@ -477,9 +471,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isAdminOnly: roleValue === ADMIN_ROLE_ID,
         });
       } catch (err) {
-        const error = err as DatabaseError;
-        if (error.code === '23505') {
-          // Unique violation
+        if (isUniqueViolation(err)) {
           return badRequest(reply, 'Username already exists');
         }
         throw err;
@@ -602,20 +594,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (name !== undefined) {
         const nameResult = optionalNonEmptyString(name, 'name');
-        if (!nameResult.ok)
-          return badRequest(reply, (nameResult as { ok: false; message: string }).message);
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
       }
 
       if (costPerHour !== undefined) {
         const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
-        if (!costPerHourResult.ok)
-          return badRequest(reply, (costPerHourResult as { ok: false; message: string }).message);
+        if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
       }
 
       if (email !== undefined) {
         const emailResult = optionalEmail(email, 'email');
-        if (!emailResult.ok)
-          return badRequest(reply, (emailResult as { ok: false; message: string }).message);
+        if (!emailResult.ok) return badRequest(reply, emailResult.message);
       }
 
       const targetUserResult = await query(
@@ -908,8 +897,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
 
       const roleIdsResult = ensureArrayOfStrings(roleIds, 'roleIds');
-      if (!roleIdsResult.ok)
-        return badRequest(reply, (roleIdsResult as { ok: false; message: string }).message);
+      if (!roleIdsResult.ok) return badRequest(reply, roleIdsResult.message);
       if (roleIdsResult.value.length < 1) return badRequest(reply, 'roleIds must not be empty');
 
       const primaryRoleIdResult = requireNonEmptyString(primaryRoleId, 'primaryRoleId');
@@ -1073,16 +1061,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const clientIdsResult = optionalArrayOfStrings(clientIds, 'clientIds');
-      if (!clientIdsResult.ok)
-        return badRequest(reply, (clientIdsResult as { ok: false; message: string }).message);
+      if (!clientIdsResult.ok) return badRequest(reply, clientIdsResult.message);
 
       const projectIdsResult = optionalArrayOfStrings(projectIds, 'projectIds');
-      if (!projectIdsResult.ok)
-        return badRequest(reply, (projectIdsResult as { ok: false; message: string }).message);
+      if (!projectIdsResult.ok) return badRequest(reply, projectIdsResult.message);
 
       const taskIdsResult = optionalArrayOfStrings(taskIds, 'taskIds');
-      if (!taskIdsResult.ok)
-        return badRequest(reply, (taskIdsResult as { ok: false; message: string }).message);
+      if (!taskIdsResult.ok) return badRequest(reply, taskIdsResult.message);
 
       const targetUser = await query('SELECT name, username FROM users WHERE id = $1', [
         idResult.value,

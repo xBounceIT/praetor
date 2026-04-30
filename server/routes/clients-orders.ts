@@ -3,6 +3,7 @@ import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import {
   generateClientOrderId,
   generateItemId,
@@ -18,12 +19,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 const idParamSchema = {
   type: 'object',
@@ -465,19 +460,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'sales_pkey' || databaseError.detail?.includes('(id)'))
-        ) {
-          return reply.code(409).send({ error: 'Order ID already exists' });
-        }
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
-            databaseError.detail?.includes('(linked_offer_id)'))
-        ) {
-          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        if (isUniqueViolation(error)) {
+          if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
+            return reply.code(409).send({ error: 'Order ID already exists' });
+          }
+          if (
+            error.constraint === 'idx_sales_linked_offer_id_unique' ||
+            error.detail?.includes('(linked_offer_id)')
+          ) {
+            return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+          }
         }
         throw error;
       }
@@ -1125,19 +1117,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'sales_pkey' || databaseError.detail?.includes('(id)'))
-        ) {
-          return reply.code(409).send({ error: 'Order ID already exists' });
-        }
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
-            databaseError.detail?.includes('(linked_offer_id)'))
-        ) {
-          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        if (isUniqueViolation(error)) {
+          if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
+            return reply.code(409).send({ error: 'Order ID already exists' });
+          }
+          if (
+            error.constraint === 'idx_sales_linked_offer_id_unique' ||
+            error.detail?.includes('(linked_offer_id)')
+          ) {
+            return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+          }
         }
         throw error;
       }

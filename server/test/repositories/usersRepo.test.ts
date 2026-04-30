@@ -111,6 +111,33 @@ describe('updatePasswordHash', () => {
   });
 });
 
+describe('findCostPerHour', () => {
+  test('parses string-encoded numerics from pg', async () => {
+    exec.enqueue({ rows: [{ costPerHour: '42.5' }] });
+    expect(await usersRepo.findCostPerHour('user-1', exec)).toBe(42.5);
+  });
+
+  test('passes numeric values through unchanged', async () => {
+    exec.enqueue({ rows: [{ costPerHour: 42.5 }] });
+    expect(await usersRepo.findCostPerHour('user-1', exec)).toBe(42.5);
+  });
+
+  test('returns 0 when row missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await usersRepo.findCostPerHour('user-1', exec)).toBe(0);
+  });
+
+  test('returns 0 when costPerHour is null', async () => {
+    exec.enqueue({ rows: [{ costPerHour: null }] });
+    expect(await usersRepo.findCostPerHour('user-1', exec)).toBe(0);
+  });
+
+  test('returns 0 when string is unparseable', async () => {
+    exec.enqueue({ rows: [{ costPerHour: 'oops' }] });
+    expect(await usersRepo.findCostPerHour('user-1', exec)).toBe(0);
+  });
+});
+
 describe('updateNameByUsername', () => {
   test('passes [username, name] in that order', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });

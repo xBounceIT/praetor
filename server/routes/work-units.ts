@@ -1,8 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query, withTransaction } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { logAudit } from '../utils/audit.ts';
+import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -69,35 +74,6 @@ const workUnitUsersBodySchema = {
   required: ['userIds'],
 } as const;
 
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
-
-// Helper to fetch unit with managers and user count
-const fetchUnitDetails = async (unitId: string) => {
-  const result = await query(
-    `
-        SELECT w.*,
-            (
-                SELECT COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name)), '[]')
-                FROM work_unit_managers wum
-                JOIN users u ON wum.user_id = u.id
-                WHERE wum.work_unit_id = w.id
-            ) as managers,
-            (SELECT COUNT(*) FROM user_work_units uw WHERE uw.work_unit_id = w.id) as user_count
-        FROM work_units w
-        WHERE w.id = $1
-    `,
-    [unitId],
-  );
-  return result.rows[0];
-};
-
-class WorkUnitNotFoundError extends Error {
-  constructor() {
-    super('Work unit not found');
-  }
-}
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List work units
   fastify.get(
@@ -113,53 +89,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      let result: Awaited<ReturnType<typeof query>>;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       if (hasPermission(request, 'hr.work_units_all.view')) {
-        result = await query(`
-                SELECT w.*,
-                    (
-                        SELECT COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name)), '[]')
-                        FROM work_unit_managers wum
-                        JOIN users u ON wum.user_id = u.id
-                        WHERE wum.work_unit_id = w.id
-                    ) as managers,
-                    (SELECT COUNT(*) FROM user_work_units uw WHERE uw.work_unit_id = w.id) as user_count
-                FROM work_units w
-                ORDER BY w.name
-            `);
-      } else {
-        result = await query(
-          `
-                SELECT w.*,
-                    (
-                        SELECT COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name)), '[]')
-                        FROM work_unit_managers wum
-                        JOIN users u ON wum.user_id = u.id
-                        WHERE wum.work_unit_id = w.id
-                    ) as managers,
-                    (SELECT COUNT(*) FROM user_work_units uw WHERE uw.work_unit_id = w.id) as user_count
-                FROM work_units w
-                WHERE EXISTS (
-                    SELECT 1 FROM work_unit_managers wum 
-                    WHERE wum.work_unit_id = w.id AND wum.user_id = $1
-                )
-                ORDER BY w.name
-            `,
-          [request.user?.id],
-        );
+        return workUnitsRepo.listAll();
       }
-
-      const workUnits = result.rows.map((w) => ({
-        id: w.id,
-        name: w.name,
-        managers: w.managers,
-        description: w.description,
-        isDisabled: !!w.is_disabled,
-        userCount: parseInt(w.user_count, 10),
-      }));
-
-      return workUnits;
+      return workUnitsRepo.listManagedBy(request.user.id);
     },
   );
 
@@ -191,45 +126,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const managerIdsResult = requireNonEmptyArrayOfStrings(managerIds, 'managerIds');
       if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
 
-      const id = 'wu-' + Date.now();
-      await withTransaction(async (tx) => {
-        await tx.query('INSERT INTO work_units (id, name, description) VALUES ($1, $2, $3)', [
-          id,
-          nameResult.value,
-          description,
-        ]);
-
-        for (const managerId of managerIdsResult.value) {
-          await tx.query('INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)', [
-            id,
-            managerId,
-          ]);
-          await tx.query(
-            'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [managerId, id],
-          );
-        }
+      const id = generatePrefixedId('wu');
+      const w = await withTransaction(async (tx) => {
+        await workUnitsRepo.create(
+          { id, name: nameResult.value, description: description ?? null },
+          tx,
+        );
+        await workUnitsRepo.addManagers(id, managerIdsResult.value, tx);
+        await workUnitsRepo.addUsersToUnit(id, managerIdsResult.value, tx);
+        return workUnitsRepo.findById(id, tx);
       });
+      if (!w) return reply.code(500).send({ error: 'Work unit not found after create' });
 
-      const w = await fetchUnitDetails(id);
       await logAudit({
         request,
         action: 'work_unit.created',
         entityType: 'work_unit',
         entityId: id,
         details: {
-          targetLabel: w.name as string,
-          counts: { users: Number.parseInt(w.user_count ?? '0', 10) },
+          targetLabel: w.name,
+          counts: { users: w.userCount },
         },
       });
-      return reply.code(201).send({
-        id: w.id,
-        name: w.name,
-        managers: w.managers,
-        description: w.description,
-        isDisabled: !!w.is_disabled,
-        userCount: Number.parseInt(w.user_count ?? '0', 10),
-      });
+      return reply.code(201).send(w);
     },
   );
 
@@ -269,81 +188,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, managerIdsResult.message);
       }
 
+      let w: workUnitsRepo.WorkUnit | null;
       try {
-        await withTransaction(async (tx) => {
-          const existingUnitResult = await tx.query(
-            'SELECT id FROM work_units WHERE id = $1 FOR UPDATE',
-            [idResult.value],
+        w = await withTransaction(async (tx) => {
+          const exists = await workUnitsRepo.lockById(idResult.value, tx);
+          if (!exists) throw new NotFoundError('Work unit');
+
+          await workUnitsRepo.updateFields(
+            idResult.value,
+            {
+              name: nameResult?.value,
+              description,
+              isDisabled,
+            },
+            tx,
           );
-          if (existingUnitResult.rows.length === 0) {
-            throw new WorkUnitNotFoundError();
-          }
-
-          if (name !== undefined || description !== undefined || isDisabled !== undefined) {
-            const updates = [];
-            const values = [];
-            let paramIdx = 1;
-
-            if (name !== undefined) {
-              updates.push(`name = $${paramIdx++}`);
-              values.push(nameResult?.value ?? null);
-            }
-            if (description !== undefined) {
-              updates.push(`description = $${paramIdx++}`);
-              values.push(description);
-            }
-            if (isDisabled !== undefined) {
-              updates.push(`is_disabled = $${paramIdx++}`);
-              values.push(isDisabled);
-            }
-
-            if (updates.length > 0) {
-              values.push(idResult.value);
-              await tx.query(
-                `UPDATE work_units SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
-                values,
-              );
-            }
-          }
 
           if (managerIdsResult?.ok) {
-            await tx.query('DELETE FROM work_unit_managers WHERE work_unit_id = $1', [
-              idResult.value,
-            ]);
-
-            for (const managerId of managerIdsResult.value) {
-              await tx.query(
-                'INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)',
-                [idResult.value, managerId],
-              );
-              await tx.query(
-                'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                [managerId, idResult.value],
-              );
-            }
+            await workUnitsRepo.clearManagers(idResult.value, tx);
+            await workUnitsRepo.addManagers(idResult.value, managerIdsResult.value, tx);
+            await workUnitsRepo.addUsersToUnit(idResult.value, managerIdsResult.value, tx);
           }
+
+          return workUnitsRepo.findById(idResult.value, tx);
         });
       } catch (err) {
-        if (err instanceof WorkUnitNotFoundError) {
+        if (err instanceof NotFoundError) {
           return reply.code(404).send({ error: err.message });
         }
         throw err;
       }
 
-      const w = await fetchUnitDetails(idResult.value);
       if (!w) return reply.code(404).send({ error: 'Work unit not found' });
 
-      const changedFields = [
-        name !== undefined ? 'name' : null,
-        managerIds !== undefined ? 'managerIds' : null,
-        description !== undefined ? 'description' : null,
-        isDisabled !== undefined ? 'isDisabled' : null,
-      ].filter((field): field is string => field !== null);
-
-      let action = 'work_unit.updated';
-      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-        action = isDisabled ? 'work_unit.disabled' : 'work_unit.enabled';
-      }
+      const action = deriveToggleAction(
+        getAuditChangedFields({ name, managerIds, description, isDisabled }) ?? [],
+        'isDisabled',
+        'work_unit.updated',
+        'work_unit.disabled',
+        'work_unit.enabled',
+        isDisabled,
+      );
 
       await logAudit({
         request,
@@ -351,18 +236,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'work_unit',
         entityId: idResult.value,
         details: {
-          targetLabel: w.name as string,
-          counts: { users: parseInt(w.user_count, 10) },
+          targetLabel: w.name,
+          counts: { users: w.userCount },
         },
       });
-      return {
-        id: w.id,
-        name: w.name,
-        managers: w.managers,
-        description: w.description,
-        isDisabled: !!w.is_disabled,
-        userCount: parseInt(w.user_count, 10),
-      };
+      return w;
     },
   );
 
@@ -386,11 +264,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query('DELETE FROM work_units WHERE id = $1 RETURNING id, name', [
-        idResult.value,
-      ]);
-
-      if (result.rows.length === 0) {
+      const deleted = await workUnitsRepo.deleteById(idResult.value);
+      if (!deleted) {
         return reply.code(404).send({ error: 'Work unit not found' });
       }
 
@@ -400,7 +275,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'work_unit',
         entityId: idResult.value,
         details: {
-          targetLabel: result.rows[0].name as string,
+          targetLabel: deleted.name,
         },
       });
       return { message: 'Work unit deleted' };
@@ -423,33 +298,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      // Check permissions
       if (!hasPermission(request, 'hr.work_units_all.view')) {
-        // Check if user is a manager of this unit
-        const check = await query(
-          'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',
-          [idResult.value, request.user?.id],
-        );
-        if (check.rows.length === 0) {
+        const isManager = await workUnitsRepo.isUserManagerOfUnit(request.user.id, idResult.value);
+        if (!isManager) {
           return reply.code(403).send({ error: 'Access denied' });
         }
       }
 
-      const result = await query(
-        `
-            SELECT u.id 
-            FROM user_work_units uw
-            JOIN users u ON uw.user_id = u.id
-            WHERE uw.work_unit_id = $1
-        `,
-        [idResult.value],
-      );
-
-      return result.rows.map((r) => r.id);
+      return workUnitsRepo.findUserIds(idResult.value);
     },
   );
 
@@ -477,20 +338,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
-      const unitResult = await query('SELECT name FROM work_units WHERE id = $1', [idResult.value]);
-      if (unitResult.rows.length === 0) {
+
+      const unitName = await workUnitsRepo.findNameById(idResult.value);
+      if (unitName === null) {
         return reply.code(404).send({ error: 'Work unit not found' });
       }
 
       await withTransaction(async (tx) => {
-        await tx.query('DELETE FROM user_work_units WHERE work_unit_id = $1', [idResult.value]);
-
-        for (const userId of userIdsResult.value) {
-          await tx.query(
-            'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [userId, idResult.value],
-          );
-        }
+        await workUnitsRepo.clearUsers(idResult.value, tx);
+        await workUnitsRepo.addUsersToUnit(idResult.value, userIdsResult.value, tx);
       });
 
       await logAudit({
@@ -499,7 +355,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'work_unit',
         entityId: idResult.value,
         details: {
-          targetLabel: unitResult.rows[0].name as string,
+          targetLabel: unitName,
           counts: { users: userIdsResult.value.length },
         },
       });

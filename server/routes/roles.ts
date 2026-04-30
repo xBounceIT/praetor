@@ -149,8 +149,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
       const permissionsResult = ensureArrayOfStrings(permissions || [], 'permissions');
-      if (!permissionsResult.ok)
-        return badRequest(reply, (permissionsResult as { ok: false; message: string }).message);
+      if (!permissionsResult.ok) return badRequest(reply, permissionsResult.message);
 
       const normalizedPermissions = normalizeSubmittedPermissions(permissionsResult.value);
 
@@ -335,8 +334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const permissionsResult = ensureArrayOfStrings(permissions, 'permissions');
-      if (!permissionsResult.ok)
-        return badRequest(reply, (permissionsResult as { ok: false; message: string }).message);
+      if (!permissionsResult.ok) return badRequest(reply, permissionsResult.message);
 
       const normalizedPermissions = normalizeSubmittedPermissions(permissionsResult.value);
 

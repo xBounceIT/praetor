@@ -228,3 +228,8 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
 
 export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>
   !!permissions?.includes(permission);
+
+export const requestHasPermission = (
+  request: { user?: { permissions?: string[] } },
+  permission: Permission | string,
+) => !!request.user?.permissions?.includes(permission);

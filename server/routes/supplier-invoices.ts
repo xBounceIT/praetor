@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { type DatabaseError, isUniqueViolation } from '../utils/db-errors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -15,12 +16,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 const isSupplierInvoiceIdConflict = (databaseError: DatabaseError) =>
   databaseError.constraint === 'supplier_invoices_pkey' || databaseError.detail?.includes('(id)');
@@ -457,11 +452,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             );
             break;
           } catch (error) {
-            const databaseError = error as DatabaseError;
             if (
               !nextIdResult.value &&
-              databaseError.code === '23505' &&
-              isSupplierInvoiceIdConflict(databaseError) &&
+              isUniqueViolation(error) &&
+              isSupplierInvoiceIdConflict(error) &&
               attempt < maxInsertAttempts - 1
             ) {
               resolvedInvoiceId = null;
@@ -515,9 +509,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(formatInvoiceResponse(invoiceResult.rows[0], createdItems));
       } catch (error) {
-        const databaseError = error as DatabaseError;
-        if (databaseError.code === '23505') {
-          return reply.code(409).send({ error: duplicateInvoiceError(databaseError) });
+        if (isUniqueViolation(error)) {
+          return reply.code(409).send({ error: duplicateInvoiceError(error) });
         }
         throw error;
       }
@@ -800,9 +793,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return formatInvoiceResponse(invoiceResult.rows[0], updatedItems);
       } catch (error) {
-        const databaseError = error as DatabaseError;
-        if (databaseError.code === '23505') {
-          return reply.code(409).send({ error: duplicateInvoiceError(databaseError) });
+        if (isUniqueViolation(error)) {
+          return reply.code(409).send({ error: duplicateInvoiceError(error) });
         }
         throw error;
       }

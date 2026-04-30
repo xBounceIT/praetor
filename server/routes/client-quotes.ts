@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
@@ -16,12 +17,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 type IncomingQuoteItem = {
   id?: string;
@@ -822,10 +817,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isExpired: isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
         });
       } catch (err) {
-        const databaseError = err as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'quotes_pkey' || databaseError.detail?.includes('(id)'))
+          isUniqueViolation(err) &&
+          (err.constraint === 'quotes_pkey' || err.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
@@ -1143,10 +1137,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (err) {
-        const databaseError = err as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'quotes_pkey' || databaseError.detail?.includes('(id)'))
+          isUniqueViolation(err) &&
+          (err.constraint === 'quotes_pkey' || err.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }

@@ -2,9 +2,11 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -513,9 +515,6 @@ const generateSessionTitle = async (
   return cleanSessionTitle(raw.text);
 };
 
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
-
 const startOfDayUtc = (d: Date) =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
@@ -536,16 +535,8 @@ const toNumber = (value: unknown) => {
 
 const capTop = <T>(rows: T[], limit = 10) => rows.slice(0, limit);
 
-const getManagedUserIds = async (viewerId: string): Promise<string[]> => {
-  const managed = await query(
-    `SELECT DISTINCT uwu.user_id
-     FROM user_work_units uwu
-     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-     WHERE wum.user_id = $1`,
-    [viewerId],
-  );
-  return managed.rows.map((r) => String(r.user_id)).filter(Boolean);
-};
+const getManagedUserIds = (viewerId: string): Promise<string[]> =>
+  workUnitsRepo.listManagedUserIds(viewerId);
 
 const toText = (value: unknown) => String(value || '').trim();
 
