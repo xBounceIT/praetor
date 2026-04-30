@@ -1,13 +1,19 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as entriesRepo from '../repositories/entriesRepo.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
+import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -40,6 +46,7 @@ const entrySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
+    taskId: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     duration: { type: 'number' },
     hourlyCost: { type: 'number' },
@@ -96,7 +103,18 @@ const entriesListQuerySchema = {
   type: 'object',
   properties: {
     userId: { type: 'string' },
+    limit: { type: 'integer', minimum: 1, maximum: 500 },
+    cursor: { type: 'string' },
   },
+} as const;
+
+const entriesListResponseSchema = {
+  type: 'object',
+  properties: {
+    entries: { type: 'array', items: entrySchema },
+    nextCursor: { type: ['string', 'null'] },
+  },
+  required: ['entries', 'nextCursor'],
 } as const;
 
 const entriesBulkDeleteQuerySchema = {
@@ -109,17 +127,6 @@ const entriesBulkDeleteQuerySchema = {
   },
   required: ['projectId', 'task'],
 } as const;
-
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
-
-const toRequiredDateOnly = (value: unknown, fieldName: string) => {
-  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
-  if (!normalizedDate) {
-    throw new TypeError(`Invalid date value for ${fieldName}`);
-  }
-  return normalizedDate;
-};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
@@ -136,7 +143,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List time entries',
         querystring: entriesListQuerySchema,
         response: {
-          200: { type: 'array', items: entrySchema },
+          200: entriesListResponseSchema,
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -144,83 +151,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      let result: Awaited<ReturnType<typeof query>>;
-      const { userId } = request.query as { userId?: string };
+      const { userId, limit, cursor } = request.query as {
+        userId?: string;
+        limit?: number;
+        cursor?: string;
+      };
       const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
       const viewerId = request.user.id;
 
-      // Non-admin access to a specific user requires a check. Do it outside caching so we can 403 cleanly.
       if (!canViewAll && userId && userId !== viewerId) {
-        const managedCheck = await query(
-          `SELECT 1
-                 FROM user_work_units uwu
-                 JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                 WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-          [viewerId, userId],
-        );
-
-        if (managedCheck.rows.length === 0) {
+        const allowed = await workUnitsRepo.isUserManagedBy(viewerId, userId);
+        if (!allowed) {
           return reply.code(403).send({ error: 'Not authorized to view entries for this user' });
         }
       }
 
-      if (canViewAll) {
-        if (userId) {
-          result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id,
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-             FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-            [userId],
-          );
-        } else {
-          result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id,
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-             FROM time_entries ORDER BY created_at DESC`,
-          );
-        }
-      } else if (userId) {
-        result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id,
-                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-           FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId],
-        );
-      } else {
-        result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id,
-                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-           FROM time_entries
-           WHERE user_id = $1
-             OR user_id IN (
-                  SELECT uwu.user_id
-                  FROM user_work_units uwu
-                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                  WHERE wum.user_id = $1
-              )
-           ORDER BY created_at DESC`,
-          [viewerId],
-        );
-      }
+      const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
+      if (cursor && !decodedCursor) return badRequest(reply, 'cursor is invalid');
 
-      const value = result.rows.map((e) => ({
-        id: e.id,
-        userId: e.user_id,
-        date: toRequiredDateOnly(e.date, 'entry.date'),
-        clientId: e.client_id,
-        clientName: e.client_name,
-        projectId: e.project_id,
-        projectName: e.project_name,
-        task: e.task,
-        notes: e.notes,
-        duration: parseFloat(e.duration),
-        hourlyCost: parseFloat(e.hourly_cost || 0),
-        isPlaceholder: e.is_placeholder,
-        location: e.location || 'remote',
-        createdAt: new Date(e.created_at).getTime(),
-      }));
+      const options = { limit, cursor: decodedCursor ?? undefined };
+      const result = userId
+        ? await entriesRepo.listForUser(userId, options)
+        : canViewAll
+          ? await entriesRepo.listAll(options)
+          : await entriesRepo.listForManagerView(viewerId, options);
 
-      return value;
+      return {
+        entries: result.entries,
+        nextCursor: result.nextCursor ? entriesRepo.encodeCursor(result.nextCursor) : null,
+      };
     },
   );
 
@@ -240,6 +199,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const {
         date,
         clientId,
@@ -271,11 +232,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Weekend validation
       if (isWeekendDate(dateResult.value)) {
-        const settingsResult = await query(
-          'SELECT allow_weekend_selection FROM general_settings WHERE id = 1',
-        );
-        const allowWeekendSelection = settingsResult.rows[0]?.allow_weekend_selection ?? true;
-
+        const settings = await generalSettingsRepo.get();
+        const allowWeekendSelection = settings?.allowWeekendSelection ?? true;
         if (!allowWeekendSelection) {
           return badRequest(reply, 'Time entries on weekends are not allowed');
         }
@@ -301,24 +259,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const isPlaceholderValue = parseBoolean(isPlaceholder);
 
-      let targetUserId = request.user?.id;
+      let targetUserId = request.user.id;
       if (userId) {
         const targetUserIdResult = requireNonEmptyString(userId, 'userId');
         if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
         targetUserId = targetUserIdResult.value;
 
         if (
-          targetUserId !== request.user?.id &&
+          targetUserId !== request.user.id &&
           !hasPermission(request, 'timesheets.tracker_all.view')
         ) {
-          const managedCheck = await query(
-            `SELECT 1 
-                     FROM user_work_units uwu
-                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user?.id, targetUserId],
-          );
-          if (managedCheck.rows.length === 0) {
+          const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, targetUserId);
+          if (!allowed) {
             return reply
               .code(403)
               .send({ error: 'Not authorized to create entries for this user' });
@@ -326,38 +278,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Fetch user's current cost
-      const userResult = await query('SELECT cost_per_hour FROM users WHERE id = $1', [
-        targetUserId,
-      ]);
-      const hourlyCost = userResult.rows[0]?.cost_per_hour || 0;
-
-      const id = Math.random().toString(36).substring(2, 11);
-
-      const locationValue = location || 'remote';
-
-      await query(
-        `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder, location)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [
-          id,
-          targetUserId,
-          dateResult.value,
-          clientIdResult.value,
-          clientNameResult.value,
-          projectIdResult.value,
-          projectNameResult.value,
-          taskResult.value,
-          notes || null,
-          durationResult.value || 0,
-          hourlyCost,
-          isPlaceholderValue,
-          locationValue,
-        ],
+      const hourlyCost = await usersRepo.findCostPerHour(targetUserId);
+      const resolvedTaskId = await tasksRepo.findIdByProjectAndName(
+        projectIdResult.value,
+        taskResult.value,
       );
 
-      const created = {
-        id,
+      const created = await entriesRepo.create({
+        id: generatePrefixedId('te'),
         userId: targetUserId,
         date: dateResult.value,
         clientId: clientIdResult.value,
@@ -365,13 +293,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         projectId: projectIdResult.value,
         projectName: projectNameResult.value,
         task: taskResult.value,
-        notes,
+        taskId: resolvedTaskId,
+        notes: notes || null,
         duration: durationResult.value || 0,
-        hourlyCost: parseFloat(hourlyCost),
+        hourlyCost,
         isPlaceholder: isPlaceholderValue,
-        location: locationValue,
-        createdAt: Date.now(),
-      };
+        location: location || 'remote',
+      });
 
       return reply.code(201).send(created);
     },
@@ -394,6 +322,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { id } = request.params as { id: string };
       const { duration, notes, isPlaceholder, location } = request.body as {
         duration?: number;
@@ -404,67 +334,57 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      let parsedDuration: number | undefined;
       if (duration !== undefined) {
         const durationResult = parseLocalizedNonNegativeNumber(duration, 'duration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
+        parsedDuration = durationResult.value;
       }
 
+      let validatedNotes: string | null | undefined;
       if (notes !== undefined) {
         const notesResult = optionalNonEmptyString(notes, 'notes');
         if (!notesResult.ok) return badRequest(reply, notesResult.message);
+        validatedNotes = notesResult.value;
       }
 
-      // Check ownership or admin/manager role
-      const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (existing.rows.length === 0) {
+      const context = await entriesRepo.findContext(idResult.value);
+      if (context === null) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user?.id) {
-        if (!hasPermission(request, 'timesheets.tracker_all.view')) {
-          const managedCheck = await query(
-            `SELECT 1
-                     FROM user_work_units uwu
-                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user?.id, existing.rows[0].user_id],
-          );
-          if (managedCheck.rows.length === 0) {
-            return reply.code(403).send({ error: 'Not authorized to update this entry' });
-          }
+      if (
+        context.userId !== request.user.id &&
+        !hasPermission(request, 'timesheets.tracker_all.view')
+      ) {
+        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, context.userId);
+        if (!allowed) {
+          return reply.code(403).send({ error: 'Not authorized to update this entry' });
         }
       }
 
-      const result = await query(
-        `UPDATE time_entries
-       SET duration = COALESCE($2, duration),
-           notes = COALESCE($3, notes),
-           is_placeholder = COALESCE($4, is_placeholder),
-           location = COALESCE($5, location)
-       WHERE id = $1
-       RETURNING *`,
-        [idResult.value, duration, notes, isPlaceholder, location],
-      );
+      // Backfill task_id only when missing — entries created before the FK column existed (or
+      // before the matching task row existed) carry task_id NULL. Don't touch the FK on rows that
+      // already have it set.
+      let backfilledTaskId: string | undefined;
+      if (context.taskId === null) {
+        const found = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
+        backfilledTaskId = found ?? undefined;
+      }
 
-      const e = result.rows[0];
-      return {
-        id: e.id,
-        userId: e.user_id,
-        date: toRequiredDateOnly(e.date, 'entry.date'),
-        clientId: e.client_id,
-        clientName: e.client_name,
-        projectId: e.project_id,
-        projectName: e.project_name,
-        task: e.task,
-        notes: e.notes,
-        duration: parseFloat(e.duration),
-        hourlyCost: parseFloat(e.hourly_cost || 0),
-        isPlaceholder: e.is_placeholder,
-        location: e.location || 'remote',
-        createdAt: new Date(e.created_at).getTime(),
-      };
+      const updated = await entriesRepo.update(idResult.value, {
+        duration: parsedDuration,
+        notes: validatedNotes,
+        isPlaceholder,
+        location,
+        taskId: backfilledTaskId,
+      });
+
+      if (!updated) {
+        return reply.code(404).send({ error: 'Entry not found' });
+      }
+
+      return updated;
     },
   );
 
@@ -484,34 +404,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      // Check ownership or admin/manager role
-      const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (existing.rows.length === 0) {
+      const ownerId = await entriesRepo.findOwner(idResult.value);
+      if (ownerId === null) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user?.id) {
-        if (!hasPermission(request, 'timesheets.tracker_all.view')) {
-          const managedCheck = await query(
-            `SELECT 1 
-                     FROM user_work_units uwu
-                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user?.id, existing.rows[0].user_id],
-          );
-          if (managedCheck.rows.length === 0) {
-            return reply.code(403).send({ error: 'Not authorized to delete this entry' });
-          }
+      if (ownerId !== request.user.id && !hasPermission(request, 'timesheets.tracker_all.view')) {
+        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, ownerId);
+        if (!allowed) {
+          return reply.code(403).send({ error: 'Not authorized to delete this entry' });
         }
       }
 
-      await query('DELETE FROM time_entries WHERE id = $1', [idResult.value]);
+      await entriesRepo.deleteById(idResult.value);
       return { message: 'Entry deleted' };
     },
   );
@@ -554,33 +465,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const futureOnlyValue = parseQueryBoolean(futureOnly) || false;
       const placeholderOnlyValue = parseQueryBoolean(placeholderOnly) || false;
 
-      let sql = 'DELETE FROM time_entries WHERE project_id = $1 AND task = $2';
-      const params: (string | boolean)[] = [projectIdResult.value, taskResult.value];
-      let paramIndex = 3;
+      const restrictToManagerScopeOf = hasPermission(request, 'timesheets.tracker_all.view')
+        ? undefined
+        : request.user.id;
 
-      // Only delete user's own entries unless manager (who can delete managed users' entries)
-      if (!hasPermission(request, 'timesheets.tracker_all.view')) {
-        sql += ` AND (user_id = $${paramIndex} OR user_id IN (
-                  SELECT uwu.user_id 
-                  FROM user_work_units uwu
-                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                  WHERE wum.user_id = $${paramIndex}
-              ))`;
-        params.push(request.user.id);
-        paramIndex++;
-      }
+      const deleted = await entriesRepo.bulkDelete({
+        projectId: projectIdResult.value,
+        task: taskResult.value,
+        restrictToManagerScopeOf,
+        fromDate: futureOnlyValue ? todayLocalDateOnly() : undefined,
+        placeholderOnly: placeholderOnlyValue,
+      });
 
-      if (futureOnlyValue === true) {
-        sql += ` AND date >= $${paramIndex++}`;
-        params.push(todayLocalDateOnly());
-      }
-
-      if (placeholderOnlyValue === true) {
-        sql += ' AND is_placeholder = true';
-      }
-
-      const result = await query(sql + ' RETURNING id', params);
-      return { message: `Deleted ${result.rows.length} entries` };
+      return { message: `Deleted ${deleted} entries` };
     },
   );
 }

@@ -1,15 +1,19 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query, withTransaction } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as projectsRepo from '../repositories/projectsRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import { logAudit } from '../utils/audit.ts';
+import { deriveToggleAction, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
+import { ForeignKeyError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   assignClientToTopManagers,
@@ -100,15 +104,6 @@ const userIdsSchema = {
   required: ['userIds'],
 } as const;
 
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
-
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks
   fastify.get(
@@ -135,52 +130,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-
       const canViewAll = hasPermission(request, 'projects.tasks_all.view');
-      let queryText = `
-            SELECT id, name, project_id, description, is_recurring,
-                   recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-                   expected_effort, revenue, notes, is_disabled,
-                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-            FROM tasks ORDER BY name
-        `;
-      let queryParams: string[] = [];
-
-      if (!canViewAll) {
-        queryText = `
-                SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
-                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
-                       t.expected_effort, t.revenue, t.notes, t.is_disabled,
-                       EXTRACT(EPOCH FROM t.created_at) * 1000 as "createdAt"
-                FROM tasks t
-                INNER JOIN user_tasks ut ON t.id = ut.task_id
-                WHERE ut.user_id = $1
-                ORDER BY t.name
-            `;
-        queryParams = [request.user.id];
-      }
-
-      const result = await query(queryText, queryParams);
-      const value = result.rows.map((t) => ({
-        id: t.id,
-        name: t.name,
-        projectId: t.project_id,
-        description: t.description,
-        isRecurring: t.is_recurring,
-        recurrencePattern: t.recurrence_pattern,
-        recurrenceStart:
-          normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
-        recurrenceEnd:
-          normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
-        recurrenceDuration: parseFloat(t.recurrence_duration || 0),
-        expectedEffort: t.expected_effort !== null ? parseFloat(t.expected_effort) : undefined,
-        revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
-        notes: t.notes ?? undefined,
-        isDisabled: t.is_disabled,
-        createdAt: t.createdAt ? parseFloat(t.createdAt) : undefined,
-      }));
-
-      return value;
+      return canViewAll ? tasksRepo.listAll() : tasksRepo.listForUser(request.user.id);
     },
   );
 
@@ -200,6 +151,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const {
         name,
         projectId,
@@ -207,6 +159,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isRecurring,
         recurrencePattern,
         recurrenceStart,
+        recurrenceDuration,
+        expectedEffort,
+        revenue,
         notes,
       } = request.body as {
         name: string;
@@ -220,12 +175,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue?: number;
         notes?: string;
       };
-      const expectedEffortRaw = (request.body as { expectedEffort?: number }).expectedEffort;
-      const revenueRaw = (request.body as { revenue?: number }).revenue;
-      const expectedEffortVal =
-        expectedEffortRaw !== undefined ? parseFloat(String(expectedEffortRaw)) : 0;
-      const revenueVal = revenueRaw !== undefined ? parseFloat(String(revenueRaw)) : 0;
-
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
@@ -233,13 +182,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
 
       const durationResult = optionalLocalizedNonNegativeNumber(
-        (request.body as { recurrenceDuration?: number }).recurrenceDuration,
+        recurrenceDuration,
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
       const isRecurringValue = parseBoolean(isRecurring);
-      let start = null;
+      let start: string | null = null;
       if (isRecurringValue) {
         const patternResult = requireNonEmptyString(recurrencePattern, 'recurrencePattern');
         if (!patternResult.ok) return badRequest(reply, patternResult.message);
@@ -251,45 +200,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('t');
 
       try {
-        const insertResult = await query(
-          `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-           RETURNING EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
-          [
-            id,
-            nameResult.value,
-            projectIdResult.value,
-            description || null,
-            isRecurringValue,
-            recurrencePattern || null,
-            start,
-            durationResult.value || 0,
-            expectedEffortVal,
-            revenueVal,
-            notes || null,
-            false,
-          ],
-        );
+        const created = await tasksRepo.create({
+          id,
+          name: nameResult.value,
+          projectId: projectIdResult.value,
+          description: description || null,
+          isRecurring: isRecurringValue,
+          recurrencePattern: recurrencePattern || null,
+          recurrenceStart: start,
+          recurrenceDuration: durationResult.value || 0,
+          expectedEffort: expectedEffort ?? 0,
+          revenue: revenue ?? 0,
+          notes: notes || null,
+          isDisabled: false,
+        });
 
-        const taskCreatedAt = insertResult.rows[0]?.createdAt
-          ? parseFloat(insertResult.rows[0].createdAt)
-          : undefined;
+        const clientId = await projectsRepo.findClientId(projectIdResult.value);
 
-        const projectResult = await query('SELECT client_id FROM projects WHERE id = $1', [
-          projectIdResult.value,
-        ]);
-        const clientId = projectResult.rows[0]?.client_id as string | undefined;
-
-        if (request.user?.id) {
-          if (clientId) {
-            await assignClientToUser(request.user.id, clientId);
-          }
-          await assignProjectToUser(request.user.id, projectIdResult.value);
-          await assignTaskToUser(request.user.id, id);
-        }
-        if (clientId) {
-          await assignClientToTopManagers(clientId);
-        }
+        if (clientId) await assignClientToUser(request.user.id, clientId);
+        await assignProjectToUser(request.user.id, projectIdResult.value);
+        await assignTaskToUser(request.user.id, id);
+        if (clientId) await assignClientToTopManagers(clientId);
         await assignProjectToTopManagers(projectIdResult.value);
         await assignTaskToTopManagers(id);
         await logAudit({
@@ -302,26 +233,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: projectIdResult.value,
           },
         });
-        return reply.code(201).send({
-          id,
-          name: nameResult.value,
-          projectId: projectIdResult.value,
-          description,
-          isRecurring: isRecurringValue,
-          recurrencePattern,
-          recurrenceStart: start,
-          recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffortVal,
-          revenue: revenueVal,
-          notes: notes || null,
-          isDisabled: false,
-          createdAt: taskCreatedAt,
-        });
+        return reply.code(201).send(created);
       } catch (err) {
-        const error = err as DatabaseError;
-        if (error.code === '23503') {
-          // Foreign key violation
-          return reply.code(400).send({ error: 'Project not found' });
+        if (err instanceof ForeignKeyError) {
+          return reply.code(400).send({ error: err.message });
         }
         throw err;
       }
@@ -377,35 +292,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (idArray.length > 200) return badRequest(reply, 'projectIds cannot exceed 200 IDs');
 
       const canViewAll = hasPermission(request, 'projects.tasks_all.view');
-      let queryText: string;
-      let queryParams: unknown[];
+      const rows = await tasksRepo.sumHoursByProjects(
+        idArray,
+        canViewAll ? undefined : request.user.id,
+      );
 
-      if (canViewAll) {
-        queryText = `
-          SELECT project_id, task, COALESCE(SUM(duration), 0)::float AS total
-          FROM time_entries
-          WHERE project_id = ANY($1)
-          GROUP BY project_id, task
-        `;
-        queryParams = [idArray];
-      } else {
-        queryText = `
-          SELECT te.project_id, te.task, COALESCE(SUM(te.duration), 0)::float AS total
-          FROM time_entries te
-          INNER JOIN tasks t ON t.name = te.task AND t.project_id = te.project_id
-          INNER JOIN user_tasks ut ON t.id = ut.task_id
-          WHERE te.project_id = ANY($1) AND ut.user_id = $2
-          GROUP BY te.project_id, te.task
-        `;
-        queryParams = [idArray, request.user.id];
-      }
-
-      const result = await query(queryText, queryParams);
       const hours: Record<string, Record<string, number>> = {};
-      for (const row of result.rows) {
-        const pid = row.project_id as string;
-        if (!hours[pid]) hours[pid] = {};
-        hours[pid][row.task as string] = Number(row.total);
+      for (const row of rows) {
+        if (!hours[row.projectId]) hours[row.projectId] = {};
+        hours[row.projectId][row.task] = row.total;
       }
       return reply.send(hours);
     },
@@ -446,25 +341,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
 
       const canViewAll = hasPermission(request, 'projects.tasks_all.view');
-      let queryText =
-        'SELECT task, COALESCE(SUM(duration), 0)::float AS total FROM time_entries WHERE project_id = $1 GROUP BY task';
-      let queryParams: string[] = [projectIdResult.value];
+      const rows = await tasksRepo.sumHoursByProjects(
+        [projectIdResult.value],
+        canViewAll ? undefined : request.user.id,
+      );
 
-      if (!canViewAll) {
-        queryText = `
-          SELECT te.task, COALESCE(SUM(te.duration), 0)::float AS total
-          FROM time_entries te
-          INNER JOIN tasks t ON t.name = te.task AND t.project_id = te.project_id
-          INNER JOIN user_tasks ut ON t.id = ut.task_id
-          WHERE te.project_id = $1 AND ut.user_id = $2
-          GROUP BY te.task
-        `;
-        queryParams = [projectIdResult.value, request.user.id];
-      }
-
-      const result = await query(queryText, queryParams);
       const hours: Record<string, number> = {};
-      for (const row of result.rows) hours[row.task as string] = Number(row.total);
+      for (const row of rows) hours[row.task] = row.total;
       return reply.send(hours);
     },
   );
@@ -487,16 +370,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const {
-        name,
-        description,
-        isRecurring,
-        recurrencePattern,
-        recurrenceStart,
-        recurrenceEnd,
-        isDisabled,
-        notes,
-      } = request.body as {
+      const body = request.body as {
         name?: string;
         description?: string;
         isRecurring?: boolean;
@@ -509,71 +383,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue?: number;
         notes?: string;
       };
-      const updateExpectedEffort = (request.body as { expectedEffort?: number }).expectedEffort;
-      const updateRevenue = (request.body as { revenue?: number }).revenue;
+      const {
+        name,
+        description,
+        isRecurring,
+        recurrencePattern,
+        recurrenceStart,
+        recurrenceEnd,
+        recurrenceDuration,
+        expectedEffort,
+        revenue,
+        isDisabled,
+        notes,
+      } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const durationResult = optionalLocalizedNonNegativeNumber(
-        (request.body as { recurrenceDuration?: number }).recurrenceDuration,
+        recurrenceDuration,
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
       if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
         const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
-        if (!startResult.ok)
-          return badRequest(reply, (startResult as { ok: false; message: string }).message);
+        if (!startResult.ok) return badRequest(reply, startResult.message);
       }
 
       if (recurrenceEnd !== undefined && recurrenceEnd !== null && recurrenceEnd !== '') {
         const endResult = parseDateString(recurrenceEnd, 'recurrenceEnd');
-        if (!endResult.ok)
-          return badRequest(reply, (endResult as { ok: false; message: string }).message);
+        if (!endResult.ok) return badRequest(reply, endResult.message);
       }
 
       const isRecurringValue =
-        isRecurring === undefined || isRecurring === null ? null : parseBoolean(isRecurring);
+        isRecurring === undefined || isRecurring === null ? undefined : parseBoolean(isRecurring);
 
-      const result = await query(
-        `UPDATE tasks
-             SET name = COALESCE($2, name),
-                 description = COALESCE($3, description),
-                 is_recurring = COALESCE($4, is_recurring),
-                 recurrence_pattern = COALESCE($5, recurrence_pattern),
-                 recurrence_start = COALESCE($6, recurrence_start),
-                 recurrence_end = COALESCE($7, recurrence_end),
-                 recurrence_duration = COALESCE($8, recurrence_duration),
-                 is_disabled = COALESCE($9, is_disabled),
-                 expected_effort = COALESCE($10, expected_effort),
-                 revenue = COALESCE($11, revenue),
-                 notes = COALESCE($12, notes)
-             WHERE id = $1
-              RETURNING id, name, project_id, description, is_recurring,
-                        recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-                        expected_effort, revenue, notes, is_disabled,
-                        EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
-        [
-          idResult.value,
-          name || null,
-          description || null,
-          isRecurringValue,
-          recurrencePattern || null,
-          recurrenceStart || null,
-          recurrenceEnd || null,
-          durationResult.value,
-          isDisabled,
-          updateExpectedEffort !== undefined ? parseFloat(String(updateExpectedEffort)) : null,
-          updateRevenue !== undefined ? parseFloat(String(updateRevenue)) : null,
-          notes !== undefined ? notes : null,
-        ],
-      );
+      const updated = await tasksRepo.update(idResult.value, {
+        name: name || undefined,
+        description: description || undefined,
+        isRecurring: isRecurringValue,
+        recurrencePattern: recurrencePattern || undefined,
+        recurrenceStart: recurrenceStart || undefined,
+        recurrenceEnd: recurrenceEnd || undefined,
+        // optionalLocalizedNonNegativeNumber returns null when the body field is omitted; the
+        // dynamic-SET in tasksRepo.update would interpret null as "set to NULL" and clobber the
+        // existing recurrence_duration. Forward undefined instead so the column is left alone.
+        recurrenceDuration: durationResult.value ?? undefined,
+        isDisabled,
+        expectedEffort,
+        revenue,
+        notes,
+      });
 
-      if (result.rows.length === 0) {
+      if (!updated) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
-      const t = result.rows[0];
-      const isDisabledChanged = isDisabled !== undefined;
       const changedFields = [
         name !== undefined ? 'name' : null,
         description !== undefined ? 'description' : null,
@@ -581,17 +445,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrencePattern !== undefined ? 'recurrencePattern' : null,
         recurrenceStart !== undefined ? 'recurrenceStart' : null,
         recurrenceEnd !== undefined ? 'recurrenceEnd' : null,
-        (request.body as { recurrenceDuration?: number }).recurrenceDuration !== undefined
-          ? 'recurrenceDuration'
-          : null,
-        isDisabledChanged ? 'isDisabled' : null,
+        recurrenceDuration !== undefined ? 'recurrenceDuration' : null,
+        isDisabled !== undefined ? 'isDisabled' : null,
       ].filter((field): field is string => field !== null);
 
-      // Determine specific action based on what changed
-      let action = 'task.updated';
-      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-        action = isDisabled ? 'task.disabled' : 'task.enabled';
-      }
+      const action = deriveToggleAction(
+        changedFields,
+        'isDisabled',
+        'task.updated',
+        'task.disabled',
+        'task.enabled',
+        isDisabled,
+      );
 
       await logAudit({
         request,
@@ -599,28 +464,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'task',
         entityId: idResult.value,
         details: {
-          targetLabel: t.name as string,
-          secondaryLabel: t.project_id as string,
+          targetLabel: updated.name,
+          secondaryLabel: updated.projectId,
         },
       });
-      return {
-        id: t.id,
-        name: t.name,
-        projectId: t.project_id,
-        description: t.description,
-        isRecurring: t.is_recurring,
-        recurrencePattern: t.recurrence_pattern,
-        recurrenceStart:
-          normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
-        recurrenceEnd:
-          normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
-        recurrenceDuration: parseFloat(t.recurrence_duration || 0),
-        expectedEffort: t.expected_effort !== null ? parseFloat(t.expected_effort) : undefined,
-        revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
-        notes: t.notes ?? undefined,
-        isDisabled: t.is_disabled,
-        createdAt: t.createdAt ? parseFloat(t.createdAt as string) : undefined,
-      };
+      return updated;
     },
   );
 
@@ -643,10 +491,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id, name, project_id', [
-        idResult.value,
-      ]);
-      if (result.rows.length === 0) {
+
+      const deleted = await tasksRepo.deleteById(idResult.value);
+      if (!deleted) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
@@ -656,8 +503,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'task',
         entityId: idResult.value,
         details: {
-          targetLabel: result.rows[0].name as string,
-          secondaryLabel: result.rows[0].project_id as string,
+          targetLabel: deleted.name,
+          secondaryLabel: deleted.projectId,
         },
       });
       return { message: 'Task deleted' };
@@ -683,10 +530,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [
-        idResult.value,
-      ]);
-      return result.rows.map((r) => r.user_id);
+      return tasksRepo.findAssignedUserIds(idResult.value);
     },
   );
 
@@ -715,22 +559,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
-      const taskResult = await query('SELECT name, project_id FROM tasks WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (taskResult.rows.length === 0) {
+
+      const taskMeta = await tasksRepo.findNameAndProjectId(idResult.value);
+      if (!taskMeta) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
       await withTransaction(async (tx) => {
-        await tx.query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
-
-        for (const userId of validUserIds) {
-          await tx.query(
-            'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [userId, idResult.value],
-          );
-        }
+        await tasksRepo.clearUserAssignments(idResult.value, tx);
+        await tasksRepo.addUserAssignments(idResult.value, validUserIds, tx);
       });
 
       await logAudit({
@@ -739,7 +576,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'task',
         entityId: idResult.value,
         details: {
-          targetLabel: taskResult.rows[0].name as string,
+          targetLabel: taskMeta.name,
           counts: { users: validUserIds.length },
         },
       });

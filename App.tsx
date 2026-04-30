@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -569,6 +569,8 @@ const App: React.FC = () => {
   const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
+  const entriesStreamTokenRef = useRef(0);
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
     enabled: false,
     serverUrl: 'ldap://ldap.example.com:389',
@@ -1168,12 +1170,31 @@ const App: React.FC = () => {
         switch (module) {
           case 'timesheets': {
             if (!canViewTimesheets) return;
+            const streamRemainingEntries = async (cursor: string | null, token: number) => {
+              while (cursor) {
+                if (entriesStreamTokenRef.current !== token) return;
+                try {
+                  const page = await api.entries.listPage({ cursor, limit: 500 });
+                  if (entriesStreamTokenRef.current !== token) return;
+                  setEntries((prev) => [...prev, ...page.entries]);
+                  cursor = page.nextCursor;
+                } catch (err) {
+                  console.error('Failed to stream remaining entries:', err);
+                  return;
+                }
+              }
+            };
             failedDatasets = await loadDatasets(module, [
               {
                 dataset: 'entries',
                 enabled: true,
-                load: () => api.entries.list(),
-                apply: (data) => setEntries(data as TimeEntry[]),
+                load: () => api.entries.listPage({ limit: 500 }),
+                apply: (data) => {
+                  const page = data as { entries: TimeEntry[]; nextCursor: string | null };
+                  const token = ++entriesStreamTokenRef.current;
+                  setEntries(page.entries);
+                  if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
+                },
               },
               {
                 dataset: 'clients',
@@ -2857,6 +2878,7 @@ const App: React.FC = () => {
     setSupplierOrders([]);
     setSupplierInvoices([]);
     setEntries([]);
+    entriesStreamTokenRef.current++;
     setWorkUnits([]);
     setLogoutReason(reason || null);
   };
@@ -2885,6 +2907,7 @@ const App: React.FC = () => {
       setSupplierOrders([]);
       setSupplierInvoices([]);
       setEntries([]);
+      entriesStreamTokenRef.current++;
       setWorkUnits([]);
 
       const response = await api.auth.switchRole(roleId);

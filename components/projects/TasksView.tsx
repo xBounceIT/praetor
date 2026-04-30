@@ -99,7 +99,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     };
   }, [projectIds]);
 
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     const saved = localStorage.getItem('praetor_tasks_rowsPerPage');

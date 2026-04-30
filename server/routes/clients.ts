@@ -8,7 +8,9 @@ import {
 } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { assignClientToTopManagers, assignClientToUser } from '../utils/top-manager-assignments.ts';
 import {
@@ -191,15 +193,6 @@ const clientUpdateBodySchema = {
     taxCode: { type: ['string', 'null'] },
   },
 } as const;
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
-
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
 
 const toNumber = (v: unknown): number | undefined => {
   if (v === null || v === undefined) return undefined;
@@ -741,15 +734,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(mapClientRow(c));
       } catch (err) {
-        const error = err as DatabaseError;
-        if (error.code === '23505') {
-          if (error.constraint === 'idx_clients_fiscal_code_unique') {
+        if (isUniqueViolation(err)) {
+          if (err.constraint === 'idx_clients_fiscal_code_unique') {
             return badRequest(reply, 'Fiscal code already exists');
           }
-          if (error.constraint === 'idx_clients_client_code_unique') {
+          if (err.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (error.detail?.includes('client_code')) {
+          if (err.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'Fiscal code already exists');
@@ -1078,15 +1070,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return mapClientRow(c);
       } catch (err) {
-        const error = err as DatabaseError;
-        if (error.code === '23505') {
-          if (error.constraint === 'idx_clients_fiscal_code_unique') {
+        if (isUniqueViolation(err)) {
+          if (err.constraint === 'idx_clients_fiscal_code_unique') {
             return badRequest(reply, 'Fiscal code already exists');
           }
-          if (error.constraint === 'idx_clients_client_code_unique') {
+          if (err.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (error.detail?.includes('client_code')) {
+          if (err.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'Fiscal code already exists');

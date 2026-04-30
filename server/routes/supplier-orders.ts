@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import { generateSupplierOrderId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -13,12 +14,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 const idParamSchema = {
   type: 'object',
@@ -377,20 +372,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'supplier_sales_pkey' ||
-            databaseError.detail?.includes('(id)'))
-        ) {
-          return reply.code(409).send({ error: 'Order ID already exists' });
-        }
-        if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'idx_supplier_sales_linked_quote_id_unique' ||
-            databaseError.detail?.includes('(linked_quote_id)'))
-        ) {
-          return reply.code(409).send({ error: 'A supplier order already exists for this quote' });
+        if (isUniqueViolation(error)) {
+          if (error.constraint === 'supplier_sales_pkey' || error.detail?.includes('(id)')) {
+            return reply.code(409).send({ error: 'Order ID already exists' });
+          }
+          if (
+            error.constraint === 'idx_supplier_sales_linked_quote_id_unique' ||
+            error.detail?.includes('(linked_quote_id)')
+          ) {
+            return reply
+              .code(409)
+              .send({ error: 'A supplier order already exists for this quote' });
+          }
         }
         throw error;
       }
@@ -622,11 +615,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'supplier_sales_pkey' ||
-            databaseError.detail?.includes('(id)'))
+          isUniqueViolation(error) &&
+          (error.constraint === 'supplier_sales_pkey' || error.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Order ID already exists' });
         }

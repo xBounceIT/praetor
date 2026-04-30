@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { isForeignKeyViolation, isUniqueViolation } from '../utils/db-errors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -16,12 +17,6 @@ import {
   requireNonEmptyString,
   validateEnum,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 const UNIT_OF_MEASURE_VALUES = ['unit', 'hours'] as const;
 
@@ -446,10 +441,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'invoices_pkey' || databaseError.detail?.includes('(id)'))
+          isUniqueViolation(error) &&
+          (error.constraint === 'invoices_pkey' || error.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Invoice ID already exists' });
         }
@@ -673,10 +667,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'invoices_pkey' || databaseError.detail?.includes('(id)'))
+          isUniqueViolation(error) &&
+          (error.constraint === 'invoices_pkey' || error.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Invoice ID already exists' });
         }
@@ -812,10 +805,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(204).send();
       } catch (err) {
         console.error('DELETE INVOICE ERROR:', err);
-        const error = err as DatabaseError;
-        // Check for specific DB errors
-        if (error.code === '23503') {
-          // Foreign key violation
+        if (isForeignKeyViolation(err)) {
           return reply.code(409).send({
             error: 'Cannot delete invoice because it is referenced by other records',
           });

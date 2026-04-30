@@ -4,6 +4,7 @@ import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import {
   badRequest,
   optionalEnum,
@@ -61,9 +62,6 @@ const generalSettingsUpdateBodySchema = {
     defaultLocation: { type: 'string' },
   },
 } as const;
-
-const hasPermission = (request: FastifyRequest, permission: string) =>
-  request.user?.permissions?.includes(permission) ?? false;
 
 const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   currency: 'EUR',

@@ -1150,8 +1150,14 @@ ON CONFLICT (user_id, task_id) DO NOTHING;
 
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,
-    task, notes, duration, hourly_cost, is_placeholder, location
-) VALUES
+    task, task_id, notes, duration, hourly_cost, is_placeholder, location
+)
+SELECT
+    v.id, v.user_id, v.entry_date, v.client_id, v.client_name, v.project_id, v.project_name,
+    v.task,
+    (SELECT t.id FROM tasks t WHERE t.project_id = v.project_id AND t.name = v.task ORDER BY t.id LIMIT 1),
+    v.notes, v.duration, v.hourly_cost, v.is_placeholder, v.location
+FROM (VALUES
     ('dm_te_01', 'u3',  CURRENT_DATE - INTERVAL '28 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Initial Design',       'Wireframe sketches for homepage',          6.00, 45.00, FALSE, 'office'),
     ('dm_te_02', 'u3',  CURRENT_DATE - INTERVAL '27 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Implement header and nav components',      7.50, 45.00, FALSE, 'office'),
     ('dm_te_03', 'u5',  CURRENT_DATE - INTERVAL '26 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Build hero section and CTA blocks',        8.00, 50.00, FALSE, 'remote'),
@@ -1172,6 +1178,7 @@ INSERT INTO time_entries (
     ('dm_te_18', 'u7',  CURRENT_DATE - INTERVAL '6 days',  'c2', 'Global Tech',  'p3', 'Internal Research',  'Market Analysis',      'On-site data collection interviews',       5.00, 55.00, FALSE, 'customer_premise'),
     ('dm_te_19', 'u3',  CURRENT_DATE - INTERVAL '4 days',  'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Final QA pass before handoff',             8.00, 45.00, FALSE, 'office'),
     ('dm_te_20', 'u5',  CURRENT_DATE - INTERVAL '2 days',  'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Deployment preparation and smoke test',    3.00, 50.00, FALSE, 'remote')
+) AS v(id, user_id, entry_date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder, location)
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     date = EXCLUDED.date,
@@ -1180,6 +1187,7 @@ ON CONFLICT (id) DO UPDATE SET
     project_id = EXCLUDED.project_id,
     project_name = EXCLUDED.project_name,
     task = EXCLUDED.task,
+    task_id = EXCLUDED.task_id,
     notes = EXCLUDED.notes,
     duration = EXCLUDED.duration,
     hourly_cost = EXCLUDED.hourly_cost,
@@ -1188,13 +1196,15 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,
-    task, notes, duration, hourly_cost, is_placeholder, location
+    task, task_id, notes, duration, hourly_cost, is_placeholder, location
 )
 SELECT
     v.id, v.user_id, v.entry_date::date,
     v.client_id, v.client_name, v.project_id,
     p.name,
-    v.task, v.notes, v.duration, v.hourly_cost, v.is_placeholder, v.location
+    v.task,
+    (SELECT t.id FROM tasks t WHERE t.project_id = v.project_id AND t.name = v.task ORDER BY t.id LIMIT 1),
+    v.notes, v.duration, v.hourly_cost, v.is_placeholder, v.location
 FROM (VALUES
     ('dm_te_21', 'u2',  CURRENT_DATE - INTERVAL '16 days', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_01', 'Security audit review',         'Reviewed pen-test findings with client',          3.00, 65.00, FALSE, 'office'),
     ('dm_te_22', 'u5',  CURRENT_DATE - INTERVAL '13 days', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_02', 'Deployment configuration',      'Set up CI pipeline and staging environment',      5.00, 50.00, FALSE, 'remote'),
@@ -1211,6 +1221,7 @@ ON CONFLICT (id) DO UPDATE SET
     project_id = EXCLUDED.project_id,
     project_name = EXCLUDED.project_name,
     task = EXCLUDED.task,
+    task_id = EXCLUDED.task_id,
     notes = EXCLUDED.notes,
     duration = EXCLUDED.duration,
     hourly_cost = EXCLUDED.hourly_cost,

@@ -1,4 +1,5 @@
 import pool, { type QueryExecutor } from '../db/index.ts';
+import { parseDbNumber } from '../utils/parse.ts';
 
 export type AuthUser = {
   id: string;
@@ -67,6 +68,17 @@ export const updatePasswordHash = async (
   exec: QueryExecutor = pool,
 ): Promise<void> => {
   await exec.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, userId]);
+};
+
+export const findCostPerHour = async (
+  userId: string,
+  exec: QueryExecutor = pool,
+): Promise<number> => {
+  const { rows } = await exec.query<{ costPerHour: string | number | null }>(
+    `SELECT cost_per_hour AS "costPerHour" FROM users WHERE id = $1`,
+    [userId],
+  );
+  return parseDbNumber(rows[0]?.costPerHour, 0);
 };
 
 export const updateNameByUsername = async (

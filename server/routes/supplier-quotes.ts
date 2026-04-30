@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { isUniqueViolation } from '../utils/db-errors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -14,12 +15,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-interface DatabaseError extends Error {
-  code?: string;
-  constraint?: string;
-  detail?: string;
-}
 
 const idParamSchema = {
   type: 'object',
@@ -308,11 +303,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'supplier_quotes_pkey' ||
-            databaseError.detail?.includes('(id)'))
+          isUniqueViolation(error) &&
+          (error.constraint === 'supplier_quotes_pkey' || error.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
@@ -506,11 +499,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
       } catch (error) {
-        const databaseError = error as DatabaseError;
         if (
-          databaseError.code === '23505' &&
-          (databaseError.constraint === 'supplier_quotes_pkey' ||
-            databaseError.detail?.includes('(id)'))
+          isUniqueViolation(error) &&
+          (error.constraint === 'supplier_quotes_pkey' || error.detail?.includes('(id)'))
         ) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }

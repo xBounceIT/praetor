@@ -57,6 +57,20 @@ export const getAuditChangedFields = (
   return changedFields.length > 0 ? changedFields : undefined;
 };
 
+export const deriveToggleAction = (
+  changedFields: string[] | undefined,
+  toggleKey: string,
+  baseAction: string,
+  onAction: string,
+  offAction: string,
+  isOn: boolean | undefined,
+): string => {
+  if (changedFields?.length === 1 && changedFields[0] === toggleKey) {
+    return isOn ? onAction : offAction;
+  }
+  return baseAction;
+};
+
 export const getAuditCounts = (
   input: Record<string, number | null | undefined>,
 ): Record<string, number> | undefined => {
