@@ -77,6 +77,10 @@ export const updateNameByUsername = async (
   await exec.query(`UPDATE users SET name = $2 WHERE username = $1`, [username, name]);
 };
 
+// For users that authenticate externally (e.g. LDAP) and must never log in locally. Satisfies
+// the `password_hash NOT NULL` column with a malformed bcrypt that no plaintext can match.
+export const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
+
 export type NewUser = {
   id: string;
   name: string;

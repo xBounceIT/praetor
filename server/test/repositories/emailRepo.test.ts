@@ -56,6 +56,12 @@ describe('get', () => {
       fromName: 'Acme',
     });
   });
+
+  test('normalizes a legacy smtpEncryption value to tls', async () => {
+    exec.enqueue({ rows: [{ ...baseRow, smtpEncryption: 'starttls' }] });
+    const result = await emailRepo.get(exec);
+    expect(result?.smtpEncryption).toBe('tls');
+  });
 });
 
 describe('update', () => {
@@ -113,6 +119,12 @@ describe('update', () => {
     exec.enqueue({ rows: [{ ...baseRow, fromName: 'Acme' }] });
     const result = await emailRepo.update({ fromName: 'Acme' }, exec);
     expect(result.fromName).toBe('Acme');
+  });
+
+  test('normalizes a legacy smtpEncryption from RETURNING to tls', async () => {
+    exec.enqueue({ rows: [{ ...baseRow, smtpEncryption: 'starttls' }] });
+    const result = await emailRepo.update({ fromName: 'Acme' }, exec);
+    expect(result.smtpEncryption).toBe('tls');
   });
 });
 

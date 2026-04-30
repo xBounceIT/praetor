@@ -35,6 +35,17 @@ export const DEFAULT_CONFIG: EmailConfig = {
   fromName: 'Praetor',
 };
 
+// Older versions of email_config accepted any string for smtp_encryption (see commit a1f1fcac).
+// Normalize at the boundary so consumers can rely on the union type.
+type EmailConfigRow = Omit<EmailConfig, 'smtpEncryption'> & { smtpEncryption: string };
+
+const mapRow = (row: EmailConfigRow): EmailConfig => ({
+  ...row,
+  smtpEncryption: (SMTP_ENCRYPTIONS as readonly string[]).includes(row.smtpEncryption)
+    ? (row.smtpEncryption as SmtpEncryption)
+    : 'tls',
+});
+
 const SELECT_COLUMNS = `enabled,
         smtp_host as "smtpHost",
         smtp_port as "smtpPort",
@@ -46,17 +57,17 @@ const SELECT_COLUMNS = `enabled,
         from_name as "fromName"`;
 
 export const get = async (exec: QueryExecutor = pool): Promise<EmailConfig | null> => {
-  const { rows } = await exec.query<EmailConfig>(
+  const { rows } = await exec.query<EmailConfigRow>(
     `SELECT ${SELECT_COLUMNS} FROM email_config WHERE id = 1`,
   );
-  return rows[0] ?? null;
+  return rows[0] ? mapRow(rows[0]) : null;
 };
 
 export const update = async (
   patch: EmailConfigPatch,
   exec: QueryExecutor = pool,
 ): Promise<EmailConfig> => {
-  const { rows } = await exec.query<EmailConfig>(
+  const { rows } = await exec.query<EmailConfigRow>(
     `UPDATE email_config
         SET enabled = COALESCE($1, enabled),
             smtp_host = COALESCE($2, smtp_host),
@@ -85,5 +96,5 @@ export const update = async (
   if (rows.length === 0) {
     throw new Error('email_config row (id=1) not found; seed missing');
   }
-  return rows[0];
+  return mapRow(rows[0]);
 };
