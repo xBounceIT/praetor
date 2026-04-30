@@ -1,4 +1,4 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export type SupplierOrder = {
@@ -321,13 +321,7 @@ export const replaceItems = async (
 ): Promise<SupplierOrderItem[]> => {
   await exec.query(`DELETE FROM supplier_sale_items WHERE sale_id = $1`, [orderId]);
   if (items.length === 0) return [];
-  const FIELDS_PER_ROW = 8;
-  const placeholders = items
-    .map((_, i) => {
-      const base = i * FIELDS_PER_ROW;
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
-    })
-    .join(', ');
+  const placeholders = buildBulkInsertPlaceholders(items.length, 8);
   const params = items.flatMap((item) => [
     item.id,
     orderId,

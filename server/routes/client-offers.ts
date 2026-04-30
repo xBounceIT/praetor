@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
+import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { isUniqueViolation } from '../utils/db-errors.ts';
+import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
@@ -17,8 +19,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-type DbQueryResult = Awaited<ReturnType<typeof query>>;
 
 const idParamSchema = {
   type: 'object',
@@ -153,8 +153,27 @@ type OfferItemInput = {
   note?: string;
 };
 
-const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
-  const normalizedItems: Array<Record<string, unknown>> = [];
+type NormalizedOfferItem = {
+  productId: string | null;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  productCost: number;
+  productMolPercentage: number | null;
+  supplierQuoteId: string | null;
+  supplierQuoteItemId: string | null;
+  supplierQuoteSupplierName: string | null;
+  supplierQuoteUnitPrice: number | null;
+  unitType: UnitType;
+  discount: number;
+  note: string | null;
+};
+
+const normalizeItems = (
+  items: OfferItemInput[],
+  reply: FastifyReply,
+): NormalizedOfferItem[] | null => {
+  const normalizedItems: NormalizedOfferItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
@@ -184,7 +203,6 @@ const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
       return null;
     }
     normalizedItems.push({
-      ...item,
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -219,62 +237,25 @@ const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
   return normalizedItems;
 };
 
-const toFiniteNumber = (value: unknown, fieldName: string) => {
-  const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue)) {
-    throw new TypeError(`Invalid numeric value for ${fieldName}`);
-  }
-  return parsedValue;
-};
+const generateOfferItemId = () => generateItemId('coi-');
 
-const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
-  if (value === undefined || value === null) return null;
-  return toFiniteNumber(value, fieldName);
-};
-
-const toNullableString = (value: unknown) => {
-  if (value === undefined || value === null) return null;
-  return String(value);
-};
-
-const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  offerId: String(row.offerId),
-  productId: toNullableString(row.productId),
-  productName: String(row.productName),
-  quantity: toFiniteNumber(row.quantity, 'offerItem.quantity'),
-  unitPrice: toFiniteNumber(row.unitPrice, 'offerItem.unitPrice'),
-  productCost: toFiniteNumber(row.productCost, 'offerItem.productCost'),
-  productMolPercentage: toNullableFiniteNumber(
-    row.productMolPercentage,
-    'offerItem.productMolPercentage',
-  ),
-  supplierQuoteId: toNullableString(row.supplierQuoteId),
-  supplierQuoteItemId: toNullableString(row.supplierQuoteItemId),
-  supplierQuoteSupplierName: toNullableString(row.supplierQuoteSupplierName),
-  supplierQuoteUnitPrice: toNullableFiniteNumber(
-    row.supplierQuoteUnitPrice,
-    'offerItem.supplierQuoteUnitPrice',
-  ),
-  unitType: normalizeUnitType(row.unitType),
-  note: toNullableString(row.note),
-  discount: toFiniteNumber(row.discount, 'offerItem.discount'),
-});
-
-const normalizeOfferRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  linkedQuoteId: String(row.linkedQuoteId),
-  clientId: String(row.clientId),
-  clientName: String(row.clientName),
-  paymentTerms: toNullableString(row.paymentTerms),
-  discount: toFiniteNumber(row.discount, 'offer.discount'),
-  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
-  status: String(row.status),
-  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
-  notes: toNullableString(row.notes),
-  createdAt: toFiniteNumber(row.createdAt, 'offer.createdAt'),
-  updatedAt: toFiniteNumber(row.updatedAt, 'offer.updatedAt'),
-});
+const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
+  items.map((item) => ({
+    id: generateOfferItemId(),
+    productId: item.productId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    unitType: item.unitType,
+  }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
@@ -296,63 +277,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async () => {
-      const offersResult = await query(
-        `SELECT
-            id,
-            linked_quote_id as "linkedQuoteId",
-            client_id as "clientId",
-            client_name as "clientName",
-            payment_terms as "paymentTerms",
-            discount,
-            discount_type as "discountType",
-            status,
-            expiration_date as "expirationDate",
-            notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-         FROM customer_offers
-         ORDER BY created_at DESC`,
-      );
+      const [offers, items] = await Promise.all([
+        clientOffersRepo.listAll(),
+        clientOffersRepo.listAllItems(),
+      ]);
 
-      const itemsResult = await query(
-        `SELECT
-            id,
-            offer_id as "offerId",
-            product_id as "productId",
-            product_name as "productName",
-            quantity,
-            unit_price as "unitPrice",
-            product_cost as "productCost",
-            product_mol_percentage as "productMolPercentage",
-            supplier_quote_id as "supplierQuoteId",
-            supplier_quote_item_id as "supplierQuoteItemId",
-            supplier_quote_supplier_name as "supplierQuoteSupplierName",
-            supplier_quote_unit_price as "supplierQuoteUnitPrice",
-            unit_type as "unitType",
-            note,
-            discount
-         FROM customer_offer_items
-         ORDER BY created_at ASC`,
-      );
+      const itemsByOffer = new Map<string, clientOffersRepo.ClientOfferItem[]>();
+      for (const item of items) {
+        const list = itemsByOffer.get(item.offerId);
+        if (list) list.push(item);
+        else itemsByOffer.set(item.offerId, [item]);
+      }
 
-      const normalizedOfferItems = itemsResult.rows.map((item) =>
-        normalizeOfferItemRow(item as Record<string, unknown>),
-      );
-      const normalizedOffers = offersResult.rows.map((offer) =>
-        normalizeOfferRow(offer as Record<string, unknown>),
-      );
-
-      const itemsByOffer: Record<string, ReturnType<typeof normalizeOfferItemRow>[]> = {};
-      normalizedOfferItems.forEach((item) => {
-        if (!itemsByOffer[item.offerId]) {
-          itemsByOffer[item.offerId] = [];
-        }
-        itemsByOffer[item.offerId].push(item);
-      });
-
-      return normalizedOffers.map((offer) => ({
+      return offers.map((offer) => ({
         ...offer,
-        items: itemsByOffer[offer.id] || [],
+        items: itemsByOffer.get(offer.id) ?? [],
       }));
     },
   );
@@ -410,28 +349,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const existingIdResult = await query('SELECT id FROM customer_offers WHERE id = $1', [
-        nextIdResult.value,
-      ]);
-      if (existingIdResult.rows.length > 0) {
-        return reply.code(409).send({ error: 'Offer ID already exists' });
-      }
-
-      const quoteResult = await query('SELECT id, status FROM quotes WHERE id = $1', [
-        linkedQuoteIdResult.value,
-      ]);
-      if (quoteResult.rows.length === 0) {
+      const sourceQuote = await clientQuotesRepo.findStatusAndClientName(linkedQuoteIdResult.value);
+      if (!sourceQuote) {
         return reply.code(404).send({ error: 'Source quote not found' });
       }
-      if (quoteResult.rows[0].status !== 'accepted') {
+      if (sourceQuote.status !== 'accepted') {
         return reply.code(409).send({ error: 'Offers can only be created from accepted quotes' });
       }
 
-      const existingOfferResult = await query(
-        'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
-        [linkedQuoteIdResult.value],
-      );
-      if (existingOfferResult.rows.length > 0) {
+      if (await clientOffersRepo.findExistingForQuote(linkedQuoteIdResult.value)) {
         return reply.code(409).send({ error: 'An offer already exists for this quote' });
       }
 
@@ -441,41 +367,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
 
-      const normalizedItems = normalizeItems(items, reply);
+      const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
 
-      let createdOfferResult: DbQueryResult;
+      let result: {
+        offer: clientOffersRepo.ClientOffer;
+        items: clientOffersRepo.ClientOfferItem[];
+      };
       try {
-        createdOfferResult = await query(
-          `INSERT INTO customer_offers
-            (id, linked_quote_id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           RETURNING
-              id,
-              linked_quote_id as "linkedQuoteId",
-              client_id as "clientId",
-              client_name as "clientName",
-              payment_terms as "paymentTerms",
-              discount,
-              discount_type as "discountType",
-              status,
-              expiration_date as "expirationDate",
-              notes,
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdResult.value,
-            linkedQuoteIdResult.value,
-            clientIdResult.value,
-            clientNameResult.value,
-            paymentTerms || 'immediate',
-            discountResult.value || 0,
-            discountTypeValue,
-            status || 'draft',
-            expirationDateResult.value,
-            notes,
-          ],
-        );
+        result = await withTransaction(async (tx) => {
+          const offer = await clientOffersRepo.create(
+            {
+              id: nextIdResult.value,
+              linkedQuoteId: linkedQuoteIdResult.value,
+              clientId: clientIdResult.value,
+              clientName: clientNameResult.value,
+              paymentTerms:
+                typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
+              discount: discountResult.value || 0,
+              discountType: discountTypeValue,
+              status: typeof status === 'string' && status ? status : 'draft',
+              expirationDate: expirationDateResult.value,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          const createdItems = await clientOffersRepo.replaceItems(
+            offer.id,
+            buildItemsForInsert(normalizedItems),
+            tx,
+          );
+          return { offer, items: createdItems };
+        });
       } catch (err) {
         if (
           isUniqueViolation(err) &&
@@ -486,64 +409,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      const createdItems: ReturnType<typeof normalizeOfferItemRow>[] = [];
-      for (const item of normalizedItems) {
-        const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-        const itemResult = await query(
-          `INSERT INTO customer_offer_items
-            (id, offer_id, product_id, product_name, quantity, unit_price, product_cost, product_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-           RETURNING
-             id,
-             offer_id as "offerId",
-             product_id as "productId",
-             product_name as "productName",
-             quantity,
-             unit_price as "unitPrice",
-             product_cost as "productCost",
-             product_mol_percentage as "productMolPercentage",
-             supplier_quote_id as "supplierQuoteId",
-             supplier_quote_item_id as "supplierQuoteItemId",
-             supplier_quote_supplier_name as "supplierQuoteSupplierName",
-             supplier_quote_unit_price as "supplierQuoteUnitPrice",
-             unit_type as "unitType",
-             discount,
-             note`,
-          [
-            itemId,
-            nextIdResult.value,
-            item.productId,
-            item.productName,
-            item.quantity,
-            item.unitPrice,
-            item.productCost,
-            item.productMolPercentage,
-            item.discount,
-            item.note,
-            item.supplierQuoteId,
-            item.supplierQuoteItemId,
-            item.supplierQuoteSupplierName,
-            item.supplierQuoteUnitPrice,
-            item.unitType || 'hours',
-          ],
-        );
-        createdItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
-      }
+      const createdOffer = result.offer;
+      const createdItems = result.items;
 
       await logAudit({
         request,
         action: 'client_offer.created',
         entityType: 'client_offer',
-        entityId: nextIdResult.value,
+        entityId: createdOffer.id,
         details: {
-          targetLabel: nextIdResult.value,
+          targetLabel: createdOffer.id,
           secondaryLabel: clientNameResult.value,
         },
       });
-      return reply.code(201).send({
-        ...normalizeOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
-        items: createdItems,
-      });
+      return reply.code(201).send({ ...createdOffer, items: createdItems });
     },
   );
 
@@ -591,22 +470,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existingOfferResult = await query(
-        `SELECT
-            id,
-            linked_quote_id as "linkedQuoteId",
-            client_id as "clientId",
-            client_name as "clientName",
-            status
-         FROM customer_offers
-         WHERE id = $1`,
-        [idResult.value],
-      );
-      if (existingOfferResult.rows.length === 0) {
+      const existingOffer = await clientOffersRepo.findForUpdate(idResult.value);
+      if (!existingOffer) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
-
-      const existingOffer = existingOfferResult.rows[0];
 
       const hasLockedFieldUpdates =
         clientId !== undefined ||
@@ -624,17 +491,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      let nextIdValue = nextId;
+      let nextIdValue: string | undefined | null = nextId as string | undefined | null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
-          const existingIdResult = await query(
-            'SELECT id FROM customer_offers WHERE id = $1 AND id <> $2',
-            [nextIdResult.value, idResult.value],
-          );
-          if (existingIdResult.rows.length > 0) {
+          if (await clientOffersRepo.findIdConflict(nextIdResult.value, idResult.value)) {
             return reply.code(409).send({ error: 'Offer ID already exists' });
           }
         }
@@ -692,54 +555,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
-      const discountTypeValue =
-        discountType !== undefined
-          ? discountType === 'currency'
+      const discountTypeValue: 'currency' | 'percentage' | undefined =
+        discountType === undefined
+          ? undefined
+          : discountType === 'currency'
             ? 'currency'
-            : 'percentage'
-          : undefined;
+            : 'percentage';
 
-      let updatedOfferResult: DbQueryResult;
+      let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
+      if (items !== undefined) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return badRequest(reply, 'Items must be a non-empty array');
+        }
+        normalizedItemsForUpdate = normalizeItems(items as OfferItemInput[], reply);
+        if (!normalizedItemsForUpdate) return;
+      }
+
+      let result: {
+        offer: clientOffersRepo.ClientOffer | null;
+        items: clientOffersRepo.ClientOfferItem[];
+      };
       try {
-        updatedOfferResult = await query(
-          `UPDATE customer_offers
-           SET id = COALESCE($1, id),
-               client_id = COALESCE($2, client_id),
-               client_name = COALESCE($3, client_name),
-               payment_terms = COALESCE($4, payment_terms),
-               discount = COALESCE($5, discount),
-               discount_type = COALESCE($6, discount_type),
-               status = COALESCE($7, status),
-               expiration_date = COALESCE($8, expiration_date),
-               notes = COALESCE($9, notes),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $10
-           RETURNING
-              id,
-              linked_quote_id as "linkedQuoteId",
-              client_id as "clientId",
-              client_name as "clientName",
-              payment_terms as "paymentTerms",
-              discount,
-              discount_type as "discountType",
-              status,
-              expiration_date as "expirationDate",
-              notes,
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            nextIdValue,
-            clientIdValue,
-            clientNameValue,
-            paymentTerms,
-            discountValue,
-            discountTypeValue,
-            status,
-            expirationDateValue,
-            notes,
+        result = await withTransaction(async (tx) => {
+          const offer = await clientOffersRepo.update(
             idResult.value,
-          ],
-        );
+            {
+              id: (nextIdValue as string | null | undefined) ?? null,
+              clientId: (clientIdValue as string | null | undefined) ?? null,
+              clientName: (clientNameValue as string | null | undefined) ?? null,
+              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
+              discount: (discountValue as number | null | undefined) ?? null,
+              discountType: discountTypeValue ?? null,
+              status: (status as string | null | undefined) ?? null,
+              expirationDate: (expirationDateValue as string | null | undefined) ?? null,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          if (!offer) return { offer: null, items: [] };
+          const updatedItems = normalizedItemsForUpdate
+            ? await clientOffersRepo.replaceItems(
+                offer.id,
+                buildItemsForInsert(normalizedItemsForUpdate),
+                tx,
+              )
+            : await clientOffersRepo.findItemsForOffer(offer.id, tx);
+          return { offer, items: updatedItems };
+        });
       } catch (err) {
         if (
           isUniqueViolation(err) &&
@@ -750,111 +612,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      if (updatedOfferResult.rows.length === 0) {
+      const updatedOffer = result.offer;
+      const updatedItems = result.items;
+      if (!updatedOffer) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
 
-      const updatedOfferId = String(updatedOfferResult.rows[0].id);
-
-      let updatedItems: ReturnType<typeof normalizeOfferItemRow>[] = [];
-      if (items !== undefined) {
-        if (!Array.isArray(items) || items.length === 0) {
-          return badRequest(reply, 'Items must be a non-empty array');
-        }
-        const normalizedItems = normalizeItems(items, reply);
-        if (!normalizedItems) return;
-        await query('DELETE FROM customer_offer_items WHERE offer_id = $1', [updatedOfferId]);
-        for (const item of normalizedItems) {
-          const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-          const itemResult = await query(
-            `INSERT INTO customer_offer_items
-              (id, offer_id, product_id, product_name, quantity, unit_price, product_cost, product_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, unit_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-             RETURNING
-               id,
-               offer_id as "offerId",
-               product_id as "productId",
-               product_name as "productName",
-               quantity,
-               unit_price as "unitPrice",
-               product_cost as "productCost",
-               product_mol_percentage as "productMolPercentage",
-               supplier_quote_id as "supplierQuoteId",
-               supplier_quote_item_id as "supplierQuoteItemId",
-               supplier_quote_supplier_name as "supplierQuoteSupplierName",
-               supplier_quote_unit_price as "supplierQuoteUnitPrice",
-               unit_type as "unitType",
-               discount,
-               note`,
-            [
-              itemId,
-              updatedOfferId,
-              item.productId,
-              item.productName,
-              item.quantity,
-              item.unitPrice,
-              item.productCost,
-              item.productMolPercentage,
-              item.discount,
-              item.note,
-              item.supplierQuoteId,
-              item.supplierQuoteItemId,
-              item.supplierQuoteSupplierName,
-              item.supplierQuoteUnitPrice,
-              item.unitType || 'hours',
-            ],
-          );
-          updatedItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
-        }
-      } else {
-        const itemsResult = await query(
-          `SELECT
-               id,
-               offer_id as "offerId",
-               product_id as "productId",
-               product_name as "productName",
-               quantity,
-               unit_price as "unitPrice",
-               product_cost as "productCost",
-               product_mol_percentage as "productMolPercentage",
-               supplier_quote_id as "supplierQuoteId",
-                supplier_quote_item_id as "supplierQuoteItemId",
-                supplier_quote_supplier_name as "supplierQuoteSupplierName",
-                supplier_quote_unit_price as "supplierQuoteUnitPrice",
-                unit_type as "unitType",
-                discount,
-                note
-             FROM customer_offer_items
-            WHERE offer_id = $1`,
-          [updatedOfferId],
-        );
-        updatedItems = itemsResult.rows.map((item) =>
-          normalizeOfferItemRow(item as Record<string, unknown>),
-        );
-      }
-
-      const nextStatus =
-        typeof status === 'string'
-          ? status
-          : String(updatedOfferResult.rows[0].status ?? existingOffer.status);
+      const nextStatus = typeof status === 'string' ? status : updatedOffer.status;
       const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
       await logAudit({
         request,
         action: 'client_offer.updated',
         entityType: 'client_offer',
-        entityId: updatedOfferId,
+        entityId: updatedOffer.id,
         details: {
-          targetLabel: updatedOfferId,
-          secondaryLabel: String(updatedOfferResult.rows[0].clientName ?? ''),
-          fromValue: didStatusChange ? String(existingOffer.status) : undefined,
+          targetLabel: updatedOffer.id,
+          secondaryLabel: updatedOffer.clientName,
+          fromValue: didStatusChange ? existingOffer.status : undefined,
           toValue: didStatusChange ? nextStatus : undefined,
         },
       });
 
-      return {
-        ...normalizeOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
-        items: updatedItems,
-      };
+      return { ...updatedOffer, items: updatedItems };
     },
   );
 
@@ -877,24 +656,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const linkedOrderResult = await query(
-        'SELECT id FROM sales WHERE linked_offer_id = $1 LIMIT 1',
-        [idResult.value],
-      );
-      if (linkedOrderResult.rows.length > 0) {
+      if (await clientOffersRepo.findLinkedSaleId(idResult.value)) {
         return reply
           .code(409)
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
       }
 
-      const offerResult = await query(
-        'SELECT id, status, client_name as "clientName" FROM customer_offers WHERE id = $1',
-        [idResult.value],
-      );
-      if (offerResult.rows.length === 0) {
+      const offer = await clientOffersRepo.findStatusAndClientName(idResult.value);
+      if (!offer) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
-      if (offerResult.rows[0].status !== 'draft') {
+      if (offer.status !== 'draft') {
         return reply.code(409).send({ error: 'Only draft offers can be deleted' });
       }
 
@@ -905,10 +677,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: String(offerResult.rows[0].clientName ?? ''),
+          secondaryLabel: offer.clientName ?? '',
         },
       });
-      await query('DELETE FROM customer_offers WHERE id = $1', [idResult.value]);
+      await clientOffersRepo.deleteById(idResult.value);
       return reply.code(204).send();
     },
   );

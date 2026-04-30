@@ -32,6 +32,17 @@ pool.on('error', (err) => {
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 
+export const buildBulkInsertPlaceholders = (rowCount: number, fieldsPerRow: number): string => {
+  const rows = new Array<string>(rowCount);
+  for (let i = 0; i < rowCount; i++) {
+    const base = i * fieldsPerRow;
+    const slots = new Array<string>(fieldsPerRow);
+    for (let n = 0; n < fieldsPerRow; n++) slots[n] = `$${base + n + 1}`;
+    rows[i] = `(${slots.join(', ')})`;
+  }
+  return rows.join(', ');
+};
+
 export type QueryExecutor = {
   query: <T extends QueryResultRow = QueryResultRow>(
     text: string,

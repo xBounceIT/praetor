@@ -1,5 +1,5 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
+import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
+import { requireDateOnly } from '../utils/date.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export type SupplierInvoice = {
@@ -79,14 +79,6 @@ const ITEM_COLUMNS = `
   unit_price as "unitPrice",
   discount
 `;
-
-const requireDateOnly = (value: unknown, fieldName: string): string => {
-  const normalized = normalizeNullableDateOnly(value, fieldName);
-  if (!normalized) {
-    throw new TypeError(`Invalid date value for ${fieldName}`);
-  }
-  return normalized;
-};
 
 const mapInvoice = (row: SupplierInvoiceRow): SupplierInvoice => ({
   id: row.id,
@@ -343,13 +335,7 @@ export const replaceItems = async (
 ): Promise<SupplierInvoiceItem[]> => {
   await exec.query(`DELETE FROM supplier_invoice_items WHERE invoice_id = $1`, [invoiceId]);
   if (items.length === 0) return [];
-  const FIELDS_PER_ROW = 7;
-  const placeholders = items
-    .map((_, i) => {
-      const base = i * FIELDS_PER_ROW;
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
-    })
-    .join(', ');
+  const placeholders = buildBulkInsertPlaceholders(items.length, 7);
   const params = items.flatMap((item) => [
     item.id,
     invoiceId,

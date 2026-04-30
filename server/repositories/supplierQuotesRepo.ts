@@ -1,4 +1,4 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
@@ -287,6 +287,59 @@ export type NewSupplierQuoteItem = {
   unitType: string;
 };
 
+export type QuoteItemSnapshot = {
+  supplierQuoteId: string;
+  supplierName: string;
+  productId: string | null;
+  unitPrice: number;
+  netCost: number;
+};
+
+/**
+ * Resolves per-item snapshots used by the client-quotes route to lock in supplier-quote pricing
+ * at the moment a client quote is created/updated. Only items belonging to *accepted* supplier
+ * quotes are returned.
+ */
+export const getQuoteItemSnapshots = async (
+  itemIds: string[],
+  exec: QueryExecutor = pool,
+): Promise<Map<string, QuoteItemSnapshot>> => {
+  const uniqueIds = Array.from(new Set(itemIds.filter(Boolean)));
+  const snapshots = new Map<string, QuoteItemSnapshot>();
+  if (uniqueIds.length === 0) return snapshots;
+
+  const { rows } = await exec.query<{
+    itemId: string;
+    quoteId: string;
+    supplierName: string;
+    productId: string | null;
+    unitPrice: string | number | null;
+  }>(
+    `SELECT
+        sqi.id as "itemId",
+        sq.id as "quoteId",
+        sq.supplier_name as "supplierName",
+        sqi.product_id as "productId",
+        sqi.unit_price as "unitPrice"
+       FROM supplier_quote_items sqi
+       JOIN supplier_quotes sq ON sq.id = sqi.quote_id
+      WHERE sqi.id = ANY($1) AND sq.status = 'accepted'`,
+    [uniqueIds],
+  );
+
+  for (const row of rows) {
+    const unitPrice = parseDbNumber(row.unitPrice, 0);
+    snapshots.set(row.itemId, {
+      supplierQuoteId: row.quoteId,
+      supplierName: row.supplierName,
+      productId: row.productId,
+      unitPrice,
+      netCost: unitPrice,
+    });
+  }
+  return snapshots;
+};
+
 export const replaceItems = async (
   quoteId: string,
   items: NewSupplierQuoteItem[],
@@ -294,13 +347,7 @@ export const replaceItems = async (
 ): Promise<SupplierQuoteItem[]> => {
   await exec.query(`DELETE FROM supplier_quote_items WHERE quote_id = $1`, [quoteId]);
   if (items.length === 0) return [];
-  const FIELDS_PER_ROW = 8;
-  const placeholders = items
-    .map((_, i) => {
-      const base = i * FIELDS_PER_ROW;
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
-    })
-    .join(', ');
+  const placeholders = buildBulkInsertPlaceholders(items.length, 8);
   const params = items.flatMap((item) => [
     item.id,
     quoteId,
