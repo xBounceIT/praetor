@@ -39,3 +39,41 @@ describe('findExistingIds', () => {
     expect(result.has('c')).toBe(false);
   });
 });
+
+describe('userHasRole', () => {
+  test('returns true when the DB returns a row', async () => {
+    exec.enqueue({ rows: [{}] });
+    const result = await rolesRepo.userHasRole('user-1', 'manager', exec);
+    expect(result).toBe(true);
+    expect(exec.calls[0].params).toEqual(['user-1', 'manager']);
+  });
+
+  test('returns false when no row is returned', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await rolesRepo.userHasRole('user-1', 'manager', exec);
+    expect(result).toBe(false);
+  });
+});
+
+describe('listAvailableRolesForUser', () => {
+  test('returns the rows as-is and passes [userId]', async () => {
+    exec.enqueue({
+      rows: [
+        { id: 'admin', name: 'Admin', isSystem: true, isAdmin: true },
+        { id: 'manager', name: 'Manager', isSystem: false, isAdmin: false },
+      ],
+    });
+    const result = await rolesRepo.listAvailableRolesForUser('user-1', exec);
+    expect(result).toEqual([
+      { id: 'admin', name: 'Admin', isSystem: true, isAdmin: true },
+      { id: 'manager', name: 'Manager', isSystem: false, isAdmin: false },
+    ]);
+    expect(exec.calls[0].params).toEqual(['user-1']);
+  });
+
+  test('returns an empty array when the user has no roles', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await rolesRepo.listAvailableRolesForUser('user-1', exec);
+    expect(result).toEqual([]);
+  });
+});
