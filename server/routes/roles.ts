@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query, withTransaction } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -65,17 +66,10 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
-const mapRoleRow = async (row: {
-  id: string;
-  name: string;
-  is_system: boolean;
-  is_admin: boolean;
-}) => {
-  const explicitPerms = (
-    await query('SELECT permission FROM role_permissions WHERE role_id = $1', [row.id])
-  ).rows.map((perm) => normalizePermission(perm.permission));
+const mapRoleRow = async (row: rolesRepo.Role) => {
+  const explicitPerms = (await rolesRepo.listExplicitPermissions(row.id)).map(normalizePermission);
 
-  const permissions = row.is_admin
+  const permissions = row.isAdmin
     ? Array.from(
         new Set([
           ...ADMINISTRATION_PERMISSIONS,
@@ -89,8 +83,8 @@ const mapRoleRow = async (row: {
   return {
     id: row.id,
     name: row.name,
-    isSystem: row.is_system,
-    isAdmin: row.is_admin,
+    isSystem: row.isSystem,
+    isAdmin: row.isAdmin,
     permissions,
   };
 };
@@ -123,9 +117,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
-      const result = await query('SELECT id, name, is_system, is_admin FROM roles ORDER BY name');
-      const value = await Promise.all(result.rows.map(mapRoleRow));
-      return value;
+      const rows = await rolesRepo.listAll();
+      return Promise.all(rows.map(mapRoleRow));
     },
   );
 
@@ -183,23 +176,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await withTransaction(async (tx) => {
-        await tx.query(
-          'INSERT INTO roles (id, name, is_system, is_admin) VALUES ($1, $2, $3, $4)',
-          [id, nameResult.value, false, false],
-        );
+        await rolesRepo.insertRole(id, nameResult.value, tx);
 
         for (const permission of normalizedPermissions) {
-          await tx.query(
-            'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [id, permission],
-          );
+          await rolesRepo.insertPermission(id, permission, tx);
         }
       });
 
-      const roleRow = await query('SELECT id, name, is_system, is_admin FROM roles WHERE id = $1', [
+      const role = await mapRoleRow({
         id,
-      ]);
-      const role = await mapRoleRow(roleRow.rows[0]);
+        name: nameResult.value,
+        isSystem: false,
+        isAdmin: false,
+      });
       await logAudit({
         request,
         action: 'role.created',
@@ -243,20 +232,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const roleResult = await query(
-        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
-        [idResult.value],
-      );
-      if (roleResult.rows.length === 0) {
+      const roleRow = await rolesRepo.findById(idResult.value);
+      if (!roleRow) {
         return reply.code(404).send({ error: 'Role not found' });
       }
 
-      const roleRow = roleResult.rows[0];
-      if (roleRow.is_admin || roleRow.is_system) {
+      if (roleRow.isAdmin || roleRow.isSystem) {
         return reply.code(403).send({ error: 'System roles cannot be renamed' });
       }
 
-      await query('UPDATE roles SET name = $1 WHERE id = $2', [nameResult.value, idResult.value]);
+      await rolesRepo.updateRoleName(idResult.value, nameResult.value);
       await logAudit({
         request,
         action: 'role.updated',
@@ -264,16 +249,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: nameResult.value,
-          fromValue: roleRow.name as string,
+          fromValue: roleRow.name,
           toValue: nameResult.value,
         },
       });
 
-      const updatedRoleResult = await query(
-        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
-        [idResult.value],
-      );
-      const updatedRole = await mapRoleRow(updatedRoleResult.rows[0]);
+      const updatedRole = await mapRoleRow({ ...roleRow, name: nameResult.value });
       return reply.send(updatedRole);
     },
   );
@@ -298,34 +279,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const roleResult = await query(
-        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
-        [idResult.value],
-      );
-      if (roleResult.rows.length === 0) {
+      const roleRow = await rolesRepo.findById(idResult.value);
+      if (!roleRow) {
         return reply.code(404).send({ error: 'Role not found' });
       }
 
-      const roleRow = roleResult.rows[0];
-      if (roleRow.is_admin || roleRow.is_system) {
+      if (roleRow.isAdmin || roleRow.isSystem) {
         return reply.code(403).send({ error: 'System roles cannot be deleted' });
       }
 
-      const userCheck = await query('SELECT id FROM users WHERE role = $1 LIMIT 1', [
-        idResult.value,
-      ]);
-      if (userCheck.rows.length > 0) {
+      if (await rolesRepo.isRoleInUse(idResult.value)) {
         return reply.code(409).send({ error: 'Role is in use by existing users' });
       }
 
-      await query('DELETE FROM roles WHERE id = $1', [idResult.value]);
+      await rolesRepo.deleteRole(idResult.value);
       await logAudit({
         request,
         action: 'role.deleted',
         entityType: 'role',
         entityId: idResult.value,
         details: {
-          targetLabel: roleRow.name as string,
+          targetLabel: roleRow.name,
         },
       });
       return { message: 'Role deleted' };
@@ -368,13 +342,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, `Unknown permission: ${invalidPermission}`);
       }
 
-      const roleResult = await query('SELECT id, name, is_admin FROM roles WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (roleResult.rows.length === 0) {
+      const roleRow = await rolesRepo.findById(idResult.value);
+      if (!roleRow) {
         return reply.code(404).send({ error: 'Role not found' });
       }
-      if (roleResult.rows[0].is_admin) {
+      if (roleRow.isAdmin) {
         return reply.code(403).send({ error: 'Admin role permissions are locked' });
       }
       const forbiddenPermission = findForbiddenAdministrationPermission(normalizedPermissions);
@@ -396,20 +368,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await withTransaction(async (tx) => {
-        await tx.query('DELETE FROM role_permissions WHERE role_id = $1', [idResult.value]);
+        await rolesRepo.clearPermissions(idResult.value, tx);
         for (const permission of normalizedPermissions) {
-          await tx.query(
-            'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [idResult.value, permission],
-          );
+          await rolesRepo.insertPermission(idResult.value, permission, tx);
         }
       });
 
-      const updatedRoleResult = await query(
-        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
-        [idResult.value],
-      );
-      const updatedRole = await mapRoleRow(updatedRoleResult.rows[0]);
+      const updatedRole = await mapRoleRow(roleRow);
       await logAudit({
         request,
         action: 'role.permissions_updated',
