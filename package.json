@@ -38,7 +38,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "swagger-ui-react": "^5.32.4",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
