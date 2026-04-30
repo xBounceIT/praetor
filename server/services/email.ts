@@ -1,33 +1,30 @@
 import nodemailer from 'nodemailer';
-import { query } from '../db/index.ts';
+import type { EmailConfig } from '../repositories/emailRepo.ts';
+import * as emailRepo from '../repositories/emailRepo.ts';
 import { decrypt } from '../utils/crypto.ts';
 
-type SmtpEncryption = 'insecure' | 'ssl' | 'tls';
-
-type EmailConfig = {
-  enabled: boolean;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_encryption: SmtpEncryption;
-  smtp_reject_unauthorized: boolean;
-  smtp_user: string;
-  smtp_password: string;
-  from_email: string;
-  from_name: string;
-};
-
 class EmailService {
-  config: EmailConfig | null;
+  private config: EmailConfig | null;
 
   constructor() {
     this.config = null;
   }
 
-  async loadConfig() {
-    const result = await query('SELECT * FROM email_config WHERE id = 1');
-    if (result.rows.length > 0) {
-      this.config = result.rows[0];
-    }
+  private async loadConfig() {
+    this.config = await emailRepo.get();
+  }
+
+  setConfig(config: EmailConfig) {
+    this.config = config;
+  }
+
+  private async ensureReady(): Promise<
+    { ok: true; config: EmailConfig } | { ok: false; code: string }
+  > {
+    if (!this.config) await this.loadConfig();
+    if (!this.config?.enabled) return { ok: false, code: 'EMAIL_NOT_ENABLED' };
+    if (!this.config.smtpHost) return { ok: false, code: 'SMTP_NOT_CONFIGURED' };
+    return { ok: true, config: this.config };
   }
 
   private createTransporter() {
@@ -35,7 +32,6 @@ class EmailService {
       throw new Error('Email configuration not loaded');
     }
 
-    // Map encryption setting to nodemailer options
     let transportOptions: {
       host: string;
       port: number;
@@ -45,44 +41,40 @@ class EmailService {
       tls?: { rejectUnauthorized: boolean };
     };
 
-    switch (this.config.smtp_encryption) {
+    switch (this.config.smtpEncryption) {
       case 'ssl':
-        // SSL: implicit encryption (typically port 465)
         transportOptions = {
-          host: this.config.smtp_host,
-          port: this.config.smtp_port,
+          host: this.config.smtpHost,
+          port: this.config.smtpPort,
           secure: true,
         };
         break;
       case 'insecure':
-        // No encryption (cleartext, for OAuth2 proxy)
         transportOptions = {
-          host: this.config.smtp_host,
-          port: this.config.smtp_port,
+          host: this.config.smtpHost,
+          port: this.config.smtpPort,
           secure: false,
           ignoreTLS: true,
         };
         break;
       default:
-        // TLS/STARTTLS: upgrades connection (typically port 587)
+        // TLS/STARTTLS: nodemailer upgrades the connection via STARTTLS when secure=false
         transportOptions = {
-          host: this.config.smtp_host,
-          port: this.config.smtp_port,
+          host: this.config.smtpHost,
+          port: this.config.smtpPort,
           secure: false,
         };
         break;
     }
 
-    // Add authentication if credentials provided
-    if (this.config.smtp_user && this.config.smtp_password) {
+    if (this.config.smtpUser && this.config.smtpPassword) {
       transportOptions.auth = {
-        user: this.config.smtp_user,
-        pass: decrypt(this.config.smtp_password),
+        user: this.config.smtpUser,
+        pass: decrypt(this.config.smtpPassword),
       };
     }
 
-    // Handle self-signed certificates
-    if (!this.config.smtp_reject_unauthorized) {
+    if (!this.config.smtpRejectUnauthorized) {
       transportOptions.tls = {
         rejectUnauthorized: false,
       };
@@ -97,17 +89,8 @@ class EmailService {
     params?: Record<string, string>;
   }> {
     try {
-      if (!this.config) {
-        await this.loadConfig();
-      }
-
-      if (!this.config?.enabled) {
-        return { success: false, code: 'EMAIL_NOT_ENABLED' };
-      }
-
-      if (!this.config.smtp_host) {
-        return { success: false, code: 'SMTP_NOT_CONFIGURED' };
-      }
+      const ready = await this.ensureReady();
+      if (!ready.ok) return { success: false, code: ready.code };
 
       const transporter = this.createTransporter();
       await transporter.verify();
@@ -134,23 +117,15 @@ class EmailService {
     messageId?: string;
   }> {
     try {
-      if (!this.config) {
-        await this.loadConfig();
-      }
+      const ready = await this.ensureReady();
+      if (!ready.ok) return { success: false, code: ready.code };
 
-      if (!this.config?.enabled) {
-        return { success: false, code: 'EMAIL_NOT_ENABLED' };
-      }
-
-      if (!this.config.smtp_host) {
-        return { success: false, code: 'SMTP_NOT_CONFIGURED' };
-      }
-
+      const { config } = ready;
       const transporter = this.createTransporter();
 
-      const fromAddress = this.config.from_name
-        ? `"${this.config.from_name}" <${this.config.from_email}>`
-        : this.config.from_email;
+      const fromAddress = config.fromName
+        ? `"${config.fromName}" <${config.fromEmail}>`
+        : config.fromEmail;
 
       const info = await transporter.sendMail({
         from: fromAddress,

@@ -1,50 +1,32 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as emailRepo from '../repositories/emailRepo.ts';
 import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import emailService from '../services/email.ts';
 import { logAudit } from '../utils/audit.ts';
-import { encrypt } from '../utils/crypto.ts';
+import { encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+
+const emailConfigProperties = {
+  enabled: { type: 'boolean' },
+  smtpHost: { type: 'string' },
+  smtpPort: { type: 'number' },
+  smtpEncryption: { type: 'string', enum: [...emailRepo.SMTP_ENCRYPTIONS] },
+  smtpRejectUnauthorized: { type: 'boolean' },
+  smtpUser: { type: 'string' },
+  smtpPassword: { type: 'string' },
+  fromEmail: { type: 'string' },
+  fromName: { type: 'string' },
+} as const;
 
 const emailConfigSchema = {
   type: 'object',
-  properties: {
-    enabled: { type: 'boolean' },
-    smtpHost: { type: 'string' },
-    smtpPort: { type: 'number' },
-    smtpEncryption: { type: 'string' },
-    smtpRejectUnauthorized: { type: 'boolean' },
-    smtpUser: { type: 'string' },
-    smtpPassword: { type: 'string' },
-    fromEmail: { type: 'string' },
-    fromName: { type: 'string' },
-  },
-  required: [
-    'enabled',
-    'smtpHost',
-    'smtpPort',
-    'smtpEncryption',
-    'smtpRejectUnauthorized',
-    'smtpUser',
-    'smtpPassword',
-    'fromEmail',
-    'fromName',
-  ],
+  properties: emailConfigProperties,
+  required: Object.keys(emailConfigProperties),
 } as const;
 
 const emailConfigUpdateBodySchema = {
   type: 'object',
-  properties: {
-    enabled: { type: 'boolean' },
-    smtpHost: { type: 'string' },
-    smtpPort: { type: 'number' },
-    smtpEncryption: { type: 'string' },
-    smtpRejectUnauthorized: { type: 'boolean' },
-    smtpUser: { type: 'string' },
-    smtpPassword: { type: 'string' },
-    fromEmail: { type: 'string' },
-    fromName: { type: 'string' },
-  },
+  properties: emailConfigProperties,
 } as const;
 
 const emailTestBodySchema = {
@@ -78,8 +60,12 @@ const emailTestConnectionResponseSchema = {
   additionalProperties: true,
 } as const;
 
+const serializeForResponse = (config: emailRepo.EmailConfig) => ({
+  ...config,
+  smtpPassword: config.smtpPassword ? MASKED_SECRET : '',
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // GET /config - Get email configuration (Admin only)
   fastify.get(
     '/config',
     {
@@ -94,36 +80,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request, _reply) => {
-      const result = await query('SELECT * FROM email_config WHERE id = 1');
-      if (result.rows.length === 0) {
-        return {
-          enabled: false,
-          smtpHost: '',
-          smtpPort: 587,
-          smtpEncryption: 'tls',
-          smtpRejectUnauthorized: true,
-          smtpUser: '',
-          smtpPassword: '',
-          fromEmail: '',
-          fromName: 'Praetor',
-        };
-      }
-      const c = result.rows[0];
-      return {
-        enabled: c.enabled,
-        smtpHost: c.smtp_host || '',
-        smtpPort: c.smtp_port,
-        smtpEncryption: c.smtp_encryption || 'tls',
-        smtpRejectUnauthorized: c.smtp_reject_unauthorized,
-        smtpUser: c.smtp_user || '',
-        smtpPassword: c.smtp_password ? '********' : '',
-        fromEmail: c.from_email || '',
-        fromName: c.from_name || 'Praetor',
-      };
+      return serializeForResponse(await emailRepo.get());
     },
   );
 
-  // PUT /config - Update email configuration (Admin only)
   fastify.put(
     '/config',
     {
@@ -139,91 +99,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply) => {
-      const {
-        enabled,
-        smtpHost,
-        smtpPort,
-        smtpEncryption,
-        smtpRejectUnauthorized,
-        smtpUser,
-        smtpPassword,
-        fromEmail,
-        fromName,
-      } = request.body as {
-        enabled?: boolean;
-        smtpHost?: string;
-        smtpPort?: number;
-        smtpEncryption?: string;
-        smtpRejectUnauthorized?: boolean;
-        smtpUser?: string;
-        smtpPassword?: string;
-        fromEmail?: string;
-        fromName?: string;
-      };
+      const body = request.body as Partial<emailRepo.EmailConfig>;
 
-      // Don't update password if it's masked
-      const shouldUpdatePassword = smtpPassword && smtpPassword !== '********';
-      // Encrypt password before storing
-      const encryptedPassword = shouldUpdatePassword ? encrypt(smtpPassword) : null;
+      const updated = await emailRepo.update({
+        ...body,
+        smtpPassword:
+          body.smtpPassword && body.smtpPassword !== MASKED_SECRET
+            ? encrypt(body.smtpPassword)
+            : undefined,
+      });
 
-      const result = await query(
-        `UPDATE email_config
-         SET enabled = COALESCE($1, enabled),
-             smtp_host = COALESCE($2, smtp_host),
-             smtp_port = COALESCE($3, smtp_port),
-             smtp_encryption = COALESCE($4, smtp_encryption),
-             smtp_reject_unauthorized = COALESCE($5, smtp_reject_unauthorized),
-             smtp_user = COALESCE($6, smtp_user),
-             smtp_password = CASE WHEN $7::boolean THEN $8 ELSE smtp_password END,
-             from_email = COALESCE($9, from_email),
-             from_name = COALESCE($10, from_name),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = 1
-         RETURNING *`,
-        [
-          enabled,
-          smtpHost,
-          smtpPort,
-          smtpEncryption,
-          smtpRejectUnauthorized,
-          smtpUser,
-          shouldUpdatePassword,
-          encryptedPassword,
-          fromEmail,
-          fromName,
-        ],
-      );
+      emailService.setConfig(updated);
 
-      // Reload email service config
-      await emailService.loadConfig();
-
-      const c = result.rows[0];
       await logAudit({
         request,
         action: 'email_config.updated',
         entityType: 'email_config',
         details: {
-          secondaryLabel:
-            (typeof c.from_email === 'string' && c.from_email.length > 0
-              ? c.from_email
-              : c.smtp_host) || undefined,
+          secondaryLabel: updated.fromEmail || updated.smtpHost || undefined,
         },
       });
-      return {
-        enabled: c.enabled,
-        smtpHost: c.smtp_host || '',
-        smtpPort: c.smtp_port,
-        smtpEncryption: c.smtp_encryption || 'tls',
-        smtpRejectUnauthorized: c.smtp_reject_unauthorized,
-        smtpUser: c.smtp_user || '',
-        smtpPassword: c.smtp_password ? '********' : '',
-        fromEmail: c.from_email || '',
-        fromName: c.from_name || 'Praetor',
-      };
+      return serializeForResponse(updated);
     },
   );
 
-  // POST /test - Send test email (Admin only)
   fastify.post(
     '/test',
     {
@@ -247,9 +146,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(400).send({ error: 'INVALID_RECIPIENT', code: 'INVALID_RECIPIENT' });
       }
 
-      // Reload config before testing
-      await emailService.loadConfig();
-
       const result = await emailService.sendTestEmail(recipientEmail);
 
       if (!result.success) {
@@ -269,7 +165,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // POST /test-connection - Test SMTP connection without sending email (Admin only)
   fastify.post(
     '/test-connection',
     {
@@ -285,9 +180,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request, reply) => {
-      // Reload config before testing
-      await emailService.loadConfig();
-
       const result = await emailService.testConnection();
 
       if (!result.success) {
