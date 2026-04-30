@@ -80,7 +80,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request, _reply) => {
-      return serializeForResponse(await emailRepo.get());
+      return serializeForResponse((await emailRepo.get()) ?? emailRepo.DEFAULT_CONFIG);
     },
   );
 

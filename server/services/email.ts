@@ -11,7 +11,7 @@ class EmailService {
   }
 
   private async loadConfig() {
-    this.config = await emailRepo.get();
+    this.config = (await emailRepo.get()) ?? emailRepo.DEFAULT_CONFIG;
   }
 
   setConfig(config: EmailConfig) {

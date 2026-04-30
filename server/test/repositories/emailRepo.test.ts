@@ -21,9 +21,10 @@ const baseRow = {
 };
 
 describe('get', () => {
-  test('throws the seed-missing guard when SELECT returns 0 rows', async () => {
+  test('returns null when SELECT returns 0 rows', async () => {
     exec.enqueue({ rows: [] });
-    await expect(emailRepo.get(exec)).rejects.toThrow(/email_config row \(id=1\) not found/);
+    const result = await emailRepo.get(exec);
+    expect(result).toBeNull();
   });
 
   test('returns the row verbatim when present', async () => {
@@ -112,5 +113,21 @@ describe('update', () => {
     exec.enqueue({ rows: [{ ...baseRow, fromName: 'Acme' }] });
     const result = await emailRepo.update({ fromName: 'Acme' }, exec);
     expect(result.fromName).toBe('Acme');
+  });
+});
+
+describe('DEFAULT_CONFIG', () => {
+  test('matches the schema-default shape used as a fallback when seed is absent', () => {
+    expect(emailRepo.DEFAULT_CONFIG).toEqual({
+      enabled: false,
+      smtpHost: '',
+      smtpPort: 587,
+      smtpEncryption: 'tls',
+      smtpRejectUnauthorized: true,
+      smtpUser: '',
+      smtpPassword: '',
+      fromEmail: '',
+      fromName: 'Praetor',
+    });
   });
 });

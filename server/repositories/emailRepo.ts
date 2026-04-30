@@ -17,6 +17,18 @@ export type EmailConfig = {
 
 export type EmailConfigPatch = Partial<EmailConfig>;
 
+export const DEFAULT_CONFIG: EmailConfig = {
+  enabled: false,
+  smtpHost: '',
+  smtpPort: 587,
+  smtpEncryption: 'tls',
+  smtpRejectUnauthorized: true,
+  smtpUser: '',
+  smtpPassword: '',
+  fromEmail: '',
+  fromName: 'Praetor',
+};
+
 const SELECT_COLUMNS = `enabled,
         smtp_host as "smtpHost",
         smtp_port as "smtpPort",
@@ -27,14 +39,11 @@ const SELECT_COLUMNS = `enabled,
         from_email as "fromEmail",
         from_name as "fromName"`;
 
-const SEED_MISSING_ERROR = 'email_config row (id=1) not found; seed missing';
-
-export const get = async (exec: QueryExecutor = pool): Promise<EmailConfig> => {
+export const get = async (exec: QueryExecutor = pool): Promise<EmailConfig | null> => {
   const { rows } = await exec.query<EmailConfig>(
     `SELECT ${SELECT_COLUMNS} FROM email_config WHERE id = 1`,
   );
-  if (rows.length === 0) throw new Error(SEED_MISSING_ERROR);
-  return rows[0];
+  return rows[0] ?? null;
 };
 
 export const update = async (
@@ -67,6 +76,8 @@ export const update = async (
       patch.fromName,
     ],
   );
-  if (rows.length === 0) throw new Error(SEED_MISSING_ERROR);
+  if (rows.length === 0) {
+    throw new Error('email_config row (id=1) not found; seed missing');
+  }
   return rows[0];
 };
