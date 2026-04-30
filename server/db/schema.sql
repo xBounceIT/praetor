@@ -1112,6 +1112,9 @@ BEGIN
 END $$;
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 
+-- Ensure order_id column exists for projects (added after sales table is created)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS order_id VARCHAR(100) REFERENCES sales(id) ON DELETE SET NULL;
+
 -- Sale items table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sale_items (
     id VARCHAR(50) PRIMARY KEY,

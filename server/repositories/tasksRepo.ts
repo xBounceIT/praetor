@@ -18,6 +18,7 @@ export type Task = {
   revenue: number | undefined;
   notes: string | undefined;
   isDisabled: boolean;
+  createdAt: number;
 };
 
 type TaskRaw = {
@@ -34,11 +35,12 @@ type TaskRaw = {
   revenue: string | number | null;
   notes: string | null;
   is_disabled: boolean;
+  created_at: string | Date;
 };
 
 const TASK_COLUMNS = `id, name, project_id, description, is_recurring,
   recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-  expected_effort, revenue, notes, is_disabled`;
+  expected_effort, revenue, notes, is_disabled, created_at`;
 
 const mapRow = (row: TaskRaw): Task => ({
   id: row.id,
@@ -55,6 +57,7 @@ const mapRow = (row: TaskRaw): Task => ({
   revenue: parseDbNumber(row.revenue, undefined),
   notes: row.notes ?? undefined,
   isDisabled: row.is_disabled,
+  createdAt: new Date(row.created_at).getTime(),
 });
 
 export const listAll = async (exec: QueryExecutor = pool): Promise<Task[]> => {
@@ -66,7 +69,7 @@ export const listForUser = async (userId: string, exec: QueryExecutor = pool): P
   const { rows } = await exec.query<TaskRaw>(
     `SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
             t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
-            t.expected_effort, t.revenue, t.notes, t.is_disabled
+            t.expected_effort, t.revenue, t.notes, t.is_disabled, t.created_at
        FROM tasks t
        INNER JOIN user_tasks ut ON t.id = ut.task_id
       WHERE ut.user_id = $1
@@ -91,11 +94,12 @@ export type NewTask = {
   isDisabled: boolean;
 };
 
-export const create = async (task: NewTask, exec: QueryExecutor = pool): Promise<void> => {
+export const create = async (task: NewTask, exec: QueryExecutor = pool): Promise<Task> => {
   try {
-    await exec.query(
+    const { rows } = await exec.query<TaskRaw>(
       `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING ${TASK_COLUMNS}`,
       [
         task.id,
         task.name,
@@ -111,6 +115,7 @@ export const create = async (task: NewTask, exec: QueryExecutor = pool): Promise
         task.isDisabled,
       ],
     );
+    return mapRow(rows[0]);
   } catch (err) {
     if (isForeignKeyViolation(err)) throw new ForeignKeyError('Project');
     throw err;

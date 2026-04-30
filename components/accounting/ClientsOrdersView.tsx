@@ -23,7 +23,6 @@ import {
   getItemPricingContext,
   type PricingTotals,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -45,6 +44,7 @@ export interface ClientsOrdersViewProps {
   onViewOffer?: (offerId: string) => void;
   currency: string;
   offerFilterId?: string | null;
+  orderFilterId?: string | null;
 }
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
@@ -56,7 +56,7 @@ const pillBadgeClass =
   'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
-  roundToTwoDecimals(convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE));
+  convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE);
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
@@ -125,6 +125,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onViewOffer,
   currency,
   offerFilterId,
+  orderFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -299,7 +300,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: roundToTwoDecimals(adjustedPrice),
+      unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -309,6 +310,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const isLinkedOffer = Boolean(formData.linkedOfferId);
   const isReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
+
+  const tableInitialFilterState = useMemo(() => {
+    if (orderFilterId) {
+      return { id: [orderFilterId] };
+    }
+    return undefined;
+  }, [orderFilterId]);
 
   // Filter orders by offerFilterId if provided
   const filteredOrders = useMemo(() => {
@@ -906,7 +914,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 )}
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
-                                    value={unitCost.toFixed(2)}
+                                    value={unitCost}
+                                    formatDecimals={2}
                                     onValueChange={handleCostChange}
                                     disabled={isReadOnly}
                                     className={compactInputClass}
@@ -923,7 +932,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               </label>
                               <div className="flex items-center justify-center min-h-[42px] gap-1">
                                 <ValidatedNumberInput
-                                  value={molPercentage.toFixed(1)}
+                                  value={molPercentage}
+                                  formatDecimals={1}
                                   onValueChange={handleMolChange}
                                   disabled={isReadOnly}
                                   className={compactInputClass}
@@ -1120,6 +1130,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}
+        initialFilterState={tableInitialFilterState}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
           isHistoryRow(row.status) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'

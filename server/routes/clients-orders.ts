@@ -477,7 +477,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Insert order items
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-        const itemResult = await query(
+        const _itemResult = await query(
           `INSERT INTO sale_items (id, sale_id, product_id, product_name, quantity, unit_price, product_cost, product_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, unit_type)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                  RETURNING

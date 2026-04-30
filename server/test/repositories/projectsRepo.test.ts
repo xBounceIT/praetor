@@ -20,6 +20,8 @@ const rawRow = {
   color: '#3b82f6',
   description: 'desc',
   is_disabled: false,
+  created_at: new Date('2026-04-30T12:00:00Z'),
+  order_id: null,
 };
 
 const mappedRow = {
@@ -29,6 +31,8 @@ const mappedRow = {
   color: '#3b82f6',
   description: 'desc',
   isDisabled: false,
+  createdAt: new Date('2026-04-30T12:00:00Z').getTime(),
+  orderId: null,
 };
 
 describe('listAll', () => {
@@ -84,9 +88,9 @@ describe('lockNameAndClientById', () => {
 });
 
 describe('create', () => {
-  test('passes 6 columns in order', async () => {
-    exec.enqueue({ rows: [] });
-    await projectsRepo.create(
+  test('passes 7 columns in order (incl. order_id) and returns the mapped row', async () => {
+    exec.enqueue({ rows: [rawRow] });
+    const created = await projectsRepo.create(
       {
         id: 'p-1',
         name: 'Alpha',
@@ -97,7 +101,27 @@ describe('create', () => {
       },
       exec,
     );
-    expect(exec.calls[0].params).toEqual(['p-1', 'Alpha', 'c-1', '#3b82f6', 'desc', false]);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Alpha', 'c-1', '#3b82f6', 'desc', false, null]);
+    expect(exec.calls[0].sql).toContain('RETURNING');
+    expect(created).toEqual(mappedRow);
+  });
+
+  test('forwards orderId when provided', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, order_id: 'so-7' }] });
+    const created = await projectsRepo.create(
+      {
+        id: 'p-1',
+        name: 'Alpha',
+        clientId: 'c-1',
+        color: '#3b82f6',
+        description: 'desc',
+        isDisabled: false,
+        orderId: 'so-7',
+      },
+      exec,
+    );
+    expect(exec.calls[0].params[6]).toBe('so-7');
+    expect(created.orderId).toBe('so-7');
   });
 });
 

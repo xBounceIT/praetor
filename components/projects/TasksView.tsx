@@ -1,16 +1,20 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
+
+const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
@@ -21,6 +25,7 @@ export interface TasksViewProps {
   permissions: string[];
   users: User[];
   roles: Role[];
+  currency: string;
   onAddTask: (
     name: string,
     projectId: string,
@@ -29,6 +34,7 @@ export interface TasksViewProps {
   ) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
+  onViewOrder?: (orderId: string) => void;
 }
 
 const TasksView: React.FC<TasksViewProps> = ({
@@ -38,9 +44,11 @@ const TasksView: React.FC<TasksViewProps> = ({
   permissions,
   users,
   roles,
+  currency,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
+  onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
   const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
@@ -55,6 +63,41 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
+
+  const [taskHours, setTaskHours] = useState<Record<string, Record<string, number>> | null>(null);
+  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const fetchHoursGenRef = useRef(0);
+
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+
+  useEffect(() => {
+    if (projectIds.length === 0) {
+      setTaskHours({});
+      setHoursLoadState('idle');
+      return;
+    }
+    const gen = ++fetchHoursGenRef.current;
+    const abortController = new AbortController();
+    setTaskHours(null);
+    setHoursLoadState('loading');
+    (async () => {
+      try {
+        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
+        if (fetchHoursGenRef.current !== gen) return;
+        setTaskHours(map);
+        setHoursLoadState('idle');
+      } catch (e) {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load task hours', e);
+        if (fetchHoursGenRef.current !== gen) return;
+        setTaskHours({});
+        setHoursLoadState('error');
+      }
+    })();
+    return () => {
+      abortController.abort();
+    };
+  }, [projectIds]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
@@ -145,6 +188,16 @@ const TasksView: React.FC<TasksViewProps> = ({
         },
       },
       {
+        header: t('projects:projects.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (task) => task.createdAt ?? 0,
+        cell: ({ row }) => (
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+          </span>
+        ),
+      },
+      {
         header: t('tasks.project'),
         accessorFn: (task) => {
           const project = projects.find((p) => p.id === task.projectId);
@@ -160,8 +213,10 @@ const TasksView: React.FC<TasksViewProps> = ({
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
-                className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                  isProjectDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'
+                className={`text-sm font-bold ${
+                  isProjectDisabled
+                    ? 'text-slate-600 line-through decoration-slate-300'
+                    : 'text-slate-800'
                 }`}
               >
                 {project?.name || t('projects.unknown')}
@@ -197,6 +252,71 @@ const TasksView: React.FC<TasksViewProps> = ({
                 <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
               )}
             </p>
+          );
+        },
+      },
+      {
+        header: t('projects:projects.expectedEffort'),
+        id: 'expectedEffort',
+        accessorFn: (task) => task.expectedEffort ?? 0,
+        cell: ({ row }) => {
+          const effort = row.expectedEffort;
+          if (!effort) return <span className="text-xs text-slate-400">—</span>;
+          return <span className="text-xs font-bold text-slate-600 tabular-nums">{effort}h</span>;
+        },
+      },
+      {
+        header: `${t('projects:projects.taskRevenue')} (${currency})`,
+        id: 'revenue',
+        accessorFn: (task) => task.revenue ?? 0,
+        cell: ({ row }) => {
+          const rev = row.revenue;
+          if (!rev) return <span className="text-xs text-slate-400">—</span>;
+          return (
+            <span className="text-xs font-bold text-slate-600 tabular-nums">
+              {currency}
+              {rev.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('projects:projects.progress'),
+        id: 'progress',
+        disableFiltering: true,
+        disableSorting: true,
+        cell: ({ row }) => {
+          if (hoursLoadState === 'loading' || taskHours === null) {
+            return (
+              <span className="text-slate-400 text-xs">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+              </span>
+            );
+          }
+          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+          const projectHours = taskHours[row.projectId] ?? {};
+          const logged = projectHours[row.name] ?? 0;
+          const expected = row.expectedEffort ?? 0;
+          if (!expected) return <span className="text-slate-400 text-xs">—</span>;
+          const pct = Math.round((logged / expected) * 100);
+          const overBudget = logged > expected;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(pct, 100)}%` }}
+                />
+              </div>
+              <span
+                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+              >
+                {pct}%
+              </span>
+            </div>
           );
         },
       },
@@ -330,6 +450,9 @@ const TasksView: React.FC<TasksViewProps> = ({
       confirmDelete,
       openAssignments,
       openEditModal,
+      currency,
+      taskHours,
+      hoursLoadState,
     ],
   );
 
@@ -380,41 +503,20 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                <Trans
-                  i18nKey="tasks.deleteConfirmDesc"
-                  ns="projects"
-                  values={{ name: editingTask?.name }}
-                  components={{ span: <span className="font-bold text-slate-800" /> }}
-                />
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('tasks.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={cancelDelete}
+        onConfirm={handleDelete}
+        title={t('tasks.deleteTaskTitle', { name: editingTask?.name })}
+        description={
+          <Trans
+            i18nKey="tasks.deleteConfirmDesc"
+            ns="projects"
+            values={{ name: editingTask?.name }}
+            components={{ span: <span className="font-bold text-slate-800" /> }}
+          />
+        }
+      />
 
       {/* User Assignment Modal */}
       <UserAssignmentModal
@@ -448,6 +550,34 @@ const TasksView: React.FC<TasksViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {(() => {
+              const project = projects.find((p) => p.id === projectId);
+              return editingTask && project?.orderId ? (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                      <i className="fa-solid fa-link"></i>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {t('projects:projects.linkedOrder')}
+                      </div>
+                      <div className="text-xs text-praetor">{formatOrderId(project.orderId!)}</div>
+                    </div>
+                  </div>
+                  {onViewOrder && (
+                    <button
+                      type="button"
+                      onClick={() => onViewOrder(project.orderId!)}
+                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                    >
+                      {t('projects:projects.viewOrder')}
+                    </button>
+                  )}
+                </div>
+              ) : null;
+            })()}
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.project')}</label>
               <CustomSelect
@@ -597,6 +727,14 @@ const TasksView: React.FC<TasksViewProps> = ({
         data={paginatedTasks}
         columns={columns}
         defaultRowsPerPage={rowsPerPage}
+        onRowClick={canUpdateTasks ? openEditModal : undefined}
+        rowClassName={(row) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          return row.isDisabled || project?.isDisabled || client?.isDisabled
+            ? 'opacity-70 grayscale hover:grayscale-0'
+            : '';
+        }}
         footer={
           <>
             <div className="flex items-center gap-3">

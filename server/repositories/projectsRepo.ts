@@ -14,6 +14,8 @@ export type Project = {
   color: string;
   description: string | null;
   isDisabled: boolean;
+  createdAt: number;
+  orderId: string | null;
 };
 
 type ProjectRaw = {
@@ -23,9 +25,11 @@ type ProjectRaw = {
   color: string;
   description: string | null;
   is_disabled: boolean;
+  created_at: string | Date;
+  order_id: string | null;
 };
 
-const PROJECT_COLUMNS = `id, name, client_id, color, description, is_disabled`;
+const PROJECT_COLUMNS = `id, name, client_id, color, description, is_disabled, created_at, order_id`;
 
 const mapRow = (row: ProjectRaw): Project => ({
   id: row.id,
@@ -34,6 +38,8 @@ const mapRow = (row: ProjectRaw): Project => ({
   color: row.color,
   description: row.description,
   isDisabled: row.is_disabled,
+  createdAt: new Date(row.created_at).getTime(),
+  orderId: row.order_id,
 });
 
 export const listAll = async (exec: QueryExecutor = pool): Promise<Project[]> => {
@@ -48,7 +54,7 @@ export const listForUser = async (
   exec: QueryExecutor = pool,
 ): Promise<Project[]> => {
   const { rows } = await exec.query<ProjectRaw>(
-    `SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled
+    `SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id
        FROM projects p
        INNER JOIN user_projects up ON p.id = up.project_id
       WHERE up.user_id = $1
@@ -99,13 +105,17 @@ export type NewProject = {
   color: string;
   description: string | null;
   isDisabled: boolean;
+  orderId?: string | null;
 };
 
-export const create = async (project: NewProject, exec: QueryExecutor = pool): Promise<void> => {
+const PROJECT_ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
+
+export const create = async (project: NewProject, exec: QueryExecutor = pool): Promise<Project> => {
   try {
-    await exec.query(
-      `INSERT INTO projects (id, name, client_id, color, description, is_disabled)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+    const { rows } = await exec.query<ProjectRaw>(
+      `INSERT INTO projects (id, name, client_id, color, description, is_disabled, order_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING ${PROJECT_COLUMNS}`,
       [
         project.id,
         project.name,
@@ -113,10 +123,15 @@ export const create = async (project: NewProject, exec: QueryExecutor = pool): P
         project.color,
         project.description,
         project.isDisabled,
+        project.orderId ?? null,
       ],
     );
+    return mapRow(rows[0]);
   } catch (err) {
-    if (isForeignKeyViolation(err)) throw new ForeignKeyError('Client');
+    if (isForeignKeyViolation(err)) {
+      if (err.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      throw new ForeignKeyError('Client');
+    }
     throw err;
   }
 };

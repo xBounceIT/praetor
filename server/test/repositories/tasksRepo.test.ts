@@ -22,6 +22,7 @@ const rawRow = {
   revenue: '120.5',
   notes: 'n',
   is_disabled: false,
+  created_at: new Date('2026-04-30T12:00:00Z'),
 };
 
 describe('listAll', () => {
@@ -72,9 +73,9 @@ describe('listForUser', () => {
 });
 
 describe('create', () => {
-  test('passes 12 params in column order', async () => {
-    exec.enqueue({ rows: [] });
-    await tasksRepo.create(
+  test('passes 12 params in column order and returns the mapped row', async () => {
+    exec.enqueue({ rows: [rawRow] });
+    const created = await tasksRepo.create(
       {
         id: 't-1',
         name: 'Build',
@@ -91,6 +92,9 @@ describe('create', () => {
       },
       exec,
     );
+    expect(exec.calls[0].sql).toContain('RETURNING');
+    expect(created.id).toBe('t-1');
+    expect(created.createdAt).toBe(new Date('2026-04-30T12:00:00Z').getTime());
     expect(exec.calls[0].params).toEqual([
       't-1',
       'Build',

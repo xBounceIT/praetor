@@ -57,6 +57,7 @@ const taskSchema = {
     revenue: { type: 'number' },
     notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    createdAt: { type: 'number' },
   },
   required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
 } as const;
@@ -199,7 +200,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('t');
 
       try {
-        await tasksRepo.create({
+        const created = await tasksRepo.create({
           id,
           name: nameResult.value,
           projectId: projectIdResult.value,
@@ -232,20 +233,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: projectIdResult.value,
           },
         });
-        return reply.code(201).send({
-          id,
-          name: nameResult.value,
-          projectId: projectIdResult.value,
-          description,
-          isRecurring: isRecurringValue,
-          recurrencePattern,
-          recurrenceStart: start,
-          recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffort ?? 0,
-          revenue: revenue ?? 0,
-          notes: notes || null,
-          isDisabled: false,
-        });
+        return reply.code(201).send(created);
       } catch (err) {
         if (err instanceof ForeignKeyError) {
           return reply.code(400).send({ error: err.message });

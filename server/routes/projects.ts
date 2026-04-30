@@ -51,6 +51,8 @@ const projectSchema = {
     color: { type: 'string' },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    createdAt: { type: 'number' },
+    orderId: { type: ['string', 'null'] },
   },
   required: ['id', 'name', 'clientId', 'color', 'isDisabled'],
 } as const;
@@ -62,6 +64,7 @@ const projectCreateBodySchema = {
     clientId: { type: 'string' },
     description: { type: 'string' },
     color: { type: 'string' },
+    orderId: { type: 'string' },
   },
   required: ['name', 'clientId'],
 } as const;
@@ -126,11 +129,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-      const { name, clientId, description, color } = request.body as {
+      const { name, clientId, description, color, orderId } = request.body as {
         name: string;
         clientId: string;
         description?: string;
         color?: string;
+        orderId?: string;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -148,13 +152,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        await projectsRepo.create({
+        const created = await projectsRepo.create({
           id,
           name: nameResult.value,
           clientId: clientIdResult.value,
           color: projectColor,
           description: description || null,
           isDisabled: false,
+          orderId: orderId || null,
         });
 
         await assignClientToUser(request.user.id, clientIdResult.value);
@@ -171,14 +176,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: clientIdResult.value,
           },
         });
-        return reply.code(201).send({
-          id,
-          name: nameResult.value,
-          clientId: clientIdResult.value,
-          color: projectColor,
-          description,
-          isDisabled: false,
-        });
+        return reply.code(201).send(created);
       } catch (err) {
         if (err instanceof ForeignKeyError) {
           return reply.code(400).send({ error: err.message });

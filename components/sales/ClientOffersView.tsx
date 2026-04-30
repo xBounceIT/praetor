@@ -16,6 +16,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { getLinkedFieldStatus } from '../../utils/fieldStatus';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -23,12 +24,12 @@ import {
   formatDiscountValue,
   getItemPricingContext,
   parseNumberInputValue,
-  roundToTwoDecimals,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
+import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -159,6 +160,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     index: number,
     selectProps: { className?: string; buttonClassName?: string },
   ) => {
+    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
     if (isLinkedProductMissing(item)) {
       return (
         <input
@@ -178,7 +180,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           defaultValue: 'Select product',
         })}
         searchable={true}
-        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        disabled={isReadOnly || isLinkedToSupplierQuote}
         className={selectProps.className}
         buttonClassName={selectProps.buttonClassName}
       />
@@ -197,7 +199,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       items[index] = {
         ...items[index],
         unitType: newType,
-        unitPrice: roundToTwoDecimals(adjustedPrice),
+        unitPrice: adjustedPrice,
       };
       return { ...prev, items };
     });
@@ -214,6 +216,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
+
+  const readOnlyReason = t('sales:clientOffers.readOnlyStatus', {
+    defaultValue: 'Read-only due to non-draft status',
+  });
+  const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
+    defaultValue: 'Locked due to linked quote',
+  });
+  const supplierLockedReason = t('sales:fieldInfo.fieldLockedBySupplierQuote', {
+    defaultValue: 'Locked due to linked supplier quote',
+  });
+  const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
+  const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
+
+  const clientStatus = isReadOnly
+    ? readOnlyReason
+    : isClientLocked
+      ? clientLockedReason
+      : statusEditable;
+  const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
 
   const filteredOffers = useMemo(() => {
     return offers.filter((offer) => {
@@ -600,7 +621,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           current.productName = product.name;
-          current.unitPrice = roundToTwoDecimals(calcProductSalePrice(Number(product.costo), mol));
+          current.unitPrice = calcProductSalePrice(Number(product.costo), mol);
           current.productCost = Number(product.costo);
           current.productMolPercentage = product.molPercentage;
           current.supplierQuoteId = null;
@@ -620,9 +641,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           const product = products.find((p) => p.id === current.productId);
           if (product) {
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            current.unitPrice = roundToTwoDecimals(
-              calcProductSalePrice(Number(product.costo), mol),
-            );
+            current.unitPrice = calcProductSalePrice(Number(product.costo), mol);
             current.productCost = Number(product.costo);
             current.productMolPercentage = product.molPercentage;
           }
@@ -661,7 +680,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          current.unitPrice = roundToTwoDecimals(salePrice);
+          current.unitPrice = salePrice;
         }
       }
 
@@ -763,8 +782,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
                   {t('sales:clientOffers.readOnlyStatus', {
-                    defaultValue:
-                      'Non-draft offers are read-only. Change status from the list actions.',
+                    defaultValue: 'Read-only due to non-draft status',
                   })}
                 </span>
               </div>
@@ -775,6 +793,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientOffers.clientInformation', { defaultValue: 'Client Information' })}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.clientInformation', {
+                    defaultValue: 'Client and document details',
+                  })}
+                  status={clientStatus}
+                  statusLabel={statusLabel}
+                />
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -855,6 +880,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientOffers.items', { defaultValue: 'Items' })}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.items', {
+                      defaultValue: 'Line items for this offer',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <button
                   type="button"
@@ -905,9 +937,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedSupplierQuote = item.supplierQuoteItemId
-                      ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
-                      : undefined;
                     const isSupply =
                       products.find((p) => p.id === item.productId)?.type === 'supply';
 
@@ -920,6 +949,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
+
+                    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                    const linkedFieldStatus = getLinkedFieldStatus({
+                      isReadOnly,
+                      isLinkedToSupplierQuote,
+                      readOnlyReason,
+                      supplierLockedReason,
+                      statusEditable,
+                    });
 
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
@@ -939,8 +977,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="lg:hidden flex items-start gap-3">
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.supplierQuoteColumn')}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.supplierQuote', {
+                                    defaultValue:
+                                      'Link this item to a supplier quote for cost tracking',
+                                  })}
+                                  status={readOnlyStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
                               <CustomSelect
                                 options={supplierQuoteSelectOptions}
@@ -963,8 +1009,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               />
                             </div>
                             <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientOffers.product', { defaultValue: 'Product' })}
+                                <FieldTooltip
+                                  description={t('sales:fieldInfo.product', {
+                                    defaultValue: 'Select a product or service for this line item',
+                                  })}
+                                  status={linkedFieldStatus}
+                                  statusLabel={statusLabel}
+                                />
                               </div>
                               {renderProductSelectOrFallback(item, index, {
                                 className: 'min-w-0',
@@ -984,20 +1037,29 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                           <div>
-                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.qty', {
+                                  defaultValue: 'Quantity of items or hours',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
                                 step="0.01"
                                 min="0"
                                 required
-                                placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                                placeholder={t('sales:clientOffers.qty', {
+                                  defaultValue: 'Qty',
+                                })}
                                 value={item.quantity}
                                 onValueChange={(value) =>
                                   updateItem(index, 'quantity', parseNumberInputValue(value))
                                 }
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                                 className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                               />
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1008,24 +1070,27 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 onChange={(val) => handleUnitTypeChange(index, val)}
                                 isSupply={isSupply}
                                 quantity={Number(item.quantity) || 0}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                               />
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('crm:internalListing.cost')}
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.cost', {
+                                  defaultValue: 'Unit cost for this item',
+                                })}
+                                status={linkedFieldStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
-                            {selectedSupplierQuote && (
-                              <span className="inline-flex px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
-                                {t('sales:clientQuotes.supplierQuoteBadge')}
-                              </span>
-                            )}
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={cost.toFixed(2)}
+                                value={cost}
+                                formatDecimals={2}
                                 onValueChange={handleCostChange}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || isLinkedToSupplierQuote}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
@@ -1034,12 +1099,20 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                               {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })} (%)
+                              <FieldTooltip
+                                description={t('sales:fieldInfo.mol', {
+                                  defaultValue: 'Margin overhead loading percentage',
+                                })}
+                                status={readOnlyStatus}
+                                statusLabel={statusLabel}
+                              />
                             </div>
                             <div className="flex items-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1069,9 +1142,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.revenue')}
                             </div>
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                            >
+                            <div className="text-sm font-semibold whitespace-nowrap text-slate-800">
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -1112,12 +1183,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   step="0.01"
                                   min="0"
                                   required
-                                  placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                                  placeholder={t('sales:clientOffers.qty', {
+                                    defaultValue: 'Qty',
+                                  })}
                                   value={item.quantity}
                                   onValueChange={(value) =>
                                     updateItem(index, 'quantity', parseNumberInputValue(value))
                                   }
-                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
                                   className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1128,21 +1201,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   onChange={(val) => handleUnitTypeChange(index, val)}
                                   isSupply={isSupply}
                                   quantity={Number(item.quantity) || 0}
-                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
                                 />
                               </div>
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                              {selectedSupplierQuote && (
+                              {isLinkedToSupplierQuote && (
                                 <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
                                 </span>
                               )}
                               <div className="flex items-center gap-1 w-full">
                                 <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
+                                  value={cost}
+                                  formatDecimals={2}
                                   onValueChange={handleCostChange}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || isLinkedToSupplierQuote}
                                   className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-[9px] font-semibold text-slate-400 shrink-0">
@@ -1152,7 +1226,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center gap-1">
                               <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
+                                value={molPercentage}
+                                formatDecimals={1}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1172,9 +1247,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span
-                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : 'text-slate-800'}`}
-                              >
+                              <span className="text-xs font-semibold whitespace-nowrap text-slate-800">
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
                             </div>
@@ -1226,6 +1299,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                       {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
+                      <FieldTooltip
+                        description={t('sales:fieldInfo.notes', {
+                          defaultValue: 'Additional notes for the entire document',
+                        })}
+                        status={readOnlyStatus}
+                        statusLabel={statusLabel}
+                      />
                     </h4>
                     <textarea
                       rows={4}
