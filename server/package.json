@@ -23,8 +23,7 @@
     "pg": "^8.20.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.2",
-    "selfsigned": "^2.4.1",
-    "uuid": "^11.1.0"
+    "selfsigned": "^2.4.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

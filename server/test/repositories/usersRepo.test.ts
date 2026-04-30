@@ -110,3 +110,36 @@ describe('updatePasswordHash', () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe('updateNameByUsername', () => {
+  test('passes [username, name] in that order', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await usersRepo.updateNameByUsername('alice', 'Alice Smith', exec);
+    expect(exec.calls[0].params).toEqual(['alice', 'Alice Smith']);
+  });
+});
+
+describe('createUser', () => {
+  test('passes params in [id, name, username, passwordHash, role, avatarInitials] order', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await usersRepo.createUser(
+      {
+        id: 'user-1',
+        name: 'Alice Smith',
+        username: 'alice',
+        passwordHash: '$2a$10$placeholder',
+        role: 'user',
+        avatarInitials: 'AS',
+      },
+      exec,
+    );
+    expect(exec.calls[0].params).toEqual([
+      'user-1',
+      'Alice Smith',
+      'alice',
+      '$2a$10$placeholder',
+      'user',
+      'AS',
+    ]);
+  });
+});

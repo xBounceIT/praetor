@@ -10,6 +10,7 @@ import {
 } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -412,12 +413,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const avatarInitials = nameResult.value
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .substring(0, 2)
-        .toUpperCase();
+      const avatarInitials = computeAvatarInitials(nameResult.value);
       const id = 'u-' + Date.now();
 
       try {

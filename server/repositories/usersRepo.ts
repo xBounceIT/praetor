@@ -68,3 +68,28 @@ export const updatePasswordHash = async (
 ): Promise<void> => {
   await exec.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, userId]);
 };
+
+export const updateNameByUsername = async (
+  username: string,
+  name: string,
+  exec: QueryExecutor = pool,
+): Promise<void> => {
+  await exec.query(`UPDATE users SET name = $2 WHERE username = $1`, [username, name]);
+};
+
+export type NewUser = {
+  id: string;
+  name: string;
+  username: string;
+  passwordHash: string;
+  role: string;
+  avatarInitials: string;
+};
+
+export const createUser = async (user: NewUser, exec: QueryExecutor = pool): Promise<void> => {
+  await exec.query(
+    `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [user.id, user.name, user.username, user.passwordHash, user.role, user.avatarInitials],
+  );
+};

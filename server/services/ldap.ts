@@ -1,20 +1,18 @@
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import ldap from 'ldapjs';
-import { v4 as uuidv4 } from 'uuid';
-import { query } from '../db/index.ts';
+import type { LdapConfig } from '../repositories/ldapRepo.ts';
+import * as ldapRepo from '../repositories/ldapRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
+import { computeAvatarInitials } from '../utils/initials.ts';
 import { buildUserLookupFilter, buildUserSyncFilter } from '../utils/ldap-filter.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
 
-type LdapConfig = {
-  enabled: boolean;
-  server_url: string;
-  bind_dn: string;
-  bind_password: string;
-  base_dn: string;
-  user_filter: string;
-};
+// LDAP users authenticate via LDAP, not against a local password hash. We store a well-formed but
+// unmatchable bcrypt placeholder so the NOT NULL column is satisfied without enabling local login.
+const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
 
 interface LdapEntry {
   objectName: string;
@@ -58,10 +56,7 @@ class LDAPService {
   }
 
   async loadConfig() {
-    const result = await query('SELECT * FROM ldap_config WHERE id = 1');
-    if (result.rows.length > 0) {
-      this.config = result.rows[0];
-    }
+    this.config = await ldapRepo.get();
   }
 
   async getClient(): Promise<LdapClient | null> {
@@ -95,7 +90,7 @@ class LDAPService {
     }
 
     return ldap.createClient({
-      url: this.config.server_url,
+      url: this.config.serverUrl,
       tlsOptions: tlsOptions,
     }) as LdapClient;
   }
@@ -115,7 +110,7 @@ class LDAPService {
 
       // Bind with service account first to find the user's DN
       await new Promise<void>((resolve, reject) => {
-        ldapClient.bind(config.bind_dn, config.bind_password, (err) => {
+        ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -159,11 +154,11 @@ class LDAPService {
     }
     const searchOptions = {
       scope: 'sub',
-      filter: buildUserLookupFilter(config.user_filter, username),
+      filter: buildUserLookupFilter(config.userFilter, username),
     };
 
     return new Promise((resolve, reject) => {
-      client.search(config.base_dn, searchOptions, (err, res) => {
+      client.search(config.baseDn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
         let foundDn: string | null = null;
@@ -209,7 +204,7 @@ class LDAPService {
       }
 
       await new Promise<void>((resolve, reject) => {
-        ldapClient.bind(config.bind_dn, config.bind_password, (err) => {
+        ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -217,14 +212,14 @@ class LDAPService {
 
       const searchOptions = {
         scope: 'sub',
-        filter: buildUserSyncFilter(config.user_filter),
+        filter: buildUserSyncFilter(config.userFilter),
         attributes: ['uid', 'cn', 'sn', 'givenName', 'mail', 'displayName', 'sAMAccountName'],
       };
 
       const entries: LdapEntry[] = [];
 
       await new Promise<void>((resolve, reject) => {
-        ldapClient.search(config.base_dn, searchOptions, (err, res) => {
+        ldapClient.search(config.baseDn, searchOptions, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry: LdapSearchEntry) => {
@@ -247,13 +242,10 @@ class LDAPService {
       let createdCount = 0;
 
       for (const entry of entries) {
-        // Extract username. Depending on schema it might be 'uid' or 'sAMAccountName' (AD).
-        // We'll try common fields or rely on what mapped to 'uid' in the object based on filter.
-        // But usually 'uid' is the attribute.
         let username = entry.uid;
         if (Array.isArray(username)) username = username[0];
 
-        // Fallback for AD
+        // Fallback for AD, where the username attribute is sAMAccountName rather than uid.
         if (!username && entry.sAMAccountName) {
           username = entry.sAMAccountName;
           if (Array.isArray(username)) username = username[0];
@@ -264,7 +256,6 @@ class LDAPService {
           continue;
         }
 
-        // Name
         const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
         let name: string;
         if (nameValue) {
@@ -273,44 +264,20 @@ class LDAPService {
           name = username;
         }
 
-        // Check dependencies
-        // We matched local users by username
-        const res = await query('SELECT * FROM users WHERE username = $1', [username]);
+        const existing = await usersRepo.findLoginUserByUsername(username);
 
-        if (res.rows.length > 0) {
-          // Update existing
-          await query('UPDATE users SET name = $1 WHERE username = $2', [name, username]);
+        if (existing) {
+          await usersRepo.updateNameByUsername(username, name);
           syncedCount++;
         } else {
-          // Create new
-          // We need a dummy password hash or maybe handle it.
-          // Since we don't have their password, we can set a random unguessable hash
-          // or flag them. But for now invalid hash is fine?
-          // Or let's just leave it empty string?
-          // The 'users' table has `password_hash` NOT NULL.
-          // We'll set a placeholder that bcrypt won't match.
-
-          // Initials
-          const initials = name
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .substring(0, 2)
-            .toUpperCase();
-
-          const newId = uuidv4();
-          await query(
-            `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
-                         VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              newId,
-              name,
-              username,
-              '$2a$10$invalidpasswordhashforldapuser00000000000000',
-              'user',
-              initials,
-            ],
-          );
+          await usersRepo.createUser({
+            id: randomUUID(),
+            name,
+            username,
+            passwordHash: LDAP_PLACEHOLDER_PASSWORD_HASH,
+            role: 'user',
+            avatarInitials: computeAvatarInitials(name),
+          });
           createdCount++;
         }
       }
