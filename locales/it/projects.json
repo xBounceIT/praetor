@@ -104,6 +104,8 @@
     "taskHeader": "Attività: {{name}}",
     "noUsersFound": "Nessun utente trovato.",
     "inheritedFromDisabledProject": "Ereditato da Progetto disabilitato: {{projectName}}",
+    "disableTask": "Disabilita Attività",
+    "enableTask": "Abilita Attività",
     "createNewTask": "Crea Nuova Attività",
     "searchPlaceholder": "Cerca attività, descrizioni o progetti...",
     "tasksDirectory": "Archivio Attività",

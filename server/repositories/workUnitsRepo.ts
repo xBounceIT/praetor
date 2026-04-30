@@ -74,7 +74,8 @@ export const addManagers = async (
   if (userIds.length === 0) return;
   await exec.query(
     `INSERT INTO work_unit_managers (work_unit_id, user_id)
-     SELECT $1, unnest($2::text[])`,
+     SELECT $1, unnest($2::text[])
+     ON CONFLICT DO NOTHING`,
     [unitId, userIds],
   );
 };

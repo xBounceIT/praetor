@@ -327,9 +327,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      let parsedDuration = duration;
       if (duration !== undefined) {
         const durationResult = parseLocalizedNonNegativeNumber(duration, 'duration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
+        parsedDuration = durationResult.value;
       }
 
       if (notes !== undefined) {
@@ -350,7 +352,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const updated = await entriesRepo.update(idResult.value, {
-        duration,
+        duration: parsedDuration,
         notes,
         isPlaceholder,
         location,

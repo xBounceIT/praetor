@@ -278,9 +278,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { name, clientId, description, color, isDisabled } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      let normalizedColor = color;
       if (color !== undefined && color !== null && color !== '') {
         const colorResult = validateHexColor(color, 'color');
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
+        normalizedColor = colorResult.value;
       }
 
       let updatedProject: {
@@ -305,7 +307,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           const updated = await projectsRepo.update(
             idResult.value,
-            { name, clientId, color, description, isDisabled },
+            { name, clientId, color: normalizedColor, description, isDisabled },
             tx,
           );
 

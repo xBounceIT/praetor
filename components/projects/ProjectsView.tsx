@@ -947,7 +947,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: projectToDelete?.name })}
                 {t('projects:projects.deleteConfirm')}
               </p>
             </div>

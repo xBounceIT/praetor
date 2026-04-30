@@ -56,9 +56,6 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
 
-  // Pagination State
-
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     const saved = localStorage.getItem('praetor_tasks_rowsPerPage');
@@ -278,9 +275,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                   </Tooltip>
                   {!isInheritedDisabled && (
                     <Tooltip
-                      label={
-                        isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
-                      }
+                      label={isTaskDisabled ? t('tasks.enableTask') : t('tasks.disableTask')}
                     >
                       {() => (
                         <button
