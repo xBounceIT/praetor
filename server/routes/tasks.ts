@@ -436,7 +436,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrencePattern: recurrencePattern || undefined,
         recurrenceStart: recurrenceStart || undefined,
         recurrenceEnd: recurrenceEnd || undefined,
-        recurrenceDuration: durationResult.value,
+        // optionalLocalizedNonNegativeNumber returns null when the body field is omitted; the
+        // dynamic-SET in tasksRepo.update would interpret null as "set to NULL" and clobber the
+        // existing recurrence_duration. Forward undefined instead so the column is left alone.
+        recurrenceDuration: durationResult.value ?? undefined,
         isDisabled,
         expectedEffort,
         revenue,

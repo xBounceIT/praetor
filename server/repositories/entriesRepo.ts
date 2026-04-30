@@ -37,10 +37,15 @@ type TimeEntryRow = {
   is_placeholder: boolean | null;
   location: string | null;
   created_at: string | Date;
+  // Microsecond-precision text rep of created_at — pg returns TIMESTAMP as a JS Date (ms-only),
+  // which would lose precision in the cursor and skip rows at page boundaries. Using ::text keeps
+  // the full Postgres precision for cursor round-trips.
+  created_at_text: string;
 };
 
 const ENTRY_COLUMNS = `id, user_id, date, client_id, client_name, project_id,
-  project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at`;
+  project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at,
+  created_at::text AS created_at_text`;
 
 const mapRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
@@ -64,7 +69,10 @@ const mapRow = (row: TimeEntryRow): TimeEntry => {
   };
 };
 
-export type EntriesCursor = { createdAt: number; id: string };
+// `createdAt` is an opaque µs-precision Postgres TIMESTAMP text (e.g. "2026-04-30 12:00:00.123456")
+// rather than ms — the JS Date round-trip would truncate to ms and skip rows whose actual
+// timestamp falls between the truncated ms and the µs value when paginating.
+export type EntriesCursor = { createdAt: string; id: string };
 
 export type ListEntriesOptions = {
   /** Default 200, hard-capped at 500. */
@@ -83,7 +91,7 @@ const resolveLimit = (limit?: number): number => {
 
 const buildCursorClause = (cursor: EntriesCursor | undefined, startIdx: number) => {
   if (!cursor) return { sql: '', params: [], nextIdx: startIdx };
-  const sql = `(created_at, id) < (to_timestamp($${startIdx} / 1000.0), $${startIdx + 1})`;
+  const sql = `(created_at, id) < ($${startIdx}::timestamp, $${startIdx + 1})`;
   return { sql, params: [cursor.createdAt, cursor.id], nextIdx: startIdx + 2 };
 };
 
@@ -94,9 +102,10 @@ export type ListEntriesResult = {
 
 const buildResult = (rows: TimeEntryRow[], limit: number): ListEntriesResult => {
   const entries = rows.map(mapRow);
+  const lastRow = rows[rows.length - 1];
   const nextCursor =
-    entries.length === limit
-      ? { createdAt: entries[entries.length - 1].createdAt, id: entries[entries.length - 1].id }
+    entries.length === limit && lastRow
+      ? { createdAt: lastRow.created_at_text, id: lastRow.id }
       : null;
   return { entries, nextCursor };
 };
@@ -162,7 +171,7 @@ export const decodeCursor = (raw: string): EntriesCursor | null => {
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      typeof (parsed as EntriesCursor).createdAt === 'number' &&
+      typeof (parsed as EntriesCursor).createdAt === 'string' &&
       typeof (parsed as EntriesCursor).id === 'string'
     ) {
       return parsed as EntriesCursor;

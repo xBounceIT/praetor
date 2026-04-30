@@ -23,11 +23,15 @@ describe('listAll', () => {
     expect(exec.calls[0].params).toEqual([500]);
   });
 
-  test('cursor adds (created_at, id) < tuple comparison', async () => {
+  test('cursor adds (created_at, id) < tuple comparison with µs-precision timestamp', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.listAll({ limit: 50, cursor: { createdAt: 1700000000000, id: 'e-1' } }, exec);
-    expect(exec.calls[0].params).toEqual([1700000000000, 'e-1', 50]);
-    expect(exec.calls[0].sql).toContain('to_timestamp');
+    await entriesRepo.listAll(
+      { limit: 50, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-1' } },
+      exec,
+    );
+    expect(exec.calls[0].params).toEqual(['2026-04-30 12:00:00.123456', 'e-1', 50]);
+    expect(exec.calls[0].sql).toContain('::timestamp');
+    expect(exec.calls[0].sql).not.toContain('to_timestamp');
   });
 });
 
@@ -52,9 +56,15 @@ describe('listForManagerView', () => {
 });
 
 describe('encodeCursor / decodeCursor', () => {
-  test('round-trips a valid cursor', () => {
-    const encoded = entriesRepo.encodeCursor({ createdAt: 12345, id: 'e-1' });
-    expect(entriesRepo.decodeCursor(encoded)).toEqual({ createdAt: 12345, id: 'e-1' });
+  test('round-trips a µs-precision Postgres timestamp cursor', () => {
+    const encoded = entriesRepo.encodeCursor({
+      createdAt: '2026-04-30 12:00:00.123456',
+      id: 'e-1',
+    });
+    expect(entriesRepo.decodeCursor(encoded)).toEqual({
+      createdAt: '2026-04-30 12:00:00.123456',
+      id: 'e-1',
+    });
   });
 
   test('returns null for malformed input', () => {
@@ -64,7 +74,14 @@ describe('encodeCursor / decodeCursor', () => {
     ).toBeNull();
   });
 
-  test('produces a nextCursor when limit is reached', async () => {
+  test('rejects legacy numeric createdAt cursors', () => {
+    const legacy = Buffer.from(JSON.stringify({ createdAt: 12345, id: 'e-1' }), 'utf8').toString(
+      'base64url',
+    );
+    expect(entriesRepo.decodeCursor(legacy)).toBeNull();
+  });
+
+  test('produces a nextCursor that preserves µs precision from created_at_text', async () => {
     const row = {
       id: 'e-2',
       user_id: 'u-1',
@@ -80,12 +97,17 @@ describe('encodeCursor / decodeCursor', () => {
       hourly_cost: 100,
       is_placeholder: false,
       location: 'remote',
-      created_at: new Date('2026-04-30T12:00:00Z'),
+      created_at: new Date('2026-04-30T12:00:00.123Z'),
+      created_at_text: '2026-04-30 12:00:00.123456',
     };
-    exec.enqueue({ rows: [row, { ...row, id: 'e-1' }] });
+    exec.enqueue({
+      rows: [row, { ...row, id: 'e-1', created_at_text: '2026-04-30 12:00:00.123100' }],
+    });
     const result = await entriesRepo.listAll({ limit: 2 }, exec);
-    expect(result.nextCursor).not.toBeNull();
-    expect(result.nextCursor?.id).toBe('e-1');
+    expect(result.nextCursor).toEqual({
+      createdAt: '2026-04-30 12:00:00.123100',
+      id: 'e-1',
+    });
   });
 });
 
