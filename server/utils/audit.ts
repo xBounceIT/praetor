@@ -1,6 +1,5 @@
-import { randomUUID } from 'crypto';
 import type { FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import * as auditLogsRepo from '../repositories/auditLogsRepo.ts';
 import { createChildLogger, serializeError } from './logger.ts';
 
 const logger = createChildLogger({ module: 'audit' });
@@ -115,19 +114,14 @@ export async function logAudit({
   }
 
   try {
-    const normalizedDetails = normalizeAuditDetails(details);
-    await query(
-      'INSERT INTO audit_logs (id, user_id, action, entity_type, entity_id, ip_address, details) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
-      [
-        `audit-${randomUUID()}`,
-        effectiveUserId,
-        action,
-        entityType ?? null,
-        entityId ?? null,
-        request.ip || 'unknown',
-        normalizedDetails ? JSON.stringify(normalizedDetails) : null,
-      ],
-    );
+    await auditLogsRepo.create({
+      userId: effectiveUserId,
+      action,
+      entityType: entityType ?? null,
+      entityId: entityId ?? null,
+      ipAddress: request.ip || 'unknown',
+      details: normalizeAuditDetails(details),
+    });
   } catch (err) {
     logger.error(
       { err: serializeError(err), userId: effectiveUserId, action },

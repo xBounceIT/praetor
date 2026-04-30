@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
 import { type QueryExecutor, query } from '../db/index.ts';
+
+export const generatePrefixedId = (prefix: string): string => `${prefix}-${randomUUID()}`;
 
 const generateSequentialId = async (
   prefix: string,

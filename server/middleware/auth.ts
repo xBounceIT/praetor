@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import { query } from '../db/index.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
@@ -33,44 +34,36 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
     request.auth = { userId: decoded.userId, sessionStart };
 
-    // Fetch user data from Postgres.
-    type AuthUserRow = {
-      id: string;
-      name: string;
-      username: string;
-      role: string;
-      avatar_initials: string | null;
-      is_disabled: boolean;
-    };
-
-    const result = await query(
-      `SELECT u.id, u.name, u.username, u.role, u.avatar_initials, u.is_disabled
-       FROM users u
-       WHERE u.id = $1`,
-      [decoded.userId],
-    );
-    const user = result.rows.length === 0 ? null : (result.rows[0] as AuthUserRow);
+    const user = await usersRepo.findAuthUserById(decoded.userId);
 
     if (!user) {
       return reply.code(401).send({ error: 'User not found' });
     }
 
-    if (user.is_disabled) {
+    if (user.isDisabled) {
       return reply.code(401).send({ error: 'Invalid or expired token' });
     }
 
     const effectiveRole = decoded.activeRole ?? user.role;
 
-    const membership = await query(
-      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
-      [user.id, effectiveRole],
-    );
-    if (membership.rows.length === 0) {
+    // Run in parallel: this middleware fires on every authenticated request and the success path
+    // (user has the role) is the hot case. The wasted permissions lookup on a 403 is cheap
+    // compared to the latency saved on the 99%+ success path.
+    const [hasRole, permissions] = await Promise.all([
+      rolesRepo.userHasRole(user.id, effectiveRole),
+      getRolePermissions(effectiveRole),
+    ]);
+    if (!hasRole) {
       return reply.code(403).send({ error: 'Invalid or expired token' });
     }
-
-    const permissions = await getRolePermissions(effectiveRole);
-    request.user = { ...user, role: effectiveRole, permissions };
+    request.user = {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      role: effectiveRole,
+      avatarInitials: user.avatarInitials,
+      permissions,
+    };
 
     // Sliding window: Issue new token with same sessionStart
     // This resets the 30m idle timer but keeps the 8h max session limit

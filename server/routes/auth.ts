@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, generateToken } from '../middleware/auth.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
@@ -60,24 +61,6 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
-const getAvailableRolesForUser = async (userId: string) => {
-  const result = await query(
-    `SELECT r.id, r.name, r.is_system, r.is_admin
-       FROM user_roles ur
-       JOIN roles r ON r.id = ur.role_id
-      WHERE ur.user_id = $1
-      ORDER BY r.name`,
-    [userId],
-  );
-
-  return result.rows.map((r) => ({
-    id: r.id as string,
-    name: r.name as string,
-    isSystem: !!r.is_system,
-    isAdmin: !!r.is_admin,
-  }));
-};
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
   fastify.post(
@@ -108,18 +91,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, passwordResult.message);
       }
 
-      const result = await query(
-        'SELECT id, name, username, password_hash, role, avatar_initials, is_disabled FROM users WHERE username = $1',
-        [usernameResult.value],
-      );
+      const user = await usersRepo.findLoginUserByUsername(usernameResult.value);
 
-      if (result.rows.length === 0) {
+      if (!user) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      const user = result.rows[0];
-
-      if (user.is_disabled) {
+      if (user.isDisabled) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
@@ -142,8 +120,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let validPassword = false;
       if (ldapAuthSuccess) {
         validPassword = true;
-      } else {
-        validPassword = await bcrypt.compare(passwordResult.value, user.password_hash);
+      } else if (user.passwordHash) {
+        validPassword = await bcrypt.compare(passwordResult.value, user.passwordHash);
       }
 
       if (!validPassword) {
@@ -159,19 +137,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'user',
         entityId: user.id,
         details: {
-          targetLabel: user.name as string,
-          secondaryLabel: user.role as string,
+          targetLabel: user.name,
+          secondaryLabel: user.role,
         },
         userId: user.id,
       });
-      const availableRoles = await getAvailableRolesForUser(user.id);
+      const availableRoles = await rolesRepo.listAvailableRolesForUser(user.id);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles
           : [
               {
-                id: user.role as string,
-                name: user.role as string,
+                id: user.role,
+                name: user.role,
                 isSystem: false,
                 isAdmin: user.role === 'admin',
               },
@@ -184,7 +162,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           name: user.name,
           username: user.username,
           role: user.role,
-          avatarInitials: user.avatar_initials,
+          avatarInitials: user.avatarInitials,
           permissions,
           availableRoles: effectiveAvailableRoles,
         },
@@ -208,7 +186,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const availableRoles = request.user?.id
-        ? await getAvailableRolesForUser(request.user.id)
+        ? await rolesRepo.listAvailableRolesForUser(request.user.id)
         : [];
       const effectiveAvailableRoles =
         availableRoles.length > 0
@@ -226,7 +204,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         name: request.user?.name,
         username: request.user?.username,
         role: request.user?.role,
-        avatarInitials: request.user?.avatar_initials,
+        avatarInitials: request.user?.avatarInitials,
         permissions: request.user?.permissions || [],
         availableRoles: effectiveAvailableRoles,
       };
@@ -256,16 +234,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userId = request.user?.id;
       if (!userId) return reply.code(401).send({ error: 'Authentication required' });
 
-      const membership = await query(
-        'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
-        [userId, roleIdResult.value],
-      );
-      if (membership.rows.length === 0) {
+      const hasRole = await rolesRepo.userHasRole(userId, roleIdResult.value);
+      if (!hasRole) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       const permissions = await getRolePermissions(roleIdResult.value);
-      const availableRoles = await getAvailableRolesForUser(userId);
+      const availableRoles = await rolesRepo.listAvailableRolesForUser(userId);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles
@@ -304,7 +279,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           name: request.user?.name,
           username: request.user?.username,
           role: roleIdResult.value,
-          avatarInitials: request.user?.avatar_initials,
+          avatarInitials: request.user?.avatarInitials,
           permissions,
           availableRoles: effectiveAvailableRoles,
         },

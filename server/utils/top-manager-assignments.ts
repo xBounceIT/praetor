@@ -1,4 +1,5 @@
 import { query } from '../db/index.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { TOP_MANAGER_ROLE_ID } from './permissions.ts';
 
 export const MANUAL_ASSIGNMENT_SOURCE = 'manual';
@@ -58,13 +59,8 @@ const assignAllTopManagersSql = (table: string, targetColumn: string) => `
   END
 `;
 
-export const userHasTopManagerRole = async (userId: string) => {
-  const result = await query(
-    'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
-    [userId, TOP_MANAGER_ROLE_ID],
-  );
-  return result.rows.length > 0;
-};
+export const userHasTopManagerRole = (userId: string) =>
+  rolesRepo.userHasRole(userId, TOP_MANAGER_ROLE_ID);
 
 export const assignClientToUser = async (
   userId: string,

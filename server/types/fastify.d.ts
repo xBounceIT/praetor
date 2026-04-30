@@ -11,8 +11,8 @@ declare module 'fastify' {
       name: string;
       username: string;
       role: string;
-      avatar_initials?: string | null;
-      permissions?: string[];
+      avatarInitials: string;
+      permissions: string[];
     };
   }
 }

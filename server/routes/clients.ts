@@ -8,6 +8,7 @@ import {
 } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { assignClientToTopManagers, assignClientToUser } from '../utils/top-manager-assignments.ts';
 import {
@@ -1220,7 +1221,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [categoryResult.value],
       );
       const nextSortOrder = Number(computedSortOrderResult.rows[0]?.next_sort_order ?? 1);
-      const id = `cpo-${crypto.randomUUID()}`;
+      const id = generatePrefixedId('cpo');
 
       const insertResult = await query(
         `INSERT INTO client_profile_options (id, category, value, sort_order)

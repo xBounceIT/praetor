@@ -3,6 +3,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { MASKED_SECRET } from '../utils/crypto.ts';
 import {
   badRequest,
   optionalEnum,
@@ -80,7 +81,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
-  reveal ? (value ?? '') : value ? '********' : '';
+  reveal ? (value ?? '') : value ? MASKED_SECRET : '';
 
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,

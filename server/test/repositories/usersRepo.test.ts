@@ -29,6 +29,74 @@ describe('getPasswordHash', () => {
   });
 });
 
+describe('findAuthUserById', () => {
+  test('returns the mapped user when the row exists', async () => {
+    exec.enqueue({
+      rows: [
+        {
+          id: 'user-1',
+          name: 'Alice',
+          username: 'alice',
+          role: 'manager',
+          avatarInitials: 'AL',
+          isDisabled: false,
+        },
+      ],
+    });
+    const result = await usersRepo.findAuthUserById('user-1', exec);
+    expect(result).toEqual({
+      id: 'user-1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'manager',
+      avatarInitials: 'AL',
+      isDisabled: false,
+    });
+    expect(exec.calls[0].params).toEqual(['user-1']);
+  });
+
+  test('returns null when no row exists', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await usersRepo.findAuthUserById('user-1', exec);
+    expect(result).toBeNull();
+  });
+});
+
+describe('findLoginUserByUsername', () => {
+  test('returns the mapped login user when the row exists', async () => {
+    exec.enqueue({
+      rows: [
+        {
+          id: 'user-1',
+          name: 'Alice',
+          username: 'alice',
+          role: 'manager',
+          passwordHash: '$2b$10$abc',
+          avatarInitials: 'AL',
+          isDisabled: false,
+        },
+      ],
+    });
+    const result = await usersRepo.findLoginUserByUsername('alice', exec);
+    expect(result).toEqual({
+      id: 'user-1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'manager',
+      passwordHash: '$2b$10$abc',
+      avatarInitials: 'AL',
+      isDisabled: false,
+    });
+    expect(exec.calls[0].params).toEqual(['alice']);
+  });
+
+  test('returns null when no row exists', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await usersRepo.findLoginUserByUsername('alice', exec);
+    expect(result).toBeNull();
+  });
+});
+
 describe('updatePasswordHash', () => {
   test('passes [hash, userId] in that order', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
@@ -40,5 +108,38 @@ describe('updatePasswordHash', () => {
     exec.enqueue({ rows: [], rowCount: 1 });
     const result = await usersRepo.updatePasswordHash('user-1', 'new-hash', exec);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('updateNameByUsername', () => {
+  test('passes [username, name] in that order', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await usersRepo.updateNameByUsername('alice', 'Alice Smith', exec);
+    expect(exec.calls[0].params).toEqual(['alice', 'Alice Smith']);
+  });
+});
+
+describe('createUser', () => {
+  test('passes params in [id, name, username, passwordHash, role, avatarInitials] order', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await usersRepo.createUser(
+      {
+        id: 'user-1',
+        name: 'Alice Smith',
+        username: 'alice',
+        passwordHash: '$2a$10$placeholder',
+        role: 'user',
+        avatarInitials: 'AS',
+      },
+      exec,
+    );
+    expect(exec.calls[0].params).toEqual([
+      'user-1',
+      'Alice Smith',
+      'alice',
+      '$2a$10$placeholder',
+      'user',
+      'AS',
+    ]);
   });
 });
