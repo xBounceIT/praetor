@@ -309,7 +309,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             idResult.value,
             {
               name: name || undefined,
-              clientId: clientId || undefined,
+              clientId: clientChanged ? requestedClientId : undefined,
               color: normalizedColor || undefined,
               description: description || undefined,
               isDisabled,
