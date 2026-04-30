@@ -7,7 +7,8 @@ export type Role = {
   isAdmin: boolean;
 };
 
-const SELECT_COLUMNS = `id, name, is_system AS "isSystem", is_admin AS "isAdmin"`;
+const roleColumns = (prefix = '') =>
+  `${prefix}id, ${prefix}name, ${prefix}is_system AS "isSystem", ${prefix}is_admin AS "isAdmin"`;
 
 export const findExistingIds = async (
   ids: string[],
@@ -38,7 +39,7 @@ export const listAvailableRolesForUser = async (
   exec: QueryExecutor = pool,
 ): Promise<Role[]> => {
   const { rows } = await exec.query<Role>(
-    `SELECT r.id, r.name, r.is_system AS "isSystem", r.is_admin AS "isAdmin"
+    `SELECT ${roleColumns('r.')}
        FROM user_roles ur
        JOIN roles r ON r.id = ur.role_id
       WHERE ur.user_id = $1
@@ -49,14 +50,12 @@ export const listAvailableRolesForUser = async (
 };
 
 export const listAll = async (exec: QueryExecutor = pool): Promise<Role[]> => {
-  const { rows } = await exec.query<Role>(`SELECT ${SELECT_COLUMNS} FROM roles ORDER BY name`);
+  const { rows } = await exec.query<Role>(`SELECT ${roleColumns()} FROM roles ORDER BY name`);
   return rows;
 };
 
 export const findById = async (id: string, exec: QueryExecutor = pool): Promise<Role | null> => {
-  const { rows } = await exec.query<Role>(`SELECT ${SELECT_COLUMNS} FROM roles WHERE id = $1`, [
-    id,
-  ]);
+  const { rows } = await exec.query<Role>(`SELECT ${roleColumns()} FROM roles WHERE id = $1`, [id]);
   return rows[0] ?? null;
 };
 
@@ -69,6 +68,23 @@ export const listExplicitPermissions = async (
     [roleId],
   );
   return rows.map((r) => r.permission);
+};
+
+export const listExplicitPermissionsForRoles = async (
+  roleIds: string[],
+  exec: QueryExecutor = pool,
+): Promise<Map<string, string[]>> => {
+  const result = new Map<string, string[]>();
+  if (roleIds.length === 0) return result;
+  for (const id of roleIds) result.set(id, []);
+  const { rows } = await exec.query<{ roleId: string; permission: string }>(
+    `SELECT role_id AS "roleId", permission
+       FROM role_permissions
+      WHERE role_id = ANY($1::text[])`,
+    [roleIds],
+  );
+  for (const row of rows) result.get(row.roleId)?.push(row.permission);
+  return result;
 };
 
 export const insertRole = async (

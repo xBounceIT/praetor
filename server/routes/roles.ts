@@ -66,19 +66,18 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
-const mapRoleRow = async (row: rolesRepo.Role) => {
-  const explicitPerms = (await rolesRepo.listExplicitPermissions(row.id)).map(normalizePermission);
-
+const buildRolePayload = (row: rolesRepo.Role, explicitPerms: string[]) => {
+  const normalized = explicitPerms.map(normalizePermission);
   const permissions = row.isAdmin
     ? Array.from(
         new Set([
           ...ADMINISTRATION_PERMISSIONS,
           ...ADMIN_BASE_PERMISSIONS,
-          ...explicitPerms,
+          ...normalized,
           ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
         ]),
       )
-    : Array.from(new Set([...explicitPerms, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]));
+    : Array.from(new Set([...normalized, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]));
 
   return {
     id: row.id,
@@ -88,6 +87,9 @@ const mapRoleRow = async (row: rolesRepo.Role) => {
     permissions,
   };
 };
+
+const mapRoleRow = async (row: rolesRepo.Role) =>
+  buildRolePayload(row, await rolesRepo.listExplicitPermissions(row.id));
 
 const isForbiddenAdministrationPermissionForNonAdmin = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
@@ -118,7 +120,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
       const rows = await rolesRepo.listAll();
-      return Promise.all(rows.map(mapRoleRow));
+      const permsByRole = await rolesRepo.listExplicitPermissionsForRoles(
+        rows.map((row) => row.id),
+      );
+      return rows.map((row) => buildRolePayload(row, permsByRole.get(row.id) ?? []));
     },
   );
 

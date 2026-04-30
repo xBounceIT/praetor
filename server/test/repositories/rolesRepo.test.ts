@@ -136,6 +136,43 @@ describe('listExplicitPermissions', () => {
   });
 });
 
+describe('listExplicitPermissionsForRoles', () => {
+  test('returns an empty Map without firing SQL when roleIds is empty', async () => {
+    const result = await rolesRepo.listExplicitPermissionsForRoles([], exec);
+    expect(result.size).toBe(0);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('passes roleIds as a single $1 param (ANY($1::text[]) contract)', async () => {
+    exec.enqueue({ rows: [] });
+    await rolesRepo.listExplicitPermissionsForRoles(['a', 'b'], exec);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].params).toEqual([['a', 'b']]);
+  });
+
+  test('groups permissions by role and preserves DB row order within each role', async () => {
+    exec.enqueue({
+      rows: [
+        { roleId: 'manager', permission: 'projects.view' },
+        { roleId: 'auditor', permission: 'reports.view' },
+        { roleId: 'manager', permission: 'clients.update' },
+      ],
+    });
+    const result = await rolesRepo.listExplicitPermissionsForRoles(['manager', 'auditor'], exec);
+    expect(result.get('manager')).toEqual(['projects.view', 'clients.update']);
+    expect(result.get('auditor')).toEqual(['reports.view']);
+  });
+
+  test('roles with no permissions are still present in the Map with empty arrays', async () => {
+    exec.enqueue({
+      rows: [{ roleId: 'manager', permission: 'projects.view' }],
+    });
+    const result = await rolesRepo.listExplicitPermissionsForRoles(['manager', 'empty-role'], exec);
+    expect(result.get('manager')).toEqual(['projects.view']);
+    expect(result.get('empty-role')).toEqual([]);
+  });
+});
+
 describe('insertRole', () => {
   test('passes [id, name] and hard-codes is_system/is_admin to FALSE in the SQL', async () => {
     exec.enqueue({ rows: [] });
