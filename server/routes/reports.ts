@@ -1545,8 +1545,7 @@ const buildBusinessDataset = async (
             ? await query(
                 `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
-               JOIN tasks t ON t.project_id = te.project_id AND t.name = te.task
-               JOIN user_tasks ut ON ut.task_id = t.id
+               JOIN user_tasks ut ON ut.task_id = te.task_id
                WHERE te.date >= $1
                  AND te.date <= $2
                  AND ut.user_id = $3
@@ -1558,8 +1557,7 @@ const buildBusinessDataset = async (
             : await query(
                 `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
-               JOIN tasks t ON t.project_id = te.project_id AND t.name = te.task
-               JOIN user_tasks ut ON ut.task_id = t.id
+               JOIN user_tasks ut ON ut.task_id = te.task_id
                WHERE te.date >= $1
                  AND te.date <= $2
                  AND te.user_id = ANY($3)

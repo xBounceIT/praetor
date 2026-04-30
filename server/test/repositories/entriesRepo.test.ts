@@ -74,6 +74,7 @@ describe('encodeCursor / decodeCursor', () => {
       project_id: 'p-1',
       project_name: 'Alpha',
       task: 'Dev',
+      task_id: 't-1',
       notes: null,
       duration: 1,
       hourly_cost: 100,
@@ -109,6 +110,7 @@ const rawRow = {
   project_id: 'p-1',
   project_name: 'Alpha',
   task: 'Dev',
+  task_id: 't-1',
   notes: 'n',
   duration: '1.5',
   hourly_cost: '100',
@@ -118,7 +120,7 @@ const rawRow = {
 };
 
 describe('create', () => {
-  test('passes 13 params in expected order and returns mapped row', async () => {
+  test('passes 14 params in expected order and returns mapped row', async () => {
     exec.enqueue({ rows: [rawRow] });
     const result = await entriesRepo.create(
       {
@@ -130,6 +132,7 @@ describe('create', () => {
         projectId: 'p-1',
         projectName: 'Alpha',
         task: 'Dev',
+        taskId: 't-1',
         notes: 'n',
         duration: 1.5,
         hourlyCost: 100,
@@ -147,6 +150,7 @@ describe('create', () => {
       'p-1',
       'Alpha',
       'Dev',
+      't-1',
       'n',
       1.5,
       100,
@@ -157,6 +161,32 @@ describe('create', () => {
     expect(result.duration).toBe(1.5);
     expect(result.hourlyCost).toBe(100);
     expect(result.userId).toBe('u-1');
+    expect(result.taskId).toBe('t-1');
+  });
+
+  test('null taskId is passed through (task name has no matching task row)', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, task_id: null }] });
+    const result = await entriesRepo.create(
+      {
+        id: 'e-1',
+        userId: 'u-1',
+        date: '2026-04-30',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        projectId: 'p-1',
+        projectName: 'Alpha',
+        task: 'Dev',
+        taskId: null,
+        notes: 'n',
+        duration: 1.5,
+        hourlyCost: 100,
+        isPlaceholder: false,
+        location: 'remote',
+      },
+      exec,
+    );
+    expect(exec.calls[0].params[8]).toBeNull();
+    expect(result.taskId).toBeNull();
   });
 });
 

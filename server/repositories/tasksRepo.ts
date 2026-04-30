@@ -230,8 +230,21 @@ export const addUserAssignments = async (
   );
 };
 
-// time_entries.task is a string joined on tasks.name + project_id (not tasks.id), so duplicate
-// task names within a project collide here.
+// Best-effort lookup of a task by (project, name). Duplicate task names within a project resolve
+// to the lowest task id; callers store the result so subsequent aggregations remain deterministic
+// per entry. Returns null when no matching task exists.
+export const findIdByProjectAndName = async (
+  projectId: string,
+  name: string,
+  exec: QueryExecutor = pool,
+): Promise<string | null> => {
+  const { rows } = await exec.query<{ id: string }>(
+    `SELECT id FROM tasks WHERE project_id = $1 AND name = $2 ORDER BY id LIMIT 1`,
+    [projectId, name],
+  );
+  return rows[0]?.id ?? null;
+};
+
 export const sumHoursByProjects = async (
   projectIds: string[],
   userId: string | undefined,
@@ -240,8 +253,7 @@ export const sumHoursByProjects = async (
   const sql = userId
     ? `SELECT te.project_id, te.task, COALESCE(SUM(te.duration), 0)::float AS total
          FROM time_entries te
-         INNER JOIN tasks t ON t.name = te.task AND t.project_id = te.project_id
-         INNER JOIN user_tasks ut ON t.id = ut.task_id
+         INNER JOIN user_tasks ut ON ut.task_id = te.task_id
         WHERE te.project_id = ANY($1) AND ut.user_id = $2
         GROUP BY te.project_id, te.task`
     : `SELECT project_id, task, COALESCE(SUM(duration), 0)::float AS total

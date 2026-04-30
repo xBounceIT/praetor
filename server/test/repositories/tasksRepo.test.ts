@@ -212,13 +212,29 @@ describe('hours aggregation', () => {
     ]);
   });
 
-  test('sumHoursByProjects with userId uses tasks-name join (preserved behavior)', async () => {
+  test('sumHoursByProjects with userId joins on time_entries.task_id (not name)', async () => {
     exec.enqueue({ rows: [] });
     await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', exec);
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('t.name = te.task');
-    expect(sql).toContain('t.project_id = te.project_id');
+    expect(sql).toContain('ut.task_id = te.task_id');
+    expect(sql).not.toContain('t.name = te.task');
     expect(sql).toContain('user_tasks');
     expect(exec.calls[0].params).toEqual([['p-1'], 'u-1']);
+  });
+});
+
+describe('findIdByProjectAndName', () => {
+  test('returns task id when found', async () => {
+    exec.enqueue({ rows: [{ id: 't-1' }] });
+    const result = await tasksRepo.findIdByProjectAndName('p-1', 'Dev', exec);
+    expect(result).toBe('t-1');
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
+    expect(exec.calls[0].sql).toContain('LIMIT 1');
+    expect(exec.calls[0].sql).toContain('ORDER BY id');
+  });
+
+  test('returns null when no matching task', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await tasksRepo.findIdByProjectAndName('p-1', 'Missing', exec)).toBeNull();
   });
 });

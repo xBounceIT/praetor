@@ -12,6 +12,7 @@ export type TimeEntry = {
   projectId: string;
   projectName: string;
   task: string;
+  taskId: string | null;
   notes: string | null;
   duration: number;
   hourlyCost: number;
@@ -29,6 +30,7 @@ type TimeEntryRow = {
   project_id: string;
   project_name: string;
   task: string;
+  task_id: string | null;
   notes: string | null;
   duration: string | number | null;
   hourly_cost: string | number | null;
@@ -38,7 +40,7 @@ type TimeEntryRow = {
 };
 
 const ENTRY_COLUMNS = `id, user_id, date, client_id, client_name, project_id,
-  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at`;
+  project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at`;
 
 const mapRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
@@ -52,6 +54,7 @@ const mapRow = (row: TimeEntryRow): TimeEntry => {
     projectId: row.project_id,
     projectName: row.project_name,
     task: row.task,
+    taskId: row.task_id,
     notes: row.notes,
     duration: parseDbNumber(row.duration, 0),
     hourlyCost: parseDbNumber(row.hourly_cost, 0),
@@ -187,6 +190,7 @@ export type NewEntry = {
   projectId: string;
   projectName: string;
   task: string;
+  taskId: string | null;
   notes: string | null;
   duration: number;
   hourlyCost: number;
@@ -196,8 +200,8 @@ export type NewEntry = {
 
 export const create = async (entry: NewEntry, exec: QueryExecutor = pool): Promise<TimeEntry> => {
   const { rows } = await exec.query<TimeEntryRow>(
-    `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder, location)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING ${ENTRY_COLUMNS}`,
     [
       entry.id,
@@ -208,6 +212,7 @@ export const create = async (entry: NewEntry, exec: QueryExecutor = pool): Promi
       entry.projectId,
       entry.projectName,
       entry.task,
+      entry.taskId,
       entry.notes,
       entry.duration,
       entry.hourlyCost,

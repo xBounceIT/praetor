@@ -170,6 +170,7 @@ export interface TimeEntry {
   projectId: string;
   projectName: string;
   task: string;
+  taskId?: string | null;
   notes?: string;
   duration: number;
   hourlyCost: number;

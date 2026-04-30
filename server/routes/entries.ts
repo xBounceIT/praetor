@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as entriesRepo from '../repositories/entriesRepo.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
@@ -45,6 +46,7 @@ const entrySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
+    taskId: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     duration: { type: 'number' },
     hourlyCost: { type: 'number' },
@@ -277,6 +279,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const hourlyCost = await usersRepo.findCostPerHour(targetUserId);
+      const resolvedTaskId = await tasksRepo.findIdByProjectAndName(
+        projectIdResult.value,
+        taskResult.value,
+      );
 
       const created = await entriesRepo.create({
         id: generatePrefixedId('te'),
@@ -287,6 +293,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         projectId: projectIdResult.value,
         projectName: projectNameResult.value,
         task: taskResult.value,
+        taskId: resolvedTaskId,
         notes: notes || null,
         duration: durationResult.value || 0,
         hourlyCost,

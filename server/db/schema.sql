@@ -602,6 +602,7 @@ CREATE TABLE IF NOT EXISTS time_entries (
     project_id VARCHAR(50) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     project_name VARCHAR(255) NOT NULL,
     task VARCHAR(255) NOT NULL,
+    task_id VARCHAR(50) REFERENCES tasks(id) ON DELETE SET NULL,
     notes TEXT,
     duration DECIMAL(10, 2) NOT NULL DEFAULT 0,
     hourly_cost DECIMAL(10, 2) DEFAULT 0,
@@ -614,6 +615,24 @@ ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS hourly_cost DECIMAL(10, 2) DEF
 
 -- Ensure location column exists for existing installations
 ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS location VARCHAR(20) DEFAULT 'remote';
+
+-- Ensure task_id column exists for existing installations (joins by id, not name).
+ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS task_id VARCHAR(50) REFERENCES tasks(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
+
+-- Best-effort backfill of task_id from (project_id, name). Duplicate task names within a project
+-- resolve to the lowest task id; the alternative is leaving task_id null and excluding the row from
+-- task-scoped aggregations.
+UPDATE time_entries te
+   SET task_id = sub.id
+  FROM (
+    SELECT DISTINCT ON (project_id, name) project_id, name, id
+      FROM tasks
+     ORDER BY project_id, name, id
+  ) sub
+ WHERE te.task_id IS NULL
+   AND te.project_id = sub.project_id
+   AND te.task = sub.name;
 
 -- Location field migration: update constraint for new values
 DO $$
