@@ -10,6 +10,7 @@ export type EmailConfig = {
   smtpEncryption: SmtpEncryption;
   smtpRejectUnauthorized: boolean;
   smtpUser: string;
+  // Encrypted ciphertext when stored; callers must `decrypt()` before passing to a transporter.
   smtpPassword: string;
   fromEmail: string;
   fromName: string;

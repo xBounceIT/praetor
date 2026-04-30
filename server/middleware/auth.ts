@@ -46,6 +46,9 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
     const effectiveRole = decoded.activeRole ?? user.role;
 
+    // Run in parallel: this middleware fires on every authenticated request and the success path
+    // (user has the role) is the hot case. The wasted permissions lookup on a 403 is cheap
+    // compared to the latency saved on the 99%+ success path.
     const [hasRole, permissions] = await Promise.all([
       rolesRepo.userHasRole(user.id, effectiveRole),
       getRolePermissions(effectiveRole),

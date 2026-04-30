@@ -12,7 +12,7 @@ declare module 'fastify' {
       username: string;
       role: string;
       avatarInitials: string;
-      permissions?: string[];
+      permissions: string[];
     };
   }
 }

@@ -10,8 +10,8 @@ import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
 
-// LDAP users authenticate via LDAP, not against a local password hash. We store a well-formed but
-// unmatchable bcrypt placeholder so the NOT NULL column is satisfied without enabling local login.
+// LDAP users authenticate via LDAP, not against a local password hash. We store an unmatchable
+// bcrypt placeholder so the NOT NULL column is satisfied without enabling local login.
 const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
 
 interface LdapEntry {
