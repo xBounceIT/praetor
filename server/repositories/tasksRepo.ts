@@ -230,6 +230,13 @@ export const addUserAssignments = async (
   );
 };
 
+// Joins time_entries -> tasks via task_id when present, falling back to (project_id, name) for
+// rows where task_id is null (legacy entries, or entries created before the matching task
+// existed). Use as part of a larger query: caller adds te. alias and WHERE clauses.
+export const TIME_ENTRIES_TASKS_JOIN = `JOIN tasks t
+    ON t.id = te.task_id
+    OR (te.task_id IS NULL AND t.project_id = te.project_id AND t.name = te.task)`;
+
 // Best-effort lookup of a task by (project, name). Duplicate task names within a project resolve
 // to the lowest task id; callers store the result so subsequent aggregations remain deterministic
 // per entry. Returns null when no matching task exists.
@@ -253,7 +260,8 @@ export const sumHoursByProjects = async (
   const sql = userId
     ? `SELECT te.project_id, te.task, COALESCE(SUM(te.duration), 0)::float AS total
          FROM time_entries te
-         INNER JOIN user_tasks ut ON ut.task_id = te.task_id
+         ${TIME_ENTRIES_TASKS_JOIN}
+         JOIN user_tasks ut ON ut.task_id = t.id
         WHERE te.project_id = ANY($1) AND ut.user_id = $2
         GROUP BY te.project_id, te.task`
     : `SELECT project_id, task, COALESCE(SUM(duration), 0)::float AS total

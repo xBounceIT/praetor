@@ -181,6 +181,32 @@ export const findOwner = async (id: string, exec: QueryExecutor = pool): Promise
   return rows[0]?.user_id ?? null;
 };
 
+export type EntryContext = {
+  userId: string;
+  projectId: string;
+  task: string;
+  taskId: string | null;
+};
+
+export const findContext = async (
+  id: string,
+  exec: QueryExecutor = pool,
+): Promise<EntryContext | null> => {
+  const { rows } = await exec.query<{
+    user_id: string;
+    project_id: string;
+    task: string;
+    task_id: string | null;
+  }>(`SELECT user_id, project_id, task, task_id FROM time_entries WHERE id = $1`, [id]);
+  if (!rows[0]) return null;
+  return {
+    userId: rows[0].user_id,
+    projectId: rows[0].project_id,
+    task: rows[0].task,
+    taskId: rows[0].task_id,
+  };
+};
+
 export type NewEntry = {
   id: string;
   userId: string;
@@ -228,6 +254,7 @@ export type EntryUpdate = {
   notes?: string | null;
   isPlaceholder?: boolean;
   location?: string;
+  taskId?: string | null;
 };
 
 export const update = async (
@@ -240,10 +267,11 @@ export const update = async (
         SET duration = COALESCE($2, duration),
             notes = COALESCE($3, notes),
             is_placeholder = COALESCE($4, is_placeholder),
-            location = COALESCE($5, location)
+            location = COALESCE($5, location),
+            task_id = COALESCE($6, task_id)
       WHERE id = $1
       RETURNING ${ENTRY_COLUMNS}`,
-    [id, patch.duration, patch.notes, patch.isPlaceholder, patch.location],
+    [id, patch.duration, patch.notes, patch.isPlaceholder, patch.location, patch.taskId],
   );
   return rows[0] ? mapRow(rows[0]) : null;
 };

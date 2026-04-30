@@ -212,13 +212,16 @@ describe('hours aggregation', () => {
     ]);
   });
 
-  test('sumHoursByProjects with userId joins on time_entries.task_id (not name)', async () => {
+  test('sumHoursByProjects with userId joins via tasks with name fallback', async () => {
     exec.enqueue({ rows: [] });
     await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', exec);
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('ut.task_id = te.task_id');
-    expect(sql).not.toContain('t.name = te.task');
-    expect(sql).toContain('user_tasks');
+    // Primary join: matched FK task_id.
+    expect(sql).toContain('t.id = te.task_id');
+    // Fallback: name+project for entries with null task_id.
+    expect(sql).toContain('te.task_id IS NULL');
+    expect(sql).toContain('t.name = te.task');
+    expect(sql).toContain('JOIN user_tasks ut ON ut.task_id = t.id');
     expect(exec.calls[0].params).toEqual([['p-1'], 'u-1']);
   });
 });

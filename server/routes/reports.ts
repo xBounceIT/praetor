@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { TIME_ENTRIES_TASKS_JOIN } from '../repositories/tasksRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
@@ -1545,7 +1546,8 @@ const buildBusinessDataset = async (
             ? await query(
                 `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
-               JOIN user_tasks ut ON ut.task_id = te.task_id
+               ${TIME_ENTRIES_TASKS_JOIN}
+               JOIN user_tasks ut ON ut.task_id = t.id
                WHERE te.date >= $1
                  AND te.date <= $2
                  AND ut.user_id = $3
@@ -1557,7 +1559,8 @@ const buildBusinessDataset = async (
             : await query(
                 `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
-               JOIN user_tasks ut ON ut.task_id = te.task_id
+               ${TIME_ENTRIES_TASKS_JOIN}
+               JOIN user_tasks ut ON ut.task_id = t.id
                WHERE te.date >= $1
                  AND te.date <= $2
                  AND te.user_id = ANY($3)

@@ -101,6 +101,32 @@ describe('findOwner', () => {
   });
 });
 
+describe('findContext', () => {
+  test('returns full context including taskId when present', async () => {
+    exec.enqueue({
+      rows: [{ user_id: 'u-1', project_id: 'p-1', task: 'Dev', task_id: 't-1' }],
+    });
+    expect(await entriesRepo.findContext('e-1', exec)).toEqual({
+      userId: 'u-1',
+      projectId: 'p-1',
+      task: 'Dev',
+      taskId: 't-1',
+    });
+  });
+
+  test('returns context with null taskId for orphaned entries', async () => {
+    exec.enqueue({
+      rows: [{ user_id: 'u-1', project_id: 'p-1', task: 'Dev', task_id: null }],
+    });
+    expect((await entriesRepo.findContext('e-1', exec))?.taskId).toBeNull();
+  });
+
+  test('returns null when entry not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await entriesRepo.findContext('e-x', exec)).toBeNull();
+  });
+});
+
 const rawRow = {
   id: 'e-1',
   user_id: 'u-1',
@@ -200,7 +226,21 @@ describe('update', () => {
     expect(result?.duration).toBe(1.5);
     expect(result?.hourlyCost).toBe(100);
     expect(result?.isPlaceholder).toBe(false);
-    expect(exec.calls[0].params).toEqual(['e-1', 2, undefined, undefined, undefined]);
+    expect(exec.calls[0].params).toEqual(['e-1', 2, undefined, undefined, undefined, undefined]);
+  });
+
+  test('passes taskId through as $6 when set', async () => {
+    exec.enqueue({ rows: [rawRow] });
+    await entriesRepo.update('e-1', { taskId: 't-2' }, exec);
+    expect(exec.calls[0].params).toEqual([
+      'e-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      't-2',
+    ]);
+    expect(exec.calls[0].sql).toContain('task_id = COALESCE($6, task_id)');
   });
 
   test('returns null when no row updated', async () => {

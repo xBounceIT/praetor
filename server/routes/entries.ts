@@ -334,7 +334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      let parsedDuration = duration;
+      let parsedDuration: number | undefined;
       if (duration !== undefined) {
         const durationResult = parseLocalizedNonNegativeNumber(duration, 'duration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
@@ -346,23 +346,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!notesResult.ok) return badRequest(reply, notesResult.message);
       }
 
-      const ownerId = await entriesRepo.findOwner(idResult.value);
-      if (ownerId === null) {
+      const context = await entriesRepo.findContext(idResult.value);
+      if (context === null) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (ownerId !== request.user.id && !hasPermission(request, 'timesheets.tracker_all.view')) {
-        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, ownerId);
+      if (
+        context.userId !== request.user.id &&
+        !hasPermission(request, 'timesheets.tracker_all.view')
+      ) {
+        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, context.userId);
         if (!allowed) {
           return reply.code(403).send({ error: 'Not authorized to update this entry' });
         }
       }
+
+      const resolvedTaskId =
+        context.taskId === null
+          ? await tasksRepo.findIdByProjectAndName(context.projectId, context.task)
+          : null;
 
       const updated = await entriesRepo.update(idResult.value, {
         duration: parsedDuration,
         notes,
         isPlaceholder,
         location,
+        taskId: resolvedTaskId,
       });
 
       if (!updated) {
