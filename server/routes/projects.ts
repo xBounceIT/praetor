@@ -157,12 +157,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isDisabled: false,
         });
 
-        await Promise.all([
-          assignClientToUser(request.user.id, clientIdResult.value),
-          assignProjectToUser(request.user.id, id),
-          assignClientToTopManagers(clientIdResult.value),
-          assignProjectToTopManagers(id),
-        ]);
+        await assignClientToUser(request.user.id, clientIdResult.value);
+        await assignProjectToUser(request.user.id, id);
+        await assignClientToTopManagers(clientIdResult.value);
+        await assignProjectToTopManagers(id);
         await logAudit({
           request,
           action: 'project.created',

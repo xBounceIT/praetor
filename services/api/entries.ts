@@ -14,9 +14,9 @@ export const entriesApi = {
     do {
       const params = new URLSearchParams();
       if (userId) params.set('userId', userId);
+      params.set('limit', '500');
       if (cursor) params.set('cursor', cursor);
-      const qs = params.toString();
-      const page = await fetchApi<EntriesPage>(qs ? `/entries?${qs}` : '/entries');
+      const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`);
       for (const entry of page.entries) all.push(normalizeTimeEntry(entry));
       cursor = page.nextCursor;
     } while (cursor);

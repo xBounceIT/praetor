@@ -199,32 +199,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('t');
 
       try {
-        const [, clientId] = await Promise.all([
-          tasksRepo.create({
-            id,
-            name: nameResult.value,
-            projectId: projectIdResult.value,
-            description: description || null,
-            isRecurring: isRecurringValue,
-            recurrencePattern: recurrencePattern || null,
-            recurrenceStart: start,
-            recurrenceDuration: durationResult.value || 0,
-            expectedEffort: expectedEffort ?? 0,
-            revenue: revenue ?? 0,
-            notes: notes || null,
-            isDisabled: false,
-          }),
-          projectsRepo.findClientId(projectIdResult.value),
-        ]);
+        await tasksRepo.create({
+          id,
+          name: nameResult.value,
+          projectId: projectIdResult.value,
+          description: description || null,
+          isRecurring: isRecurringValue,
+          recurrencePattern: recurrencePattern || null,
+          recurrenceStart: start,
+          recurrenceDuration: durationResult.value || 0,
+          expectedEffort: expectedEffort ?? 0,
+          revenue: revenue ?? 0,
+          notes: notes || null,
+          isDisabled: false,
+        });
 
-        await Promise.all([
-          clientId ? assignClientToUser(request.user.id, clientId) : null,
-          assignProjectToUser(request.user.id, projectIdResult.value),
-          assignTaskToUser(request.user.id, id),
-          clientId ? assignClientToTopManagers(clientId) : null,
-          assignProjectToTopManagers(projectIdResult.value),
-          assignTaskToTopManagers(id),
-        ]);
+        const clientId = await projectsRepo.findClientId(projectIdResult.value);
+
+        if (clientId) await assignClientToUser(request.user.id, clientId);
+        await assignProjectToUser(request.user.id, projectIdResult.value);
+        await assignTaskToUser(request.user.id, id);
+        if (clientId) await assignClientToTopManagers(clientId);
+        await assignProjectToTopManagers(projectIdResult.value);
+        await assignTaskToTopManagers(id);
         await logAudit({
           request,
           action: 'task.created',
