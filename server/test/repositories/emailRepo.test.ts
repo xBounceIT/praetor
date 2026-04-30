@@ -74,7 +74,7 @@ describe('update', () => {
         smtpEncryption: 'ssl',
         smtpRejectUnauthorized: false,
         smtpUser: 'noreply@example.com',
-        smtpPassword: 'enc:ciphertext',
+        smtpPasswordCiphertext: 'enc:ciphertext',
         fromEmail: 'noreply@example.com',
         fromName: 'Acme',
       },
@@ -103,9 +103,9 @@ describe('update', () => {
     expect(params[6]).toBeUndefined();
   });
 
-  test('passes the encrypted string for smtpPassword when set', async () => {
+  test('passes the ciphertext through to $7 when set', async () => {
     exec.enqueue({ rows: [baseRow] });
-    await emailRepo.update({ smtpPassword: 'enc:ciphertext' }, exec);
+    await emailRepo.update({ smtpPasswordCiphertext: 'enc:ciphertext' }, exec);
     expect(exec.calls[0].params[6]).toBe('enc:ciphertext');
   });
 

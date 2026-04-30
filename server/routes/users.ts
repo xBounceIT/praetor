@@ -414,7 +414,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const avatarInitials = computeAvatarInitials(nameResult.value);
-      const id = 'u-' + Date.now();
+      const id = generatePrefixedId('u');
 
       try {
         await query(

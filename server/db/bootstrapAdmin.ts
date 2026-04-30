@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { createChildLogger } from '../utils/logger.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { query } from './index.ts';
 
 export const ADMIN_USERNAME = 'admin';
@@ -23,7 +23,7 @@ export const ensureBootstrapAdmin = async () => {
     const defaultIdCheck = await query('SELECT 1 FROM users WHERE id = $1 LIMIT 1', [
       DEFAULT_ADMIN_USER_ID,
     ]);
-    adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : randomUUID();
+    adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : generatePrefixedId('u');
 
     const rawPassword = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
     const adminPassword =

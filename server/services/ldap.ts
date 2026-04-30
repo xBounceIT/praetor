@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import fs from 'fs';
 import ldap from 'ldapjs';
 import type { LdapConfig } from '../repositories/ldapRepo.ts';
@@ -7,6 +6,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { buildUserLookupFilter, buildUserSyncFilter } from '../utils/ldap-filter.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
 
@@ -271,7 +271,7 @@ class LDAPService {
           syncedCount++;
         } else {
           await usersRepo.createUser({
-            id: randomUUID(),
+            id: generatePrefixedId('u'),
             name,
             username,
             passwordHash: LDAP_PLACEHOLDER_PASSWORD_HASH,

@@ -1,7 +1,14 @@
 import nodemailer from 'nodemailer';
 import type { EmailConfig } from '../repositories/emailRepo.ts';
 import * as emailRepo from '../repositories/emailRepo.ts';
-import { decrypt } from '../utils/crypto.ts';
+import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+
+// Plaintext input for `saveConfig`. Distinct from `EmailConfigPatch` (which carries
+// `smtpPasswordCiphertext`) so the encrypt step can't be skipped: anything reaching the repo
+// has already passed through this service's encryption boundary.
+export type EmailConfigInput = Partial<Omit<EmailConfig, 'smtpPassword'>> & {
+  smtpPassword?: string;
+};
 
 class EmailService {
   private config: EmailConfig | null;
@@ -14,8 +21,15 @@ class EmailService {
     this.config = (await emailRepo.get()) ?? emailRepo.DEFAULT_CONFIG;
   }
 
-  setConfig(config: EmailConfig) {
-    this.config = config;
+  async saveConfig(input: EmailConfigInput): Promise<EmailConfig> {
+    const { smtpPassword, ...rest } = input;
+    const updated = await emailRepo.update({
+      ...rest,
+      smtpPasswordCiphertext:
+        smtpPassword && smtpPassword !== MASKED_SECRET ? encrypt(smtpPassword) : undefined,
+    });
+    this.config = updated;
+    return updated;
   }
 
   private async ensureReady(): Promise<

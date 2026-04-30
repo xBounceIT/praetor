@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as emailRepo from '../repositories/emailRepo.ts';
 import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import emailService from '../services/email.ts';
+import emailService, { type EmailConfigInput } from '../services/email.ts';
 import { logAudit } from '../utils/audit.ts';
-import { encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+import { MASKED_SECRET } from '../utils/crypto.ts';
 
 const sharedConfigProperties = {
   enabled: { type: 'boolean' },
@@ -110,17 +110,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply) => {
-      const body = request.body as Partial<emailRepo.EmailConfig>;
-
-      const updated = await emailRepo.update({
-        ...body,
-        smtpPassword:
-          body.smtpPassword && body.smtpPassword !== MASKED_SECRET
-            ? encrypt(body.smtpPassword)
-            : undefined,
-      });
-
-      emailService.setConfig(updated);
+      const updated = await emailService.saveConfig(request.body as EmailConfigInput);
 
       await logAudit({
         request,
