@@ -2,11 +2,26 @@ import type { TimeEntry } from '../../types';
 import { fetchApi } from './client';
 import { normalizeTimeEntry } from './normalizers';
 
+type EntriesPage = {
+  entries: TimeEntry[];
+  nextCursor: string | null;
+};
+
 export const entriesApi = {
-  list: (userId?: string): Promise<TimeEntry[]> =>
-    fetchApi<TimeEntry[]>(userId ? `/entries?userId=${userId}` : '/entries').then((entries) =>
-      entries.map(normalizeTimeEntry),
-    ),
+  list: async (userId?: string): Promise<TimeEntry[]> => {
+    const all: TimeEntry[] = [];
+    let cursor: string | null = null;
+    do {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', userId);
+      if (cursor) params.set('cursor', cursor);
+      const qs = params.toString();
+      const page = await fetchApi<EntriesPage>(qs ? `/entries?${qs}` : '/entries');
+      for (const entry of page.entries) all.push(normalizeTimeEntry(entry));
+      cursor = page.nextCursor;
+    } while (cursor);
+    return all;
+  },
 
   create: (entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry> =>
     fetchApi<TimeEntry>('/entries', {

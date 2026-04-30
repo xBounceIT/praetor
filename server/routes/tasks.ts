@@ -433,12 +433,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isRecurring === undefined || isRecurring === null ? undefined : parseBoolean(isRecurring);
 
       const updated = await tasksRepo.update(idResult.value, {
-        name,
-        description,
+        name: name || undefined,
+        description: description || undefined,
         isRecurring: isRecurringValue,
-        recurrencePattern,
-        recurrenceStart,
-        recurrenceEnd,
+        recurrencePattern: recurrencePattern || undefined,
+        recurrenceStart: recurrenceStart || undefined,
+        recurrenceEnd: recurrenceEnd || undefined,
         recurrenceDuration: durationResult.value,
         isDisabled,
         expectedEffort,

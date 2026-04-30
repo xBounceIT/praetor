@@ -109,7 +109,7 @@ const entriesListQuerySchema = {
 const entriesListResponseSchema = {
   type: 'object',
   properties: {
-    entries: { type: 'array' },
+    entries: { type: 'array', items: entrySchema },
     nextCursor: { type: ['string', 'null'] },
   },
   required: ['entries', 'nextCursor'],

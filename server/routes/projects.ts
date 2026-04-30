@@ -307,7 +307,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           const updated = await projectsRepo.update(
             idResult.value,
-            { name, clientId, color: normalizedColor, description, isDisabled },
+            {
+              name: name || undefined,
+              clientId: clientId || undefined,
+              color: normalizedColor || undefined,
+              description: description || undefined,
+              isDisabled,
+            },
             tx,
           );
 
