@@ -31,7 +31,7 @@ The table already has a `schema/<table>.ts` file. Today, only `notifications` qu
 ```bash
 # Edit server/db/schema/notifications.ts (e.g. add a column).
 cd server
-bun db:generate --name add_notifications_priority
+bun run db:generate --name add_notifications_priority
 # Review the generated SQL in db/migrations/0NNN_add_notifications_priority.sql.
 git add db/schema/ db/migrations/
 git commit
@@ -45,7 +45,7 @@ Additive changes (new column, new index) are safe to ship as-generated. **Destru
 # Create server/db/schema/<table>.ts with the new table definition.
 # Re-export it from server/db/schema/index.ts.
 cd server
-bun db:generate --name add_<table>_table
+bun run db:generate --name add_<table>_table
 # Review the generated SQL.
 git add db/schema/ db/migrations/
 git commit
@@ -57,7 +57,7 @@ This is what you'll do most often during Phase 2/3 — the table lives only in `
 
 ```bash
 cd server
-bun db:generate:custom --name add_clients_priority
+bun run db:generate:custom --name add_clients_priority
 # This produces an empty 0NNN_add_clients_priority.sql in db/migrations/.
 # Open it and write the raw SQL by hand:
 #
@@ -71,7 +71,7 @@ git commit
 
 ### First-time-modeling rule
 
-When you add a previously unmodeled table to `schema/*.ts` for the first time, the next `bun db:generate` will produce a `CREATE TABLE` for it — but every existing DB already has it from `schema.sql`. Two ways to handle this:
+When you add a previously unmodeled table to `schema/*.ts` for the first time, the next `bun run db:generate` will produce a `CREATE TABLE` for it — but every existing DB already has it from `schema.sql`. Two ways to handle this:
 
 - **Idempotent guard** (recommended): hand-edit the generated SQL to use `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Safe to run on any DB; the same pattern as the `0000_baseline_pre_drizzle` migration.
 - **No-op claim**: replace the body of the generated SQL with a single comment (e.g. `-- claim existing clients table; no schema change`). Useful when you're modeling a table without changing its shape, just to bring it under Drizzle ORM.
@@ -84,7 +84,7 @@ The same principle applies to **constraints, foreign keys, and indexes** that ex
 
 ```bash
 cd server
-bun db:migrate
+bun run db:migrate
 ```
 
 This runs every pending migration in order and records each one in the `drizzle.__drizzle_migrations` tracking table. It's idempotent — re-running is a no-op if everything's applied.
@@ -94,7 +94,7 @@ This runs every pending migration in order and records each one in the `drizzle.
 Bootstrap order for a fresh local DB:
 
 1. Apply `schema.sql` (full historical baseline) using your preferred method — `psql -f db/schema.sql` or the existing Docker bootstrap.
-2. From `server/`, run `bun db:migrate`. The `0000_baseline_pre_drizzle` migration is a no-op on a DB that already has `notifications` (it uses `IF NOT EXISTS` guards), but the migration is still recorded in `__drizzle_migrations`. Subsequent migrations apply normally.
+2. From `server/`, run `bun run db:migrate`. The `0000_baseline_pre_drizzle` migration is a no-op on a DB that already has `notifications` (it uses `IF NOT EXISTS` guards), but the migration is still recorded in `__drizzle_migrations`. Subsequent migrations apply normally.
 
 After this, fresh and existing DBs converge to the same `__drizzle_migrations` state.
 
@@ -104,15 +104,15 @@ From the `server/` directory:
 
 | Script | Purpose |
 |---|---|
-| `bun db:generate` | Generate a migration from the diff between `schema/*.ts` and the latest snapshot. |
-| `bun db:generate:custom` | Generate an empty migration file for hand-written SQL (used when the affected table isn't modeled in TS yet). |
-| `bun db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. |
-| `bun db:check` | Verify that snapshots and migration SQL are consistent (run in CI to catch drift). |
-| `bun db:studio` | Open Drizzle Studio (browser-based DB explorer). **Local dev only — never point at prod credentials.** |
+| `bun run db:generate` | Generate a migration from the diff between `schema/*.ts` and the latest snapshot. |
+| `bun run db:generate:custom` | Generate an empty migration file for hand-written SQL (used when the affected table isn't modeled in TS yet). |
+| `bun run db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. |
+| `bun run db:check` | Verify that snapshots and migration SQL are consistent (run in CI to catch drift). |
+| `bun run db:studio` | Open Drizzle Studio (browser-based DB explorer). **Local dev only — never point at prod credentials.** |
 
 ### Why no `db:push`?
 
-`drizzle-kit push` skips the migration files entirely and applies schema diffs directly to the DB. That's a fast prototyping tool, but it bypasses `__drizzle_migrations` and creates trivial paths to prod drift. We deliberately don't ship it as a script. If you really want it for local prototyping, run `bun drizzle-kit push` manually with full awareness — but commit a real migration before merging.
+`drizzle-kit push` skips the migration files entirely and applies schema diffs directly to the DB. That's a fast prototyping tool, but it bypasses `__drizzle_migrations` and creates trivial paths to prod drift. We deliberately don't ship it as a script. If you really want it for local prototyping, run `bunx drizzle-kit push` manually with full awareness — but commit a real migration before merging.
 
 ## Adding to or changing this workflow
 
