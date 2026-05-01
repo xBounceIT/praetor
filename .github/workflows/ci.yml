@@ -128,43 +128,16 @@ jobs:
           exit 1
 
       # The backend image is built with `bun install --frozen-lockfile` (no
-      # production flag), so drizzle-kit and the drizzle.config.ts/db/* sources
+      # production flag), so drizzle-orm and the drizzle.config.ts/db/* sources
       # are all present in the running container. Running migrate inside the
       # backend container exercises the exact code path a deploy would use, on
       # a Postgres that was bootstrapped from schema.sql by the postgres init
       # mount — mirroring the dev/prod baseline scenario.
-      #
-      # drizzle-kit's ora spinner ignores CI=1 and overwrites its own error
-      # output via cursor escapes when stdout is a non-TTY pipe. To surface
-      # any actual failure, redirect stdout and stderr to separate files
-      # inside the container, then dump both regardless of exit code.
       - name: Apply Drizzle baseline migration
-        run: |
-          docker compose exec -T backend bash -c '
-            set +e
-            bun run db:migrate >/tmp/migrate.out 2>/tmp/migrate.err
-            code=$?
-            echo "=== drizzle-kit migrate exit code: $code ==="
-            echo "=== stdout ==="
-            cat /tmp/migrate.out
-            echo "=== stderr ==="
-            cat /tmp/migrate.err
-            exit $code
-          '
+        run: docker compose exec -T backend bun run db:migrate
 
       - name: Verify Drizzle baseline migration is idempotent
-        run: |
-          docker compose exec -T backend bash -c '
-            set +e
-            bun run db:migrate >/tmp/migrate2.out 2>/tmp/migrate2.err
-            code=$?
-            echo "=== drizzle-kit migrate (rerun) exit code: $code ==="
-            echo "=== stdout ==="
-            cat /tmp/migrate2.out
-            echo "=== stderr ==="
-            cat /tmp/migrate2.err
-            exit $code
-          '
+        run: docker compose exec -T backend bun run db:migrate
 
       - name: Verify migration recorded in __drizzle_migrations
         run: |

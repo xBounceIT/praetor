@@ -114,9 +114,17 @@ From the `server/` directory:
 |---|---|
 | `bun run db:generate` | Generate a migration from the diff between `schema/*.ts` and the latest snapshot. |
 | `bun run db:generate:custom` | Generate an empty migration file for hand-written SQL (used when the affected table isn't modeled in TS yet). |
-| `bun run db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. |
+| `bun run db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. Calls `drizzle-orm`'s programmatic migrator via `scripts/run-migrations.ts`, not `drizzle-kit migrate` — see the note below. |
 | `bun run db:check` | Verify that snapshots and migration SQL are consistent (run in CI to catch drift). |
 | `bun run db:studio` | Open Drizzle Studio (browser-based DB explorer). **Local dev only — never point at prod credentials.** |
+
+### Why `db:migrate` doesn't call `drizzle-kit migrate`
+
+drizzle-kit 0.31's `migrate` CLI wraps the migrator in a hanji `renderWithTask` spinner that swallows error output in non-TTY environments (CI, deploy hooks, anything where stdout isn't a real terminal). When migrations fail, the CLI exits 1 with no error message — the actual exception never reaches stdout or stderr because the spinner renderer consumes the rejected promise before the outer `try/catch` can `console.error` it.
+
+We use `drizzle-orm/node-postgres/migrator` directly via [`scripts/run-migrations.ts`](../scripts/run-migrations.ts) instead. The migration files, journal, snapshot, and `__drizzle_migrations` tracking table are all read/written exactly the same way — only the framing differs. Errors propagate as normal Node exceptions and reach stderr.
+
+`drizzle-kit generate`, `db:check`, and `db:studio` continue to use the drizzle-kit CLI because their failure modes are observable from interactive use and they don't run unattended.
 
 ### Why no `db:push`?
 
