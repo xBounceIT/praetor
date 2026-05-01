@@ -1197,6 +1197,85 @@ const endSseResponse = (reply: FastifyReply) => {
   }
 };
 
+type AiReportingConvoTurn = { role: 'user' | 'assistant'; content: string };
+
+const isAiReportingConvoTurn = (r: reportsAiChatRepo.ConversationTurn): r is AiReportingConvoTurn =>
+  (r.role === 'user' || r.role === 'assistant') &&
+  r.content.trim().length > 0 &&
+  !isRetryRewritePrompt(r.content);
+
+const buildAiReportingConversation = (
+  recent: reportsAiChatRepo.ConversationTurn[],
+): AiReportingConvoTurn[] => recent.filter(isAiReportingConvoTurn).reverse();
+
+type AiReportingPromptPayload =
+  | {
+      provider: 'openrouter';
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    }
+  | { provider: 'gemini'; prompt: string };
+
+const buildAiReportingPromptPayload = (args: {
+  provider: AiProvider;
+  uiLanguage: UiLanguage;
+  datasetJson: string;
+  convo: AiReportingConvoTurn[];
+}): AiReportingPromptPayload => {
+  const { provider, uiLanguage, datasetJson, convo } = args;
+  if (provider === 'openrouter') {
+    return {
+      provider: 'openrouter',
+      messages: [
+        { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
+        { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
+        ...convo,
+      ],
+    };
+  }
+  const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+  return {
+    provider: 'gemini',
+    prompt: [
+      buildAiReportingSystemPrompt(uiLanguage),
+      '',
+      buildDatasetInstruction(datasetJson, uiLanguage),
+      '',
+      'Conversation:',
+      transcript,
+      '',
+      'Answer as the assistant:',
+    ].join('\n'),
+  };
+};
+
+const createSseStreamHandlers = (
+  reply: FastifyReply,
+  abortController: AbortController,
+  emitThoughtDone: () => Promise<void>,
+) => {
+  const accumulated = { text: '', thoughtContent: '' };
+
+  const callbacks = {
+    onThoughtDelta: async (delta: string) => {
+      if (abortController.signal.aborted) return;
+      accumulated.thoughtContent += delta;
+      if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+        abortController.abort();
+      }
+    },
+    onAnswerDelta: async (delta: string) => {
+      if (abortController.signal.aborted) return;
+      accumulated.text += delta;
+      if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+        abortController.abort();
+      }
+    },
+    onThoughtDone: emitThoughtDone,
+  };
+
+  return { callbacks, accumulated };
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -1446,8 +1525,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let shouldAutoTitle = false;
       let streamStarted = false;
       let thoughtDoneSent = false;
-      let streamedText = '';
-      let streamedThoughtContent = '';
       const streamAbortController = new AbortController();
       const handleClientDisconnect = () => {
         streamAbortController.abort();
@@ -1480,15 +1557,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
-        const convo = recent
-          .filter(
-            (r) =>
-              (r.role === 'user' || r.role === 'assistant') &&
-              r.content.trim() &&
-              !isRetryRewritePrompt(r.content),
-          )
-          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
-          .reverse();
+        const convo = buildAiReportingConversation(recent);
 
         if (isRetryRewrite) {
           convo.push({ role: 'user', content: messageResult.value });
@@ -1531,80 +1600,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         };
 
-        let generated: AiTextResult;
-        if (provider === 'openrouter') {
-          const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-            { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
-            { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
-            ...convo.map((m) => ({ role: m.role, content: m.content })),
-          ];
-          generated = await openrouterGenerateTextStream(
-            apiKey,
-            modelId,
-            messagesForAi,
-            {
-              onThoughtDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedThoughtContent += delta;
-                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onAnswerDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedText += delta;
-                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onThoughtDone: emitThoughtDone,
-            },
-            streamAbortController.signal,
-          );
-        } else {
-          const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-          const prompt = [
-            buildAiReportingSystemPrompt(uiLanguage),
-            '',
-            buildDatasetInstruction(datasetJson, uiLanguage),
-            '',
-            'Conversation:',
-            transcript,
-            '',
-            'Answer as the assistant:',
-          ].join('\n');
-          generated = await geminiGenerateTextStream(
-            apiKey,
-            modelId,
-            prompt,
-            {
-              onThoughtDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedThoughtContent += delta;
-                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onAnswerDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedText += delta;
-                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onThoughtDone: emitThoughtDone,
-            },
-            streamAbortController.signal,
-          );
-        }
+        const streamHandlers = createSseStreamHandlers(
+          reply,
+          streamAbortController,
+          emitThoughtDone,
+        );
+        const payload = buildAiReportingPromptPayload({
+          provider,
+          uiLanguage,
+          datasetJson,
+          convo,
+        });
+        const generated: AiTextResult =
+          payload.provider === 'openrouter'
+            ? await openrouterGenerateTextStream(
+                apiKey,
+                modelId,
+                payload.messages,
+                streamHandlers.callbacks,
+                streamAbortController.signal,
+              )
+            : await geminiGenerateTextStream(
+                apiKey,
+                modelId,
+                payload.prompt,
+                streamHandlers.callbacks,
+                streamAbortController.signal,
+              );
 
         if (streamAbortController.signal.aborted) return;
         await emitThoughtDone();
 
         const generatedText = String(generated.text || '').trim();
         const generatedThought = String(generated.thoughtContent || '').trim();
-        const assistantText = generatedText || streamedText.trim() || 'No response.';
-        const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
+        const assistantText =
+          generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
+        const assistantThoughtContent =
+          generatedThought || streamHandlers.accumulated.thoughtContent.trim();
         if (streamAbortController.signal.aborted) return;
 
         await reportsAiChatRepo.insertAssistantMessage({
@@ -1719,8 +1751,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let streamStarted = false;
       let thoughtDoneSent = false;
-      let streamedText = '';
-      let streamedThoughtContent = '';
       const streamAbortController = new AbortController();
       const handleClientDisconnect = () => {
         streamAbortController.abort();
@@ -1760,15 +1790,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const recent = await reportsAiChatRepo.listRecentMessages(sessionIdResult.value, {
           beforeOrAt: userMsgCreatedAt,
         });
-        const convo = recent
-          .filter(
-            (r) =>
-              (r.role === 'user' || r.role === 'assistant') &&
-              r.content.trim() &&
-              !isRetryRewritePrompt(r.content),
-          )
-          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
-          .reverse();
+        const convo = buildAiReportingConversation(recent);
 
         const { fromDate, toDate } = getReportingRange();
         const requestedSections = determineRequestedSections(contentResult.value, convo);
@@ -1807,80 +1829,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         };
 
-        let generated: AiTextResult;
-        if (provider === 'openrouter') {
-          const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-            { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
-            { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
-            ...convo.map((m) => ({ role: m.role, content: m.content })),
-          ];
-          generated = await openrouterGenerateTextStream(
-            apiKey,
-            modelId,
-            messagesForAi,
-            {
-              onThoughtDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedThoughtContent += delta;
-                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onAnswerDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedText += delta;
-                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onThoughtDone: emitThoughtDone,
-            },
-            streamAbortController.signal,
-          );
-        } else {
-          const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-          const prompt = [
-            buildAiReportingSystemPrompt(uiLanguage),
-            '',
-            buildDatasetInstruction(datasetJson, uiLanguage),
-            '',
-            'Conversation:',
-            transcript,
-            '',
-            'Answer as the assistant:',
-          ].join('\n');
-          generated = await geminiGenerateTextStream(
-            apiKey,
-            modelId,
-            prompt,
-            {
-              onThoughtDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedThoughtContent += delta;
-                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onAnswerDelta: async (delta) => {
-                if (streamAbortController.signal.aborted) return;
-                streamedText += delta;
-                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
-                  streamAbortController.abort();
-                }
-              },
-              onThoughtDone: emitThoughtDone,
-            },
-            streamAbortController.signal,
-          );
-        }
+        const streamHandlers = createSseStreamHandlers(
+          reply,
+          streamAbortController,
+          emitThoughtDone,
+        );
+        const payload = buildAiReportingPromptPayload({
+          provider,
+          uiLanguage,
+          datasetJson,
+          convo,
+        });
+        const generated: AiTextResult =
+          payload.provider === 'openrouter'
+            ? await openrouterGenerateTextStream(
+                apiKey,
+                modelId,
+                payload.messages,
+                streamHandlers.callbacks,
+                streamAbortController.signal,
+              )
+            : await geminiGenerateTextStream(
+                apiKey,
+                modelId,
+                payload.prompt,
+                streamHandlers.callbacks,
+                streamAbortController.signal,
+              );
 
         if (streamAbortController.signal.aborted) return;
         await emitThoughtDone();
 
         const generatedText = String(generated.text || '').trim();
         const generatedThought = String(generated.thoughtContent || '').trim();
-        const assistantText = generatedText || streamedText.trim() || 'No response.';
-        const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
+        const assistantText =
+          generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
+        const assistantThoughtContent =
+          generatedThought || streamHandlers.accumulated.thoughtContent.trim();
         if (streamAbortController.signal.aborted) return;
 
         await reportsAiChatRepo.insertAssistantMessage({
@@ -2002,15 +1987,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
-        const convo = recent
-          .filter(
-            (r) =>
-              (r.role === 'user' || r.role === 'assistant') &&
-              r.content.trim() &&
-              !isRetryRewritePrompt(r.content),
-          )
-          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
-          .reverse();
+        const convo = buildAiReportingConversation(recent);
 
         if (isRetryRewrite) {
           convo.push({ role: 'user', content: messageResult.value });
@@ -2032,33 +2009,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         const datasetJson = JSON.stringify(datasetBuildResult.dataset);
 
-        let text = '';
-        let thoughtContent = '';
-        if (provider === 'openrouter') {
-          const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-            { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
-            { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
-            ...convo.map((m) => ({ role: m.role, content: m.content })),
-          ];
-          const generated = await openrouterGenerateText(apiKey, modelId, messagesForAi);
-          text = generated.text;
-          thoughtContent = generated.thoughtContent || '';
-        } else {
-          const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-          const prompt = [
-            buildAiReportingSystemPrompt(uiLanguage),
-            '',
-            buildDatasetInstruction(datasetJson, uiLanguage),
-            '',
-            'Conversation:',
-            transcript,
-            '',
-            'Answer as the assistant:',
-          ].join('\n');
-          const generated = await geminiGenerateText(apiKey, modelId, prompt);
-          text = generated.text;
-          thoughtContent = generated.thoughtContent || '';
-        }
+        const payload = buildAiReportingPromptPayload({
+          provider,
+          uiLanguage,
+          datasetJson,
+          convo,
+        });
+        const generated =
+          payload.provider === 'openrouter'
+            ? await openrouterGenerateText(apiKey, modelId, payload.messages)
+            : await geminiGenerateText(apiKey, modelId, payload.prompt);
+        const text = generated.text;
+        const thoughtContent = generated.thoughtContent || '';
 
         const cleaned = String(text || '').trim();
         const assistantText = cleaned || 'No response.';
