@@ -4,8 +4,9 @@ import { notifications } from '../db/schema/notifications.ts';
 
 // `is_read IS NOT TRUE` matches both `false` and NULL rows so list / count / markAll
 // agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
-// would parameterize the comparison and miss NULL; a SQL literal also avoids defeating
-// any partial index that may exist on `is_read = false`.
+// would parameterize the comparison and miss NULL. The partial index
+// `idx_notifications_user_unread` (predicate `is_read = false`) is not matched by this
+// predicate — the NULL-handling consistency is the tradeoff we want.
 const isUnread = sql`${notifications.isRead} IS NOT TRUE`;
 
 export type Notification = {
@@ -27,8 +28,9 @@ const mapRow = (row: typeof notifications.$inferSelect): Notification => ({
   message: row.message ?? '',
   data: row.data,
   isRead: row.isRead ?? false,
-  // `created_at` has DEFAULT CURRENT_TIMESTAMP, so the `?? 0` branch should not fire
-  // in practice; the schema permits NULL only because Phase 0 mirrored schema.sql.
+  // `created_at` is nullable in the schema (mirrors `schema.sql`) but has
+  // DEFAULT CURRENT_TIMESTAMP, so the runtime invariant is that it always has a value;
+  // `?? 0` is a TS-strict appeasement for the unreachable branch.
   createdAt: row.createdAt?.getTime() ?? 0,
 });
 
