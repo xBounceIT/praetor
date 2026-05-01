@@ -1161,14 +1161,6 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_id VARCHAR(100);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_item_id VARCHAR(50);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_sale_supplier_name VARCHAR(255);
 
--- Backfill: link existing sale_items to their auto-created supplier_sales via shared supplier_quote_id
-UPDATE sale_items si
-SET supplier_sale_id = ss.id,
-    supplier_sale_supplier_name = ss.supplier_name
-FROM supplier_sales ss
-WHERE ss.linked_quote_id = si.supplier_quote_id
-  AND si.supplier_sale_id IS NULL;
-
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_supplier_sale_id ON sale_items(supplier_sale_id);
 
@@ -1471,6 +1463,14 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_supplier_id ON supplier_sales(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_status ON supplier_sales(status);
+
+-- Backfill: link existing sale_items to their auto-created supplier_sales via shared supplier_quote_id
+UPDATE sale_items si
+SET supplier_sale_id = ss.id,
+    supplier_sale_supplier_name = ss.supplier_name
+FROM supplier_sales ss
+WHERE ss.linked_quote_id = si.supplier_quote_id
+  AND si.supplier_sale_id IS NULL;
 
 CREATE TABLE IF NOT EXISTS supplier_sale_items (
     id VARCHAR(50) PRIMARY KEY,
