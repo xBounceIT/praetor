@@ -133,11 +133,23 @@ jobs:
       # backend container exercises the exact code path a deploy would use, on
       # a Postgres that was bootstrapped from schema.sql by the postgres init
       # mount — mirroring the dev/prod baseline scenario.
+      #
+      # CI=1 disables drizzle-kit's spinner (ora) so the actual error message
+      # isn't overwritten by terminal cursor escapes when something fails;
+      # `set -o pipefail` + `2>&1 | cat` forces line-buffered output for the
+      # same reason. Without these, a non-zero drizzle-kit exit can land in
+      # the log without any error context (we hit exactly that on first run).
       - name: Apply Drizzle baseline migration
-        run: docker compose exec -T backend bun run db:migrate
+        shell: bash
+        run: |
+          set -o pipefail
+          docker compose exec -T -e CI=1 backend bun run db:migrate 2>&1 | cat
 
       - name: Verify Drizzle baseline migration is idempotent
-        run: docker compose exec -T backend bun run db:migrate
+        shell: bash
+        run: |
+          set -o pipefail
+          docker compose exec -T -e CI=1 backend bun run db:migrate 2>&1 | cat
 
       - name: Verify migration recorded in __drizzle_migrations
         run: |
