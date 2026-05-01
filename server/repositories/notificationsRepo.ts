@@ -2,10 +2,11 @@ import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
 
-// `is_read = false` is written as a SQL literal (not eq(..., false)) so PG can match
-// the predicate against the partial index `idx_notifications_user_unread WHERE is_read = false`.
-// A parameterized `is_read = $N` defeats the partial-index match under generic plans.
-const isUnread = sql`${notifications.isRead} = false`;
+// `is_read IS NOT TRUE` matches both `false` and NULL rows so list / count / markAll
+// agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
+// would parameterize the comparison and miss NULL; a SQL literal also avoids defeating
+// any partial index that may exist on `is_read = false`.
+const isUnread = sql`${notifications.isRead} is not true`;
 
 export type Notification = {
   id: string;

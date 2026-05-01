@@ -9,9 +9,22 @@ import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts'
 let exec: FakeExecutor;
 let testDb: DbExecutor;
 
+// Drizzle's node-postgres driver invokes `client.query(config, params)` where `config` is
+// a `{ text, rowMode, ... }` object — not a string. Translate both call shapes so the fake
+// records the SQL string (rather than the raw config object) and so future SQL-string
+// assertions or debugging are straightforward.
+const makePoolAdapter = (fake: FakeExecutor): Pool =>
+  ({
+    query(textOrConfig: string | { text: string; values?: unknown[] }, params?: unknown[]) {
+      const text = typeof textOrConfig === 'string' ? textOrConfig : textOrConfig.text;
+      const values = params ?? (typeof textOrConfig === 'string' ? undefined : textOrConfig.values);
+      return fake.query(text, values);
+    },
+  }) as unknown as Pool;
+
 beforeEach(() => {
   exec = makeFakeExecutor();
-  testDb = drizzle(exec as unknown as Pool, { schema });
+  testDb = drizzle(makePoolAdapter(exec), { schema });
 });
 
 // drizzle-orm/node-postgres uses rowMode: 'array' for select queries; rows are positional
