@@ -134,22 +134,37 @@ jobs:
       # a Postgres that was bootstrapped from schema.sql by the postgres init
       # mount — mirroring the dev/prod baseline scenario.
       #
-      # CI=1 disables drizzle-kit's spinner (ora) so the actual error message
-      # isn't overwritten by terminal cursor escapes when something fails;
-      # `set -o pipefail` + `2>&1 | cat` forces line-buffered output for the
-      # same reason. Without these, a non-zero drizzle-kit exit can land in
-      # the log without any error context (we hit exactly that on first run).
+      # drizzle-kit's ora spinner ignores CI=1 and overwrites its own error
+      # output via cursor escapes when stdout is a non-TTY pipe. To surface
+      # any actual failure, redirect stdout and stderr to separate files
+      # inside the container, then dump both regardless of exit code.
       - name: Apply Drizzle baseline migration
-        shell: bash
         run: |
-          set -o pipefail
-          docker compose exec -T -e CI=1 backend bun run db:migrate 2>&1 | cat
+          docker compose exec -T backend bash -c '
+            set +e
+            bun run db:migrate >/tmp/migrate.out 2>/tmp/migrate.err
+            code=$?
+            echo "=== drizzle-kit migrate exit code: $code ==="
+            echo "=== stdout ==="
+            cat /tmp/migrate.out
+            echo "=== stderr ==="
+            cat /tmp/migrate.err
+            exit $code
+          '
 
       - name: Verify Drizzle baseline migration is idempotent
-        shell: bash
         run: |
-          set -o pipefail
-          docker compose exec -T -e CI=1 backend bun run db:migrate 2>&1 | cat
+          docker compose exec -T backend bash -c '
+            set +e
+            bun run db:migrate >/tmp/migrate2.out 2>/tmp/migrate2.err
+            code=$?
+            echo "=== drizzle-kit migrate (rerun) exit code: $code ==="
+            echo "=== stdout ==="
+            cat /tmp/migrate2.out
+            echo "=== stderr ==="
+            cat /tmp/migrate2.err
+            exit $code
+          '
 
       - name: Verify migration recorded in __drizzle_migrations
         run: |
