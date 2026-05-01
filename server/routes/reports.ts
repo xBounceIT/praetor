@@ -767,7 +767,10 @@ const buildBusinessDataset = async (
   requestedSections: Set<DatasetSection> | null = null,
 ): Promise<DatasetBuildResult> =>
   datasetQueryCounterStorage.run({ count: 0 }, async () => {
-    const viewerId = request.user?.id || '';
+    const viewerId = request.user?.id;
+    if (!viewerId) {
+      throw new Error('buildBusinessDataset requires an authenticated request');
+    }
     const permissionsApplied = new Set<string>();
     const includedSections = new Set<DatasetSection>();
     const requestedSectionsLabel = requestedSections
@@ -1478,14 +1481,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
         const convo = recent
-          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
-            (x) =>
-              (x.role === 'user' || x.role === 'assistant') &&
-              x.content.trim() &&
-              !isRetryRewritePrompt(x.content),
+            (r) =>
+              (r.role === 'user' || r.role === 'assistant') &&
+              r.content.trim() &&
+              !isRetryRewritePrompt(r.content),
           )
-          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
           .reverse();
 
         if (isRetryRewrite) {
@@ -1759,14 +1761,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           beforeOrAt: userMsgCreatedAt,
         });
         const convo = recent
-          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
-            (x) =>
-              (x.role === 'user' || x.role === 'assistant') &&
-              x.content.trim() &&
-              !isRetryRewritePrompt(x.content),
+            (r) =>
+              (r.role === 'user' || r.role === 'assistant') &&
+              r.content.trim() &&
+              !isRetryRewritePrompt(r.content),
           )
-          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
           .reverse();
 
         const { fromDate, toDate } = getReportingRange();
@@ -2002,14 +2003,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
         const convo = recent
-          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
-            (x) =>
-              (x.role === 'user' || x.role === 'assistant') &&
-              x.content.trim() &&
-              !isRetryRewritePrompt(x.content),
+            (r) =>
+              (r.role === 'user' || r.role === 'assistant') &&
+              r.content.trim() &&
+              !isRetryRewritePrompt(r.content),
           )
-          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))
           .reverse();
 
         if (isRetryRewrite) {

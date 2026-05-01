@@ -359,7 +359,7 @@ export const getInvoicesSection = async (
 ): Promise<InvoicesSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
-  const [totals, byStatus, byMonth, aging, topOutstanding, topInvoices] = await Promise.all([
+  const [totals, byStatus, byMonth, aging, topClients, topInvoices] = await Promise.all([
     exec.query<{
       count: string;
       total_sum: string;
@@ -491,7 +491,7 @@ export const getInvoicesSection = async (
       dueDate: toText(r.due_date),
       outstanding: toNumber(r.outstanding),
     })),
-    topClientsByOutstanding: topOutstanding.rows.map((r) => ({
+    topClientsByOutstanding: topClients.rows.map((r) => ({
       label: toText(r.label),
       value: toNumber(r.value),
       invoiceCount: toNumber(r.invoice_count),
