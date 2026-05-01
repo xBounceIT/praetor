@@ -37,6 +37,8 @@ git add db/schema/ db/migrations/
 git commit
 ```
 
+Additive changes (new column, new index) are safe to ship as-generated. **Destructive changes** (drop column, change column type, tighten a constraint) need extra care: the generated `ALTER TABLE` will run against existing data. For type changes, you may need a `USING` clause; for `NOT NULL` tightening, you may need a backfill statement first. Always read the generated SQL and add data migration steps by hand when the schema change isn't purely additive.
+
 ### Flavor 2 — Add a brand-new table
 
 ```bash
@@ -74,7 +76,9 @@ When you add a previously unmodeled table to `schema/*.ts` for the first time, t
 - **Idempotent guard** (recommended): hand-edit the generated SQL to use `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Safe to run on any DB; the same pattern as the `0000_baseline_pre_drizzle` migration.
 - **No-op claim**: replace the body of the generated SQL with a single comment (e.g. `-- claim existing clients table; no schema change`). Useful when you're modeling a table without changing its shape, just to bring it under Drizzle ORM.
 
-Either way, the snapshot in `meta/` (which now includes the table) stays unchanged.
+The same principle applies to **constraints, foreign keys, and indexes** that exist in `schema.sql` but aren't yet declared in the TS schema. When you add a `.references(...)` or a new index that already exists in the live DB, the generated `ALTER TABLE ... ADD CONSTRAINT` or `CREATE INDEX` will fail. Postgres has no `ADD CONSTRAINT IF NOT EXISTS` — wrap the statement in a `DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN ... END $$` block, or replace it with a no-op comment if the constraint is already in place.
+
+**Known drift to watch for in Phase 3**: `notifications.user_id` has `REFERENCES users(id) ON DELETE CASCADE` in `schema.sql` but no `.references(...)` in `schema/notifications.ts` (because `users` isn't modeled yet). When `users` is modeled and the FK is added to the TS schema, the generated migration will need the constraint-existence guard described above.
 
 ## Applying migrations
 
@@ -104,7 +108,7 @@ From the `server/` directory:
 | `bun db:generate:custom` | Generate an empty migration file for hand-written SQL (used when the affected table isn't modeled in TS yet). |
 | `bun db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. |
 | `bun db:check` | Verify that snapshots and migration SQL are consistent (run in CI to catch drift). |
-| `bun db:studio` | Open Drizzle Studio (browser-based DB explorer). |
+| `bun db:studio` | Open Drizzle Studio (browser-based DB explorer). **Local dev only — never point at prod credentials.** |
 
 ### Why no `db:push`?
 

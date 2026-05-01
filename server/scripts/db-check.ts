@@ -3,6 +3,8 @@ import { StringDecoder } from 'node:string_decoder';
 
 const stripEmoji = (s: string) => s.replace(/\p{Extended_Pictographic}/gu, '');
 
+// shell: true is required on Windows to resolve drizzle-kit's .cmd shim in
+// node_modules/.bin. Args are hardcoded so there's no injection surface.
 const child = spawn('drizzle-kit', ['check'], {
   stdio: ['inherit', 'pipe', 'pipe'],
   shell: true,
