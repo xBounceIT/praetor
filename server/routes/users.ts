@@ -1,8 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query, withTransaction } from '../db/index.ts';
+import { withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
+import * as settingsRepo from '../repositories/settingsRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -14,6 +17,7 @@ import { isUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
+  ADMIN_ROLE_ID,
   requestHasPermission as hasPermission,
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
@@ -29,7 +33,6 @@ import {
   optionalArrayOfStrings,
   optionalEmail,
   optionalLocalizedNonNegativeNumber,
-  optionalNonEmptyString,
   requireNonEmptyString,
   validateEnum,
 } from '../utils/validation.ts';
@@ -41,8 +44,6 @@ const idParamSchema = {
   },
   required: ['id'],
 } as const;
-
-const ADMIN_ROLE_ID = 'admin';
 
 const userSchema = {
   type: 'object',
@@ -140,38 +141,36 @@ const canViewUserEmails = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
   hasPermission(request, 'administration.user_management.view');
 
-type UserRow = {
-  id: string;
-  name: string;
-  username: string;
-  email?: string | null;
-  role: string;
-  avatar_initials: string | null;
-  cost_per_hour: string | number | null;
-  is_disabled: boolean | null;
-  employee_type: string | null;
-  has_top_manager_role?: boolean | null;
-  is_admin_only?: boolean | null;
+const canViewAllUsers = (request: FastifyRequest) =>
+  hasPermission(request, 'administration.user_management_all.view') ||
+  hasPermission(request, 'hr.work_units_all.view');
+
+const CREATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
+  app_user: 'administration.user_management.create',
+  internal: 'hr.internal.create',
+  external: 'hr.external.create',
 };
 
-const mapUserResponse = (
-  user: UserRow,
+const UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
+  app_user: 'administration.user_management.update',
+  internal: 'hr.internal.update',
+  external: 'hr.external.update',
+};
+
+const DELETE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
+  app_user: 'administration.user_management.delete',
+  internal: 'hr.internal.delete',
+  external: 'hr.external.delete',
+};
+
+const maskUserResponse = (
+  user: usersRepo.UserListRow,
   canViewCosts: boolean,
   canRevealUserEmails: boolean,
-  hasTopManagerRole = Boolean(user.has_top_manager_role),
-  isAdminOnly = Boolean(user.is_admin_only),
 ) => ({
-  id: user.id,
-  name: user.name,
-  username: user.username,
-  email: canRevealUserEmails ? (user.email ?? '') : '',
-  role: user.role,
-  avatarInitials: user.avatar_initials ?? '',
-  costPerHour: canViewCosts ? parseFloat(String(user.cost_per_hour || 0)) : 0,
-  isDisabled: !!user.is_disabled,
-  employeeType: user.employee_type || 'app_user',
-  hasTopManagerRole,
-  isAdminOnly,
+  ...user,
+  email: canRevealUserEmails ? user.email : '',
+  costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -205,9 +204,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const canViewAllUsers =
-        hasPermission(request, 'administration.user_management_all.view') ||
-        hasPermission(request, 'hr.work_units_all.view');
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
         hasPermission(request, 'timesheets.tracker.view') ||
@@ -219,87 +215,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewCosts = hasPermission(request, 'hr.costs.view');
       const canRevealUserEmails = canViewUserEmails(request);
 
-      let result: Awaited<ReturnType<typeof query>>;
-      if (canViewAllUsers) {
-        result = await query(
-          `SELECT u.id,
-                  u.name,
-                  u.username,
-                  COALESCE(s.email, '') AS email,
-                  u.role,
-                  u.avatar_initials,
-                  u.cost_per_hour,
-                  u.is_disabled,
-                  u.employee_type,
-                  EXISTS (
-                    SELECT 1
-                    FROM user_roles ur
-                    WHERE ur.user_id = u.id AND ur.role_id = $1
-                  ) AS has_top_manager_role,
-                  (
-                    u.role = $2
-                    AND NOT EXISTS (
-                      SELECT 1
-                      FROM user_roles ur_admin_only
-                      WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> $2
-                    )
-                  ) AS is_admin_only
-             FROM users u
-             LEFT JOIN settings s ON s.user_id = u.id
-             ORDER BY u.name`,
-          [TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
-        );
-      } else {
-        const conditions: string[] = ['u.id = $1'];
-        if (canViewManagedUsers) {
-          conditions.push('wum.user_id = $1');
-        }
-        if (canViewInternal) {
-          conditions.push("u.employee_type = 'internal'");
-        }
-        if (canViewExternal) {
-          conditions.push("u.employee_type = 'external'");
-        }
+      const users = canViewAllUsers(request)
+        ? await usersRepo.listAllForAdmin()
+        : await usersRepo.listScopedForManager(request.user.id, {
+            canViewManagedUsers,
+            canViewInternal,
+            canViewExternal,
+          });
 
-        result = await query(
-          `SELECT DISTINCT u.id,
-                           u.name,
-                           u.username,
-                           COALESCE(s.email, '') AS email,
-                           u.role,
-                           u.avatar_initials,
-                           u.cost_per_hour,
-                           u.is_disabled,
-                           u.employee_type,
-                           EXISTS (
-                             SELECT 1
-                             FROM user_roles ur
-                             WHERE ur.user_id = u.id AND ur.role_id = $2
-                           ) AS has_top_manager_role,
-                           (
-                             u.role = $3
-                             AND NOT EXISTS (
-                               SELECT 1
-                               FROM user_roles ur_admin_only
-                               WHERE ur_admin_only.user_id = u.id
-                                 AND ur_admin_only.role_id <> $3
-                             )
-                           ) AS is_admin_only
-             FROM users u
-             LEFT JOIN settings s ON s.user_id = u.id
-             LEFT JOIN user_work_units uw ON u.id = uw.user_id
-             LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-             WHERE (${conditions.join(' OR ')})
-               AND NOT EXISTS (SELECT 1 FROM user_roles ur_tm WHERE ur_tm.user_id = u.id AND ur_tm.role_id = $2)
-             ORDER BY u.name`,
-          [request.user.id, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
-        );
-      }
-
-      const value = result.rows.map((u) =>
-        mapUserResponse(u as UserRow, canViewCosts, canRevealUserEmails),
-      );
-      return value;
+      return users.map((u) => maskUserResponse(u, canViewCosts, canRevealUserEmails));
     },
   );
 
@@ -336,28 +260,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         employeeType?: string;
       };
 
-      // Validate employee type if provided
-      const employeeTypeResult: { ok: true; value: string } | { ok: false; message: string } =
-        employeeType
-          ? validateEnum(employeeType, ['app_user', 'internal', 'external'], 'employeeType')
-          : { ok: true, value: 'app_user' };
+      const employeeTypeResult:
+        | { ok: true; value: usersRepo.EmployeeType }
+        | { ok: false; message: string } = employeeType
+        ? validateEnum(employeeType, ['app_user', 'internal', 'external'] as const, 'employeeType')
+        : { ok: true, value: 'app_user' };
       if (!employeeTypeResult.ok) return badRequest(reply, employeeTypeResult.message);
 
       const effectiveEmployeeType = employeeTypeResult.value;
 
-      const canCreateAppUser = hasPermission(request, 'administration.user_management.create');
-      const canCreateInternal = hasPermission(request, 'hr.internal.create');
-      const canCreateExternal = hasPermission(request, 'hr.external.create');
-
-      if (effectiveEmployeeType === 'app_user' && !canCreateAppUser) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
-      }
-
-      if (effectiveEmployeeType === 'internal' && !canCreateInternal) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
-      }
-
-      if (effectiveEmployeeType === 'external' && !canCreateExternal) {
+      if (!hasPermission(request, CREATE_PERM_BY_EMPLOYEE_TYPE[effectiveEmployeeType])) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -375,12 +287,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let roleValue: string;
 
       if (effectiveEmployeeType === 'internal' || effectiveEmployeeType === 'external') {
-        // Internal/external employees: generate dummy username, placeholder password, user role
+        // Internal/external employees never log in: generated username, random unguessable
+        // password, default user role kept only for FK consistency.
         usernameValue = generatePrefixedId('emp');
-        passwordHash = await bcrypt.hash(randomUUID(), 12); // Random unguessable password
-        roleValue = 'user'; // Internal/external employees have user role but cannot login
+        passwordHash = await bcrypt.hash(randomUUID(), 12);
+        roleValue = 'user';
       } else {
-        // App users: require username, password, and role
         const usernameResult = requireNonEmptyString(username, 'username');
         if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
         usernameValue = usernameResult.value;
@@ -393,55 +305,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!roleResult.ok) return badRequest(reply, roleResult.message);
         roleValue = roleResult.value;
 
-        const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleValue]);
-        if (roleCheck.rows.length === 0) {
-          return badRequest(reply, 'Invalid role');
-        }
-
-        // Check username uniqueness for app users
-        const existingUser = await query('SELECT id FROM users WHERE username = $1', [
-          usernameValue,
+        const [roleExists, usernameTaken] = await Promise.all([
+          rolesRepo.findById(roleValue),
+          usersRepo.existsByUsername(usernameValue),
         ]);
-        if (existingUser.rows.length > 0) {
-          return badRequest(reply, 'Username already exists');
-        }
+        if (!roleExists) return badRequest(reply, 'Invalid role');
+        if (usernameTaken) return badRequest(reply, 'Username already exists');
       }
 
       const avatarInitials = computeAvatarInitials(nameResult.value);
       const id = generatePrefixedId('u');
 
       try {
-        await query(
-          `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, cost_per_hour, is_disabled, employee_type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            id,
-            nameResult.value,
-            usernameValue,
-            passwordHash,
-            roleValue,
-            avatarInitials,
-            costPerHourResult.value || 0,
-            false,
-            effectiveEmployeeType,
-          ],
-        );
+        await usersRepo.insertUser({
+          id,
+          name: nameResult.value,
+          username: usernameValue,
+          passwordHash,
+          role: roleValue,
+          avatarInitials,
+          costPerHour: costPerHourResult.value || 0,
+          isDisabled: false,
+          employeeType: effectiveEmployeeType,
+        });
 
-        // Keep user_roles in sync with users.role (primary/default role)
-        await query(
-          'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-          [id, roleValue],
-        );
+        // Keep user_roles in sync with users.role (primary/default role).
+        await usersRepo.addUserRole(id, roleValue);
 
-        await query(
-          `INSERT INTO settings (user_id, full_name, email)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_id) DO UPDATE SET
-             full_name = EXCLUDED.full_name,
-             email = EXCLUDED.email,
-             updated_at = CURRENT_TIMESTAMP`,
-          [id, nameResult.value, emailResult.value || ''],
-        );
+        await settingsRepo.upsertForUser(id, {
+          fullName: nameResult.value,
+          email: emailResult.value || '',
+          language: null,
+        });
 
         if (roleValue === TOP_MANAGER_ROLE_ID) {
           await syncTopManagerAssignmentsForUser(id);
@@ -508,38 +403,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Cannot delete your own account');
       }
 
-      // Check the user's employee type
-      const userCheck = await query(
-        'SELECT name, username, employee_type FROM users WHERE id = $1',
-        [id],
-      );
-      if (userCheck.rows.length === 0) {
+      const user = await usersRepo.findCoreById(id);
+      if (!user) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const employeeType = userCheck.rows[0].employee_type || 'app_user';
-
-      if (employeeType === 'app_user') {
-        if (!hasPermission(request, 'administration.user_management.delete')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
+      if (!hasPermission(request, DELETE_PERM_BY_EMPLOYEE_TYPE[user.employeeType])) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (employeeType === 'internal') {
-        if (!hasPermission(request, 'hr.internal.delete')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-      }
+      const deleted = await usersRepo.deleteById(id);
 
-      if (employeeType === 'external') {
-        if (!hasPermission(request, 'hr.external.delete')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-      }
-
-      const result = await query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
-
-      if (result.rows.length === 0) {
+      if (!deleted) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
@@ -549,8 +424,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'user',
         entityId: id,
         details: {
-          targetLabel: userCheck.rows[0].name as string,
-          secondaryLabel: userCheck.rows[0].username as string,
+          targetLabel: user.name,
+          secondaryLabel: user.username,
         },
       });
       return { message: 'User deleted' };
@@ -592,67 +467,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const fields: usersRepo.UserUpdateFields = {};
+
       if (name !== undefined) {
-        const nameResult = optionalNonEmptyString(name, 'name');
+        const nameResult = requireNonEmptyString(name, 'name');
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
+        fields.name = nameResult.value;
       }
 
-      if (costPerHour !== undefined) {
+      if (costPerHour !== undefined && hasPermission(request, 'hr.costs.update')) {
         const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
         if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+        fields.costPerHour = costPerHourResult.value;
       }
 
+      let validatedEmail: string | null | undefined;
       if (email !== undefined) {
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
+        validatedEmail = emailResult.value;
       }
 
-      const targetUserResult = await query(
-        'SELECT id, name, username, role, employee_type FROM users WHERE id = $1',
-        [idResult.value],
-      );
-      if (targetUserResult.rows.length === 0) {
+      const targetUser = await usersRepo.findCoreById(idResult.value);
+      if (!targetUser) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const targetEmployeeType = targetUserResult.rows[0].employee_type || 'app_user';
-      const currentRole = targetUserResult.rows[0].role as string;
-      const currentName = targetUserResult.rows[0].name as string;
-      const currentUsername = targetUserResult.rows[0].username as string;
+      const targetEmployeeType = targetUser.employeeType;
+      const currentRole = targetUser.role;
+      const currentName = targetUser.name;
+      const currentUsername = targetUser.username;
 
-      if (targetEmployeeType === 'app_user') {
-        if (!hasPermission(request, 'administration.user_management.update')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-
-        if (
-          !hasPermission(request, 'administration.user_management_all.view') &&
-          idResult.value !== request.user?.id
-        ) {
-          const managedCheck = await query(
-            `SELECT 1
-               FROM user_work_units uw
-               JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-               WHERE uw.user_id = $1 AND wum.user_id = $2
-               LIMIT 1`,
-            [idResult.value, request.user?.id],
-          );
-          if (managedCheck.rows.length === 0) {
-            return reply.code(403).send({ error: 'Insufficient permissions' });
-          }
-        }
+      if (!hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (targetEmployeeType === 'internal') {
-        if (!hasPermission(request, 'hr.internal.update')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-      }
-
-      if (targetEmployeeType === 'external') {
-        if (!hasPermission(request, 'hr.external.update')) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
+      if (
+        targetEmployeeType === 'app_user' &&
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        idResult.value !== request.user?.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       let roleValue: string | null = null;
@@ -664,86 +520,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!roleResult.ok) return badRequest(reply, roleResult.message);
         roleValue = roleResult.value;
 
-        const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleValue]);
-        if (roleCheck.rows.length === 0) {
+        const roleExists = await rolesRepo.findById(roleValue);
+        if (!roleExists) {
           return badRequest(reply, 'Invalid role');
         }
+        fields.role = roleValue;
       }
 
       if (idResult.value === request.user?.id && isDisabled === true) {
         return badRequest(reply, 'Cannot disable your own account');
       }
 
-      const updates: string[] = [];
-      const values: Array<string | boolean | number | null> = [];
-      let paramIdx = 1;
+      if (isDisabled !== undefined) fields.isDisabled = isDisabled;
 
-      if (name !== undefined) {
-        updates.push(`name = $${paramIdx++}`);
-        values.push((requireNonEmptyString(name, 'name') as { ok: true; value: string }).value);
-      }
+      const hasFieldUpdates = Object.keys(fields).length > 0;
 
-      if (isDisabled !== undefined) {
-        updates.push(`is_disabled = $${paramIdx++}`);
-        values.push(isDisabled);
-      }
-
-      if (costPerHour !== undefined && hasPermission(request, 'hr.costs.update')) {
-        updates.push(`cost_per_hour = $${paramIdx++}`);
-        values.push(
-          (
-            optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour') as {
-              ok: true;
-              value: number | null;
-            }
-          ).value,
-        );
-      }
-
-      if (role !== undefined) {
-        updates.push(`role = $${paramIdx++}`);
-        values.push(roleValue);
-      }
-
-      if (updates.length === 0 && email === undefined) {
+      if (!hasFieldUpdates && email === undefined) {
         return badRequest(reply, 'No fields to update');
       }
 
-      let result: Awaited<ReturnType<typeof query>>;
-      if (updates.length === 0) {
-        result = await query(
-          `SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type
-             FROM users
-            WHERE id = $1`,
-          [idResult.value],
-        );
-      } else if (role !== undefined) {
-        values.push(idResult.value);
-        result = await withTransaction(async (tx) => {
-          const updatedResult = await tx.query(
-            `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
-            values,
-          );
-
-          await tx.query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
-          await tx.query(
-            'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [idResult.value, roleValue],
-          );
-          return updatedResult;
+      if (hasFieldUpdates) {
+        const updatedRow = await withTransaction(async (tx) => {
+          const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
+          if (row && roleValue !== null) {
+            await usersRepo.clearUserRoles(idResult.value, tx);
+            await usersRepo.addUserRole(idResult.value, roleValue, tx);
+          }
+          return row;
         });
 
-        await syncTopManagerAssignmentsForUser(idResult.value);
-      } else {
-        values.push(idResult.value);
-        result = await query(
-          `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
-          values,
-        );
-      }
-
-      if (result.rows.length === 0) {
-        return reply.code(404).send({ error: 'User not found' });
+        if (!updatedRow) {
+          return reply.code(404).send({ error: 'User not found' });
+        }
+        if (roleValue !== null) {
+          await syncTopManagerAssignmentsForUser(idResult.value);
+        }
       }
 
       const changedFields = [
@@ -756,7 +567,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         role !== undefined ? 'role' : null,
       ].filter((field): field is string => field !== null);
 
-      // Determine specific action based on what changed
       let action = 'user.updated';
       if (changedFields.length === 1) {
         if (changedFields[0] === 'isDisabled') {
@@ -766,48 +576,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      if (name !== undefined || email !== undefined) {
-        const emailResult = optionalEmail(email, 'email') as { ok: true; value: string | null };
-        await query(
-          `INSERT INTO settings (user_id, full_name, email)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_id) DO UPDATE SET
-             full_name = CASE WHEN $4 THEN EXCLUDED.full_name ELSE settings.full_name END,
-             email = CASE WHEN $5 THEN EXCLUDED.email ELSE settings.email END,
-             updated_at = CURRENT_TIMESTAMP`,
-          [
-            idResult.value,
-            name ?? null,
-            emailResult.value,
-            name !== undefined,
-            email !== undefined,
-          ],
-        );
+      // Settings upsert must complete before findById — findById LEFT JOINs settings to
+      // populate `email`, and parallel reads on different pool connections can observe the
+      // pre-update row under read-committed isolation, returning stale email in the response.
+      if (fields.name !== undefined || validatedEmail !== undefined) {
+        await settingsRepo.upsertForUser(idResult.value, {
+          fullName: fields.name ?? null,
+          email: validatedEmail ?? null,
+          language: null,
+        });
+      }
+      const fullUser = await usersRepo.findById(idResult.value);
+      if (!fullUser) {
+        return reply.code(404).send({ error: 'User not found' });
       }
 
-      const responseResult = await query(
-        `SELECT u.id, u.name, u.username, COALESCE(s.email, '') AS email, u.role,
-                u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type,
-                EXISTS (
-                  SELECT 1
-                  FROM user_roles ur
-                  WHERE ur.user_id = u.id AND ur.role_id = $2
-                ) AS has_top_manager_role,
-                (
-                  u.role = $3
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM user_roles ur_admin_only
-                    WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> $3
-                  )
-                ) AS is_admin_only
-           FROM users u
-           LEFT JOIN settings s ON s.user_id = u.id
-          WHERE u.id = $1`,
-        [idResult.value, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
-      );
-
-      const u = responseResult.rows[0] as UserRow;
       const canRevealUserEmails = canViewUserEmails(request);
 
       await logAudit({
@@ -816,14 +599,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'user',
         entityId: idResult.value,
         details: {
-          targetLabel: (u.name as string) || currentName,
-          secondaryLabel: (u.username as string) || currentUsername,
+          targetLabel: fullUser.name || currentName,
+          secondaryLabel: fullUser.username || currentUsername,
           changedFields: changedFields.length > 0 ? changedFields : undefined,
           fromValue: role !== undefined ? currentRole : undefined,
-          toValue: role !== undefined ? String(u.role) : undefined,
+          toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
-      return mapUserResponse(u, hasPermission(request, 'hr.costs.view'), canRevealUserEmails);
+      return maskUserResponse(
+        fullUser,
+        hasPermission(request, 'hr.costs.view'),
+        canRevealUserEmails,
+      );
     },
   );
 
@@ -847,19 +634,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const userResult = await query('SELECT id, role FROM users WHERE id = $1', [idResult.value]);
-      if (userResult.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
-
-      const primaryRoleId = userResult.rows[0].role as string;
-      const roleRows = await query('SELECT role_id FROM user_roles WHERE user_id = $1', [
-        idResult.value,
+      const [user, assignedRoleIds] = await Promise.all([
+        usersRepo.findCoreById(idResult.value),
+        usersRepo.getUserRoleIds(idResult.value),
       ]);
+      if (!user) return reply.code(404).send({ error: 'User not found' });
+
+      const primaryRoleId = user.role;
       const roleIds = Array.from(
-        new Set(
-          roleRows.rows
-            .map((r) => r.role_id as string)
-            .concat(primaryRoleId ? [primaryRoleId] : []),
-        ),
+        new Set(assignedRoleIds.concat(primaryRoleId ? [primaryRoleId] : [])),
       );
 
       return { roleIds, primaryRoleId };
@@ -907,30 +690,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'primaryRoleId must be included in roleIds');
       }
 
-      const userExists = await query('SELECT name, username FROM users WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+      const user = await usersRepo.findCoreById(idResult.value);
+      if (!user) return reply.code(404).send({ error: 'User not found' });
 
-      const roleCheck = await query('SELECT id FROM roles WHERE id = ANY($1::varchar[])', [
-        roleIdsResult.value,
-      ]);
-      const found = new Set(roleCheck.rows.map((r) => r.id as string));
+      const found = await rolesRepo.findExistingIds(roleIdsResult.value);
       const missing = roleIdsResult.value.filter((rid) => !found.has(rid));
       if (missing.length > 0) return badRequest(reply, `Invalid role(s): ${missing.join(', ')}`);
 
       await withTransaction(async (tx) => {
-        await tx.query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
-        for (const rid of roleIdsResult.value) {
-          await tx.query(
-            'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [idResult.value, rid],
-          );
-        }
-        await tx.query('UPDATE users SET role = $1 WHERE id = $2', [
-          primaryRoleIdResult.value,
-          idResult.value,
-        ]);
+        await usersRepo.replaceUserRoles(idResult.value, roleIdsResult.value, tx);
+        await usersRepo.setPrimaryRole(idResult.value, primaryRoleIdResult.value, tx);
       });
 
       await syncTopManagerAssignmentsForUser(idResult.value);
@@ -940,8 +709,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'user',
         entityId: idResult.value,
         details: {
-          targetLabel: userExists.rows[0].name as string,
-          secondaryLabel: userExists.rows[0].username as string,
+          targetLabel: user.name,
+          secondaryLabel: user.username,
           counts: getAuditCounts({ roles: roleIdsResult.value.length }),
           toValue: primaryRoleIdResult.value,
         },
@@ -970,9 +739,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAllUsers =
-        hasPermission(request, 'administration.user_management_all.view') ||
-        hasPermission(request, 'hr.work_units_all.view');
       const canViewAssignments =
         request.user?.id === id ||
         hasPermission(request, 'administration.user_management.view') ||
@@ -984,35 +750,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (request.user?.id !== id && !canViewAllUsers) {
-        const managedCheck = await query(
-          `SELECT 1
-             FROM user_work_units uw
-             JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-             WHERE uw.user_id = $1 AND wum.user_id = $2
-             LIMIT 1`,
-          [idResult.value, request.user?.id],
-        );
-        if (managedCheck.rows.length === 0) {
+      if (request.user?.id !== id && !canViewAllUsers(request)) {
+        if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
       }
 
-      const clientsRes = await query('SELECT client_id FROM user_clients WHERE user_id = $1', [
-        idResult.value,
-      ]);
-      const projectsRes = await query('SELECT project_id FROM user_projects WHERE user_id = $1', [
-        idResult.value,
-      ]);
-      const tasksRes = await query('SELECT task_id FROM user_tasks WHERE user_id = $1', [
-        idResult.value,
-      ]);
-
-      return {
-        clientIds: clientsRes.rows.map((r) => r.client_id),
-        projectIds: projectsRes.rows.map((r) => r.project_id),
-        taskIds: tasksRes.rows.map((r) => r.task_id),
-      };
+      return await usersRepo.getAssignments(idResult.value);
     },
   );
 
@@ -1042,20 +786,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAllUsers =
-        hasPermission(request, 'administration.user_management_all.view') ||
-        hasPermission(request, 'hr.work_units_all.view');
-
-      if (!canViewAllUsers && idResult.value !== request.user?.id) {
-        const managedCheck = await query(
-          `SELECT 1
-             FROM user_work_units uw
-             JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-             WHERE uw.user_id = $1 AND wum.user_id = $2
-             LIMIT 1`,
-          [idResult.value, request.user?.id],
-        );
-        if (managedCheck.rows.length === 0) {
+      if (!canViewAllUsers(request) && idResult.value !== request.user?.id) {
+        if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
       }
@@ -1069,67 +801,55 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const taskIdsResult = optionalArrayOfStrings(taskIds, 'taskIds');
       if (!taskIdsResult.ok) return badRequest(reply, taskIdsResult.message);
 
-      const targetUser = await query('SELECT name, username FROM users WHERE id = $1', [
-        idResult.value,
+      const [targetUser, isTopManager] = await Promise.all([
+        usersRepo.findCoreById(idResult.value),
+        userHasTopManagerRole(idResult.value),
       ]);
-      if (targetUser.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+      if (!targetUser) return reply.code(404).send({ error: 'User not found' });
 
-      if (await userHasTopManagerRole(idResult.value)) {
+      if (isTopManager) {
         return reply.code(409).send({
           error: 'Top Manager assignments are managed automatically and cannot be edited manually',
         });
       }
 
+      const resolvedClientIds = (clientIdsResult as { ok: true; value: string[] | null }).value;
+      const resolvedProjectIds = (projectIdsResult as { ok: true; value: string[] | null }).value;
+      const resolvedTaskIds = (taskIdsResult as { ok: true; value: string[] | null }).value;
+
       await withTransaction(async (tx) => {
         if (clientIds) {
-          await tx.query('DELETE FROM user_clients WHERE user_id = $1', [idResult.value]);
-          for (const clientId of (clientIdsResult as { ok: true; value: string[] | null }).value ||
-            []) {
-            await tx.query(
-              'INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-              [idResult.value, clientId, MANUAL_ASSIGNMENT_SOURCE],
-            );
-          }
-        }
-
-        if (projectIds) {
-          await tx.query('DELETE FROM user_projects WHERE user_id = $1', [idResult.value]);
-          for (const projectId of (projectIdsResult as { ok: true; value: string[] | null })
-            .value || []) {
-            await tx.query(
-              'INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-              [idResult.value, projectId, MANUAL_ASSIGNMENT_SOURCE],
-            );
-          }
-        }
-
-        if (taskIds) {
-          await tx.query('DELETE FROM user_tasks WHERE user_id = $1', [idResult.value]);
-          for (const taskId of (taskIdsResult as { ok: true; value: string[] | null }).value ||
-            []) {
-            await tx.query(
-              'INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-              [idResult.value, taskId, MANUAL_ASSIGNMENT_SOURCE],
-            );
-          }
-        }
-
-        if (projectIds || clientIds) {
-          await tx.query(
-            `DELETE FROM user_clients WHERE user_id = $1 AND assignment_source = 'project_cascade'`,
-            [idResult.value],
+          await usersRepo.replaceUserClients(
+            idResult.value,
+            resolvedClientIds ?? [],
+            MANUAL_ASSIGNMENT_SOURCE,
+            tx,
           );
         }
 
-        await tx.query(
-          `INSERT INTO user_clients (user_id, client_id, assignment_source)
-           SELECT $1, p.client_id, 'project_cascade'
-           FROM user_projects up
-           JOIN projects p ON up.project_id = p.id
-           WHERE up.user_id = $1
-           ON CONFLICT (user_id, client_id) DO NOTHING`,
-          [idResult.value],
-        );
+        if (projectIds) {
+          await usersRepo.replaceUserProjects(
+            idResult.value,
+            resolvedProjectIds ?? [],
+            MANUAL_ASSIGNMENT_SOURCE,
+            tx,
+          );
+        }
+
+        if (taskIds) {
+          await usersRepo.replaceUserTasks(
+            idResult.value,
+            resolvedTaskIds ?? [],
+            MANUAL_ASSIGNMENT_SOURCE,
+            tx,
+          );
+        }
+
+        if (projectIds || clientIds) {
+          await usersRepo.clearProjectCascadeAssignments(idResult.value, tx);
+        }
+
+        await usersRepo.applyProjectCascadeToClients(idResult.value, tx);
       });
 
       await logAudit({
@@ -1138,18 +858,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'user',
         entityId: idResult.value,
         details: {
-          targetLabel: targetUser.rows[0].name as string,
-          secondaryLabel: targetUser.rows[0].username as string,
+          targetLabel: targetUser.name,
+          secondaryLabel: targetUser.username,
           counts: getAuditCounts({
-            clients: clientIds
-              ? ((clientIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-              : undefined,
-            projects: projectIds
-              ? ((projectIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-              : undefined,
-            tasks: taskIds
-              ? ((taskIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-              : undefined,
+            clients: clientIds ? (resolvedClientIds?.length ?? 0) : undefined,
+            projects: projectIds ? (resolvedProjectIds?.length ?? 0) : undefined,
+            tasks: taskIds ? (resolvedTaskIds?.length ?? 0) : undefined,
           }),
         },
       });
