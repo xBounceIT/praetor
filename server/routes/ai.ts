@@ -1,35 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
-
-type AiProvider = 'gemini' | 'openrouter';
-
-type GeneralAiConfig = {
-  aiProvider: AiProvider;
-  geminiApiKey: string;
-  openrouterApiKey: string;
-  geminiModelId: string;
-  openrouterModelId: string;
-};
-
-const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
-  const result = await query(
-    `SELECT ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id
-     FROM general_settings
-     WHERE id = 1`,
-  );
-  const row = result.rows[0];
-  return {
-    aiProvider: (row?.ai_provider || 'gemini') as AiProvider,
-    geminiApiKey: row?.gemini_api_key || '',
-    openrouterApiKey: row?.openrouter_api_key || '',
-    geminiModelId: row?.gemini_model_id || '',
-    openrouterModelId: row?.openrouter_model_id || '',
-  };
-};
 
 const googleModelExists = async (apiKey: string, modelPath: string): Promise<boolean> => {
   const url = new URL(`/v1beta/${modelPath}`, 'https://generativelanguage.googleapis.com');
@@ -118,8 +92,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (typeof apiKey !== 'string') return badRequest(reply, 'apiKey must be a string');
         keyToUse = apiKey;
       } else {
-        const cfg = await getGeneralAiConfig();
-        keyToUse = providerResult.value === 'gemini' ? cfg.geminiApiKey : cfg.openrouterApiKey;
+        const settings = await generalSettingsRepo.get();
+        keyToUse =
+          providerResult.value === 'gemini'
+            ? (settings?.geminiApiKey ?? '')
+            : (settings?.openrouterApiKey ?? '');
       }
 
       if (!keyToUse.trim()) {
