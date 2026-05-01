@@ -82,6 +82,8 @@ When you add a previously unmodeled table to `schema/*.ts` for the first time, t
 - **Idempotent guard** (recommended): hand-edit the generated SQL to use `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Safe to run on any DB; the same pattern as the `0000_baseline_pre_drizzle` migration.
 - **No-op claim**: replace the body of the generated SQL with a single comment (e.g. `-- claim existing clients table; no schema change`). Useful when you're modeling a table without changing its shape, just to bring it under Drizzle ORM.
 
+Either way, **commit the generated snapshot too** (`git add db/migrations/meta/`). The snapshot now reflects the newly modeled table, and future `db:generate` runs diff against it — if it isn't committed, the next contributor's `generate` will re-emit the same `CREATE TABLE` migration.
+
 The same principle applies to **constraints, foreign keys, and indexes** that exist in `schema.sql` but aren't yet declared in the TS schema. When you add a `.references(...)` or a new index that already exists in the live DB, the generated `ALTER TABLE ... ADD CONSTRAINT` or `CREATE INDEX` will fail. Postgres has no `ADD CONSTRAINT IF NOT EXISTS` — wrap the statement in a `DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN ... END $$` block, or replace it with a no-op comment if the constraint is already in place.
 
 **Known drift to watch for in Phase 3**: `notifications.user_id` has `REFERENCES users(id) ON DELETE CASCADE` in `schema.sql` but no `.references(...)` in `schema/notifications.ts` (because `users` isn't modeled yet). When `users` is modeled and the FK is added to the TS schema, the generated migration will need the constraint-existence guard described above.

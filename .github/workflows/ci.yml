@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint & Typecheck
+    name: Lint, Typecheck & DB Schema Checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,7 +38,12 @@ jobs:
       - name: Schema regeneration check
         run: |
           bun run db:generate --name __ci_drift_check__
-          status=$(git status --porcelain -- db/migrations/)
+          # Filter to the file patterns drizzle-kit writes for a real migration:
+          # the SQL file and its companion snapshot. _journal.json is excluded so
+          # a future drizzle-kit version that touches it on a no-diff run cannot
+          # cause a spurious failure — real drift always produces both an SQL
+          # file and a snapshot, which this glob catches.
+          status=$(git status --porcelain -- 'db/migrations/0*.sql' 'db/migrations/meta/0*_snapshot.json')
           # Restore the working tree before exiting so subsequent steps and
           # local copies of this snippet don't accumulate phantom migrations.
           git checkout -- db/migrations/ 2>/dev/null || true
@@ -121,6 +126,27 @@ jobs:
           echo "Backend did not log 'Praetor API server running' within 60s"
           docker compose logs backend
           exit 1
+
+      # The backend image is built with `bun install --frozen-lockfile` (no
+      # production flag), so drizzle-kit and the drizzle.config.ts/db/* sources
+      # are all present in the running container. Running migrate inside the
+      # backend container exercises the exact code path a deploy would use, on
+      # a Postgres that was bootstrapped from schema.sql by the postgres init
+      # mount — mirroring the dev/prod baseline scenario.
+      - name: Apply Drizzle baseline migration
+        run: docker compose exec -T backend bun run db:migrate
+
+      - name: Verify Drizzle baseline migration is idempotent
+        run: docker compose exec -T backend bun run db:migrate
+
+      - name: Verify migration recorded in __drizzle_migrations
+        run: |
+          count=$(docker compose exec -T postgres psql -U "${POSTGRES_USER:-praetor}" -d "${POSTGRES_DB:-praetor}" -tAc 'SELECT COUNT(*) FROM drizzle.__drizzle_migrations' | tr -d '[:space:]')
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected exactly 1 row in drizzle.__drizzle_migrations after baseline migration, got '$count'"
+            docker compose exec -T postgres psql -U "${POSTGRES_USER:-praetor}" -d "${POSTGRES_DB:-praetor}" -c 'SELECT * FROM drizzle.__drizzle_migrations'
+            exit 1
+          fi
 
       - name: Probe /api/health via Caddy proxy
         run: |
