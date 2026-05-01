@@ -8,7 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "bun run dist/index.js",
     "dev": "bun --watch index.ts",
-    "seed:demo": "bun run scripts/seed-demo.ts"
+    "seed:demo": "bun run scripts/seed-demo.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:generate:custom": "drizzle-kit generate --custom",
+    "db:migrate": "drizzle-kit migrate",
+    "db:check": "bun run scripts/db-check.ts",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",

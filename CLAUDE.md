@@ -43,6 +43,10 @@ bun run start        # Run compiled server
 - Raw SQL queries with parameterized inputs
 - Snake_case in DB → camelCase in API responses
 
+### Database migrations
+- New schema changes go through Drizzle Kit (`bun db:generate` or `bun db:generate:custom` from `server/`, then `bun db:migrate`).
+- The legacy `server/db/add_*.ts` scripts and `server/db/schema.sql` are frozen historical artifacts — see `server/db/README.md` for the full workflow.
+
 ### Authentication
 - JWT (HS256) with optional LDAP/AD fallback
 - Roles: admin (full access), manager (CRM/reports), user (personal tracking)
