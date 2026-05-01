@@ -232,6 +232,9 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
 });
 
+// SAFE: TOP_MANAGER_ROLE_ID and ADMIN_ROLE_ID are compile-time string constants from
+// utils/permissions.ts. Never interpolate dynamic / user-supplied values into this fragment —
+// pass them as bind parameters instead.
 const USER_LIST_FLAG_COLUMNS = `
   EXISTS (
     SELECT 1

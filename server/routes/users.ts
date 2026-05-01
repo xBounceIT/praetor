@@ -576,15 +576,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const settingsUpsert =
-        fields.name !== undefined || validatedEmail !== undefined
-          ? settingsRepo.upsertForUser(idResult.value, {
-              fullName: fields.name ?? null,
-              email: validatedEmail ?? null,
-              language: null,
-            })
-          : Promise.resolve();
-      const [, fullUser] = await Promise.all([settingsUpsert, usersRepo.findById(idResult.value)]);
+      // Settings upsert must complete before findById — findById LEFT JOINs settings to
+      // populate `email`, and parallel reads on different pool connections can observe the
+      // pre-update row under read-committed isolation, returning stale email in the response.
+      if (fields.name !== undefined || validatedEmail !== undefined) {
+        await settingsRepo.upsertForUser(idResult.value, {
+          fullName: fields.name ?? null,
+          email: validatedEmail ?? null,
+          language: null,
+        });
+      }
+      const fullUser = await usersRepo.findById(idResult.value);
       if (!fullUser) {
         return reply.code(404).send({ error: 'User not found' });
       }

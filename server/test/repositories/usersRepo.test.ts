@@ -456,6 +456,27 @@ describe('addUserRole / clearUserRoles / setPrimaryRole', () => {
   });
 });
 
+describe('replaceUserRoles', () => {
+  test('issues DELETE then a single bulk INSERT for the id list', async () => {
+    exec.enqueue({ rows: [], rowCount: 3 }); // DELETE
+    exec.enqueue({ rows: [], rowCount: 2 }); // INSERT
+    await usersRepo.replaceUserRoles('user-1', ['manager', 'user'], exec);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
+    expect(exec.calls[0].params).toEqual(['user-1']);
+    expect(exec.calls[1].sql).toContain('INSERT INTO user_roles');
+    expect(exec.calls[1].sql).toContain('ON CONFLICT DO NOTHING');
+    expect(exec.calls[1].params).toEqual(['user-1', 'manager', 'user-1', 'user']);
+  });
+
+  test('only issues the DELETE when the id list is empty', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    await usersRepo.replaceUserRoles('user-1', [], exec);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
+  });
+});
+
 describe('getUserRoleIds', () => {
   test('returns the role ids in the order returned by the query', async () => {
     exec.enqueue({ rows: [{ roleId: 'manager' }, { roleId: 'user' }] });
