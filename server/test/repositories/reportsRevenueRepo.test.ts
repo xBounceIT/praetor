@@ -142,7 +142,6 @@ describe('getInvoicesSection', () => {
       ],
     });
     exec.enqueue({ rows: [{ bucket: '0-30', count: '1', outstanding_sum: '300' }] });
-    exec.enqueue({ rows: [{ label: 'Acme', invoice_count: '1', value: '300' }] });
     exec.enqueue({
       rows: [
         {
@@ -154,6 +153,7 @@ describe('getInvoicesSection', () => {
         },
       ],
     });
+    exec.enqueue({ rows: [{ label: 'Acme', invoice_count: '1', value: '300' }] });
 
     const result = await repo.getInvoicesSection(
       { fromDate: FROM, toDate: TO, topLimit: 10 },

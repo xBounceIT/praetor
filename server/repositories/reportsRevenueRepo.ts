@@ -359,7 +359,7 @@ export const getInvoicesSection = async (
 ): Promise<InvoicesSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
-  const [totals, byStatus, byMonth, aging, topClients, topInvoices] = await Promise.all([
+  const [totals, byStatus, byMonth, aging, topInvoices, topClients] = await Promise.all([
     exec.query<{
       count: string;
       total_sum: string;
@@ -426,18 +426,6 @@ export const getInvoicesSection = async (
         ORDER BY bucket ASC`,
       [fromDate, toDate],
     ),
-    exec.query<{ label: string; invoice_count: string; value: string }>(
-      `SELECT
-          client_name as label,
-          COUNT(*) as invoice_count,
-          COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as value
-         FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2
-        GROUP BY client_name
-        ORDER BY value DESC
-        LIMIT $3`,
-      [fromDate, toDate, topLimit],
-    ),
     exec.query<{
       id: string;
       client_name: string;
@@ -454,6 +442,18 @@ export const getInvoicesSection = async (
          FROM invoices
         WHERE issue_date >= $1 AND issue_date <= $2
         ORDER BY outstanding DESC
+        LIMIT $3`,
+      [fromDate, toDate, topLimit],
+    ),
+    exec.query<{ label: string; invoice_count: string; value: string }>(
+      `SELECT
+          client_name as label,
+          COUNT(*) as invoice_count,
+          COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as value
+         FROM invoices
+        WHERE issue_date >= $1 AND issue_date <= $2
+        GROUP BY client_name
+        ORDER BY value DESC
         LIMIT $3`,
       [fromDate, toDate, topLimit],
     ),
