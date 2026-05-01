@@ -39,6 +39,10 @@ jobs:
         run: |
           bun run db:generate --name __ci_drift_check__
           status=$(git status --porcelain -- db/migrations/)
+          # Restore the working tree before exiting so subsequent steps and
+          # local copies of this snippet don't accumulate phantom migrations.
+          git checkout -- db/migrations/ 2>/dev/null || true
+          git clean -fd db/migrations/ 2>/dev/null || true
           if [ -n "$status" ]; then
             echo "::error::Schema TS modified without regenerating migration. Run: cd server && bun run db:generate --name <descriptive_name>"
             echo "$status"
