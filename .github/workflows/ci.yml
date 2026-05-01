@@ -1,0 +1,204 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: server
+
+      - name: Lint and typecheck
+        run: bun run lint
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: server
+
+      - name: Run repository tests
+        run: bun test server/test
+
+  build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: bun run build
+
+  docker-stack:
+    name: Docker Stack Deploy & Health
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare environment file
+        run: cp .env.example .env
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start stack and wait for healthchecks
+        run: docker compose up -d --wait --wait-timeout 60
+
+      - name: Wait for backend startup signal
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose logs --no-color --no-log-prefix backend 2>/dev/null | grep -q 'Praetor API server running'; then
+              echo "Backend ready after ~$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not log 'Praetor API server running' within 60s"
+          docker compose logs backend
+          exit 1
+
+      - name: Probe /api/health via Caddy proxy
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS http://localhost:3000/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "/api/health failed via Caddy proxy after backend became ready"
+          docker compose logs
+          exit 1
+
+      - name: Probe frontend SPA shell
+        run: |
+          response=$(mktemp)
+          code=$(curl -s -o "$response" -w '%{http_code}' http://localhost:3000/ || echo 000)
+          if [ "$code" != 200 ]; then
+            echo "Frontend SPA returned $code"
+            head -c 500 "$response"
+            exit 1
+          fi
+          if ! grep -qiE '<(!doctype html|html)' "$response"; then
+            echo "Frontend response did not look like HTML"
+            head -c 500 "$response"
+            exit 1
+          fi
+
+      - name: Verify all defined services are running
+        run: |
+          expected=$(docker compose config --services | sort | paste -sd, -)
+          running=$(docker compose ps --status running --services | sort | paste -sd, -)
+          echo "running:  $running"
+          echo "expected: $expected"
+          if [ "$running" != "$expected" ]; then
+            docker compose ps
+            exit 1
+          fi
+
+      - name: Capture container logs
+        if: always()
+        run: |
+          mkdir -p logs
+          docker compose logs --no-color --no-log-prefix postgres > logs/postgres.log 2>&1 || true
+          docker compose logs --no-color --no-log-prefix backend > logs/backend.log 2>&1 || true
+          docker compose logs --no-color --no-log-prefix frontend > logs/frontend.log 2>&1 || true
+          perl -i -pe 's/\e\[[\d;]*[A-Za-z]//g' logs/postgres.log logs/backend.log logs/frontend.log
+
+      - name: Dump container logs to console
+        if: always()
+        run: |
+          for svc in postgres backend frontend; do
+            echo "===== $svc ====="
+            cat "logs/$svc.log"
+          done
+
+      - name: Upload stack logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-stack-logs
+          path: logs/
+          retention-days: 7
+
+      - name: Scan postgres logs for FATAL/PANIC
+        run: |
+          if grep -nE '\b(FATAL|PANIC):' logs/postgres.log; then
+            echo "::error::Postgres logged FATAL or PANIC"
+            exit 1
+          fi
+
+      - name: Scan backend logs for error/fatal entries
+        run: |
+          if grep -nE '^\[[^]]+\] (ERROR|FATAL)\b' logs/backend.log; then
+            echo "::error::Backend pretty logs contain ERROR or FATAL"
+            exit 1
+          fi
+          if grep -nE '"level":(50|60)\b' logs/backend.log; then
+            echo "::error::Backend JSON logs contain error/fatal level"
+            exit 1
+          fi
+          if grep -nF 'Failed to start server' logs/backend.log; then
+            echo "::error::Backend logged 'Failed to start server'"
+            exit 1
+          fi
+
+      - name: Scan frontend (Caddy) logs for error/fatal entries
+        run: |
+          if grep -nE '"level":"(error|fatal)"' logs/frontend.log; then
+            echo "::error::Caddy JSON logs contain error/fatal level"
+            exit 1
+          fi
+          if grep -niwE 'panic' logs/frontend.log; then
+            echo "::error::Caddy logs contain 'panic'"
+            exit 1
+          fi
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
