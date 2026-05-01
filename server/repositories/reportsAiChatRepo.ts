@@ -191,7 +191,7 @@ export const listRecentMessages = async (
   const limit = options.limit ?? 20;
   if (options.beforeOrAt) {
     const { rows } = await exec.query<ConversationTurn>(
-      `SELECT role, content
+      `SELECT COALESCE(role, '') as role, COALESCE(content, '') as content
          FROM report_chat_messages
         WHERE session_id = $1
           AND created_at <= $2
@@ -202,7 +202,7 @@ export const listRecentMessages = async (
     return rows;
   }
   const { rows } = await exec.query<ConversationTurn>(
-    `SELECT role, content
+    `SELECT COALESCE(role, '') as role, COALESCE(content, '') as content
        FROM report_chat_messages
       WHERE session_id = $1
       ORDER BY created_at DESC

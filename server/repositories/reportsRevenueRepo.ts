@@ -115,8 +115,8 @@ export const getQuotesSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_quote
          ORDER BY net_value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
     exec.query<{ label: string; quote_count: string; value: string }>(
       `WITH per_quote AS (
@@ -136,8 +136,8 @@ export const getQuotesSection = async (
           FROM per_quote
          GROUP BY client_name
          ORDER BY value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
   ]);
 
@@ -280,8 +280,8 @@ export const getOrdersSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_order
          ORDER BY net_value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
     exec.query<{ label: string; order_count: string; value: string }>(
       `WITH per_order AS (
@@ -301,8 +301,8 @@ export const getOrdersSection = async (
           FROM per_order
          GROUP BY client_name
          ORDER BY value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
   ]);
 
@@ -435,8 +435,8 @@ export const getInvoicesSection = async (
         WHERE issue_date >= $1 AND issue_date <= $2
         GROUP BY client_name
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-      [fromDate, toDate],
+        LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
     exec.query<{
       id: string;
@@ -454,8 +454,8 @@ export const getInvoicesSection = async (
          FROM invoices
         WHERE issue_date >= $1 AND issue_date <= $2
         ORDER BY outstanding DESC
-        LIMIT ${topLimit}`,
-      [fromDate, toDate],
+        LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
   ]);
 

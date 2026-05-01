@@ -52,6 +52,8 @@ export const getTimesheetsSection = async (
         clause: 'WHERE te.date >= $1 AND te.date <= $2',
         params: [fromDate, toDate] as unknown[],
       };
+  const topLimitPlaceholder = `$${baseWhere.params.length + 1}`;
+  const topParams = [...baseWhere.params, topLimit];
 
   const [totals, topUsers, topClients, topProjects, topTasks, byMonth, byLocation] =
     await Promise.all([
@@ -74,8 +76,8 @@ export const getTimesheetsSection = async (
          ${baseWhere.clause}
         GROUP BY u.name
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-        baseWhere.params,
+        LIMIT ${topLimitPlaceholder}`,
+        topParams,
       ),
       exec.query<{ label: string; value: string; entry_count: string }>(
         `SELECT
@@ -86,8 +88,8 @@ export const getTimesheetsSection = async (
          ${baseWhere.clause}
         GROUP BY te.client_name
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-        baseWhere.params,
+        LIMIT ${topLimitPlaceholder}`,
+        topParams,
       ),
       exec.query<{ label: string; value: string; entry_count: string }>(
         `SELECT
@@ -98,8 +100,8 @@ export const getTimesheetsSection = async (
          ${baseWhere.clause}
         GROUP BY te.project_name
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-        baseWhere.params,
+        LIMIT ${topLimitPlaceholder}`,
+        topParams,
       ),
       exec.query<{ label: string; value: string; entry_count: string }>(
         `SELECT
@@ -110,8 +112,8 @@ export const getTimesheetsSection = async (
          ${baseWhere.clause}
         GROUP BY te.task
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-        baseWhere.params,
+        LIMIT ${topLimitPlaceholder}`,
+        topParams,
       ),
       exec.query<{
         label: string;
@@ -477,8 +479,8 @@ export const getTasksSection = async (
               WHERE te.date >= $1 AND te.date <= $2
               GROUP BY te.task
               ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-            [fromDate, toDate],
+              LIMIT $3`,
+            [fromDate, toDate, topLimit],
           )
         : exec.query<{ label: string; hours: string; entry_count: string }>(
             `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
@@ -488,8 +490,8 @@ export const getTasksSection = async (
                 AND te.user_id = ANY($3)
               GROUP BY te.task
               ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-            [fromDate, toDate, allowedTimesheetUserIds || []],
+              LIMIT $4`,
+            [fromDate, toDate, allowedTimesheetUserIds || [], topLimit],
           )
       : canViewAllTimesheets
         ? exec.query<{ label: string; hours: string; entry_count: string }>(
@@ -502,8 +504,8 @@ export const getTasksSection = async (
                 AND ut.user_id = $3
               GROUP BY te.task
               ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-            [fromDate, toDate, viewerId],
+              LIMIT $4`,
+            [fromDate, toDate, viewerId, topLimit],
           )
         : exec.query<{ label: string; hours: string; entry_count: string }>(
             `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
@@ -516,8 +518,8 @@ export const getTasksSection = async (
                 AND ut.user_id = $4
               GROUP BY te.task
               ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-            [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
+              LIMIT $5`,
+            [fromDate, toDate, allowedTimesheetUserIds || [], viewerId, topLimit],
           )
     : null;
 

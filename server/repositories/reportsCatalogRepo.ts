@@ -269,8 +269,8 @@ export const getSupplierQuotesSection = async (
           FROM per_quote
          GROUP BY supplier_name
          ORDER BY value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
     exec.query<{
       id: string;
@@ -299,8 +299,8 @@ export const getSupplierQuotesSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_quote
          ORDER BY net_value DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
   ]);
 
@@ -408,7 +408,8 @@ export const getCatalogSection = async (
         WHERE p.supplier_id IS NOT NULL
         GROUP BY COALESCE(s.name, 'Unknown')
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
+        LIMIT $1`,
+      [topLimit],
     ),
     exec.query<{
       product_id: string;
@@ -443,8 +444,8 @@ export const getCatalogSection = async (
           FROM usage_rows
          GROUP BY product_id, product_name
          ORDER BY usage_count DESC, quantity_total DESC
-         LIMIT ${topLimit}`,
-      [fromDate, toDate],
+         LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
     exec.query<{ product_id: string; product_name: string; value: string }>(
       `SELECT
@@ -464,8 +465,8 @@ export const getCatalogSection = async (
         WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
         GROUP BY si.product_id, si.product_name
         ORDER BY value DESC
-        LIMIT ${topLimit}`,
-      [fromDate, toDate],
+        LIMIT $3`,
+      [fromDate, toDate, topLimit],
     ),
   ]);
 
