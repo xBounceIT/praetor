@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process';
 import { constants } from 'node:os';
 import { StringDecoder } from 'node:string_decoder';
-
-const stripEmoji = (s: string) => s.replace(/\p{Extended_Pictographic}/gu, '');
+import { stripEmoji } from './strip-emoji.ts';
 
 // shell: true is required on Windows to resolve drizzle-kit's .cmd shim in
 // node_modules/.bin. Args are hardcoded so there's no injection surface.

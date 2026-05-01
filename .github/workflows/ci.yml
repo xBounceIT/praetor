@@ -35,6 +35,17 @@ jobs:
         run: bun run db:check
         working-directory: server
 
+      - name: Schema regeneration check
+        run: |
+          bun run db:generate --name __ci_drift_check__
+          status=$(git status --porcelain -- db/migrations/)
+          if [ -n "$status" ]; then
+            echo "::error::Schema TS modified without regenerating migration. Run: cd server && bun run db:generate --name <descriptive_name>"
+            echo "$status"
+            exit 1
+          fi
+        working-directory: server
+
   test:
     name: Tests
     runs-on: ubuntu-latest
