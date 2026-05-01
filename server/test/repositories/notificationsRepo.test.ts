@@ -13,6 +13,10 @@ let testDb: DbExecutor;
 // a `{ text, rowMode, ... }` object — not a string. Translate both call shapes so the fake
 // records the SQL string (rather than the raw config object) and so future SQL-string
 // assertions or debugging are straightforward.
+//
+// Note: this adapter only implements `.query()`. Drizzle's `db.transaction(...)` calls
+// `.connect()` on the pool, which would fail here — this test pattern is for non-
+// transactional repos. Repos with transactional callers will need a different setup.
 const makePoolAdapter = (fake: FakeExecutor): Pool =>
   ({
     query(textOrConfig: string | { text: string; values?: unknown[] }, params?: unknown[]) {
@@ -55,6 +59,15 @@ describe('listForUser', () => {
         createdAt: 1700000000000,
       },
     ]);
+  });
+
+  test('passes JSONB data through unchanged', async () => {
+    const data = { actor: 'u9', refType: 'task', refId: 't1' };
+    exec.enqueue({
+      rows: [['n1', 'user-1', 'task', 't', 'm', data, false, new Date(1700000000000)]],
+    });
+    const [result] = await notificationsRepo.listForUser('user-1', testDb);
+    expect(result.data).toEqual(data);
   });
 
   test('coerces null message/isRead/createdAt to defaults', async () => {

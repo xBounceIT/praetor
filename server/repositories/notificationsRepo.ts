@@ -6,7 +6,7 @@ import { notifications } from '../db/schema/notifications.ts';
 // agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
 // would parameterize the comparison and miss NULL; a SQL literal also avoids defeating
 // any partial index that may exist on `is_read = false`.
-const isUnread = sql`${notifications.isRead} is not true`;
+const isUnread = sql`${notifications.isRead} IS NOT TRUE`;
 
 export type Notification = {
   id: string;
@@ -27,7 +27,9 @@ const mapRow = (row: typeof notifications.$inferSelect): Notification => ({
   message: row.message ?? '',
   data: row.data,
   isRead: row.isRead ?? false,
-  createdAt: row.createdAt ? row.createdAt.getTime() : 0,
+  // `created_at` has DEFAULT CURRENT_TIMESTAMP, so the `?? 0` branch should not fire
+  // in practice; the schema permits NULL only because Phase 0 mirrored schema.sql.
+  createdAt: row.createdAt?.getTime() ?? 0,
 });
 
 export const listForUser = async (
