@@ -10,13 +10,13 @@ export const notifications = pgTable(
     title: varchar('title', { length: 255 }).notNull(),
     message: text('message'),
     data: jsonb('data').$type<Record<string, unknown> | null>(),
-    isRead: boolean('is_read').notNull().default(false),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    isRead: boolean('is_read').default(false),
+    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_notifications_user_id').on(table.userId),
     index('idx_notifications_user_unread')
       .on(table.userId, table.isRead)
-      .where(sql`is_read = FALSE`),
+      .where(sql`${table.isRead} = false`),
   ],
 );
