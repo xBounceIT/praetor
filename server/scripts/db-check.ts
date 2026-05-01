@@ -24,6 +24,9 @@ child.stderr.on('data', (chunk: Buffer) => {
   process.stderr.write(stripEmoji(stderrDecoder.write(chunk)));
 });
 
+// With shell: true this only fires if the shell itself fails to start
+// (missing /bin/sh, inaccessible cmd.exe). drizzle-kit-not-found surfaces
+// as a shell exit 127 + stderr instead, handled by the close handler below.
 child.on('error', (err) => {
   console.error(err);
   process.exit(1);

@@ -31,6 +31,10 @@ jobs:
       - name: Lint and typecheck
         run: bun run lint
 
+      - name: Drizzle drift check
+        run: bun run db:check
+        working-directory: server
+
   test:
     name: Tests
     runs-on: ubuntu-latest
