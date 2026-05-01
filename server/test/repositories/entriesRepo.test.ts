@@ -33,6 +33,18 @@ describe('listAll', () => {
     expect(exec.calls[0].sql).toContain('::timestamp');
     expect(exec.calls[0].sql).not.toContain('to_timestamp');
   });
+
+  test.each([
+    ['zero', 0, 200],
+    ['negative', -5, 200],
+    ['NaN', Number.NaN, 200],
+    ['Infinity', Number.POSITIVE_INFINITY, 200],
+    ['fractional truncates via Math.floor', 1.7, 1],
+  ])('resolveLimit treats %s (%p) as %p', async (_label, input, expected) => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listAll({ limit: input }, exec);
+    expect(exec.calls[0].params).toEqual([expected]);
+  });
 });
 
 describe('listForUser', () => {
@@ -41,6 +53,20 @@ describe('listForUser', () => {
     await entriesRepo.listForUser('u-1', {}, exec);
     expect(exec.calls[0].params).toEqual(['u-1', 200]);
     expect(exec.calls[0].sql).toContain('WHERE user_id = $1');
+  });
+
+  test('with cursor: cursor params start at $2, limit lands at $4', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listForUser(
+      'u-1',
+      { limit: 50, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-9' } },
+      exec,
+    );
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30 12:00:00.123456', 'e-9', 50]);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('WHERE user_id = $1');
+    expect(sql).toContain('$2::timestamp');
+    expect(sql).toContain('LIMIT $4');
   });
 });
 
@@ -52,6 +78,19 @@ describe('listForManagerView', () => {
     expect(exec.calls[0].sql).toContain('work_unit_managers');
     expect(exec.calls[0].sql).toContain('user_id = $1');
     expect(exec.calls[0].sql).toContain('wum.user_id = $1');
+  });
+
+  test('with cursor: cursor params start at $2, limit lands at $4', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listForManagerView(
+      'mgr',
+      { limit: 25, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-9' } },
+      exec,
+    );
+    expect(exec.calls[0].params).toEqual(['mgr', '2026-04-30 12:00:00.123456', 'e-9', 25]);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('$2::timestamp');
+    expect(sql).toContain('LIMIT $4');
   });
 });
 
@@ -79,6 +118,17 @@ describe('encodeCursor / decodeCursor', () => {
       'base64url',
     );
     expect(entriesRepo.decodeCursor(legacy)).toBeNull();
+  });
+
+  test.each([
+    ['missing id', { createdAt: '2026-04-30 12:00:00.123456' }],
+    ['missing createdAt', { id: 'e-1' }],
+    ['non-string id', { createdAt: '2026-04-30 12:00:00.123456', id: 42 }],
+    ['null payload', null],
+    ['array payload', ['2026-04-30 12:00:00.123456', 'e-1']],
+  ])('rejects %s', (_label, payload) => {
+    const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+    expect(entriesRepo.decodeCursor(encoded)).toBeNull();
   });
 
   test('produces a nextCursor that preserves µs precision from created_at_text', async () => {
@@ -238,6 +288,77 @@ describe('create', () => {
   });
 });
 
+const newEntry = {
+  id: 'e-1',
+  userId: 'u-1',
+  date: '2026-04-30',
+  clientId: 'c-1',
+  clientName: 'Acme',
+  projectId: 'p-1',
+  projectName: 'Alpha',
+  task: 'Dev',
+  taskId: 't-1',
+  notes: 'n',
+  duration: 1.5,
+  hourlyCost: 100,
+  isPlaceholder: false,
+  location: 'remote',
+};
+
+describe('mapRow (exercised via create return path)', () => {
+  test('null duration falls back to 0', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, duration: null }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.duration).toBe(0);
+  });
+
+  test('null hourly_cost falls back to 0', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, hourly_cost: null }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.hourlyCost).toBe(0);
+  });
+
+  test('null is_placeholder coerces to false', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, is_placeholder: null }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.isPlaceholder).toBe(false);
+  });
+
+  test('null location falls back to "remote"', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, location: null }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.location).toBe('remote');
+  });
+
+  test('empty location falls back to "remote"', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, location: '' }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.location).toBe('remote');
+  });
+
+  test('numeric-string duration is parsed to number', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, duration: '2.75' }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.duration).toBe(2.75);
+  });
+
+  test('string created_at is converted to ms epoch', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, created_at: '2026-04-30T12:00:00Z' }] });
+    const result = await entriesRepo.create(newEntry, exec);
+    expect(result.createdAt).toBe(new Date('2026-04-30T12:00:00Z').getTime());
+  });
+
+  test('throws TypeError when row.date is null', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, date: null }] });
+    await expect(entriesRepo.create(newEntry, exec)).rejects.toThrow(TypeError);
+  });
+
+  test('throws TypeError when row.date is an unsupported type', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, date: 12345 }] });
+    await expect(entriesRepo.create(newEntry, exec)).rejects.toThrow(TypeError);
+  });
+});
+
 describe('update', () => {
   test('only sets provided fields, id is the last param', async () => {
     exec.enqueue({ rows: [rawRow] });
@@ -295,13 +416,25 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await entriesRepo.update('e-x', {}, exec)).toBeNull();
   });
+
+  test('notes: null clears the column (distinct from undefined which is skipped)', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, notes: null }] });
+    const result = await entriesRepo.update('e-1', { notes: null }, exec);
+    expect(exec.calls[0].sql).toContain('UPDATE');
+    expect(exec.calls[0].sql).toContain('notes = $1');
+    expect(exec.calls[0].sql).toContain('WHERE id = $2');
+    expect(exec.calls[0].params).toEqual([null, 'e-1']);
+    expect(result?.notes).toBeNull();
+  });
 });
 
 describe('deleteById', () => {
-  test('passes id as $1', async () => {
+  test('passes id as $1 against time_entries', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.deleteById('e-1', exec);
     expect(exec.calls[0].params).toEqual(['e-1']);
+    expect(exec.calls[0].sql).toContain('DELETE FROM time_entries');
+    expect(exec.calls[0].sql).toContain('WHERE id = $1');
   });
 });
 
@@ -364,5 +497,35 @@ describe('bulkDelete', () => {
     await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: true }, exec);
     expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
     expect(exec.calls[0].sql).toContain('is_placeholder = true');
+  });
+
+  test('placeholderOnly: false does NOT add the predicate (gated on === true)', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: false }, exec);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
+    expect(exec.calls[0].sql).not.toContain('is_placeholder');
+  });
+
+  test('all filters together: manager scope + fromDate + placeholderOnly', async () => {
+    exec.enqueue({ rows: [], rowCount: 5 });
+    const result = await entriesRepo.bulkDelete(
+      {
+        projectId: 'p-1',
+        task: 'Dev',
+        restrictToManagerScopeOf: 'mgr',
+        fromDate: '2026-04-30',
+        placeholderOnly: true,
+      },
+      exec,
+    );
+    expect(result).toBe(5);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', '2026-04-30']);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('project_id = $1');
+    expect(sql).toContain('task = $2');
+    expect(sql).toContain('user_id = $3');
+    expect(sql).toContain('wum.user_id = $3');
+    expect(sql).toContain('date >= $4');
+    expect(sql).toContain('is_placeholder = true');
   });
 });
