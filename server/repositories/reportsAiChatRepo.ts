@@ -88,7 +88,7 @@ export const sessionExistsForUser = async (
   return (rowCount ?? 0) > 0;
 };
 
-export const findActiveSessionForUser = async (
+export const getActiveSessionForUser = async (
   id: string,
   userId: string,
   exec: QueryExecutor = pool,
@@ -146,8 +146,8 @@ export const listMessagesForSession = async (
           `SELECT
               id,
               session_id as "sessionId",
-              role,
-              content,
+              COALESCE(role, '') as role,
+              COALESCE(content, '') as content,
               thought_content as "thoughtContent",
               (EXTRACT(EPOCH FROM created_at) * 1000)::float8 as "createdAt"
             FROM report_chat_messages
@@ -160,8 +160,8 @@ export const listMessagesForSession = async (
           `SELECT
               id,
               session_id as "sessionId",
-              role,
-              content,
+              COALESCE(role, '') as role,
+              COALESCE(content, '') as content,
               thought_content as "thoughtContent",
               (EXTRACT(EPOCH FROM created_at) * 1000)::float8 as "createdAt"
             FROM report_chat_messages
@@ -172,12 +172,8 @@ export const listMessagesForSession = async (
           [sessionId, beforeMs, limit],
         );
   return rows.map((r) => ({
-    id: String(r.id),
-    sessionId: String(r.sessionId),
-    role: String(r.role),
-    content: String(r.content || ''),
+    ...r,
     thoughtContent: r.thoughtContent ? String(r.thoughtContent) : null,
-    createdAt: r.createdAt,
   }));
 };
 

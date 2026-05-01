@@ -71,22 +71,22 @@ describe('sessionExistsForUser', () => {
   });
 });
 
-describe('findActiveSessionForUser', () => {
+describe('getActiveSessionForUser', () => {
   test('returns null when no row found', async () => {
     exec.enqueue({ rows: [] });
-    const result = await repo.findActiveSessionForUser('s1', 'user-1', exec);
+    const result = await repo.getActiveSessionForUser('s1', 'user-1', exec);
     expect(result).toBeNull();
   });
 
   test('returns first row when found', async () => {
     exec.enqueue({ rows: [{ title: 'Hello' }] });
-    const result = await repo.findActiveSessionForUser('s1', 'user-1', exec);
+    const result = await repo.getActiveSessionForUser('s1', 'user-1', exec);
     expect(result).toEqual({ title: 'Hello' });
   });
 
   test('filters on is_archived = FALSE', async () => {
     exec.enqueue({ rows: [] });
-    await repo.findActiveSessionForUser('s1', 'user-1', exec);
+    await repo.getActiveSessionForUser('s1', 'user-1', exec);
     expect(exec.calls[0].sql).toContain('is_archived = FALSE');
     expect(exec.calls[0].params).toEqual(['s1', 'user-1']);
   });
@@ -158,14 +158,14 @@ describe('listMessagesForSession', () => {
     ]);
   });
 
-  test('empty content/role become empty strings, not null', async () => {
+  test('empty content/role pass through; empty thoughtContent maps to null', async () => {
     exec.enqueue({
       rows: [
         {
           id: 'm1',
           sessionId: 's1',
           role: '',
-          content: null,
+          content: '',
           thoughtContent: '',
           createdAt: 0,
         },
@@ -174,6 +174,13 @@ describe('listMessagesForSession', () => {
     const [m] = await repo.listMessagesForSession('s1', { beforeMs: null, limit: 1 }, exec);
     expect(m.content).toBe('');
     expect(m.thoughtContent).toBeNull();
+  });
+
+  test('SQL COALESCEs role and content so the typed shape is accurate', async () => {
+    exec.enqueue({ rows: [] });
+    await repo.listMessagesForSession('s1', { beforeMs: null, limit: 1 }, exec);
+    expect(exec.calls[0].sql).toContain("COALESCE(role, '')");
+    expect(exec.calls[0].sql).toContain("COALESCE(content, '')");
   });
 });
 

@@ -1457,7 +1457,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
-        const session = await reportsAiChatRepo.findActiveSessionForUser(resolvedSessionId, userId);
+        const session = await reportsAiChatRepo.getActiveSessionForUser(resolvedSessionId, userId);
         if (!session) return reply.code(404).send({ error: 'Session not found' });
         shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
@@ -1728,7 +1728,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       request.raw.once('aborted', handleClientDisconnect);
       request.raw.once('close', handleClientDisconnect);
 
-      if (!(await reportsAiChatRepo.findActiveSessionForUser(sessionIdResult.value, userId))) {
+      if (!(await reportsAiChatRepo.getActiveSessionForUser(sessionIdResult.value, userId))) {
         return reply.code(404).send({ error: 'Session not found' });
       }
 
@@ -1981,7 +1981,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
-        const session = await reportsAiChatRepo.findActiveSessionForUser(resolvedSessionId, userId);
+        const session = await reportsAiChatRepo.getActiveSessionForUser(resolvedSessionId, userId);
         if (!session) return reply.code(404).send({ error: 'Session not found' });
         shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
