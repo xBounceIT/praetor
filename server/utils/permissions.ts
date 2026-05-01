@@ -16,6 +16,7 @@ export type PermissionDefinition = {
 };
 
 export const TOP_MANAGER_ROLE_ID = 'top_manager';
+export const ADMIN_ROLE_ID = 'admin';
 
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets

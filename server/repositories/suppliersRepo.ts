@@ -68,6 +68,16 @@ export const findById = async (
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
+export const findNameById = async (
+  id: string,
+  exec: QueryExecutor = pool,
+): Promise<string | null> => {
+  const { rows } = await exec.query<{ name: string }>(`SELECT name FROM suppliers WHERE id = $1`, [
+    id,
+  ]);
+  return rows[0]?.name ?? null;
+};
+
 export type NewSupplier = {
   id: string;
   name: string;
