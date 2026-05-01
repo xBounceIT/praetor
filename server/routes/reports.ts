@@ -1,11 +1,18 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query as dbQuery } from '../db/index.ts';
+import type { QueryResultRow } from 'pg';
+import pool, { type QueryExecutor } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { TIME_ENTRIES_TASKS_JOIN } from '../repositories/tasksRepo.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
+import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
+import * as reportsCatalogRepo from '../repositories/reportsCatalogRepo.ts';
+import * as reportsClientsRepo from '../repositories/reportsClientsRepo.ts';
+import * as reportsHoursRepo from '../repositories/reportsHoursRepo.ts';
+import * as reportsRevenueRepo from '../repositories/reportsRevenueRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -27,27 +34,24 @@ type GeneralAiConfig = {
 type DatasetQueryCounterStore = { count: number };
 const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
 
-const query = (text: string, params?: unknown[]) => {
-  const counter = datasetQueryCounterStorage.getStore();
-  if (counter) counter.count += 1;
-  return dbQuery(text, params);
+const datasetExec: QueryExecutor = {
+  query: <T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => {
+    const counter = datasetQueryCounterStorage.getStore();
+    if (counter) counter.count += 1;
+    return pool.query<T>(text, params);
+  },
 };
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
-  const result = await query(
-    `SELECT enable_ai_reporting, ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id, currency
-     FROM general_settings
-     WHERE id = 1`,
-  );
-  const row = result.rows[0];
+  const settings = await generalSettingsRepo.get();
   return {
-    enableAiReporting: row?.enable_ai_reporting ?? false,
-    aiProvider: (row?.ai_provider || 'gemini') as AiProvider,
-    geminiApiKey: row?.gemini_api_key || '',
-    openrouterApiKey: row?.openrouter_api_key || '',
-    geminiModelId: row?.gemini_model_id || '',
-    openrouterModelId: row?.openrouter_model_id || '',
-    currency: row?.currency || '',
+    enableAiReporting: settings?.enableAiReporting ?? false,
+    aiProvider: (settings?.aiProvider || 'gemini') as AiProvider,
+    geminiApiKey: settings?.geminiApiKey || '',
+    openrouterApiKey: settings?.openrouterApiKey || '',
+    geminiModelId: settings?.geminiModelId || '',
+    openrouterModelId: settings?.openrouterModelId || '',
+    currency: settings?.currency || '',
   };
 };
 
@@ -529,17 +533,8 @@ const getReportingRange = () => {
   return { fromDate: toDateString(from), toDate: toDateString(to) };
 };
 
-const toNumber = (value: unknown) => {
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const capTop = <T>(rows: T[], limit = 10) => rows.slice(0, limit);
-
 const getManagedUserIds = (viewerId: string): Promise<string[]> =>
   workUnitsRepo.listManagedUserIds(viewerId);
-
-const toText = (value: unknown) => String(value || '').trim();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -848,158 +843,17 @@ const buildBusinessDataset = async (
       top: 50,
     };
 
-    // Timesheets (scoped to self+managed unless tracker_all is present)
     if (canViewTimesheets && shouldIncludeDatasetSection(requestedSections, 'timesheets')) {
       includedSections.add('timesheets');
-      const baseWhere = allowedTimesheetUserIds
-        ? {
-            clause: 'WHERE te.date >= $1 AND te.date <= $2 AND te.user_id = ANY($3)',
-            params: [fromDate, toDate, allowedTimesheetUserIds],
-          }
-        : { clause: 'WHERE te.date >= $1 AND te.date <= $2', params: [fromDate, toDate] };
-
-      const totals = await query(
-        `SELECT
-         COALESCE(SUM(te.duration), 0) as hours,
-         COUNT(*) as entry_count,
-         COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as total_cost
-       FROM time_entries te
-       ${baseWhere.clause}`,
-        baseWhere.params,
-      );
-
-      const topUsers = await query(
-        `SELECT
-         u.name as label,
-         COALESCE(SUM(te.duration), 0) as value,
-         COUNT(*) as entry_count
-       FROM time_entries te
-       JOIN users u ON u.id = te.user_id
-       ${baseWhere.clause}
-       GROUP BY u.name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        baseWhere.params,
-      );
-
-      const topClients = await query(
-        `SELECT
-         te.client_name as label,
-         COALESCE(SUM(te.duration), 0) as value,
-         COUNT(*) as entry_count
-       FROM time_entries te
-       ${baseWhere.clause}
-       GROUP BY te.client_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        baseWhere.params,
-      );
-
-      const topProjects = await query(
-        `SELECT
-         te.project_name as label,
-         COALESCE(SUM(te.duration), 0) as value,
-         COUNT(*) as entry_count
-       FROM time_entries te
-       ${baseWhere.clause}
-       GROUP BY te.project_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        baseWhere.params,
-      );
-
-      const topTasks = await query(
-        `SELECT
-         te.task as label,
-         COALESCE(SUM(te.duration), 0) as value,
-         COUNT(*) as entry_count
-       FROM time_entries te
-       ${baseWhere.clause}
-       GROUP BY te.task
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        baseWhere.params,
-      );
-
-      const byMonth = await query(
-        `SELECT
-         TO_CHAR(DATE_TRUNC('month', te.date), 'YYYY-MM') as label,
-         COALESCE(SUM(te.duration), 0) as hours,
-         COUNT(*) as entry_count,
-         COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as total_cost
-       FROM time_entries te
-       ${baseWhere.clause}
-       GROUP BY DATE_TRUNC('month', te.date)
-       ORDER BY label ASC`,
-        baseWhere.params,
-      );
-
-      const byLocation = await query(
-        `SELECT
-         COALESCE(NULLIF(te.location, ''), 'unknown') as location,
-         COALESCE(SUM(te.duration), 0) as hours,
-         COUNT(*) as entry_count
-       FROM time_entries te
-       ${baseWhere.clause}
-       GROUP BY COALESCE(NULLIF(te.location, ''), 'unknown')
-       ORDER BY hours DESC`,
-        baseWhere.params,
-      );
-
-      const totalHours = toNumber(totals.rows[0]?.hours);
-      const totalEntries = toNumber(totals.rows[0]?.entry_count);
-
-      dataset.timesheets = {
-        totals: {
-          hours: totalHours,
-          entryCount: totalEntries,
-          cost: toNumber(totals.rows[0]?.total_cost),
-          avgEntryHours: totalEntries > 0 ? totalHours / totalEntries : 0,
+      dataset.timesheets = await reportsHoursRepo.getTimesheetsSection(
+        {
+          fromDate,
+          toDate,
+          allowedTimesheetUserIds,
+          topLimit: listLimits.top,
         },
-        byMonth: byMonth.rows.map((r) => ({
-          label: toText(r.label),
-          hours: toNumber(r.hours),
-          entryCount: toNumber(r.entry_count),
-          cost: toNumber(r.total_cost),
-        })),
-        byLocation: byLocation.rows.map((r) => ({
-          location: toText(r.location),
-          hours: toNumber(r.hours),
-          entryCount: toNumber(r.entry_count),
-        })),
-        topHoursByUser: capTop(
-          topUsers.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            entryCount: toNumber(r.entry_count),
-          })),
-          listLimits.top,
-        ),
-        topHoursByClient: capTop(
-          topClients.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            entryCount: toNumber(r.entry_count),
-          })),
-          listLimits.top,
-        ),
-        topHoursByProject: capTop(
-          topProjects.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            entryCount: toNumber(r.entry_count),
-          })),
-          listLimits.top,
-        ),
-        topHoursByTask: capTop(
-          topTasks.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            entryCount: toNumber(r.entry_count),
-          })),
-          listLimits.top,
-        ),
-      };
+        datasetExec,
+      );
     }
 
     const supplierWorkflowViewPermissions = [
@@ -1054,7 +908,6 @@ const buildBusinessDataset = async (
       addGrantedPermissions(request, productListPermissions, permissionsApplied);
     }
 
-    // Clients (scoped if clients_all not present)
     const canListClients = clientListPermissions.some((p) => hasPermission(request, p));
 
     if (canListClients && shouldIncludeDatasetSection(requestedSections, 'clients')) {
@@ -1062,223 +915,24 @@ const buildBusinessDataset = async (
       addGrantedPermissions(request, clientListPermissions, permissionsApplied);
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
-      const countRes = canViewAllClients
-        ? await query('SELECT COUNT(*) as count FROM clients')
-        : await query(
-            `SELECT COUNT(*) as count
-           FROM clients c
-           JOIN user_clients uc ON uc.client_id = c.id
-           WHERE uc.user_id = $1`,
-            [viewerId],
-          );
-
-      const listRes = canViewAllClients
-        ? await query(
-            `SELECT
-             c.id,
-             c.name,
-             c.client_code,
-             c.type,
-             c.contact_name,
-             c.email,
-             c.phone,
-             c.address,
-             c.is_disabled
-           FROM clients c
-           ORDER BY c.name ASC
-           LIMIT ${listLimits.items}`,
-          )
-        : await query(
-            `SELECT DISTINCT
-             c.id,
-             c.name,
-             c.client_code,
-             c.type,
-             c.contact_name,
-             c.email,
-             c.phone,
-             c.address,
-             c.is_disabled
-           FROM clients c
-           JOIN user_clients uc ON uc.client_id = c.id
-           WHERE uc.user_id = $1
-           ORDER BY c.name ASC
-           LIMIT ${listLimits.items}`,
-            [viewerId],
-          );
-
-      const clientIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
-      const activityByClient = new Map<
-        string,
+      dataset.clients = await reportsClientsRepo.getClientsSection(
         {
-          clientId: string;
-          quotesCount: number | null;
-          quotesNet: number | null;
-          ordersCount: number | null;
-          ordersNet: number | null;
-          invoicesCount: number | null;
-          invoicesTotal: number | null;
-          invoicesOutstanding: number | null;
-          timesheetHours: number | null;
-        }
-      >();
-      for (const clientId of clientIds) {
-        activityByClient.set(clientId, {
-          clientId,
-          quotesCount: null,
-          quotesNet: null,
-          ordersCount: null,
-          ordersNet: null,
-          invoicesCount: null,
-          invoicesTotal: null,
-          invoicesOutstanding: null,
-          timesheetHours: null,
-        });
-      }
-
-      if (clientIds.length > 0 && canViewQuotes) {
-        const perClientQuotes = await query(
-          `WITH per_quote AS (
-          SELECT
-            q.id,
-            q.client_id,
-            SUM(
-              qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)
-            ) * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
-          FROM quotes q
-          JOIN quote_items qi ON qi.quote_id = q.id
-          WHERE q.created_at::date >= $1
-            AND q.created_at::date <= $2
-            AND q.client_id = ANY($3)
-          GROUP BY q.id
-        )
-        SELECT
-          client_id,
-          COUNT(*) as quote_count,
-          COALESCE(SUM(net_value), 0) as net_value
-        FROM per_quote
-        GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
-        );
-        for (const row of perClientQuotes.rows) {
-          const clientId = toText(row.client_id);
-          const target = activityByClient.get(clientId);
-          if (!target) continue;
-          target.quotesCount = toNumber(row.quote_count);
-          target.quotesNet = toNumber(row.net_value);
-        }
-      }
-
-      if (clientIds.length > 0 && canViewOrders) {
-        const perClientOrders = await query(
-          `WITH per_order AS (
-          SELECT
-            s.id,
-            s.client_id,
-            SUM(
-              si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)
-            ) * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
-          FROM sales s
-          JOIN sale_items si ON si.sale_id = s.id
-          WHERE s.created_at::date >= $1
-            AND s.created_at::date <= $2
-            AND s.client_id = ANY($3)
-          GROUP BY s.id
-        )
-        SELECT
-          client_id,
-          COUNT(*) as order_count,
-          COALESCE(SUM(net_value), 0) as net_value
-        FROM per_order
-        GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
-        );
-        for (const row of perClientOrders.rows) {
-          const clientId = toText(row.client_id);
-          const target = activityByClient.get(clientId);
-          if (!target) continue;
-          target.ordersCount = toNumber(row.order_count);
-          target.ordersNet = toNumber(row.net_value);
-        }
-      }
-
-      if (clientIds.length > 0 && canViewInvoices) {
-        const perClientInvoices = await query(
-          `SELECT
-           client_id,
-           COUNT(*) as invoice_count,
-           COALESCE(SUM(total), 0) as total_sum,
-           COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
-         FROM invoices
-         WHERE issue_date >= $1
-           AND issue_date <= $2
-           AND client_id = ANY($3)
-         GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
-        );
-        for (const row of perClientInvoices.rows) {
-          const clientId = toText(row.client_id);
-          const target = activityByClient.get(clientId);
-          if (!target) continue;
-          target.invoicesCount = toNumber(row.invoice_count);
-          target.invoicesTotal = toNumber(row.total_sum);
-          target.invoicesOutstanding = toNumber(row.outstanding_sum);
-        }
-      }
-
-      if (clientIds.length > 0 && canViewTimesheets) {
-        const timesheetByClient = canViewAllTimesheets
-          ? await query(
-              `SELECT
-               te.client_id,
-               COALESCE(SUM(te.duration), 0) as hours
-             FROM time_entries te
-             WHERE te.date >= $1
-               AND te.date <= $2
-               AND te.client_id = ANY($3)
-             GROUP BY te.client_id`,
-              [fromDate, toDate, clientIds],
-            )
-          : await query(
-              `SELECT
-               te.client_id,
-               COALESCE(SUM(te.duration), 0) as hours
-             FROM time_entries te
-             WHERE te.date >= $1
-               AND te.date <= $2
-               AND te.user_id = ANY($3)
-               AND te.client_id = ANY($4)
-             GROUP BY te.client_id`,
-              [fromDate, toDate, allowedTimesheetUserIds || [], clientIds],
-            );
-        for (const row of timesheetByClient.rows) {
-          const clientId = toText(row.client_id);
-          const target = activityByClient.get(clientId);
-          if (!target) continue;
-          target.timesheetHours = toNumber(row.hours);
-        }
-      }
-
-      dataset.clients = {
-        count: toNumber(countRes.rows[0]?.count),
-        items: listRes.rows.map((r) => ({
-          id: toText(r.id),
-          name: toText(r.name),
-          clientCode: toText(r.client_code),
-          type: toText(r.type),
-          contactName: toText(r.contact_name),
-          email: toText(r.email),
-          phone: toText(r.phone),
-          address: toText(r.address),
-          isDisabled: Boolean(r.is_disabled),
-        })),
-        activitySummary: clientIds
-          .map((clientId) => activityByClient.get(clientId))
-          .filter(Boolean),
-      };
+          viewerId,
+          fromDate,
+          toDate,
+          canViewAllClients,
+          canViewQuotes,
+          canViewOrders,
+          canViewInvoices,
+          canViewTimesheets,
+          canViewAllTimesheets,
+          allowedTimesheetUserIds,
+          itemsLimit: listLimits.items,
+        },
+        datasetExec,
+      );
     }
 
-    // Projects (scoped if manage_all not present)
     const canListProjects = [
       'projects.manage.view',
       'projects.tasks.view',
@@ -1299,153 +953,22 @@ const buildBusinessDataset = async (
       );
 
       const canViewAllProjects = hasPermission(request, 'projects.manage_all.view');
-      const summaryRes = canViewAllProjects
-        ? await query(
-            `SELECT
-             COUNT(*) as count,
-             SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
-           FROM projects`,
-          )
-        : await query(
-            `SELECT
-             COUNT(*) as count,
-             SUM(CASE WHEN p.is_disabled THEN 1 ELSE 0 END) as disabled_count
-           FROM projects p
-           JOIN user_projects up ON up.project_id = p.id
-           WHERE up.user_id = $1`,
-            [viewerId],
-          );
-
-      const itemsRes = canViewAllProjects
-        ? await query(
-            `SELECT
-             p.id,
-             p.name,
-             p.client_id,
-             c.name as client_name,
-             p.description,
-             p.is_disabled
-           FROM projects p
-           JOIN clients c ON c.id = p.client_id
-           ORDER BY p.name ASC
-           LIMIT ${listLimits.items}`,
-          )
-        : await query(
-            `SELECT
-             p.id,
-             p.name,
-             p.client_id,
-             c.name as client_name,
-             p.description,
-             p.is_disabled
-           FROM projects p
-           JOIN clients c ON c.id = p.client_id
-           JOIN user_projects up ON up.project_id = p.id
-           WHERE up.user_id = $1
-           ORDER BY p.name ASC
-           LIMIT ${listLimits.items}`,
-            [viewerId],
-          );
-
-      let topByHours: Array<{ label: string; value: number; cost: number }> = [];
-      let topByCost: Array<{ label: string; value: number; hours: number }> = [];
-
-      if (canViewTimesheets) {
-        const rows = canViewAllProjects
-          ? canViewAllTimesheets
-            ? await query(
-                `SELECT
-                 te.project_name as label,
-                 COALESCE(SUM(te.duration), 0) as hours,
-                 COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               WHERE te.date >= $1 AND te.date <= $2
-               GROUP BY te.project_name`,
-                [fromDate, toDate],
-              )
-            : await query(
-                `SELECT
-                 te.project_name as label,
-                 COALESCE(SUM(te.duration), 0) as hours,
-                 COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND te.user_id = ANY($3)
-               GROUP BY te.project_name`,
-                [fromDate, toDate, allowedTimesheetUserIds || []],
-              )
-          : canViewAllTimesheets
-            ? await query(
-                `SELECT
-                 te.project_name as label,
-                 COALESCE(SUM(te.duration), 0) as hours,
-                 COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               JOIN user_projects up ON up.project_id = te.project_id
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND up.user_id = $3
-               GROUP BY te.project_name`,
-                [fromDate, toDate, viewerId],
-              )
-            : await query(
-                `SELECT
-                 te.project_name as label,
-                 COALESCE(SUM(te.duration), 0) as hours,
-                 COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               JOIN user_projects up ON up.project_id = te.project_id
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND te.user_id = ANY($3)
-                 AND up.user_id = $4
-               GROUP BY te.project_name`,
-                [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
-              );
-
-        topByHours = capTop(
-          rows.rows
-            .map((r) => ({
-              label: toText(r.label),
-              value: toNumber(r.hours),
-              cost: toNumber(r.cost),
-            }))
-            .sort((a, b) => b.value - a.value),
-          listLimits.top,
-        );
-        topByCost = capTop(
-          rows.rows
-            .map((r) => ({
-              label: toText(r.label),
-              value: toNumber(r.cost),
-              hours: toNumber(r.hours),
-            }))
-            .sort((a, b) => b.value - a.value),
-          listLimits.top,
-        );
-      }
-
-      const projectCount = toNumber(summaryRes.rows[0]?.count);
-      const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-      dataset.projects = {
-        count: projectCount,
-        activeCount: Math.max(projectCount - disabledCount, 0),
-        disabledCount,
-        items: itemsRes.rows.map((r) => ({
-          id: toText(r.id),
-          name: toText(r.name),
-          clientId: toText(r.client_id),
-          clientName: toText(r.client_name),
-          description: toText(r.description),
-          isDisabled: Boolean(r.is_disabled),
-        })),
-        topByHours,
-        topByCost,
-      };
+      dataset.projects = await reportsHoursRepo.getProjectsSection(
+        {
+          viewerId,
+          fromDate,
+          toDate,
+          canViewAllProjects,
+          canViewTimesheets,
+          canViewAllTimesheets,
+          allowedTimesheetUserIds,
+          itemsLimit: listLimits.items,
+          topLimit: listLimits.top,
+        },
+        datasetExec,
+      );
     }
 
-    // Tasks (scoped if tasks_all not present)
     const canListTasks = [
       'projects.tasks.view',
       'projects.manage.view',
@@ -1466,950 +989,76 @@ const buildBusinessDataset = async (
       );
 
       const canViewAllTasks = hasPermission(request, 'projects.tasks_all.view');
-      const summaryRes = canViewAllTasks
-        ? await query(
-            `SELECT
-             COUNT(*) as count,
-             SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count,
-             SUM(CASE WHEN is_recurring THEN 1 ELSE 0 END) as recurring_count
-           FROM tasks`,
-          )
-        : await query(
-            `SELECT
-             COUNT(*) as count,
-             SUM(CASE WHEN t.is_disabled THEN 1 ELSE 0 END) as disabled_count,
-             SUM(CASE WHEN t.is_recurring THEN 1 ELSE 0 END) as recurring_count
-           FROM tasks t
-           JOIN user_tasks ut ON ut.task_id = t.id
-           WHERE ut.user_id = $1`,
-            [viewerId],
-          );
-
-      const itemsRes = canViewAllTasks
-        ? await query(
-            `SELECT
-             t.id,
-             t.name,
-             t.project_id,
-             p.name as project_name,
-             t.is_disabled,
-             t.is_recurring,
-             t.recurrence_pattern
-           FROM tasks t
-           JOIN projects p ON p.id = t.project_id
-           ORDER BY t.name ASC
-           LIMIT ${listLimits.items}`,
-          )
-        : await query(
-            `SELECT
-             t.id,
-             t.name,
-             t.project_id,
-             p.name as project_name,
-             t.is_disabled,
-             t.is_recurring,
-             t.recurrence_pattern
-           FROM tasks t
-           JOIN projects p ON p.id = t.project_id
-           JOIN user_tasks ut ON ut.task_id = t.id
-           WHERE ut.user_id = $1
-           ORDER BY t.name ASC
-           LIMIT ${listLimits.items}`,
-            [viewerId],
-          );
-
-      let topByHours: Array<{ label: string; value: number; entryCount: number }> = [];
-      if (canViewTimesheets) {
-        const taskHoursRes = canViewAllTasks
-          ? canViewAllTimesheets
-            ? await query(
-                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               WHERE te.date >= $1 AND te.date <= $2
-               GROUP BY te.task
-               ORDER BY hours DESC
-               LIMIT ${listLimits.top}`,
-                [fromDate, toDate],
-              )
-            : await query(
-                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND te.user_id = ANY($3)
-               GROUP BY te.task
-               ORDER BY hours DESC
-               LIMIT ${listLimits.top}`,
-                [fromDate, toDate, allowedTimesheetUserIds || []],
-              )
-          : canViewAllTimesheets
-            ? await query(
-                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               ${TIME_ENTRIES_TASKS_JOIN}
-               JOIN user_tasks ut ON ut.task_id = t.id
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND ut.user_id = $3
-               GROUP BY te.task
-               ORDER BY hours DESC
-               LIMIT ${listLimits.top}`,
-                [fromDate, toDate, viewerId],
-              )
-            : await query(
-                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               ${TIME_ENTRIES_TASKS_JOIN}
-               JOIN user_tasks ut ON ut.task_id = t.id
-               WHERE te.date >= $1
-                 AND te.date <= $2
-                 AND te.user_id = ANY($3)
-                 AND ut.user_id = $4
-               GROUP BY te.task
-               ORDER BY hours DESC
-               LIMIT ${listLimits.top}`,
-                [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
-              );
-
-        topByHours = taskHoursRes.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.hours),
-          entryCount: toNumber(r.entry_count),
-        }));
-      }
-
-      const taskCount = toNumber(summaryRes.rows[0]?.count);
-      const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-      dataset.tasks = {
-        count: taskCount,
-        activeCount: Math.max(taskCount - disabledCount, 0),
-        disabledCount,
-        recurringCount: toNumber(summaryRes.rows[0]?.recurring_count),
-        items: itemsRes.rows.map((r) => ({
-          id: toText(r.id),
-          name: toText(r.name),
-          projectId: toText(r.project_id),
-          projectName: toText(r.project_name),
-          isDisabled: Boolean(r.is_disabled),
-          isRecurring: Boolean(r.is_recurring),
-          recurrencePattern: toText(r.recurrence_pattern),
-        })),
-        topByHours,
-      };
+      dataset.tasks = await reportsHoursRepo.getTasksSection(
+        {
+          viewerId,
+          fromDate,
+          toDate,
+          canViewAllTasks,
+          canViewTimesheets,
+          canViewAllTimesheets,
+          allowedTimesheetUserIds,
+          itemsLimit: listLimits.items,
+          topLimit: listLimits.top,
+        },
+        datasetExec,
+      );
     }
 
-    // Quotes
     if (canViewQuotes && shouldIncludeDatasetSection(requestedSections, 'quotes')) {
       includedSections.add('quotes');
-      const totals = await query(
-        `WITH per_quote AS (
-        SELECT
-          q.id,
-          SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-            * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
-        FROM quotes q
-        JOIN quote_items qi ON qi.quote_id = q.id
-        WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-        GROUP BY q.id
-      )
-      SELECT
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net,
-        COALESCE(AVG(net_value), 0) as avg_net
-      FROM per_quote`,
-        [fromDate, toDate],
+      dataset.quotes = await reportsRevenueRepo.getQuotesSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetExec,
       );
-
-      const byStatus = await query(
-        `WITH per_quote AS (
-        SELECT
-          q.id,
-          q.status,
-          q.client_name,
-          q.created_at,
-          (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
-        FROM quotes q
-        JOIN quote_items qi ON qi.quote_id = q.id
-        WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-        GROUP BY q.id
-      )
-      SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
-      FROM per_quote
-      GROUP BY status
-      ORDER BY count DESC`,
-        [fromDate, toDate],
-      );
-
-      const byMonth = await query(
-        `WITH per_quote AS (
-        SELECT
-          q.id,
-          q.created_at,
-          SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-            * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
-        FROM quotes q
-        JOIN quote_items qi ON qi.quote_id = q.id
-        WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-        GROUP BY q.id
-      )
-      SELECT
-        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as label,
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net
-      FROM per_quote
-      GROUP BY DATE_TRUNC('month', created_at)
-      ORDER BY label ASC`,
-        [fromDate, toDate],
-      );
-
-      const topQuotes = await query(
-        `WITH per_quote AS (
-        SELECT
-          q.id,
-          q.client_name,
-          q.status,
-          q.created_at,
-          SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-            * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
-        FROM quotes q
-        JOIN quote_items qi ON qi.quote_id = q.id
-        WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-        GROUP BY q.id
-      )
-      SELECT
-        id,
-        client_name,
-        status,
-        net_value,
-        EXTRACT(EPOCH FROM created_at) * 1000 as created_at
-      FROM per_quote
-      ORDER BY net_value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      const topClients = await query(
-        `WITH per_quote AS (
-        SELECT
-          q.id,
-          q.client_name,
-          (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
-        FROM quotes q
-        JOIN quote_items qi ON qi.quote_id = q.id
-        WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-        GROUP BY q.id
-      )
-      SELECT
-        client_name as label,
-        COUNT(*) as quote_count,
-        COALESCE(SUM(net_value), 0) as value
-      FROM per_quote
-      GROUP BY client_name
-      ORDER BY value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      dataset.quotes = {
-        totals: {
-          count: toNumber(totals.rows[0]?.count),
-          totalNet: toNumber(totals.rows[0]?.total_net),
-          avgNet: toNumber(totals.rows[0]?.avg_net),
-        },
-        byMonth: byMonth.rows.map((r) => ({
-          label: toText(r.label),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        byStatus: byStatus.rows.map((r) => ({
-          status: toText(r.status),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        topQuotesByNet: topQuotes.rows.map((r) => ({
-          id: toText(r.id),
-          quoteCode: toText(r.id),
-          clientName: toText(r.client_name),
-          status: toText(r.status),
-          netValue: toNumber(r.net_value),
-          createdAt: toNumber(r.created_at),
-        })),
-        topClientsByNet: capTop(
-          topClients.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            quoteCount: toNumber(r.quote_count),
-          })),
-          listLimits.top,
-        ),
-      };
     }
 
-    // Orders (sales)
     if (canViewOrders && shouldIncludeDatasetSection(requestedSections, 'orders')) {
       includedSections.add('orders');
-      const totals = await query(
-        `WITH per_order AS (
-        SELECT
-          s.id,
-          SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-            * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
-        FROM sales s
-        JOIN sale_items si ON si.sale_id = s.id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-        GROUP BY s.id
-      )
-      SELECT
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net,
-        COALESCE(AVG(net_value), 0) as avg_net
-      FROM per_order`,
-        [fromDate, toDate],
+      dataset.orders = await reportsRevenueRepo.getOrdersSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetExec,
       );
-
-      const byStatus = await query(
-        `WITH per_order AS (
-        SELECT
-          s.id,
-          s.status,
-          s.client_name,
-          s.created_at,
-          (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
-        FROM sales s
-        JOIN sale_items si ON si.sale_id = s.id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-        GROUP BY s.id
-      )
-      SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
-      FROM per_order
-      GROUP BY status
-      ORDER BY count DESC`,
-        [fromDate, toDate],
-      );
-
-      const byMonth = await query(
-        `WITH per_order AS (
-        SELECT
-          s.id,
-          s.created_at,
-          SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-            * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
-        FROM sales s
-        JOIN sale_items si ON si.sale_id = s.id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-        GROUP BY s.id
-      )
-      SELECT
-        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as label,
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net
-      FROM per_order
-      GROUP BY DATE_TRUNC('month', created_at)
-      ORDER BY label ASC`,
-        [fromDate, toDate],
-      );
-
-      const topOrders = await query(
-        `WITH per_order AS (
-        SELECT
-          s.id,
-          s.client_name,
-          s.status,
-          s.created_at,
-          SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-            * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
-        FROM sales s
-        JOIN sale_items si ON si.sale_id = s.id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-        GROUP BY s.id
-      )
-      SELECT
-        id,
-        client_name,
-        status,
-        net_value,
-        EXTRACT(EPOCH FROM created_at) * 1000 as created_at
-      FROM per_order
-      ORDER BY net_value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      const topClients = await query(
-        `WITH per_order AS (
-        SELECT
-          s.id,
-          s.client_name,
-          (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
-        FROM sales s
-        JOIN sale_items si ON si.sale_id = s.id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-        GROUP BY s.id
-      )
-      SELECT
-        client_name as label,
-        COUNT(*) as order_count,
-        COALESCE(SUM(net_value), 0) as value
-      FROM per_order
-      GROUP BY client_name
-      ORDER BY value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      dataset.orders = {
-        totals: {
-          count: toNumber(totals.rows[0]?.count),
-          totalNet: toNumber(totals.rows[0]?.total_net),
-          avgNet: toNumber(totals.rows[0]?.avg_net),
-        },
-        byMonth: byMonth.rows.map((r) => ({
-          label: toText(r.label),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        byStatus: byStatus.rows.map((r) => ({
-          status: toText(r.status),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        topOrdersByNet: topOrders.rows.map((r) => ({
-          id: toText(r.id),
-          clientName: toText(r.client_name),
-          status: toText(r.status),
-          netValue: toNumber(r.net_value),
-          createdAt: toNumber(r.created_at),
-        })),
-        topClientsByNet: capTop(
-          topClients.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            orderCount: toNumber(r.order_count),
-          })),
-          listLimits.top,
-        ),
-      };
     }
 
-    // Invoices
     if (canViewInvoices && shouldIncludeDatasetSection(requestedSections, 'invoices')) {
       includedSections.add('invoices');
-      const totals = await query(
-        `SELECT
-         COUNT(*) as count,
-         COALESCE(SUM(total), 0) as total_sum,
-         COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum,
-         COALESCE(SUM(amount_paid), 0) as paid_sum
-       FROM invoices
-       WHERE issue_date >= $1 AND issue_date <= $2`,
-        [fromDate, toDate],
+      dataset.invoices = await reportsRevenueRepo.getInvoicesSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetExec,
       );
-
-      const byStatus = await query(
-        `SELECT status,
-              COUNT(*) as count,
-              COALESCE(SUM(total), 0) as total_sum,
-              COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
-       FROM invoices
-       WHERE issue_date >= $1 AND issue_date <= $2
-       GROUP BY status
-       ORDER BY count DESC`,
-        [fromDate, toDate],
-      );
-
-      const byMonth = await query(
-        `SELECT
-         TO_CHAR(DATE_TRUNC('month', issue_date), 'YYYY-MM') as label,
-         COUNT(*) as count,
-         COALESCE(SUM(total), 0) as total_sum,
-         COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
-       FROM invoices
-       WHERE issue_date >= $1 AND issue_date <= $2
-       GROUP BY DATE_TRUNC('month', issue_date)
-       ORDER BY label ASC`,
-        [fromDate, toDate],
-      );
-
-      const aging = await query(
-        `SELECT
-         CASE
-           WHEN CURRENT_DATE - due_date <= 30 THEN '0-30'
-           WHEN CURRENT_DATE - due_date <= 60 THEN '31-60'
-           WHEN CURRENT_DATE - due_date <= 90 THEN '61-90'
-           ELSE '90+'
-         END as bucket,
-         COUNT(*) as count,
-         COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
-       FROM invoices
-       WHERE issue_date >= $1
-         AND issue_date <= $2
-         AND GREATEST(total - amount_paid, 0) > 0
-       GROUP BY bucket
-       ORDER BY bucket ASC`,
-        [fromDate, toDate],
-      );
-
-      const topOutstanding = await query(
-        `SELECT
-         client_name as label,
-         COUNT(*) as invoice_count,
-         COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as value
-       FROM invoices
-       WHERE issue_date >= $1 AND issue_date <= $2
-       GROUP BY client_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      const topInvoices = await query(
-        `SELECT
-         id,
-         client_name,
-         status,
-         due_date,
-         GREATEST(total - amount_paid, 0) as outstanding
-       FROM invoices
-       WHERE issue_date >= $1 AND issue_date <= $2
-       ORDER BY outstanding DESC
-       LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      dataset.invoices = {
-        totals: {
-          count: toNumber(totals.rows[0]?.count),
-          total: toNumber(totals.rows[0]?.total_sum),
-          outstanding: toNumber(totals.rows[0]?.outstanding_sum),
-          paidAmount: toNumber(totals.rows[0]?.paid_sum),
-        },
-        byMonth: byMonth.rows.map((r) => ({
-          label: toText(r.label),
-          count: toNumber(r.count),
-          total: toNumber(r.total_sum),
-          outstanding: toNumber(r.outstanding_sum),
-        })),
-        aging: aging.rows.map((r) => ({
-          bucket: toText(r.bucket),
-          count: toNumber(r.count),
-          outstanding: toNumber(r.outstanding_sum),
-        })),
-        byStatus: byStatus.rows.map((r) => ({
-          status: toText(r.status),
-          count: toNumber(r.count),
-          total: toNumber(r.total_sum),
-          outstanding: toNumber(r.outstanding_sum),
-        })),
-        topInvoicesByOutstanding: topInvoices.rows.map((r) => ({
-          id: toText(r.id),
-          invoiceNumber: toText(r.id),
-          clientName: toText(r.client_name),
-          status: toText(r.status),
-          dueDate: toText(r.due_date),
-          outstanding: toNumber(r.outstanding),
-        })),
-        topClientsByOutstanding: capTop(
-          topOutstanding.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            invoiceCount: toNumber(r.invoice_count),
-          })),
-          listLimits.top,
-        ),
-      };
     }
 
-    // Suppliers (global in current access model)
     const canListSuppliers = supplierListPermissions.some((p) => hasPermission(request, p));
     if (canListSuppliers && shouldIncludeDatasetSection(requestedSections, 'suppliers')) {
       includedSections.add('suppliers');
       addGrantedPermissions(request, supplierListPermissions, permissionsApplied);
-
-      const summaryRes = await query(
-        `SELECT
-         COUNT(*) as count,
-         SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
-       FROM suppliers`,
-      );
-      const listRes = await query(
-        `SELECT
-         id,
-         name,
-         supplier_code,
-         contact_name,
-         email,
-         phone,
-         address,
-         is_disabled
-       FROM suppliers
-       ORDER BY name ASC
-       LIMIT ${listLimits.items}`,
-      );
-
-      const supplierIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
-      const activityBySupplier = new Map<
-        string,
+      dataset.suppliers = await reportsCatalogRepo.getSuppliersSection(
         {
-          supplierId: string;
-          quotesCount: number | null;
-          quotesNet: number | null;
-          productsCount: number | null;
-        }
-      >();
-      for (const supplierId of supplierIds) {
-        activityBySupplier.set(supplierId, {
-          supplierId,
-          quotesCount: null,
-          quotesNet: null,
-          productsCount: null,
-        });
-      }
-
-      if (supplierIds.length > 0 && canViewSupplierQuotes) {
-        const supplierQuoteStats = await query(
-          `WITH per_quote AS (
-          SELECT
-            sq.id,
-            sq.supplier_id,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
-          FROM supplier_quotes sq
-          JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-          WHERE sq.created_at::date >= $1
-            AND sq.created_at::date <= $2
-            AND sq.supplier_id = ANY($3)
-          GROUP BY sq.id
-        )
-        SELECT
-          supplier_id,
-          COUNT(*) as quote_count,
-          COALESCE(SUM(net_value), 0) as net_value
-        FROM per_quote
-        GROUP BY supplier_id`,
-          [fromDate, toDate, supplierIds],
-        );
-
-        for (const row of supplierQuoteStats.rows) {
-          const supplierId = toText(row.supplier_id);
-          const target = activityBySupplier.get(supplierId);
-          if (!target) continue;
-          target.quotesCount = toNumber(row.quote_count);
-          target.quotesNet = toNumber(row.net_value);
-        }
-      }
-
-      if (supplierIds.length > 0 && canListProducts) {
-        const supplierProductStats = await query(
-          `SELECT supplier_id, COUNT(*) as product_count
-         FROM products
-         WHERE supplier_id = ANY($1)
-         GROUP BY supplier_id`,
-          [supplierIds],
-        );
-
-        for (const row of supplierProductStats.rows) {
-          const supplierId = toText(row.supplier_id);
-          const target = activityBySupplier.get(supplierId);
-          if (!target) continue;
-          target.productsCount = toNumber(row.product_count);
-        }
-      }
-
-      const supplierCount = toNumber(summaryRes.rows[0]?.count);
-      const supplierDisabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-      dataset.suppliers = {
-        count: supplierCount,
-        activeCount: Math.max(supplierCount - supplierDisabledCount, 0),
-        disabledCount: supplierDisabledCount,
-        items: listRes.rows.map((r) => ({
-          id: toText(r.id),
-          name: toText(r.name),
-          supplierCode: toText(r.supplier_code),
-          contactName: toText(r.contact_name),
-          email: toText(r.email),
-          phone: toText(r.phone),
-          address: toText(r.address),
-          isDisabled: Boolean(r.is_disabled),
-        })),
-        activitySummary: supplierIds
-          .map((supplierId) => activityBySupplier.get(supplierId))
-          .filter(Boolean),
-      };
+          fromDate,
+          toDate,
+          canViewSupplierQuotes,
+          canListProducts,
+          itemsLimit: listLimits.items,
+        },
+        datasetExec,
+      );
     }
 
-    // Supplier quotes
     if (canViewSupplierQuotes && shouldIncludeDatasetSection(requestedSections, 'supplierQuotes')) {
       includedSections.add('supplierQuotes');
-      const totals = await query(
-        `WITH per_quote AS (
-        SELECT
-          sq.id,
-          SUM(sqi.quantity * sqi.unit_price) as net_value
-        FROM supplier_quotes sq
-        JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-        WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
-        GROUP BY sq.id
-      )
-      SELECT
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net,
-        COALESCE(AVG(net_value), 0) as avg_net
-      FROM per_quote`,
-        [fromDate, toDate],
+      dataset.supplierQuotes = await reportsCatalogRepo.getSupplierQuotesSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetExec,
       );
-
-      const byStatus = await query(
-        `WITH per_quote AS (
-        SELECT
-          sq.id,
-          sq.status,
-          sq.supplier_name,
-          sq.created_at,
-          SUM(sqi.quantity * sqi.unit_price) as net_value
-        FROM supplier_quotes sq
-        JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-        WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
-        GROUP BY sq.id
-      )
-      SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
-      FROM per_quote
-      GROUP BY status
-      ORDER BY count DESC`,
-        [fromDate, toDate],
-      );
-
-      const byMonth = await query(
-        `WITH per_quote AS (
-        SELECT
-          sq.id,
-          sq.created_at,
-          SUM(sqi.quantity * sqi.unit_price) as net_value
-        FROM supplier_quotes sq
-        JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-        WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
-        GROUP BY sq.id
-      )
-      SELECT
-        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as label,
-        COUNT(*) as count,
-        COALESCE(SUM(net_value), 0) as total_net
-      FROM per_quote
-      GROUP BY DATE_TRUNC('month', created_at)
-      ORDER BY label ASC`,
-        [fromDate, toDate],
-      );
-
-      const topSuppliers = await query(
-        `WITH per_quote AS (
-        SELECT
-          sq.id,
-          sq.supplier_name,
-          SUM(sqi.quantity * sqi.unit_price) as net_value
-        FROM supplier_quotes sq
-        JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-        WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
-        GROUP BY sq.id
-      )
-      SELECT
-        supplier_name as label,
-        COUNT(*) as quote_count,
-        COALESCE(SUM(net_value), 0) as value
-      FROM per_quote
-      GROUP BY supplier_name
-      ORDER BY value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      const topQuotes = await query(
-        `WITH per_quote AS (
-        SELECT
-          sq.id,
-          sq.supplier_name,
-          sq.status,
-          sq.created_at,
-          SUM(sqi.quantity * sqi.unit_price) as net_value
-        FROM supplier_quotes sq
-        JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-        WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
-        GROUP BY sq.id
-      )
-      SELECT
-        id,
-        supplier_name,
-        status,
-        net_value,
-        EXTRACT(EPOCH FROM created_at) * 1000 as created_at
-      FROM per_quote
-      ORDER BY net_value DESC
-      LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      dataset.supplierQuotes = {
-        totals: {
-          count: toNumber(totals.rows[0]?.count),
-          totalNet: toNumber(totals.rows[0]?.total_net),
-          avgNet: toNumber(totals.rows[0]?.avg_net),
-        },
-        byMonth: byMonth.rows.map((r) => ({
-          label: toText(r.label),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        byStatus: byStatus.rows.map((r) => ({
-          status: toText(r.status),
-          count: toNumber(r.count),
-          totalNet: toNumber(r.total_net),
-        })),
-        topQuotesByNet: topQuotes.rows.map((r) => ({
-          id: toText(r.id),
-          supplierName: toText(r.supplier_name),
-          purchaseOrderNumber: toText(r.id),
-          status: toText(r.status),
-          netValue: toNumber(r.net_value),
-          createdAt: toNumber(r.created_at),
-        })),
-        topSuppliersByNet: capTop(
-          topSuppliers.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-            quoteCount: toNumber(r.quote_count),
-          })),
-          listLimits.top,
-        ),
-      };
     }
 
-    // Products / Catalog
     if (canListProducts && shouldIncludeDatasetSection(requestedSections, 'catalog')) {
       includedSections.add('catalog');
-      const counts = await query(
-        `SELECT
-         SUM(CASE WHEN supplier_id IS NULL THEN 1 ELSE 0 END) as internal_count,
-         SUM(CASE WHEN supplier_id IS NOT NULL THEN 1 ELSE 0 END) as external_count,
-         SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
-       FROM products`,
+      dataset.catalog = await reportsCatalogRepo.getCatalogSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetExec,
       );
-
-      const byType = await query(
-        `SELECT COALESCE(NULLIF(type, ''), 'unknown') as label, COUNT(*) as value
-       FROM products
-       GROUP BY COALESCE(NULLIF(type, ''), 'unknown')
-       ORDER BY value DESC`,
-      );
-
-      const byCategory = await query(
-        `SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as label, COUNT(*) as value
-       FROM products
-       GROUP BY COALESCE(NULLIF(category, ''), 'uncategorized')
-       ORDER BY value DESC`,
-      );
-
-      const bySubcategory = await query(
-        `SELECT COALESCE(NULLIF(subcategory, ''), 'none') as label, COUNT(*) as value
-       FROM products
-       GROUP BY COALESCE(NULLIF(subcategory, ''), 'none')
-       ORDER BY value DESC`,
-      );
-
-      const productsBySupplier = await query(
-        `SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
-       FROM products p
-       LEFT JOIN suppliers s ON s.id = p.supplier_id
-       WHERE p.supplier_id IS NOT NULL
-       GROUP BY COALESCE(s.name, 'Unknown')
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-      );
-
-      const topProductsByUsage = await query(
-        `WITH usage_rows AS (
-         SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
-         FROM quote_items qi
-         JOIN quotes q ON q.id = qi.quote_id
-         WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
-         GROUP BY qi.product_id, qi.product_name
-         UNION ALL
-         SELECT si.product_id, si.product_name, COUNT(*) as use_count, COALESCE(SUM(si.quantity), 0) as quantity_total
-         FROM sale_items si
-         JOIN sales s ON s.id = si.sale_id
-         WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-         GROUP BY si.product_id, si.product_name
-         UNION ALL
-         SELECT ii.product_id, ii.description as product_name, COUNT(*) as use_count, COALESCE(SUM(ii.quantity), 0) as quantity_total
-         FROM invoice_items ii
-         JOIN invoices i ON i.id = ii.invoice_id
-         WHERE i.issue_date >= $1 AND i.issue_date <= $2 AND ii.product_id IS NOT NULL
-         GROUP BY ii.product_id, ii.description
-       )
-       SELECT
-         product_id,
-         product_name,
-         COALESCE(SUM(use_count), 0) as usage_count,
-         COALESCE(SUM(quantity_total), 0) as quantity_total
-       FROM usage_rows
-       GROUP BY product_id, product_name
-       ORDER BY usage_count DESC, quantity_total DESC
-       LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      const topProductsByRevenue = await query(
-        `SELECT
-         si.product_id,
-         si.product_name,
-         COALESCE(
-           SUM(
-             si.quantity
-             * si.unit_price
-             * (1 - COALESCE(si.discount, 0) / 100.0)
-             * (1 - COALESCE(s.discount, 0) / 100.0)
-           ),
-           0
-         ) as value
-       FROM sale_items si
-       JOIN sales s ON s.id = si.sale_id
-       WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
-       GROUP BY si.product_id, si.product_name
-       ORDER BY value DESC
-       LIMIT ${listLimits.top}`,
-        [fromDate, toDate],
-      );
-
-      dataset.catalog = {
-        productCounts: {
-          internal: toNumber(counts.rows[0]?.internal_count),
-          external: toNumber(counts.rows[0]?.external_count),
-          disabled: toNumber(counts.rows[0]?.disabled_count),
-        },
-        byType: byType.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-        byCategory: byCategory.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-        })),
-        bySubcategory: bySubcategory.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-        })),
-        productsBySupplierCount: capTop(
-          productsBySupplier.rows.map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.value),
-          })),
-          listLimits.top,
-        ),
-        topProductsByUsage: topProductsByUsage.rows.map((r) => ({
-          productId: toText(r.product_id),
-          productName: toText(r.product_name),
-          usageCount: toNumber(r.usage_count),
-          quantity: toNumber(r.quantity_total),
-        })),
-        topProductsByRevenue: topProductsByRevenue.rows.map((r) => ({
-          productId: toText(r.product_id),
-          productName: toText(r.product_name),
-          value: toNumber(r.value),
-        })),
-      };
     }
 
     const meta = isRecord(dataset.meta) ? dataset.meta : null;
@@ -2590,29 +1239,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id;
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
-      const result = await query(
-        `SELECT
-           id,
-           title,
-           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-         FROM report_chat_sessions
-         WHERE user_id = $1 AND is_archived = FALSE
-         ORDER BY updated_at DESC
-         LIMIT 50`,
-        [userId],
-      );
-      const value = result.rows.map((r) => ({
-        id: String(r.id),
-        title: String(r.title || ''),
-        createdAt: toNumber(r.createdAt),
-        updatedAt: toNumber(r.updatedAt),
-      }));
-
-      return value;
+      return reportsAiChatRepo.listSessionsForUser(userId);
     },
   );
 
@@ -2637,7 +1268,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { title } = request.body as { title?: unknown };
       const titleResult = optionalNonEmptyString(title, 'title');
       if (!titleResult.ok) return badRequest(reply, titleResult.message);
@@ -2645,12 +1277,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
 
-      const id = generatePrefixedId('rpt-chat');
-      await query(
-        `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
-         VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [id, userId, titleResult.value || ''],
-      );
+      const id = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);
+      await reportsAiChatRepo.createSession(id, userId, titleResult.value || '');
 
       return reply.send({ id });
     },
@@ -2679,7 +1307,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -2703,51 +1332,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
 
-      const session = await query(
-        `SELECT 1 FROM report_chat_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
-        [idResult.value, userId],
-      );
-      if (session.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+      if (!(await reportsAiChatRepo.sessionExistsForUser(idResult.value, userId))) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
 
-      const result =
-        beforeTimestampMs === null
-          ? await query(
-              `SELECT
-                 id,
-                 session_id as "sessionId",
-                 role,
-                 content,
-                 thought_content as "thoughtContent",
-                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-               FROM report_chat_messages
-               WHERE session_id = $1
-               ORDER BY created_at DESC
-               LIMIT $2`,
-              [idResult.value, messageLimit],
-            )
-          : await query(
-              `SELECT
-                 id,
-                 session_id as "sessionId",
-                 role,
-                 content,
-                 thought_content as "thoughtContent",
-                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-               FROM report_chat_messages
-               WHERE session_id = $1
-                 AND created_at < TO_TIMESTAMP($2 / 1000.0)
-               ORDER BY created_at DESC
-               LIMIT $3`,
-              [idResult.value, beforeTimestampMs, messageLimit],
-            );
+      const messages = await reportsAiChatRepo.listMessagesForSession(idResult.value, {
+        beforeMs: beforeTimestampMs,
+        limit: messageLimit,
+      });
 
-      const value = result.rows.reverse().map((r) => ({
-        id: String(r.id),
-        sessionId: String(r.sessionId),
-        role: String(r.role),
-        content: String(r.content || ''),
-        thoughtContent: r.thoughtContent ? String(r.thoughtContent) : undefined,
-        createdAt: toNumber(r.createdAt),
+      const value = messages.reverse().map((m) => ({
+        id: m.id,
+        sessionId: m.sessionId,
+        role: m.role,
+        content: m.content,
+        thoughtContent: m.thoughtContent ?? undefined,
+        createdAt: m.createdAt,
       }));
 
       return value;
@@ -2774,7 +1374,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -2782,14 +1383,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
 
-      const result = await query(
-        `UPDATE report_chat_sessions
-         SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1 AND user_id = $2
-         RETURNING id`,
-        [idResult.value, userId],
-      );
-      if (result.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+      if (!(await reportsAiChatRepo.archiveSession(idResult.value, userId))) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
 
       return reply.send({ success: true });
     },
@@ -2818,7 +1414,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { sessionId, message, language } = request.body as {
         sessionId?: unknown;
         message?: unknown;
@@ -2857,47 +1454,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
-        const owned = await query(
-          `SELECT title
-           FROM report_chat_sessions
-           WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
-           LIMIT 1`,
-          [resolvedSessionId, userId],
-        );
-        if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
-        shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
+        const session = await reportsAiChatRepo.findActiveSessionForUser(resolvedSessionId, userId);
+        if (!session) return reply.code(404).send({ error: 'Session not found' });
+        shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
-        resolvedSessionId = generatePrefixedId('rpt-chat');
-        await query(
-          `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
-           VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [resolvedSessionId, userId, ''],
-        );
+        resolvedSessionId = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);
+        await reportsAiChatRepo.createSession(resolvedSessionId, userId, '');
         shouldAutoTitle = true;
       }
 
-      const assistantMessageId = generatePrefixedId('rpt-msg');
+      const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
 
       try {
         const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
         if (!isRetryRewrite) {
-          const userMessageId = generatePrefixedId('rpt-msg');
-          await query(
-            `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-             VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
-            [userMessageId, resolvedSessionId, messageResult.value],
+          const userMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
+          await reportsAiChatRepo.insertUserMessage(
+            userMessageId,
+            resolvedSessionId,
+            messageResult.value,
           );
         }
 
-        const recent = await query(
-          `SELECT role, content
-           FROM report_chat_messages
-           WHERE session_id = $1
-           ORDER BY created_at DESC
-           LIMIT 20`,
-          [resolvedSessionId],
-        );
-        const convo = recent.rows
+        const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
+        const convo = recent
           .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
             (x) =>
@@ -3025,23 +1605,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
         if (streamAbortController.signal.aborted) return;
 
-        await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
-           VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
-          [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
-        );
+        await reportsAiChatRepo.insertAssistantMessage({
+          id: assistantMessageId,
+          sessionId: resolvedSessionId,
+          content: assistantText,
+          thoughtContent: assistantThoughtContent || null,
+        });
 
         let titleToSet = '';
         if (shouldAutoTitle) {
-          const firstUser = await query(
-            `SELECT content
-             FROM report_chat_messages
-             WHERE session_id = $1 AND role = 'user'
-             ORDER BY created_at ASC
-             LIMIT 1`,
-            [resolvedSessionId],
-          );
-          const firstUserMessage = String(firstUser.rows[0]?.content || '').trim();
+          const firstUserMessage = (
+            await reportsAiChatRepo.getFirstUserMessageContent(resolvedSessionId)
+          ).trim();
 
           try {
             titleToSet = await generateSessionTitle(providerKeyModel, firstUserMessage, uiLanguage);
@@ -3055,15 +1630,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         if (streamAbortController.signal.aborted) return;
 
-        await query(
-          `UPDATE report_chat_sessions
-           SET updated_at = CURRENT_TIMESTAMP,
-               title = CASE
-                 WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
-                 ELSE title
-               END
-            WHERE id = $1 AND user_id = $3`,
-          [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
+        await reportsAiChatRepo.updateSessionTitleAndTouch(
+          resolvedSessionId,
+          userId,
+          titleToSet || cleanSessionTitle(messageResult.value),
         );
 
         if (
@@ -3116,7 +1686,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { sessionId, messageId, content, language } = request.body as {
         sessionId?: unknown;
         messageId?: unknown;
@@ -3155,69 +1726,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       request.raw.once('aborted', handleClientDisconnect);
       request.raw.once('close', handleClientDisconnect);
 
-      // Verify session exists, belongs to user, is not archived
-      const owned = await query(
-        `SELECT id
-         FROM report_chat_sessions
-         WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
-         LIMIT 1`,
-        [sessionIdResult.value, userId],
+      if (!(await reportsAiChatRepo.findActiveSessionForUser(sessionIdResult.value, userId))) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+
+      const userMsgRef = await reportsAiChatRepo.findUserMessage(
+        messageIdResult.value,
+        sessionIdResult.value,
       );
-      if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+      if (!userMsgRef) return reply.code(404).send({ error: 'User message not found' });
+      const userMsgCreatedAt = userMsgRef.createdAt;
 
-      // Verify messageId exists and is a user message in this session
-      const userMsgRow = await query(
-        `SELECT id, created_at
-         FROM report_chat_messages
-         WHERE id = $1 AND session_id = $2 AND role = 'user'
-         LIMIT 1`,
-        [messageIdResult.value, sessionIdResult.value],
-      );
-      if (userMsgRow.rows.length === 0)
-        return reply.code(404).send({ error: 'User message not found' });
-
-      const userMsgCreatedAt = userMsgRow.rows[0].created_at;
-
-      // Find the first assistant message chronologically after the user message
-      const pairedAssistant = await query(
-        `SELECT id, created_at
-         FROM report_chat_messages
-         WHERE session_id = $1 AND role = 'assistant'
-           AND created_at > $2
-         ORDER BY created_at ASC
-         LIMIT 1`,
-        [sessionIdResult.value, userMsgCreatedAt],
+      const pairedAssistant = await reportsAiChatRepo.findFirstAssistantAfter(
+        sessionIdResult.value,
+        userMsgCreatedAt,
       );
 
       let savedAssistantCreatedAt: Date;
-      if (pairedAssistant.rows.length > 0) {
-        savedAssistantCreatedAt = new Date(pairedAssistant.rows[0].created_at);
-        // Delete the paired assistant message
-        await query(`DELETE FROM report_chat_messages WHERE id = $1`, [pairedAssistant.rows[0].id]);
+      if (pairedAssistant) {
+        savedAssistantCreatedAt = new Date(pairedAssistant.createdAt);
+        await reportsAiChatRepo.deleteMessage(pairedAssistant.id);
       } else {
         savedAssistantCreatedAt = new Date(new Date(userMsgCreatedAt).getTime() + 1000);
       }
 
-      // Update user message content
-      await query(`UPDATE report_chat_messages SET content = $1 WHERE id = $2`, [
-        contentResult.value,
-        messageIdResult.value,
-      ]);
+      await reportsAiChatRepo.updateMessageContent(messageIdResult.value, contentResult.value);
 
-      const assistantMessageId = generatePrefixedId('rpt-msg');
+      const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
 
       try {
-        // Build context from messages up to and including the edited message
-        const recent = await query(
-          `SELECT role, content
-           FROM report_chat_messages
-           WHERE session_id = $1
-             AND created_at <= $2
-           ORDER BY created_at DESC
-           LIMIT 20`,
-          [sessionIdResult.value, userMsgCreatedAt],
-        );
-        const convo = recent.rows
+        const recent = await reportsAiChatRepo.listRecentMessages(sessionIdResult.value, {
+          beforeOrAt: userMsgCreatedAt,
+        });
+        const convo = recent
           .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
             (x) =>
@@ -3341,23 +1882,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
         if (streamAbortController.signal.aborted) return;
 
-        // Insert new assistant message with the saved timestamp so ordering is preserved
-        await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
-           VALUES ($1, $2, 'assistant', $3, $4, $5)`,
-          [
-            assistantMessageId,
-            sessionIdResult.value,
-            assistantText,
-            assistantThoughtContent || null,
-            savedAssistantCreatedAt.toISOString(),
-          ],
-        );
+        await reportsAiChatRepo.insertAssistantMessage({
+          id: assistantMessageId,
+          sessionId: sessionIdResult.value,
+          content: assistantText,
+          thoughtContent: assistantThoughtContent || null,
+          createdAt: savedAssistantCreatedAt.toISOString(),
+        });
 
-        await query(
-          `UPDATE report_chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`,
-          [sessionIdResult.value, userId],
-        );
+        await reportsAiChatRepo.touchSession(sessionIdResult.value, userId);
 
         if (
           !writeSseEvent(reply, 'done', {
@@ -3417,7 +1950,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id || '';
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
       const { sessionId, message, language } = request.body as {
         sessionId?: unknown;
         message?: unknown;
@@ -3446,45 +1980,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
-        const owned = await query(
-          `SELECT title
-           FROM report_chat_sessions
-           WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
-           LIMIT 1`,
-          [resolvedSessionId, userId],
-        );
-        if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
-        shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
+        const session = await reportsAiChatRepo.findActiveSessionForUser(resolvedSessionId, userId);
+        if (!session) return reply.code(404).send({ error: 'Session not found' });
+        shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
-        resolvedSessionId = generatePrefixedId('rpt-chat');
-        await query(
-          `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
-           VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [resolvedSessionId, userId, ''],
-        );
+        resolvedSessionId = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);
+        await reportsAiChatRepo.createSession(resolvedSessionId, userId, '');
         shouldAutoTitle = true;
       }
 
       try {
         const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
         if (!isRetryRewrite) {
-          const userMessageId = generatePrefixedId('rpt-msg');
-          await query(
-            `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-             VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
-            [userMessageId, resolvedSessionId, messageResult.value],
+          const userMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
+          await reportsAiChatRepo.insertUserMessage(
+            userMessageId,
+            resolvedSessionId,
+            messageResult.value,
           );
         }
 
-        const recent = await query(
-          `SELECT role, content
-           FROM report_chat_messages
-           WHERE session_id = $1
-           ORDER BY created_at DESC
-           LIMIT 20`,
-          [resolvedSessionId],
-        );
-        const convo = recent.rows
+        const recent = await reportsAiChatRepo.listRecentMessages(resolvedSessionId);
+        const convo = recent
           .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
           .filter(
             (x) =>
@@ -3547,24 +2064,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const assistantText = cleaned || 'No response.';
         const assistantThoughtContent = String(thoughtContent || '').trim();
 
-        const assistantMessageId = generatePrefixedId('rpt-msg');
-        await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
-           VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
-          [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
-        );
+        const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
+        await reportsAiChatRepo.insertAssistantMessage({
+          id: assistantMessageId,
+          sessionId: resolvedSessionId,
+          content: assistantText,
+          thoughtContent: assistantThoughtContent || null,
+        });
 
         let titleToSet = '';
         if (shouldAutoTitle) {
-          const firstUser = await query(
-            `SELECT content
-             FROM report_chat_messages
-             WHERE session_id = $1 AND role = 'user'
-             ORDER BY created_at ASC
-             LIMIT 1`,
-            [resolvedSessionId],
-          );
-          const firstUserMessage = String(firstUser.rows[0]?.content || '').trim();
+          const firstUserMessage = (
+            await reportsAiChatRepo.getFirstUserMessageContent(resolvedSessionId)
+          ).trim();
 
           try {
             titleToSet = await generateSessionTitle(providerKeyModel, firstUserMessage, uiLanguage);
@@ -3577,16 +2089,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         }
 
-        // Update session timestamp and set an AI-generated title based on the first user message if still empty.
-        await query(
-          `UPDATE report_chat_sessions
-           SET updated_at = CURRENT_TIMESTAMP,
-               title = CASE
-                 WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
-                 ELSE title
-               END
-            WHERE id = $1 AND user_id = $3`,
-          [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
+        await reportsAiChatRepo.updateSessionTitleAndTouch(
+          resolvedSessionId,
+          userId,
+          titleToSet || cleanSessionTitle(messageResult.value),
         );
 
         return reply.send({

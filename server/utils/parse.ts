@@ -12,3 +12,8 @@ export const parseNullableDbNumber = (value: string | number | null | undefined)
   const n = typeof value === 'string' ? Number.parseFloat(value) : value;
   return Number.isFinite(n) ? n : null;
 };
+
+export const toDbText = (value: unknown): string => String(value || '').trim();
+
+export const toDbNumber = (value: unknown): number =>
+  parseDbNumber(value as string | number | null | undefined, 0);
