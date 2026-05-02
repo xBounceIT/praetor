@@ -224,9 +224,6 @@ export type ClientOfferUpdate = {
   notes?: string | null;
 };
 
-// COALESCE preserves the existing column when the patch field is null — the client-offers
-// route always passes a value, using `null` to mean "keep existing" for fields that weren't
-// sent in the request body.
 export const update = async (
   id: string,
   patch: ClientOfferUpdate,

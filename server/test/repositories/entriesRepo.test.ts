@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as entriesRepo from '../../repositories/entriesRepo.ts';
-import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -10,14 +10,10 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// Builder paths use rowMode: 'array' — fixture rows are positional in `timeEntries` schema
-// column order: [id, userId, date, clientId, clientName, projectId, projectName, task, taskId,
-// notes, duration, hourlyCost, isPlaceholder, location, createdAt].
-//
-// Raw-SQL paths via `executeRows` return objects keyed by SELECT column name (snake_case here,
-// since the SQL uses unaliased column names + `created_at::text AS created_at_text`).
-
-const builderRow: unknown[] = [
+// Builder fixtures match the column order in db/schema/timeEntries.ts. Raw-SQL fixtures
+// are objects keyed by SELECT column name (snake_case + an extra `created_at_text` for
+// cursor pagination — see ENTRY_COLUMNS_SQL).
+const ENTRY_BASE: readonly unknown[] = [
   'e-1',
   'u-1',
   '2026-04-30',
@@ -34,6 +30,8 @@ const builderRow: unknown[] = [
   'remote',
   new Date('2026-04-30T12:00:00Z'),
 ];
+
+const entryRow = (overrides: Record<number, unknown> = {}) => makeRow(ENTRY_BASE, overrides);
 
 const rawRow = {
   id: 'e-1',
@@ -229,7 +227,7 @@ describe('findContext', () => {
 
 describe('create', () => {
   test('passes 14 params in expected order and returns mapped row', async () => {
-    exec.enqueue({ rows: [builderRow] });
+    exec.enqueue({ rows: [entryRow()] });
     const result = await entriesRepo.create(
       {
         id: 'e-1',
@@ -273,9 +271,7 @@ describe('create', () => {
   });
 
   test('null taskId is passed through (task name has no matching task row)', async () => {
-    const rowWithNullTaskId = builderRow.slice();
-    rowWithNullTaskId[8] = null;
-    exec.enqueue({ rows: [rowWithNullTaskId] });
+    exec.enqueue({ rows: [entryRow({ 8: null })] });
     const result = await entriesRepo.create(
       {
         id: 'e-1',
@@ -317,64 +313,58 @@ const newEntry = {
   location: 'remote',
 };
 
-const overrideRow = (index: number, value: unknown): unknown[] => {
-  const row = builderRow.slice();
-  row[index] = value;
-  return row;
-};
-
 describe('mapBuilderRow (exercised via create return path)', () => {
   test('null duration falls back to 0', async () => {
-    exec.enqueue({ rows: [overrideRow(10, null)] });
+    exec.enqueue({ rows: [entryRow({ 10: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.duration).toBe(0);
   });
 
   test('null hourly_cost falls back to 0', async () => {
-    exec.enqueue({ rows: [overrideRow(11, null)] });
+    exec.enqueue({ rows: [entryRow({ 11: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.hourlyCost).toBe(0);
   });
 
   test('null is_placeholder coerces to false', async () => {
-    exec.enqueue({ rows: [overrideRow(12, null)] });
+    exec.enqueue({ rows: [entryRow({ 12: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.isPlaceholder).toBe(false);
   });
 
   test('null location falls back to "remote"', async () => {
-    exec.enqueue({ rows: [overrideRow(13, null)] });
+    exec.enqueue({ rows: [entryRow({ 13: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.location).toBe('remote');
   });
 
   test('empty location falls back to "remote"', async () => {
-    exec.enqueue({ rows: [overrideRow(13, '')] });
+    exec.enqueue({ rows: [entryRow({ 13: '' })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.location).toBe('remote');
   });
 
   test('numeric-string duration is parsed to number', async () => {
-    exec.enqueue({ rows: [overrideRow(10, '2.75')] });
+    exec.enqueue({ rows: [entryRow({ 10: '2.75' })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.duration).toBe(2.75);
   });
 
   test('null createdAt falls back to 0', async () => {
-    exec.enqueue({ rows: [overrideRow(14, null)] });
+    exec.enqueue({ rows: [entryRow({ 14: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.createdAt).toBe(0);
   });
 
   test('throws TypeError when row.date is null', async () => {
-    exec.enqueue({ rows: [overrideRow(2, null)] });
+    exec.enqueue({ rows: [entryRow({ 2: null })] });
     expect(entriesRepo.create(newEntry, testDb)).rejects.toThrow(TypeError);
   });
 });
 
 describe('update', () => {
   test('only sets provided fields, id is the last param', async () => {
-    exec.enqueue({ rows: [builderRow] });
+    exec.enqueue({ rows: [entryRow()] });
     const result = await entriesRepo.update('e-1', { duration: 2 }, testDb);
     expect(result?.id).toBe('e-1');
     expect(result?.userId).toBe('u-1');
@@ -387,7 +377,7 @@ describe('update', () => {
   });
 
   test('builds SET list in schema column order from defined fields', async () => {
-    exec.enqueue({ rows: [builderRow] });
+    exec.enqueue({ rows: [entryRow()] });
     await entriesRepo.update(
       'e-1',
       { duration: 2, notes: 'updated', isPlaceholder: true, location: 'office', taskId: 't-2' },
@@ -407,7 +397,7 @@ describe('update', () => {
   });
 
   test('passes taskId through when set, omitting other fields', async () => {
-    exec.enqueue({ rows: [builderRow] });
+    exec.enqueue({ rows: [entryRow()] });
     await entriesRepo.update('e-1', { taskId: 't-2' }, testDb);
     expect(exec.calls[0].sql).toContain('"task_id" = $1');
     expect(exec.calls[0].sql).toContain('"id" = $2');
@@ -415,7 +405,7 @@ describe('update', () => {
   });
 
   test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
-    exec.enqueue({ rows: [builderRow] });
+    exec.enqueue({ rows: [entryRow()] });
     const result = await entriesRepo.update('e-1', {}, testDb);
     expect(exec.calls[0].sql).not.toContain('update');
     expect(exec.calls[0].sql).toContain('select');
@@ -434,7 +424,7 @@ describe('update', () => {
   });
 
   test('notes: null clears the column (distinct from undefined which is skipped)', async () => {
-    exec.enqueue({ rows: [overrideRow(9, null)] });
+    exec.enqueue({ rows: [entryRow({ 9: null })] });
     const result = await entriesRepo.update('e-1', { notes: null }, testDb);
     expect(exec.calls[0].sql).toContain('update');
     expect(exec.calls[0].sql).toContain('"notes" = $1');
