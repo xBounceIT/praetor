@@ -238,12 +238,15 @@ describe('hours aggregation', () => {
     exec.enqueue({ rows: [] });
     await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);
     const sql = exec.calls[0].sql;
-    // Primary join: matched FK task_id.
-    expect(sql).toContain('t.id = te.task_id');
+    // FROM clause declares the `te` alias; JOIN clause declares the `t` alias.
+    expect(sql).toContain('FROM time_entries te');
+    expect(sql).toContain('JOIN tasks t');
+    // Primary join: matched FK task_id (Drizzle quotes aliased identifiers).
+    expect(sql).toContain('"t"."id" = "te"."task_id"');
     // Fallback: name+project for entries with null task_id.
-    expect(sql).toContain('te.task_id IS NULL');
-    expect(sql).toContain('t.name = te.task');
-    expect(sql).toContain('JOIN user_tasks ut ON ut.task_id = t.id');
+    expect(sql).toContain('"te"."task_id" IS NULL');
+    expect(sql).toContain('"t"."name" = "te"."task"');
+    expect(sql).toContain('JOIN user_tasks ut ON ut.task_id = "t"."id"');
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].params).toContain('p-1');
   });

@@ -1,7 +1,10 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { QueryResultRow } from 'pg';
+import type { DbExecutor } from '../db/drizzle.ts';
 import pool, { type QueryExecutor } from '../db/index.ts';
+import * as schema from '../db/schema/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
@@ -34,13 +37,28 @@ type GeneralAiConfig = {
 type DatasetQueryCounterStore = { count: number };
 const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
 
+const incrementDatasetCounter = () => {
+  const counter = datasetQueryCounterStorage.getStore();
+  if (counter) counter.count += 1;
+};
+
+// Two parallel "counting" executors that share the same AsyncLocalStorage counter:
+//   - `datasetExec` (legacy `QueryExecutor`) for repos still on raw `pg`
+//   - `datasetDb` (Drizzle `DbExecutor`) for repos converted in Phase 3+
+// Each request handler enters `datasetQueryCounterStorage` once and any query through either
+// executor increments the same counter, so dataset query budgets stay consistent across the
+// mixed-mode period of the migration.
 const datasetExec: QueryExecutor = {
   query: <T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => {
-    const counter = datasetQueryCounterStorage.getStore();
-    if (counter) counter.count += 1;
+    incrementDatasetCounter();
     return pool.query<T>(text, params);
   },
 };
+
+const datasetDb: DbExecutor = drizzle(pool, {
+  schema,
+  logger: { logQuery: incrementDatasetCounter },
+});
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const settings = await generalSettingsRepo.get();
@@ -855,7 +873,7 @@ const buildBusinessDataset = async (
           allowedTimesheetUserIds,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 
@@ -968,7 +986,7 @@ const buildBusinessDataset = async (
           itemsLimit: listLimits.items,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 
@@ -1004,7 +1022,7 @@ const buildBusinessDataset = async (
           itemsLimit: listLimits.items,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 

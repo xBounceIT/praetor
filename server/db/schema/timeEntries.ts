@@ -13,7 +13,7 @@ import { tasks } from './tasks.ts';
 
 // Time-tracking rows. `user_id`, `client_id`, `project_id` have runtime FKs (un-modeled here);
 // `task_id` references `tasks` with ON DELETE SET NULL so legacy entries survive task deletion.
-// The `TIME_ENTRIES_TASKS_JOIN` constant in `tasksRepo.ts` joins on `task_id` with a fallback
+// The `timeEntriesTasksJoin` `sql` chunk in `tasksRepo.ts` joins on `task_id` with a fallback
 // to `(project_id, name)` to handle entries whose `task_id` is NULL.
 export const timeEntries = pgTable(
   'time_entries',

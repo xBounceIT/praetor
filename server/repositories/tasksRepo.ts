@@ -213,16 +213,25 @@ export const addUserAssignments = async (
     .onConflictDoNothing();
 };
 
+// Aliased table references shared by the time-entries → tasks join and its callers.
+// Both the JOIN expression and the surrounding query MUST use these same aliases ("te"/"t")
+// — once a table is aliased, Postgres rejects column refs that name the unaliased table.
+//
+// Caller is expected to write the FROM/JOIN keywords + table-with-alias as raw SQL
+// (`FROM time_entries te`); Drizzle's `${aliasedTable}` in raw templates renders only the
+// alias (`"te"`), not `"time_entries" "te"`, so it can't be used directly in FROM. Column
+// references via `timeEntriesTe.X` / `tasksT.X` correctly compile to `"te"."x"` / `"t"."x"`
+// — that's the part the aliases buy us.
+export const timeEntriesTe = alias(timeEntries, 'te');
+export const tasksT = alias(tasks, 't');
+
 // Joins time_entries -> tasks via task_id when present, falling back to (project_id, name) for
 // rows where task_id is null (legacy entries, or entries created before the matching task
-// existed). Use as part of a larger query: caller adds te. alias and WHERE clauses.
-//
-// Exported as a raw SQL string because the not-yet-converted reportsHoursRepo composes it into
-// its own raw-SQL CTEs. When reportsHoursRepo is converted to Drizzle, this can become an
-// `sql` chunk and the consumers updated together.
-export const TIME_ENTRIES_TASKS_JOIN = `JOIN tasks t
-    ON t.id = te.task_id
-    OR (te.task_id IS NULL AND t.project_id = te.project_id AND t.name = te.task)`;
+// existed). Use as part of a larger query: the caller's FROM clause must declare the `te` and
+// `t` aliases (typically `FROM time_entries te` plus this JOIN).
+export const timeEntriesTasksJoin = sql`JOIN tasks t
+    ON ${tasksT.id} = ${timeEntriesTe.taskId}
+    OR (${timeEntriesTe.taskId} IS NULL AND ${tasksT.projectId} = ${timeEntriesTe.projectId} AND ${tasksT.name} = ${timeEntriesTe.task})`;
 
 // Best-effort lookup of a task by (project, name). Duplicate task names within a project resolve
 // to the lowest task id; callers store the result so subsequent aggregations remain deterministic
@@ -247,18 +256,13 @@ export const sumHoursByProjects = async (
   exec: DbExecutor = db,
 ): Promise<Array<{ projectId: string; task: string; total: number }>> => {
   if (projectIds.length === 0) return [];
-  // Aliased reference so `inArray` renders `"te"."project_id"` to match the `time_entries te`
-  // alias used by the FROM clause and TIME_ENTRIES_TASKS_JOIN. Using the unaliased
-  // `timeEntries.projectId` produces `"time_entries"."project_id"`, which Postgres rejects with
-  // "invalid reference to FROM-clause entry" once the table is aliased.
-  const te = alias(timeEntries, 'te');
   const query = userId
-    ? sql`SELECT te.project_id AS "projectId", te.task, COALESCE(SUM(te.duration), 0)::float AS total
+    ? sql`SELECT ${timeEntriesTe.projectId} AS "projectId", ${timeEntriesTe.task}, COALESCE(SUM(${timeEntriesTe.duration}), 0)::float AS total
             FROM time_entries te
-            ${sql.raw(TIME_ENTRIES_TASKS_JOIN)}
-            JOIN user_tasks ut ON ut.task_id = t.id
-           WHERE ${inArray(te.projectId, projectIds)} AND ut.user_id = ${userId}
-           GROUP BY te.project_id, te.task`
+            ${timeEntriesTasksJoin}
+            JOIN user_tasks ut ON ut.task_id = ${tasksT.id}
+           WHERE ${inArray(timeEntriesTe.projectId, projectIds)} AND ut.user_id = ${userId}
+           GROUP BY ${timeEntriesTe.projectId}, ${timeEntriesTe.task}`
     : sql`SELECT project_id AS "projectId", task, COALESCE(SUM(duration), 0)::float AS total
             FROM time_entries
            WHERE ${inArray(timeEntries.projectId, projectIds)}
