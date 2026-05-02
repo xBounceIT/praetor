@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { getTableColumns } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.ts';
+import { generalSettings } from '../../db/schema/generalSettings.ts';
 import * as generalSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
@@ -144,6 +146,26 @@ describe('update', () => {
     expect(params).toContain('gemini-2.0');
     expect(params).toContain('or/model');
     expect(params).toContain('home');
+    // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
+    // since the SET clause emits its 12 COALESCE pairs in projection-declaration order and
+    // each pair binds exactly one patch-value param (the column ref renders as a SQL
+    // identifier, not a parameter), the first 12 params must match PROJECTION_KEYS order.
+    // Catches column→param wiring bugs where two same-typed booleans (e.g.,
+    // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
+    expect(params.slice(0, 12)).toEqual([
+      'USD',
+      9,
+      'Sunday',
+      true,
+      false,
+      'g-key',
+      'gemini',
+      'or-key',
+      'gemini-2.0',
+      'or/model',
+      true,
+      'home',
+    ]);
   });
 
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
@@ -161,5 +183,19 @@ describe('update', () => {
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
     expect(exec.calls[0].sql).toMatch(/"id"\s*=\s*\$\d+/);
     expect(exec.calls[0].params).toContain(1);
+  });
+});
+
+describe('schema invariants', () => {
+  // Direct enforcement of the invariant called out in the comment above PROJECTION_KEYS:
+  // a column reorder in `db/schema/generalSettings.ts` (or one added without updating the
+  // projection) would silently desync `rowMode: 'array'` decoding from the projection map.
+  // The other tests would surface this as a wrong-shaped row, but failing here gives a
+  // direct signal — "schema column order changed" — instead of cascading expectation
+  // mismatches.
+  test('PROJECTION_KEYS match the schema column order (excluding id and updatedAt)', () => {
+    const schemaColumnNames = Object.keys(getTableColumns(generalSettings));
+    const expectedKeys = schemaColumnNames.filter((k) => k !== 'id' && k !== 'updatedAt');
+    expect([...PROJECTION_KEYS]).toEqual(expectedKeys);
   });
 });

@@ -62,16 +62,26 @@ type GeneralSettingsRow = {
   defaultLocation: string | null;
 };
 
-// Schema columns are nullable but always populated at runtime via DB defaults on the seeded
-// id=1 row, so the `??` fallbacks on the four non-nullable fields are TS-strict appeasement
-// matching the corresponding `schema.sql` DEFAULTs. Nullable fields pass through as-is.
-// `daily_limit` is a `numeric` column — pg returns it as a string; `parseFloat` converts it
-// to JS number to match `GeneralSettings.dailyLimit: number`.
+// Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
+// columns are nullable in TS (Drizzle infers from `.default(...)` without `.notNull()`)
+// but always populated at runtime via DB defaults on the seeded id=1 row, so these
+// fallbacks are TS-strict appeasement that fire only on a never-actually-happens null.
+// Values MUST mirror the `.default(...)` calls in `db/schema/generalSettings.ts` (and the
+// underlying DEFAULTs in `schema.sql:693-720`); update both together if defaults change.
+// `dailyLimit` is the string form because pg returns `numeric` as a string and `parseFloat`
+// runs on it inside `mapRow`.
+const DEFAULT_FALLBACKS = {
+  currency: '€',
+  dailyLimit: '8.00',
+  startOfWeek: 'Monday',
+  treatSaturdayAsHoliday: true,
+} as const;
+
 const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
-  currency: row.currency ?? '€',
-  dailyLimit: parseFloat(row.dailyLimit ?? '8.00'),
-  startOfWeek: row.startOfWeek ?? 'Monday',
-  treatSaturdayAsHoliday: row.treatSaturdayAsHoliday ?? true,
+  currency: row.currency ?? DEFAULT_FALLBACKS.currency,
+  dailyLimit: parseFloat(row.dailyLimit ?? DEFAULT_FALLBACKS.dailyLimit),
+  startOfWeek: row.startOfWeek ?? DEFAULT_FALLBACKS.startOfWeek,
+  treatSaturdayAsHoliday: row.treatSaturdayAsHoliday ?? DEFAULT_FALLBACKS.treatSaturdayAsHoliday,
   enableAiReporting: row.enableAiReporting,
   geminiApiKey: row.geminiApiKey,
   aiProvider: row.aiProvider,

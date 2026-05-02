@@ -20,9 +20,12 @@
 --     these CHECKs on the live tables (lines 697 and 1037-1044 respectively). Adding them
 --     here lets a fresh-from-migration DB (one bootstrapped purely via Drizzle migrations
 --     without first running schema.sql) enforce the same invariants as schema.sql-seeded
---     installs. Matched by `pg_get_constraintdef` substring rather than by name because
---     the start_of_week CHECK is auto-named (inline `CHECK` in schema.sql); using the
---     same definition-match shape for ai_provider keeps both guards uniform.
+--     installs. Matched by joining `pg_attribute` against `pg_constraint.conkey` (the array
+--     of columns referenced by each constraint) rather than by name (start_of_week's CHECK
+--     is auto-named) or by `pg_get_constraintdef` substring (which would over-match a future
+--     CHECK that merely mentions the column in a multi-column rule). The conkey-by-column
+--     match correctly identifies whether the table already carries a CHECK constrained on
+--     the specific column.
 --
 --   * INSERT … ON CONFLICT DO NOTHING — seeds the singleton id=1 row so the first PUT to
 --     /general-settings succeeds; idempotent on existing DBs that already have the row
@@ -60,8 +63,9 @@ DO $$ BEGIN
 		SELECT 1 FROM pg_constraint c
 		JOIN pg_class t ON c.conrelid = t.oid
 		JOIN pg_namespace n ON t.relnamespace = n.oid
+		JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
 		WHERE t.relname = 'general_settings' AND n.nspname = 'public' AND c.contype = 'c'
-		AND pg_get_constraintdef(c.oid) ILIKE '%start_of_week%'
+		AND a.attname = 'start_of_week'
 	) THEN
 		ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_start_of_week_check" CHECK ("start_of_week" IN ('Monday', 'Sunday'));
 	END IF;
@@ -71,8 +75,9 @@ DO $$ BEGIN
 		SELECT 1 FROM pg_constraint c
 		JOIN pg_class t ON c.conrelid = t.oid
 		JOIN pg_namespace n ON t.relnamespace = n.oid
+		JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
 		WHERE t.relname = 'general_settings' AND n.nspname = 'public' AND c.contype = 'c'
-		AND pg_get_constraintdef(c.oid) ILIKE '%ai_provider%'
+		AND a.attname = 'ai_provider'
 	) THEN
 		ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ai_provider_check" CHECK ("ai_provider" IN ('gemini', 'openrouter'));
 	END IF;
