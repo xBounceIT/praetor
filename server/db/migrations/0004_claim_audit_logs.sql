@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS "audit_logs" (
 	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
 --> statement-breakpoint
+-- Carry-forward of the legacy `ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details JSONB`
+-- from schema.sql. Some pre-existing DBs were bootstrapped before `details` was added inline,
+-- so the CREATE TABLE IF NOT EXISTS above no-ops on them and would leave the column missing.
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "details" jsonb;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_audit_logs_created_at" ON "audit_logs" USING btree ("created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_audit_logs_user_id" ON "audit_logs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_audit_logs_action" ON "audit_logs" USING btree ("action");
