@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { and, eq, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { clients } from '../db/schema/clients.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export type ClientContact = {
@@ -151,10 +153,14 @@ export type ListOptions =
   | { canViewAllClients: true }
   | { canViewAllClients: false; userId: string };
 
-export const list = async (options: ListOptions, exec: QueryExecutor = pool): Promise<Client[]> => {
+export const list = async (options: ListOptions, exec: DbExecutor = db): Promise<Client[]> => {
   if (options.canViewAllClients) {
-    const { rows } = await exec.query(
-      `SELECT c.*,
+    // Admin path: LEFT JOIN nested aggregates for total_sent_quotes / total_accepted_orders.
+    // Lifted near-verbatim from the legacy SQL — the nested SUM/COALESCE shape is awkward in
+    // the query builder and the existing query is well-tested.
+    const rows = await executeRows<Record<string, unknown>>(
+      exec,
+      sql`SELECT c.*,
           COALESCE(sq.total_sent_quotes, 0) as total_sent_quotes,
           COALESCE(so.total_accepted_orders, 0) as total_accepted_orders
         FROM clients c
@@ -185,8 +191,11 @@ export const list = async (options: ListOptions, exec: QueryExecutor = pool): Pr
     return rows.map(mapClientRow);
   }
 
-  const { rows } = await exec.query(
-    `SELECT c.id, c.name, c.description, c.is_disabled, c.type,
+  // User-scoped path: JOIN un-modeled user_clients. NULL placeholders for totals so
+  // mapClientRow's parseDbNumber returns undefined.
+  const rows = await executeRows<Record<string, unknown>>(
+    exec,
+    sql`SELECT c.id, c.name, c.description, c.is_disabled, c.type,
         c.contacts, c.contact_name, c.client_code, c.email, c.phone, c.address,
         c.address_country, c.address_state, c.address_cap, c.address_province,
         c.address_civic_number, c.address_line,
@@ -196,21 +205,20 @@ export const list = async (options: ListOptions, exec: QueryExecutor = pool): Pr
         NULL::numeric as total_accepted_orders
       FROM clients c
       INNER JOIN user_clients uc ON c.id = uc.client_id
-      WHERE uc.user_id = $1
+      WHERE uc.user_id = ${options.userId}
       ORDER BY c.name`,
-    [options.userId],
   );
   return rows.map(mapClientRow);
 };
 
 export const findContactsForUpdate = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ contacts: ClientContact[] } | null> => {
-  const { rows } = await exec.query<{ contacts: unknown }>(
-    `SELECT contacts FROM clients WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({ contacts: clients.contacts })
+    .from(clients)
+    .where(eq(clients.id, id));
   if (rows.length === 0) return null;
   return { contacts: parseContactsFromDb(rows[0].contacts) };
 };
@@ -218,38 +226,30 @@ export const findContactsForUpdate = async (
 export const findByFiscalCode = async (
   fiscalCode: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  if (excludeId) {
-    const { rows } = await exec.query<{ id: string }>(
-      `SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1) AND id <> $2`,
-      [fiscalCode, excludeId],
-    );
-    return rows.length > 0;
-  }
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1)`,
-    [fiscalCode],
-  );
+  const conditions = [sql`LOWER(${clients.fiscalCode}) = LOWER(${fiscalCode})`];
+  if (excludeId) conditions.push(ne(clients.id, excludeId));
+  const rows = await exec
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
 export const findByClientCode = async (
   clientCode: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  if (excludeId) {
-    const { rows } = await exec.query<{ id: string }>(
-      `SELECT id FROM clients WHERE client_code = $1 AND id <> $2`,
-      [clientCode, excludeId],
-    );
-    return rows.length > 0;
-  }
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM clients WHERE client_code = $1`,
-    [clientCode],
-  );
+  const conditions = [eq(clients.clientCode, clientCode)];
+  if (excludeId) conditions.push(ne(clients.id, excludeId));
+  const rows = await exec
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
@@ -279,50 +279,67 @@ export type NewClient = {
   officeCountRange: string | null;
 };
 
-export const create = async (input: NewClient, exec: QueryExecutor = pool): Promise<Client> => {
-  const { rows } = await exec.query(
-    `INSERT INTO clients (
-        id, name, is_disabled, type, contacts, contact_name, client_code,
-        email, phone, address, address_country, address_state, address_cap,
-        address_province, address_civic_number, address_line,
-        description, ateco_code, website, sector,
-        number_of_employees, revenue, fiscal_code, office_count_range
-    ) VALUES (
-        $1, $2, $3, $4, $5::jsonb, $6, $7,
-        $8, $9, $10, $11, $12, $13,
-        $14, $15, $16,
-        $17, $18, $19, $20,
-        $21, $22, $23, $24
-    )
-    RETURNING *`,
-    [
-      input.id,
-      input.name,
-      false,
-      input.type,
-      JSON.stringify(input.contacts),
-      input.contactName,
-      input.clientCode,
-      input.email,
-      input.phone,
-      input.address,
-      input.addressCountry,
-      input.addressState,
-      input.addressCap,
-      input.addressProvince,
-      input.addressCivicNumber,
-      input.addressLine,
-      input.description,
-      input.atecoCode,
-      input.website,
-      input.sector,
-      input.numberOfEmployees,
-      input.revenue,
-      input.fiscalCode,
-      input.officeCountRange,
-    ],
-  );
-  return mapClientRow(rows[0]);
+export const create = async (input: NewClient, exec: DbExecutor = db): Promise<Client> => {
+  const rows = await exec
+    .insert(clients)
+    .values({
+      id: input.id,
+      name: input.name,
+      isDisabled: false,
+      type: input.type,
+      contacts: input.contacts,
+      contactName: input.contactName,
+      clientCode: input.clientCode,
+      email: input.email,
+      phone: input.phone,
+      address: input.address,
+      addressCountry: input.addressCountry,
+      addressState: input.addressState,
+      addressCap: input.addressCap,
+      addressProvince: input.addressProvince,
+      addressCivicNumber: input.addressCivicNumber,
+      addressLine: input.addressLine,
+      description: input.description,
+      atecoCode: input.atecoCode,
+      website: input.website,
+      sector: input.sector,
+      numberOfEmployees: input.numberOfEmployees,
+      revenue: input.revenue,
+      fiscalCode: input.fiscalCode,
+      officeCountRange: input.officeCountRange,
+    })
+    .returning();
+  // Re-shape Drizzle's $inferSelect into the snake_case Record<string, unknown> that
+  // mapClientRow expects. mapClientRow is shared with the executeRows-based paths above,
+  // which receive raw snake_case rows.
+  const row = rows[0];
+  return mapClientRow({
+    id: row.id,
+    name: row.name,
+    is_disabled: row.isDisabled,
+    created_at: row.createdAt,
+    type: row.type,
+    contact_name: row.contactName,
+    client_code: row.clientCode,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    description: row.description,
+    ateco_code: row.atecoCode,
+    website: row.website,
+    sector: row.sector,
+    number_of_employees: row.numberOfEmployees,
+    revenue: row.revenue,
+    fiscal_code: row.fiscalCode,
+    office_count_range: row.officeCountRange,
+    contacts: row.contacts,
+    address_country: row.addressCountry,
+    address_state: row.addressState,
+    address_cap: row.addressCap,
+    address_province: row.addressProvince,
+    address_civic_number: row.addressCivicNumber,
+    address_line: row.addressLine,
+  });
 };
 
 export type ClientUpdate = {
@@ -363,81 +380,52 @@ export type ClientUpdate = {
 export const update = async (
   id: string,
   patch: ClientUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Client | null> => {
-  const { rows } = await exec.query(
-    `UPDATE clients SET
-        name = COALESCE($1, name),
-        is_disabled = COALESCE($2, is_disabled),
-        type = COALESCE($3, type),
-        contacts = COALESCE($4::jsonb, contacts),
-        contact_name = CASE WHEN $25 THEN $5 ELSE contact_name END,
-        client_code = COALESCE($6, client_code),
-        email = CASE WHEN $26 THEN $7 ELSE email END,
-        phone = CASE WHEN $27 THEN $8 ELSE phone END,
-        address = COALESCE($9, address),
-        address_country = COALESCE($10, address_country),
-        address_state = COALESCE($11, address_state),
-        address_cap = COALESCE($12, address_cap),
-        address_province = COALESCE($13, address_province),
-        address_civic_number = COALESCE($14, address_civic_number),
-        address_line = COALESCE($15, address_line),
-        description = COALESCE($16, description),
-        ateco_code = COALESCE($17, ateco_code),
-        website = COALESCE($18, website),
-        sector = CASE WHEN $28 THEN $19 ELSE sector END,
-        number_of_employees = CASE WHEN $29 THEN $20 ELSE number_of_employees END,
-        revenue = CASE WHEN $30 THEN $21 ELSE revenue END,
-        fiscal_code = COALESCE($22, fiscal_code),
-        office_count_range = CASE WHEN $31 THEN $23 ELSE office_count_range END
-    WHERE id = $24
-    RETURNING *`,
-    [
-      patch.name,
-      patch.isDisabled,
-      patch.type,
-      patch.contacts === null ? null : JSON.stringify(patch.contacts),
-      patch.contactName,
-      patch.clientCode,
-      patch.email,
-      patch.phone,
-      patch.address,
-      patch.addressCountry,
-      patch.addressState,
-      patch.addressCap,
-      patch.addressProvince,
-      patch.addressCivicNumber,
-      patch.addressLine,
-      patch.description,
-      patch.atecoCode,
-      patch.website,
-      patch.sector,
-      patch.numberOfEmployees,
-      patch.revenue,
-      patch.fiscalCode,
-      patch.officeCountRange,
-      id,
-      patch.contactNameProvided,
-      patch.emailProvided,
-      patch.phoneProvided,
-      patch.sectorProvided,
-      patch.numberOfEmployeesProvided,
-      patch.revenueProvided,
-      patch.officeCountRangeProvided,
-    ],
+  // The COALESCE/CASE WHEN hybrid encodes two separate semantics (null = keep, *Provided
+  // flag = explicit set). The structure is preserved as-is via executeRows — rewriting in
+  // the builder would obscure the dual semantics encoded in the ClientUpdate type.
+  const contactsJson = patch.contacts === null ? null : JSON.stringify(patch.contacts);
+  const rows = await executeRows<Record<string, unknown>>(
+    exec,
+    sql`UPDATE clients SET
+        name = COALESCE(${patch.name}, name),
+        is_disabled = COALESCE(${patch.isDisabled}, is_disabled),
+        type = COALESCE(${patch.type}, type),
+        contacts = COALESCE(${contactsJson}::jsonb, contacts),
+        contact_name = CASE WHEN ${patch.contactNameProvided} THEN ${patch.contactName} ELSE contact_name END,
+        client_code = COALESCE(${patch.clientCode}, client_code),
+        email = CASE WHEN ${patch.emailProvided} THEN ${patch.email} ELSE email END,
+        phone = CASE WHEN ${patch.phoneProvided} THEN ${patch.phone} ELSE phone END,
+        address = COALESCE(${patch.address}, address),
+        address_country = COALESCE(${patch.addressCountry}, address_country),
+        address_state = COALESCE(${patch.addressState}, address_state),
+        address_cap = COALESCE(${patch.addressCap}, address_cap),
+        address_province = COALESCE(${patch.addressProvince}, address_province),
+        address_civic_number = COALESCE(${patch.addressCivicNumber}, address_civic_number),
+        address_line = COALESCE(${patch.addressLine}, address_line),
+        description = COALESCE(${patch.description}, description),
+        ateco_code = COALESCE(${patch.atecoCode}, ateco_code),
+        website = COALESCE(${patch.website}, website),
+        sector = CASE WHEN ${patch.sectorProvided} THEN ${patch.sector} ELSE sector END,
+        number_of_employees = CASE WHEN ${patch.numberOfEmployeesProvided} THEN ${patch.numberOfEmployees} ELSE number_of_employees END,
+        revenue = CASE WHEN ${patch.revenueProvided} THEN ${patch.revenue} ELSE revenue END,
+        fiscal_code = COALESCE(${patch.fiscalCode}, fiscal_code),
+        office_count_range = CASE WHEN ${patch.officeCountRangeProvided} THEN ${patch.officeCountRange} ELSE office_count_range END
+      WHERE id = ${id}
+      RETURNING *`,
   );
   return rows[0] ? mapClientRow(rows[0]) : null;
 };
 
 export const deleteById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ id: string; name: string; clientCode: string | null } | null> => {
-  const { rows } = await exec.query<{
-    id: string;
-    name: string;
-    client_code: string | null;
-  }>(`DELETE FROM clients WHERE id = $1 RETURNING id, name, client_code`, [id]);
+  const rows = await exec
+    .delete(clients)
+    .where(eq(clients.id, id))
+    .returning({ id: clients.id, name: clients.name, clientCode: clients.clientCode });
   if (!rows[0]) return null;
-  return { id: rows[0].id, name: rows[0].name, clientCode: rows[0].client_code };
+  return { id: rows[0].id, name: rows[0].name, clientCode: rows[0].clientCode };
 };
