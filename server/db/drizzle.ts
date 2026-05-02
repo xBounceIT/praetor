@@ -15,6 +15,12 @@ export type DbExecutor = PgDatabase<
 // Drizzle analogue of `withTransaction` from `./index.ts`. Use this when the callback
 // invokes Drizzle-converted repos so the `tx` parameter satisfies `DbExecutor`.
 // The legacy `withTransaction` is still in use by un-converted repos.
+//
+// The `tx as unknown as DbExecutor` cast bridges Drizzle's `PgTransaction` and `PgDatabase`
+// types — both implement the same query-builder surface (`select`, `insert`, `update`,
+// `delete`, `execute`, `transaction` for nesting) that `DbExecutor` exposes, but the two
+// classes don't share a nominal supertype that includes both, so TS rejects the direct cast.
+// The `unknown` step is a structural-equivalence assertion, not a load-bearing contract.
 export const withDbTransaction = <T>(callback: (tx: DbExecutor) => Promise<T>): Promise<T> =>
   db.transaction((tx) => callback(tx as unknown as DbExecutor));
 
@@ -26,5 +32,11 @@ export const executeRows = async <T>(exec: DbExecutor, query: SQL): Promise<T[]>
   const rows = (result as { rows?: T[] }).rows;
   if (Array.isArray(rows)) return rows;
   if (Array.isArray(result)) return result as T[];
-  throw new Error('executeRows: unexpected result shape from exec.execute');
+  // Include diagnostic context so a driver upgrade or test-fake misconfig is debuggable
+  // from the stack trace alone.
+  const resultType = result === null ? 'null' : typeof result;
+  const hasRowsKey = result !== null && typeof result === 'object' && 'rows' in result;
+  throw new Error(
+    `executeRows: unexpected result shape from exec.execute (resultType=${resultType}, hasRowsKey=${hasRowsKey}, rowsType=${typeof rows})`,
+  );
 };

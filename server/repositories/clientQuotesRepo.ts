@@ -106,6 +106,13 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   updatedAt: row.updatedAt?.getTime() ?? 0,
 });
 
+// `quote_items.product_id` is nullable in the DB (an item can be sourced from a supplier quote
+// item via `supplierQuoteItemId` instead of pointing at a product). The frontend treats
+// `productId` with falsy checks (`if (!item.productId)`), so we project null to '' here to
+// keep `ClientQuoteItem.productId: string` and avoid a frontend-wide type widen. The
+// route-side counterpart writes `productId: item.productId || null` so '' never round-trips
+// into the DB. `ExistingQuoteItemSnapshot.productId` (read for diff/comparison flows) keeps
+// the true `string | null` shape.
 const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   id: row.id,
   quoteId: row.quoteId,
