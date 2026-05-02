@@ -67,9 +67,14 @@ type GeneralSettingsRow = {
 // but always populated at runtime via DB defaults on the seeded id=1 row, so these
 // fallbacks are TS-strict appeasement that fire only on a never-actually-happens null.
 // Values MUST mirror the `.default(...)` calls in `db/schema/generalSettings.ts` (and the
-// underlying DEFAULTs in `schema.sql:693-720`); update both together if defaults change.
+// underlying DEFAULTs in `schema.sql:693-720`); the `mapRow defaults match the schema
+// column defaults` test in the repo's spec guards against drift across the three places.
 // `dailyLimit` is the string form because pg returns `numeric` as a string and `parseFloat`
 // runs on it inside `mapRow`.
+//
+// Other columns with DB defaults (e.g., `enableAiReporting`, `allowWeekendSelection`) are
+// typed `T | null` in the public `GeneralSettings` type, so `mapRow` forwards null without
+// a fallback — route consumers apply their own `?? default`.
 const DEFAULT_FALLBACKS = {
   currency: '€',
   dailyLimit: '8.00',

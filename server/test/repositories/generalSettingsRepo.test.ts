@@ -201,4 +201,30 @@ describe('schema invariants', () => {
     // `toEqual` infers from the receiver and rejects the comparison without this widening.
     expect([...PROJECTION_KEYS] as string[]).toEqual(expectedKeys);
   });
+
+  // The four typed-non-nullable `GeneralSettings` fields can technically be null at the row
+  // layer (the schema columns are nullable in TS), so `mapRow` falls back via a private
+  // `DEFAULT_FALLBACKS` const. Those fallbacks duplicate the `.default(...)` values declared
+  // on the Drizzle schema (and, by transit, the DEFAULTs in schema.sql:693-720). This test
+  // builds a row where those four columns are null and asserts mapRow's fallback values
+  // match the schema column defaults — so any drift between schema.sql, the Drizzle schema,
+  // and the repo's fallback const fails CI rather than silently shipping a wrong default.
+  test('mapRow defaults match the schema column defaults (drift guard)', async () => {
+    const cols = getTableColumns(generalSettings);
+    exec.enqueue({
+      rows: [
+        buildRow({
+          currency: null,
+          dailyLimit: null,
+          startOfWeek: null,
+          treatSaturdayAsHoliday: null,
+        }),
+      ],
+    });
+    const result = await generalSettingsRepo.get(testDb);
+    expect(result?.currency).toBe(cols.currency.default as string);
+    expect(result?.dailyLimit).toBe(parseFloat(cols.dailyLimit.default as string));
+    expect(result?.startOfWeek).toBe(cols.startOfWeek.default as string);
+    expect(result?.treatSaturdayAsHoliday).toBe(cols.treatSaturdayAsHoliday.default as boolean);
+  });
 });
