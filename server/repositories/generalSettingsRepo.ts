@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { eq, sql } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { generalSettings } from '../db/schema/generalSettings.ts';
 
 export type GeneralSettings = {
   currency: string;
@@ -30,72 +32,107 @@ export type GeneralSettingsPatch = {
   defaultLocation?: string | null;
 };
 
-type GeneralSettingsRow = Omit<GeneralSettings, 'dailyLimit'> & { dailyLimit: string };
+const GENERAL_SETTINGS_PROJECTION = {
+  currency: generalSettings.currency,
+  dailyLimit: generalSettings.dailyLimit,
+  startOfWeek: generalSettings.startOfWeek,
+  treatSaturdayAsHoliday: generalSettings.treatSaturdayAsHoliday,
+  enableAiReporting: generalSettings.enableAiReporting,
+  geminiApiKey: generalSettings.geminiApiKey,
+  aiProvider: generalSettings.aiProvider,
+  openrouterApiKey: generalSettings.openrouterApiKey,
+  geminiModelId: generalSettings.geminiModelId,
+  openrouterModelId: generalSettings.openrouterModelId,
+  allowWeekendSelection: generalSettings.allowWeekendSelection,
+  defaultLocation: generalSettings.defaultLocation,
+} as const;
 
-const SELECT_COLUMNS = `currency,
-        daily_limit as "dailyLimit",
-        start_of_week as "startOfWeek",
-        treat_saturday_as_holiday as "treatSaturdayAsHoliday",
-        enable_ai_reporting as "enableAiReporting",
-        gemini_api_key as "geminiApiKey",
-        ai_provider as "aiProvider",
-        openrouter_api_key as "openrouterApiKey",
-        gemini_model_id as "geminiModelId",
-        openrouter_model_id as "openrouterModelId",
-        allow_weekend_selection as "allowWeekendSelection",
-        default_location as "defaultLocation"`;
+type GeneralSettingsRow = {
+  currency: string | null;
+  dailyLimit: string | null;
+  startOfWeek: string | null;
+  treatSaturdayAsHoliday: boolean | null;
+  enableAiReporting: boolean | null;
+  geminiApiKey: string | null;
+  aiProvider: string | null;
+  openrouterApiKey: string | null;
+  geminiModelId: string | null;
+  openrouterModelId: string | null;
+  allowWeekendSelection: boolean | null;
+  defaultLocation: string | null;
+};
+
+// Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
+// columns are nullable in TS (Drizzle infers from `.default(...)` without `.notNull()`)
+// but always populated at runtime via DB defaults on the seeded id=1 row, so these
+// fallbacks are TS-strict appeasement that fire only on a never-actually-happens null.
+// Values MUST mirror the `.default(...)` calls in `db/schema/generalSettings.ts` (and the
+// underlying DEFAULTs in `schema.sql:693-720`); the `mapRow defaults match the schema
+// column defaults` test in the repo's spec guards against drift across the three places.
+// `dailyLimit` is the string form because pg returns `numeric` as a string and `parseFloat`
+// runs on it inside `mapRow`.
+//
+// Other columns with DB defaults (e.g., `enableAiReporting`, `allowWeekendSelection`) are
+// typed `T | null` in the public `GeneralSettings` type, so `mapRow` forwards null without
+// a fallback — route consumers apply their own `?? default`.
+const DEFAULT_FALLBACKS = {
+  currency: '€',
+  dailyLimit: '8.00',
+  startOfWeek: 'Monday',
+  treatSaturdayAsHoliday: true,
+} as const;
 
 const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
-  ...row,
-  dailyLimit: parseFloat(row.dailyLimit),
+  currency: row.currency ?? DEFAULT_FALLBACKS.currency,
+  dailyLimit: parseFloat(row.dailyLimit ?? DEFAULT_FALLBACKS.dailyLimit),
+  startOfWeek: row.startOfWeek ?? DEFAULT_FALLBACKS.startOfWeek,
+  treatSaturdayAsHoliday: row.treatSaturdayAsHoliday ?? DEFAULT_FALLBACKS.treatSaturdayAsHoliday,
+  enableAiReporting: row.enableAiReporting,
+  geminiApiKey: row.geminiApiKey,
+  aiProvider: row.aiProvider,
+  openrouterApiKey: row.openrouterApiKey,
+  geminiModelId: row.geminiModelId,
+  openrouterModelId: row.openrouterModelId,
+  allowWeekendSelection: row.allowWeekendSelection,
+  defaultLocation: row.defaultLocation,
 });
 
-export const get = async (exec: QueryExecutor = pool): Promise<GeneralSettings | null> => {
-  const { rows } = await exec.query<GeneralSettingsRow>(
-    `SELECT ${SELECT_COLUMNS} FROM general_settings WHERE id = 1`,
-  );
-  if (rows.length === 0) return null;
-  return mapRow(rows[0]);
+export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
+  const rows = await exec
+    .select(GENERAL_SETTINGS_PROJECTION)
+    .from(generalSettings)
+    .where(eq(generalSettings.id, 1));
+  return rows[0] ? mapRow(rows[0]) : null;
 };
 
 export const update = async (
   patch: GeneralSettingsPatch,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<GeneralSettings> => {
-  const { rows } = await exec.query<GeneralSettingsRow>(
-    `UPDATE general_settings
-        SET currency = COALESCE($1, currency),
-            daily_limit = COALESCE($2, daily_limit),
-            start_of_week = COALESCE($3, start_of_week),
-            treat_saturday_as_holiday = COALESCE($4, treat_saturday_as_holiday),
-            enable_ai_reporting = COALESCE($5, enable_ai_reporting),
-            gemini_api_key = COALESCE($6, gemini_api_key),
-            ai_provider = COALESCE($7, ai_provider),
-            openrouter_api_key = COALESCE($8, openrouter_api_key),
-            gemini_model_id = COALESCE($9, gemini_model_id),
-            openrouter_model_id = COALESCE($10, openrouter_model_id),
-            allow_weekend_selection = COALESCE($11, allow_weekend_selection),
-            default_location = COALESCE($12, default_location),
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1
-      RETURNING ${SELECT_COLUMNS}`,
-    [
-      patch.currency,
-      patch.dailyLimit,
-      patch.startOfWeek,
-      patch.treatSaturdayAsHoliday,
-      patch.enableAiReporting,
-      patch.geminiApiKey,
-      patch.aiProvider,
-      patch.openrouterApiKey,
-      patch.geminiModelId,
-      patch.openrouterModelId,
-      patch.allowWeekendSelection,
-      patch.defaultLocation,
-    ],
-  );
-  if (rows.length === 0) {
+  // COALESCE preserves the existing column when the patch value is undefined (legacy
+  // "undefined leaves column unchanged" semantic). Same pattern as ldapRepo.update /
+  // emailRepo.update / settingsRepo.upsertForUser.
+  const result = await exec
+    .update(generalSettings)
+    .set({
+      currency: sql`COALESCE(${patch.currency ?? null}, ${generalSettings.currency})`,
+      dailyLimit: sql`COALESCE(${patch.dailyLimit ?? null}, ${generalSettings.dailyLimit})`,
+      startOfWeek: sql`COALESCE(${patch.startOfWeek ?? null}, ${generalSettings.startOfWeek})`,
+      treatSaturdayAsHoliday: sql`COALESCE(${patch.treatSaturdayAsHoliday ?? null}, ${generalSettings.treatSaturdayAsHoliday})`,
+      enableAiReporting: sql`COALESCE(${patch.enableAiReporting ?? null}, ${generalSettings.enableAiReporting})`,
+      geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
+      aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
+      openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,
+      geminiModelId: sql`COALESCE(${patch.geminiModelId ?? null}, ${generalSettings.geminiModelId})`,
+      openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
+      allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
+      defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(generalSettings.id, 1))
+    .returning(GENERAL_SETTINGS_PROJECTION);
+  if (result.length === 0) {
     throw new Error('general_settings row (id=1) not found; seed missing');
   }
-  return mapRow(rows[0]);
+  return mapRow(result[0]);
 };
