@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as repo from '../../repositories/reportsHoursRepo.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { extractTasksJoinOn } from '../helpers/sqlAssertions.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -306,22 +307,10 @@ describe('getTasksSection', () => {
   // These tests assert that BOTH branches of the JOIN's `OR` predicate ship in the emitted SQL,
   // so a future regression that drops one branch (e.g. only matching FK and losing legacy entries
   // whose `task_id` is NULL) would fail loudly here rather than at a customer reporting bug.
-  //
-  // The assertions extract the `JOIN tasks t ON ... (next-JOIN | WHERE)` substring and check
-  // both branches sit inside it. Substring-presence elsewhere in the query (e.g. a future
-  // CTE) wouldn't satisfy this — the whole `te.task_id IS NULL OR …` test has to live inside
-  // the ON clause, otherwise legacy entries with NULL `task_id` get filtered out instead of
-  // joined via the (project_id, name) fallback.
+  // `extractTasksJoinOn` (test/helpers/sqlAssertions.ts) constrains the assertions to the actual
+  // ON-clause body, not the whole SQL — so a future change that moved one branch into a CTE or
+  // WHERE filter would not satisfy these tests.
   describe('timeEntriesTasksJoin coverage in scoped task hours queries', () => {
-    const extractTasksJoinOn = (sql: string): string => {
-      // Match from `JOIN tasks t` (or `JOIN tasks "t"`) up to the next JOIN/WHERE/GROUP keyword.
-      const match = sql.match(
-        /JOIN\s+tasks\s+"?t"?\s+ON\s+([\s\S]*?)(?=\s+(?:JOIN|WHERE|GROUP)\b)/,
-      );
-      if (!match) throw new Error(`No 'JOIN tasks t ON ...' found in:\n${sql}`);
-      return match[1];
-    };
-
     test('matched-FK branch sits inside the JOIN ON clause', async () => {
       enqueueEmptyN(3);
       await repo.getTasksSection(
@@ -341,6 +330,7 @@ describe('getTasksSection', () => {
       const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
       expect(hoursCall).toBeDefined();
       const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      expect(onClause).not.toBeNull();
       expect(onClause).toContain('"t"."id" = "te"."task_id"');
     });
 
@@ -363,6 +353,7 @@ describe('getTasksSection', () => {
       const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
       expect(hoursCall).toBeDefined();
       const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      expect(onClause).not.toBeNull();
       // Both branches must be in the same ON clause; the fallback's three predicates AND'd
       // together inside parens, the whole thing OR'd against the FK match.
       expect(onClause).toContain('"t"."id" = "te"."task_id"');

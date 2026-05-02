@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as tasksRepo from '../../repositories/tasksRepo.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { extractTasksJoinOn } from '../helpers/sqlAssertions.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -248,12 +249,10 @@ describe('hours aggregation', () => {
     // Both JOIN branches must sit inside the same `JOIN tasks t ON …` clause, OR-combined.
     // Asserting against the extracted ON clause (rather than the whole SQL) prevents a
     // regression that moves one branch into an unrelated CTE or WHERE filter from passing
-    // silently — both predicates have to live in the same join condition.
-    const onMatch = sql.match(
-      /JOIN\s+tasks\s+"?t"?\s+ON\s+([\s\S]*?)(?=\s+(?:JOIN|WHERE|GROUP)\b)/,
-    );
-    expect(onMatch).not.toBeNull();
-    const onClause = onMatch?.[1] ?? '';
+    // silently — both predicates have to live in the same join condition. Helper is shared
+    // with reportsHoursRepo.test.ts (test/helpers/sqlAssertions.ts).
+    const onClause = extractTasksJoinOn(sql);
+    expect(onClause).not.toBeNull();
     expect(onClause).toContain('"t"."id" = "te"."task_id"');
     expect(onClause).toMatch(/\bOR\b/);
     expect(onClause).toContain('"te"."task_id" IS NULL');
