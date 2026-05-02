@@ -104,14 +104,17 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
   const addressCivicNumber = (c.address_civic_number as string | null) || null;
   const addressLine = (c.address_line as string | null) || null;
 
-  const computedAddress = formatAddress({
-    civicNumber: addressCivicNumber,
-    line: addressLine,
-    cap: addressCap,
-    state: addressState,
-    province: addressProvince,
-    country: addressCountry,
-  });
+  const address =
+    (c.address as string | null) ||
+    formatAddress({
+      civicNumber: addressCivicNumber,
+      line: addressLine,
+      cap: addressCap,
+      state: addressState,
+      province: addressProvince,
+      country: addressCountry,
+    }) ||
+    null;
 
   return {
     id: c.id as string,
@@ -124,7 +127,7 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
     clientCode: (c.client_code as string | null) ?? null,
     email: (c.email as string | null) || primary?.email || null,
     phone: (c.phone as string | null) || primary?.phone || null,
-    address: (c.address as string | null) || computedAddress || null,
+    address,
     addressCountry,
     addressState,
     addressCap,
@@ -191,8 +194,6 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
     return rows.map(mapClientRow);
   }
 
-  // User-scoped path: JOIN un-modeled user_clients. NULL placeholders for totals so
-  // mapClientRow's parseDbNumber returns undefined.
   const rows = await executeRows<Record<string, unknown>>(
     exec,
     sql`SELECT c.id, c.name, c.description, c.is_disabled, c.type,

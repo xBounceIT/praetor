@@ -1,10 +1,4 @@
--- First-time-modeling migration for the clients table (see db/README.md). All statements
--- are guarded with IF NOT EXISTS so this is a no-op on existing dev/prod DBs (which already
--- have clients from schema.sql) while still bootstrapping a fresh DB cleanly.
---
--- The carry-forward ALTER TABLE ADD COLUMN IF NOT EXISTS statements mirror schema.sql so DBs
--- that were bootstrapped before each column was added (the table started with just id, name,
--- is_disabled, created_at) still get the column on first migrate.
+-- First-time-modeling migration for clients (carry-forward pattern, see db/README.md).
 
 CREATE TABLE IF NOT EXISTS "clients" (
 	"id" varchar(50) PRIMARY KEY NOT NULL,

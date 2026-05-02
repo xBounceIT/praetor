@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as clientsRepo from '../../repositories/clientsRepo.ts';
-import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -10,9 +10,6 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// list, findContactsForUpdate, update use either raw SQL via executeRows or projections
-// where rows come back with snake_case keys (executeRows) or positional arrays (builder).
-// The mapClientRow helper bridges either shape.
 const baseRow = {
   id: 'c-1',
   name: 'Acme',
@@ -198,7 +195,7 @@ describe('findByClientCode', () => {
 
 describe('create', () => {
   test('inserts client and returns the mapped row', async () => {
-    exec.enqueue({ rows: [POSITIONAL_CLIENT_ROW] });
+    exec.enqueue({ rows: [makeRow(POSITIONAL_CLIENT_ROW)] });
     const result = await clientsRepo.create(
       {
         id: 'c-1',
@@ -238,7 +235,7 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('passes all 31 params including 7 boolean CASE WHEN flags', async () => {
+  test('passes provided fields with CASE WHEN flags', async () => {
     exec.enqueue({ rows: [baseRow] });
     await clientsRepo.update(
       'c-1',
