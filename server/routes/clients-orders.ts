@@ -107,7 +107,7 @@ const clientOrderItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
   },
-  required: ['productName', 'quantity', 'unitPrice'],
+  required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
 
 const clientOrderCreateBodySchema = {
@@ -146,7 +146,7 @@ const clientOrderUpdateBodySchema = {
 
 type NormalizedOrderItem = {
   id?: string;
-  productId: string | null;
+  productId: string;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -171,6 +171,11 @@ const normalizeIncomingItems = (
   const normalized: NormalizedOrderItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
+    const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
+    if (!productIdResult.ok) {
+      badRequest(reply, productIdResult.message);
+      return null;
+    }
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
     if (!productNameResult.ok) {
       badRequest(reply, productNameResult.message);
@@ -203,7 +208,7 @@ const normalizeIncomingItems = (
       value === null || value === undefined ? null : Number(value);
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
-      productId: toNullableString(item.productId),
+      productId: productIdResult.value,
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,

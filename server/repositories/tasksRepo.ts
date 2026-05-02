@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
@@ -246,12 +247,17 @@ export const sumHoursByProjects = async (
   exec: DbExecutor = db,
 ): Promise<Array<{ projectId: string; task: string; total: number }>> => {
   if (projectIds.length === 0) return [];
+  // Aliased reference so `inArray` renders `"te"."project_id"` to match the `time_entries te`
+  // alias used by the FROM clause and TIME_ENTRIES_TASKS_JOIN. Using the unaliased
+  // `timeEntries.projectId` produces `"time_entries"."project_id"`, which Postgres rejects with
+  // "invalid reference to FROM-clause entry" once the table is aliased.
+  const te = alias(timeEntries, 'te');
   const query = userId
     ? sql`SELECT te.project_id AS "projectId", te.task, COALESCE(SUM(te.duration), 0)::float AS total
             FROM time_entries te
             ${sql.raw(TIME_ENTRIES_TASKS_JOIN)}
             JOIN user_tasks ut ON ut.task_id = t.id
-           WHERE ${inArray(timeEntries.projectId, projectIds)} AND ut.user_id = ${userId}
+           WHERE ${inArray(te.projectId, projectIds)} AND ut.user_id = ${userId}
            GROUP BY te.project_id, te.task`
     : sql`SELECT project_id AS "projectId", task, COALESCE(SUM(duration), 0)::float AS total
             FROM time_entries

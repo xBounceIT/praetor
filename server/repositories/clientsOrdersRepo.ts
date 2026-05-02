@@ -287,9 +287,12 @@ export const update = async (
   return rows[0] ? mapOrder(rows[0]) : null;
 };
 
+// `productId` is required because `sale_items.product_id` is NOT NULL with an FK to
+// `products(id)`. Substituting a sentinel like '' would just trade a NOT NULL violation for an
+// FK violation, so callers must resolve a real product id before calling.
 export type NewClientOrderItem = {
   id: string;
-  productId: string | null;
+  productId: string;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -319,7 +322,7 @@ export const insertItems = async (
       items.map((item) => ({
         id: item.id,
         saleId: orderId,
-        productId: item.productId ?? '',
+        productId: item.productId,
         productName: item.productName,
         quantity: numericForDb(item.quantity),
         unitPrice: numericForDb(item.unitPrice),
