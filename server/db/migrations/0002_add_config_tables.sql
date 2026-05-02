@@ -1,7 +1,16 @@
 -- First-time-modeling migration for the single-row config tables (see db/README.md). Both
--- tables already exist in dev/prod from schema.sql, so the CREATE TABLE statements are
--- guarded with IF NOT EXISTS — no-op on existing DBs while still bootstrapping a fresh DB
--- cleanly. Same pattern as 0000_baseline_pre_drizzle and 0001_add_phase3_tables.
+-- tables already exist in dev/prod from schema.sql; CREATE TABLE / ALTER / INSERT are all
+-- guarded so this is a no-op on existing DBs while bootstrapping a fresh DB cleanly:
+--   * CREATE TABLE IF NOT EXISTS — table-creation guard.
+--   * pg_constraint guard around ADD CONSTRAINT — re-adds the CHECK (id = 1) singleton
+--     invariant from schema.sql on fresh DBs without colliding with the auto-named
+--     constraint that already exists on dev/prod (matched by `contype = 'c'` rather than by
+--     name because Postgres's auto-generated name for an inline column CHECK isn't
+--     guaranteed across versions).
+--   * INSERT … ON CONFLICT DO NOTHING — seeds the singleton id=1 row so the first PUT to
+--     /email/config and /ldap/config succeeds; idempotent on existing DBs that already
+--     have the row from schema.sql.
+-- Same overall pattern as 0000_baseline_pre_drizzle and 0001_add_phase3_tables.
 
 CREATE TABLE IF NOT EXISTS "email_config" (
 	"id" integer PRIMARY KEY DEFAULT 1 NOT NULL,
@@ -30,3 +39,26 @@ CREATE TABLE IF NOT EXISTS "ldap_config" (
 	"role_mappings" jsonb DEFAULT '[]'::jsonb,
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
+--> statement-breakpoint
+DO $$ BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint c
+		JOIN pg_class t ON c.conrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = 'email_config' AND n.nspname = 'public' AND c.contype = 'c'
+	) THEN
+		ALTER TABLE "email_config" ADD CONSTRAINT "email_config_id_check" CHECK ("id" = 1);
+	END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint c
+		JOIN pg_class t ON c.conrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = 'ldap_config' AND n.nspname = 'public' AND c.contype = 'c'
+	) THEN
+		ALTER TABLE "ldap_config" ADD CONSTRAINT "ldap_config_id_check" CHECK ("id" = 1);
+	END IF;
+END $$;--> statement-breakpoint
+INSERT INTO "email_config" ("id") VALUES (1) ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
+INSERT INTO "ldap_config" ("id") VALUES (1) ON CONFLICT ("id") DO NOTHING;
