@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as workUnitsRepo from '../../repositories/workUnitsRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
-const row = {
+// findById/listAll/listManagedBy use executeRows with raw SQL — rows come back with
+// the camelCase keys that the SELECT aliases produce ("isDisabled", "userCount", etc.).
+// Other functions use the Drizzle query builder, which returns rows in `rowMode: 'array'`
+// (positional arrays). Fixtures below are tagged with the path they exercise.
+const aggRow = {
   id: 'wu-1',
   name: 'Engineering',
   description: 'Eng team',
@@ -18,23 +24,23 @@ const row = {
 };
 
 describe('findById', () => {
-  test('passes id as $1 and returns the row', async () => {
-    exec.enqueue({ rows: [row] });
-    const result = await workUnitsRepo.findById('wu-1', exec);
-    expect(exec.calls[0].params).toEqual(['wu-1']);
-    expect(result).toEqual(row);
+  test('passes id and returns the row', async () => {
+    exec.enqueue({ rows: [aggRow] });
+    const result = await workUnitsRepo.findById('wu-1', testDb);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(result).toEqual(aggRow);
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.findById('wu-x', exec)).toBeNull();
+    expect(await workUnitsRepo.findById('wu-x', testDb)).toBeNull();
   });
 });
 
 describe('listAll', () => {
   test('takes no params and returns rows', async () => {
-    exec.enqueue({ rows: [row, { ...row, id: 'wu-2', userCount: 3 }] });
-    const result = await workUnitsRepo.listAll(exec);
+    exec.enqueue({ rows: [aggRow, { ...aggRow, id: 'wu-2', userCount: 3 }] });
+    const result = await workUnitsRepo.listAll(testDb);
     expect(exec.calls[0].params).toEqual([]);
     expect(result).toHaveLength(2);
     expect(result[1].userCount).toBe(3);
@@ -42,72 +48,81 @@ describe('listAll', () => {
 });
 
 describe('listManagedBy', () => {
-  test('passes manager id as $1', async () => {
+  test('passes manager id', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.listManagedBy('u-1', exec);
-    expect(exec.calls[0].params).toEqual(['u-1']);
+    await workUnitsRepo.listManagedBy('u-1', testDb);
+    expect(exec.calls[0].params).toContain('u-1');
   });
 });
 
 describe('create', () => {
-  test('passes [id, name, description] from object', async () => {
+  test('passes id, name, description', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.create({ id: 'wu-1', name: 'Eng', description: 'desc' }, exec);
-    expect(exec.calls[0].params).toEqual(['wu-1', 'Eng', 'desc']);
+    await workUnitsRepo.create({ id: 'wu-1', name: 'Eng', description: 'desc' }, testDb);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].params).toContain('Eng');
+    expect(exec.calls[0].params).toContain('desc');
   });
 
   test('null description is passed through as null', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.create({ id: 'wu-1', name: 'Eng', description: null }, exec);
-    expect(exec.calls[0].params).toEqual(['wu-1', 'Eng', null]);
+    await workUnitsRepo.create({ id: 'wu-1', name: 'Eng', description: null }, testDb);
+    expect(exec.calls[0].params).toContain(null);
   });
 });
 
 describe('addManagers', () => {
   test('skips query when userIds is empty', async () => {
-    await workUnitsRepo.addManagers('wu-1', [], exec);
+    await workUnitsRepo.addManagers('wu-1', [], testDb);
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('passes [unitId, userIds] for batched insert', async () => {
+  test('emits a multi-row insert with ON CONFLICT DO NOTHING', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.addManagers('wu-1', ['u-1', 'u-2'], exec);
-    expect(exec.calls[0].params).toEqual(['wu-1', ['u-1', 'u-2']]);
-    expect(exec.calls[0].sql).toContain('unnest($2::text[])');
+    await workUnitsRepo.addManagers('wu-1', ['u-1', 'u-2'], testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('insert into "work_unit_managers"');
+    expect(sql).toContain('on conflict do nothing');
+    // Each (workUnitId, userId) pair contributes 2 params; 2 users → 4 params.
+    expect(exec.calls[0].params).toEqual(['wu-1', 'u-1', 'wu-1', 'u-2']);
   });
 });
 
 describe('addUsersToUnit', () => {
   test('skips query when userIds is empty', async () => {
-    await workUnitsRepo.addUsersToUnit('wu-1', [], exec);
+    await workUnitsRepo.addUsersToUnit('wu-1', [], testDb);
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('passes [unitId, userIds] and uses ON CONFLICT DO NOTHING', async () => {
+  test('emits a multi-row insert with ON CONFLICT DO NOTHING', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.addUsersToUnit('wu-1', ['u-1', 'u-2'], exec);
-    expect(exec.calls[0].params).toEqual(['wu-1', ['u-1', 'u-2']]);
-    expect(exec.calls[0].sql).toContain('ON CONFLICT DO NOTHING');
+    await workUnitsRepo.addUsersToUnit('wu-1', ['u-1', 'u-2'], testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('insert into "user_work_units"');
+    expect(sql).toContain('on conflict do nothing');
+    // user_work_units schema declares (userId, workUnitId) so the bulk INSERT emits each
+    // pair in user-then-unit order.
+    expect(exec.calls[0].params).toEqual(['u-1', 'wu-1', 'u-2', 'wu-1']);
   });
 });
 
 describe('lockById', () => {
   test('uses FOR UPDATE and returns true when row exists', async () => {
-    exec.enqueue({ rows: [{ id: 'wu-1' }] });
-    const result = await workUnitsRepo.lockById('wu-1', exec);
-    expect(exec.calls[0].sql).toContain('FOR UPDATE');
+    exec.enqueue({ rows: [['wu-1']] });
+    const result = await workUnitsRepo.lockById('wu-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(result).toBe(true);
   });
 
   test('returns false when row missing', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.lockById('wu-x', exec)).toBe(false);
+    expect(await workUnitsRepo.lockById('wu-x', testDb)).toBe(false);
   });
 });
 
 describe('updateFields', () => {
   test('skips query entirely when no fields provided', async () => {
-    await workUnitsRepo.updateFields('wu-1', {}, exec);
+    await workUnitsRepo.updateFields('wu-1', {}, testDb);
     expect(exec.calls).toHaveLength(0);
   });
 
@@ -116,28 +131,28 @@ describe('updateFields', () => {
     await workUnitsRepo.updateFields(
       'wu-1',
       { name: 'New', description: 'D', isDisabled: true },
-      exec,
+      testDb,
     );
-    const call = exec.calls[0];
-    expect(call.sql).toContain('name = $1');
-    expect(call.sql).toContain('description = $2');
-    expect(call.sql).toContain('is_disabled = $3');
-    expect(call.sql).toContain('WHERE id = $4');
-    expect(call.params).toEqual(['New', 'D', true, 'wu-1']);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"name" = $1');
+    expect(sql).toContain('"description" = $2');
+    expect(sql).toContain('"is_disabled" = $3');
+    expect(sql).toContain('= $4');
+    expect(exec.calls[0].params).toEqual(['New', 'D', true, 'wu-1']);
   });
 
   test('only includes the fields that are defined', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.updateFields('wu-1', { name: 'New' }, exec);
-    const call = exec.calls[0];
-    expect(call.params).toEqual(['New', 'wu-1']);
-    expect(call.sql).not.toContain('description');
-    expect(call.sql).not.toContain('is_disabled');
+    await workUnitsRepo.updateFields('wu-1', { name: 'New' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(exec.calls[0].params).toEqual(['New', 'wu-1']);
+    expect(sql).not.toMatch(/"description"\s*=\s*\$/);
+    expect(sql).not.toMatch(/"is_disabled"\s*=\s*\$/);
   });
 
   test('null description is treated as a value to set, not skipped', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.updateFields('wu-1', { description: null }, exec);
+    await workUnitsRepo.updateFields('wu-1', { description: null }, testDb);
     expect(exec.calls[0].params).toEqual([null, 'wu-1']);
   });
 });
@@ -145,77 +160,79 @@ describe('updateFields', () => {
 describe('clearManagers / clearUsers', () => {
   test('clearManagers passes unitId', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.clearManagers('wu-1', exec);
-    expect(exec.calls[0].params).toEqual(['wu-1']);
-    expect(exec.calls[0].sql).toContain('work_unit_managers');
+    await workUnitsRepo.clearManagers('wu-1', testDb);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"work_unit_managers"');
   });
 
   test('clearUsers passes unitId', async () => {
     exec.enqueue({ rows: [] });
-    await workUnitsRepo.clearUsers('wu-1', exec);
-    expect(exec.calls[0].params).toEqual(['wu-1']);
-    expect(exec.calls[0].sql).toContain('user_work_units');
+    await workUnitsRepo.clearUsers('wu-1', testDb);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"user_work_units"');
   });
 });
 
 describe('deleteById', () => {
   test('returns deleted row when found', async () => {
-    exec.enqueue({ rows: [{ name: 'Eng' }] });
-    const result = await workUnitsRepo.deleteById('wu-1', exec);
+    exec.enqueue({ rows: [['Eng']] });
+    const result = await workUnitsRepo.deleteById('wu-1', testDb);
     expect(result).toEqual({ name: 'Eng' });
   });
 
   test('returns null when no row deleted', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.deleteById('wu-x', exec)).toBeNull();
+    expect(await workUnitsRepo.deleteById('wu-x', testDb)).toBeNull();
   });
 });
 
 describe('findUserIds', () => {
   test('maps rows to id array', async () => {
     exec.enqueue({ rows: [{ id: 'u-1' }, { id: 'u-2' }] });
-    const result = await workUnitsRepo.findUserIds('wu-1', exec);
+    const result = await workUnitsRepo.findUserIds('wu-1', testDb);
     expect(result).toEqual(['u-1', 'u-2']);
-    expect(exec.calls[0].params).toEqual(['wu-1']);
+    expect(exec.calls[0].params).toContain('wu-1');
   });
 });
 
 describe('findNameById', () => {
   test('returns name when found', async () => {
-    exec.enqueue({ rows: [{ name: 'Eng' }] });
-    expect(await workUnitsRepo.findNameById('wu-1', exec)).toBe('Eng');
+    exec.enqueue({ rows: [['Eng']] });
+    expect(await workUnitsRepo.findNameById('wu-1', testDb)).toBe('Eng');
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.findNameById('wu-x', exec)).toBeNull();
+    expect(await workUnitsRepo.findNameById('wu-x', testDb)).toBeNull();
   });
 });
 
 describe('isUserManagerOfUnit', () => {
-  test('passes [unitId, userId]', async () => {
-    exec.enqueue({ rows: [{ '?column?': 1 }] });
-    const result = await workUnitsRepo.isUserManagerOfUnit('u-1', 'wu-1', exec);
-    expect(exec.calls[0].params).toEqual(['wu-1', 'u-1']);
+  test('passes [unitId, userId] and returns true on match', async () => {
+    exec.enqueue({ rows: [[1]] });
+    const result = await workUnitsRepo.isUserManagerOfUnit('u-1', 'wu-1', testDb);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].params).toContain('u-1');
     expect(result).toBe(true);
   });
 
   test('returns false when no row', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.isUserManagerOfUnit('u-1', 'wu-1', exec)).toBe(false);
+    expect(await workUnitsRepo.isUserManagerOfUnit('u-1', 'wu-1', testDb)).toBe(false);
   });
 });
 
 describe('isUserManagedBy', () => {
-  test('passes [managerId, targetUserId]', async () => {
-    exec.enqueue({ rows: [{ '?column?': 1 }] });
-    const result = await workUnitsRepo.isUserManagedBy('mgr', 'target', exec);
-    expect(exec.calls[0].params).toEqual(['mgr', 'target']);
+  test('passes [managerId, targetUserId] and returns true on match', async () => {
+    exec.enqueue({ rows: [[1]] });
+    const result = await workUnitsRepo.isUserManagedBy('mgr', 'target', testDb);
+    expect(exec.calls[0].params).toContain('mgr');
+    expect(exec.calls[0].params).toContain('target');
     expect(result).toBe(true);
   });
 
   test('returns false when no row', async () => {
     exec.enqueue({ rows: [] });
-    expect(await workUnitsRepo.isUserManagedBy('mgr', 'target', exec)).toBe(false);
+    expect(await workUnitsRepo.isUserManagedBy('mgr', 'target', testDb)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -127,7 +127,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
 
       const id = generatePrefixedId('wu');
-      const w = await withTransaction(async (tx) => {
+      const w = await withDbTransaction(async (tx) => {
         await workUnitsRepo.create(
           { id, name: nameResult.value, description: description ?? null },
           tx,
@@ -193,7 +193,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let w: workUnitsRepo.WorkUnit | null;
       try {
-        w = await withTransaction(async (tx) => {
+        w = await withDbTransaction(async (tx) => {
           const exists = await workUnitsRepo.lockById(idResult.value, tx);
           if (!exists) throw new NotFoundError('Work unit');
 
@@ -347,7 +347,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Work unit not found' });
       }
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         await workUnitsRepo.clearUsers(idResult.value, tx);
         await workUnitsRepo.addUsersToUnit(idResult.value, userIdsResult.value, tx);
       });
