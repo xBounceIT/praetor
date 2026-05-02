@@ -189,6 +189,22 @@ describe('encodeCursor / decodeCursor', () => {
       id: 'e-2',
     });
   });
+
+  test('null created_at_text on the last row suppresses nextCursor', async () => {
+    exec.enqueue({
+      rows: [rawRow, { ...rawRow, id: 'e-2', created_at: null, created_at_text: null }],
+    });
+    const result = await entriesRepo.listAll({ limit: 2 }, testDb);
+    expect(result.nextCursor).toBeNull();
+  });
+});
+
+describe('mapRawRow (exercised via listAll return path)', () => {
+  test('null created_at falls back to 0 (matches mapBuilderRow)', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, created_at: null, created_at_text: null }] });
+    const result = await entriesRepo.listAll({}, testDb);
+    expect(result.entries[0].createdAt).toBe(0);
+  });
 });
 
 describe('findOwner', () => {
@@ -358,7 +374,7 @@ describe('mapBuilderRow (exercised via create return path)', () => {
 
   test('throws TypeError when row.date is null', async () => {
     exec.enqueue({ rows: [entryRow({ 2: null })] });
-    expect(entriesRepo.create(newEntry, testDb)).rejects.toThrow(TypeError);
+    await expect(entriesRepo.create(newEntry, testDb)).rejects.toThrow(TypeError);
   });
 });
 

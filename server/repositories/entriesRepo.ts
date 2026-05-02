@@ -25,6 +25,8 @@ export type TimeEntry = {
 
 // Snake-case row shape returned by raw-SQL `executeRows` paths. Carries the extra
 // `created_at_text` column that the cursor pagination needs (see `ENTRY_COLUMNS_SQL`).
+// `created_at` is nullable in the schema (DEFAULT but no NOT NULL); `created_at::text`
+// is null too when the source column is.
 type TimeEntryRow = {
   id: string;
   user_id: string;
@@ -40,11 +42,11 @@ type TimeEntryRow = {
   hourly_cost: string | number | null;
   is_placeholder: boolean | null;
   location: string | null;
-  created_at: string | Date;
+  created_at: string | Date | null;
   // Microsecond-precision text rep of created_at — pg returns TIMESTAMP as a JS Date (ms-only),
   // which would lose precision in the cursor and skip rows at page boundaries. Using ::text keeps
   // the full Postgres precision for cursor round-trips.
-  created_at_text: string;
+  created_at_text: string | null;
 };
 
 const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project_id,
@@ -69,7 +71,7 @@ const mapRawRow = (row: TimeEntryRow): TimeEntry => {
     hourlyCost: parseDbNumber(row.hourly_cost, 0),
     isPlaceholder: !!row.is_placeholder,
     location: row.location || 'remote',
-    createdAt: new Date(row.created_at).getTime(),
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
   };
 };
 
@@ -129,8 +131,11 @@ export type ListEntriesResult = {
 const buildResult = (rows: TimeEntryRow[], limit: number): ListEntriesResult => {
   const entries = rows.map(mapRawRow);
   const lastRow = rows[rows.length - 1];
+  // `created_at` is nullable in the schema, so `created_at::text` can also be null on rows
+  // inserted before the DEFAULT was added. Skip the cursor in that case so we don't emit a
+  // malformed `{createdAt: null, id}` payload (`EntriesCursor.createdAt: string`).
   const nextCursor =
-    entries.length === limit && lastRow
+    entries.length === limit && lastRow && lastRow.created_at_text
       ? { createdAt: lastRow.created_at_text, id: lastRow.id }
       : null;
   return { entries, nextCursor };
