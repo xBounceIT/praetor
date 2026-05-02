@@ -196,6 +196,9 @@ describe('schema invariants', () => {
   test('PROJECTION_KEYS match the schema column order (excluding id and updatedAt)', () => {
     const schemaColumnNames = Object.keys(getTableColumns(generalSettings));
     const expectedKeys = schemaColumnNames.filter((k) => k !== 'id' && k !== 'updatedAt');
-    expect([...PROJECTION_KEYS]).toEqual(expectedKeys);
+    // Widen `[...PROJECTION_KEYS]` (a union-of-literals tuple from `as const`) to `string[]`
+    // so it matches `expectedKeys`, which is `Object.keys(...)`'s plain `string[]`. Bun's
+    // `toEqual` infers from the receiver and rejects the comparison without this widening.
+    expect([...PROJECTION_KEYS] as string[]).toEqual(expectedKeys);
   });
 });
