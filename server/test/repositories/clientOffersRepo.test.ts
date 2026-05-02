@@ -112,6 +112,37 @@ describe('findExistingForQuote', () => {
   });
 });
 
+describe('findStatusAndClientName', () => {
+  test('returns status + clientName when offer exists', async () => {
+    exec.enqueue({ rows: [['draft', 'Acme']] });
+    const result = await clientOffersRepo.findStatusAndClientName('co-1', testDb);
+    expect(exec.calls[0].params).toEqual(['co-1']);
+    expect(result).toEqual({ status: 'draft', clientName: 'Acme' });
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientOffersRepo.findStatusAndClientName('co-x', testDb)).toBeNull();
+  });
+});
+
+describe('findItemsForOffer', () => {
+  test('queries by offer_id and maps rows', async () => {
+    exec.enqueue({ rows: [itemRow(), itemRow({ 0: 'coi-2', 4: '3' })] });
+    const result = await clientOffersRepo.findItemsForOffer('co-1', testDb);
+    expect(exec.calls[0].sql).toContain('from "customer_offer_items"');
+    expect(exec.calls[0].sql).toContain('"offer_id" = $1');
+    expect(exec.calls[0].params).toEqual(['co-1']);
+    expect(result.map((i) => i.id)).toEqual(['coi-1', 'coi-2']);
+    expect(result[1].quantity).toBe(3);
+  });
+
+  test('returns [] when no items for offer', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientOffersRepo.findItemsForOffer('co-x', testDb)).toEqual([]);
+  });
+});
+
 describe('findLinkedSaleId', () => {
   test('queries sales.linked_offer_id and returns sale id', async () => {
     exec.enqueue({ rows: [['s-1']] });
@@ -169,7 +200,8 @@ describe('update', () => {
   test('numericForDb stringifies discount before COALESCE', async () => {
     exec.enqueue({ rows: [offerRow()] });
     await clientOffersRepo.update('co-1', { discount: 12.5 }, testDb);
-    expect(exec.calls[0].params).toContain('12.5');
+    // Discount is the 5th COALESCE argument (id, clientId, clientName, paymentTerms, discount, ...).
+    expect(exec.calls[0].params[4]).toBe('12.5');
   });
 });
 

@@ -205,18 +205,8 @@ export const isUserManagedBy = async (
   return rows.length > 0;
 };
 
-// Legacy `$N`-placeholder string — used by un-converted repos that still author raw `pg`
-// query strings. Remove when this repo is converted to Drizzle (Tier 3 of the conversion
-// roadmap), at which point `managedUserIdsSubquerySql` is the only call shape that remains.
-export const managedUserIdsSubquery = (paramIdx: number) =>
-  `SELECT uwu.user_id
-     FROM user_work_units uwu
-     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-    WHERE wum.user_id = $${paramIdx}`;
-
-// Drizzle-flavored sibling of `managedUserIdsSubquery` for repos using `sql\`\`` templates.
-// Drizzle's tagged template handles parameter numbering automatically, so the caller
-// passes the actual managerId rather than a `$N` index.
+// Drizzle SQL fragment for the "user_ids managed by `managerId`" subquery, for embedding in
+// other repos' `sql\`\`` templates (e.g. entriesRepo's manager-scope filters).
 export const managedUserIdsSubquerySql = (managerId: string): SQL =>
   sql`SELECT uwu.user_id
         FROM user_work_units uwu
