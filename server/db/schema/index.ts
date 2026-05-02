@@ -11,5 +11,6 @@ export * from './roles.ts';
 export * from './sales.ts';
 export * from './settings.ts';
 export * from './supplierSales.ts';
+export * from './suppliers.ts';
 export * from './tasks.ts';
 export * from './timeEntries.ts';

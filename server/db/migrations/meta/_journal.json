@@ -43,6 +43,13 @@
       "when": 1777742281742,
       "tag": "0005_claim_customer_offer_items",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777757132864,
+      "tag": "0006_claim_suppliers",
+      "breakpoints": true
     }
   ]
 }

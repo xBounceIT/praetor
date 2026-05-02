@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { eq } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { suppliers } from '../db/schema/suppliers.ts';
 
 export type Supplier = {
   id: string;
@@ -16,65 +18,37 @@ export type Supplier = {
   createdAt: number | undefined;
 };
 
-type SupplierRaw = {
-  id: string;
-  name: string;
-  is_disabled: boolean;
-  supplier_code: string | null;
-  contact_name: string | null;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  vat_number: string | null;
-  tax_code: string | null;
-  payment_terms: string | null;
-  notes: string | null;
-  created_at: string | Date | null;
-};
-
-const SUPPLIER_COLUMNS = `id, name, is_disabled, supplier_code, contact_name, email, phone, address, vat_number, tax_code, payment_terms, notes, created_at`;
-
-const mapRow = (row: SupplierRaw): Supplier => ({
+const mapRow = (row: typeof suppliers.$inferSelect): Supplier => ({
   id: row.id,
   name: row.name,
-  isDisabled: row.is_disabled,
-  supplierCode: row.supplier_code,
-  contactName: row.contact_name,
+  isDisabled: row.isDisabled ?? false,
+  supplierCode: row.supplierCode,
+  contactName: row.contactName,
   email: row.email,
   phone: row.phone,
   address: row.address,
-  vatNumber: row.vat_number,
-  taxCode: row.tax_code,
-  paymentTerms: row.payment_terms,
+  vatNumber: row.vatNumber,
+  taxCode: row.taxCode,
+  paymentTerms: row.paymentTerms,
   notes: row.notes,
-  createdAt: row.created_at ? new Date(row.created_at).getTime() : undefined,
+  createdAt: row.createdAt ? row.createdAt.getTime() : undefined,
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<Supplier[]> => {
-  const { rows } = await exec.query<SupplierRaw>(
-    `SELECT ${SUPPLIER_COLUMNS} FROM suppliers ORDER BY name`,
-  );
+export const listAll = async (exec: DbExecutor = db): Promise<Supplier[]> => {
+  const rows = await exec.select().from(suppliers).orderBy(suppliers.name);
   return rows.map(mapRow);
 };
 
-export const findById = async (
-  id: string,
-  exec: QueryExecutor = pool,
-): Promise<Supplier | null> => {
-  const { rows } = await exec.query<SupplierRaw>(
-    `SELECT ${SUPPLIER_COLUMNS} FROM suppliers WHERE id = $1`,
-    [id],
-  );
+export const findById = async (id: string, exec: DbExecutor = db): Promise<Supplier | null> => {
+  const rows = await exec.select().from(suppliers).where(eq(suppliers.id, id));
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
-export const findNameById = async (
-  id: string,
-  exec: QueryExecutor = pool,
-): Promise<string | null> => {
-  const { rows } = await exec.query<{ name: string }>(`SELECT name FROM suppliers WHERE id = $1`, [
-    id,
-  ]);
+export const findNameById = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
+  const rows = await exec
+    .select({ name: suppliers.name })
+    .from(suppliers)
+    .where(eq(suppliers.id, id));
   return rows[0]?.name ?? null;
 };
 
@@ -93,29 +67,25 @@ export type NewSupplier = {
   createdAt: number;
 };
 
-export const create = async (input: NewSupplier, exec: QueryExecutor = pool): Promise<Supplier> => {
-  const { rows } = await exec.query<SupplierRaw>(
-    `INSERT INTO suppliers (
-       id, name, is_disabled, supplier_code, contact_name, email, phone,
-       address, vat_number, tax_code, payment_terms, notes, created_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, to_timestamp($13 / 1000.0))
-     RETURNING ${SUPPLIER_COLUMNS}`,
-    [
-      input.id,
-      input.name,
-      false,
-      input.supplierCode,
-      input.contactName,
-      input.email,
-      input.phone,
-      input.address,
-      input.vatNumber,
-      input.taxCode,
-      input.paymentTerms,
-      input.notes,
-      input.createdAt,
-    ],
-  );
+export const create = async (input: NewSupplier, exec: DbExecutor = db): Promise<Supplier> => {
+  const rows = await exec
+    .insert(suppliers)
+    .values({
+      id: input.id,
+      name: input.name,
+      isDisabled: false,
+      supplierCode: input.supplierCode,
+      contactName: input.contactName,
+      email: input.email,
+      phone: input.phone,
+      address: input.address,
+      vatNumber: input.vatNumber,
+      taxCode: input.taxCode,
+      paymentTerms: input.paymentTerms,
+      notes: input.notes,
+      createdAt: new Date(input.createdAt),
+    })
+    .returning();
   return mapRow(rows[0]);
 };
 
@@ -136,55 +106,38 @@ export type SupplierUpdate = {
 export const update = async (
   id: string,
   patch: SupplierUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Supplier | null> => {
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  let idx = 1;
-  const fields: Array<[string, unknown]> = [
-    ['name', patch.name],
-    ['is_disabled', patch.isDisabled],
-    ['supplier_code', patch.supplierCode],
-    ['contact_name', patch.contactName],
-    ['email', patch.email],
-    ['phone', patch.phone],
-    ['address', patch.address],
-    ['vat_number', patch.vatNumber],
-    ['tax_code', patch.taxCode],
-    ['payment_terms', patch.paymentTerms],
-    ['notes', patch.notes],
-  ];
-  for (const [col, value] of fields) {
-    if (value !== undefined) {
-      sets.push(`${col} = $${idx++}`);
-      params.push(value);
-    }
-  }
+  const set: Record<string, unknown> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
+  if (patch.supplierCode !== undefined) set.supplierCode = patch.supplierCode;
+  if (patch.contactName !== undefined) set.contactName = patch.contactName;
+  if (patch.email !== undefined) set.email = patch.email;
+  if (patch.phone !== undefined) set.phone = patch.phone;
+  if (patch.address !== undefined) set.address = patch.address;
+  if (patch.vatNumber !== undefined) set.vatNumber = patch.vatNumber;
+  if (patch.taxCode !== undefined) set.taxCode = patch.taxCode;
+  if (patch.paymentTerms !== undefined) set.paymentTerms = patch.paymentTerms;
+  if (patch.notes !== undefined) set.notes = patch.notes;
 
-  if (sets.length === 0) {
-    const { rows } = await exec.query<SupplierRaw>(
-      `SELECT ${SUPPLIER_COLUMNS} FROM suppliers WHERE id = $1`,
-      [id],
-    );
+  if (Object.keys(set).length === 0) {
+    const rows = await exec.select().from(suppliers).where(eq(suppliers.id, id));
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
-  params.push(id);
-  const { rows } = await exec.query<SupplierRaw>(
-    `UPDATE suppliers SET ${sets.join(', ')} WHERE id = $${idx} RETURNING ${SUPPLIER_COLUMNS}`,
-    params,
-  );
+  const rows = await exec.update(suppliers).set(set).where(eq(suppliers.id, id)).returning();
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
 export const deleteById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string; supplierCode: string | null } | null> => {
-  const { rows } = await exec.query<{ name: string; supplier_code: string | null }>(
-    `DELETE FROM suppliers WHERE id = $1 RETURNING name, supplier_code`,
-    [id],
-  );
+  const rows = await exec
+    .delete(suppliers)
+    .where(eq(suppliers.id, id))
+    .returning({ name: suppliers.name, supplierCode: suppliers.supplierCode });
   if (!rows[0]) return null;
-  return { name: rows[0].name, supplierCode: rows[0].supplier_code };
+  return { name: rows[0].name, supplierCode: rows[0].supplierCode };
 };
