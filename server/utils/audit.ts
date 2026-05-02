@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import type { AuditLogDetails } from '../db/schema/auditLogs.ts';
 import * as auditLogsRepo from '../repositories/auditLogsRepo.ts';
 import { createChildLogger, serializeError } from './logger.ts';
 
@@ -24,15 +25,6 @@ const SENSITIVE_AUDIT_FIELDS = new Set([
   'openrouterApiKey',
   'openrouter_api_key',
 ]);
-
-export interface AuditLogDetails {
-  targetLabel?: string;
-  secondaryLabel?: string;
-  changedFields?: string[];
-  counts?: Record<string, number>;
-  fromValue?: string;
-  toValue?: string;
-}
 
 export interface AuditLogParams {
   request: FastifyRequest;

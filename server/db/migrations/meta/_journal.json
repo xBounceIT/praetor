@@ -29,6 +29,13 @@
       "when": 1777730855846,
       "tag": "0003_add_general_settings_table",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777736290821,
+      "tag": "0004_claim_audit_logs",
+      "breakpoints": true
     }
   ]
 }
