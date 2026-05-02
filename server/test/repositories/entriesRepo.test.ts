@@ -195,6 +195,7 @@ describe('encodeCursor / decodeCursor', () => {
       rows: [rawRow, { ...rawRow, id: 'e-2', created_at: null, created_at_text: null }],
     });
     const result = await entriesRepo.listAll({ limit: 2 }, testDb);
+    expect(result.entries).toHaveLength(2);
     expect(result.nextCursor).toBeNull();
   });
 });
