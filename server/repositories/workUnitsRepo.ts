@@ -77,10 +77,12 @@ export const addManagers = async (
   exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec
-    .insert(workUnitManagers)
-    .values(userIds.map((userId) => ({ workUnitId: unitId, userId })))
-    .onConflictDoNothing();
+  await executeRows(
+    exec,
+    sql`INSERT INTO work_unit_managers (work_unit_id, user_id)
+        SELECT ${unitId}, unnest(${sql.param(userIds)}::text[])
+        ON CONFLICT DO NOTHING`,
+  );
 };
 
 export const addUsersToUnit = async (
@@ -89,10 +91,12 @@ export const addUsersToUnit = async (
   exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec
-    .insert(userWorkUnits)
-    .values(userIds.map((userId) => ({ workUnitId: unitId, userId })))
-    .onConflictDoNothing();
+  await executeRows(
+    exec,
+    sql`INSERT INTO user_work_units (work_unit_id, user_id)
+        SELECT ${unitId}, unnest(${sql.param(userIds)}::text[])
+        ON CONFLICT DO NOTHING`,
+  );
 };
 
 export const lockById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

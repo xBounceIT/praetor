@@ -77,14 +77,15 @@ describe('addManagers', () => {
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('emits a multi-row insert with ON CONFLICT DO NOTHING', async () => {
+  test('binds userIds as a single text[] param via unnest', async () => {
     exec.enqueue({ rows: [] });
     await workUnitsRepo.addManagers('wu-1', ['u-1', 'u-2'], testDb);
     const sql = exec.calls[0].sql.toLowerCase();
-    expect(sql).toContain('insert into "work_unit_managers"');
+    expect(sql).toContain('insert into work_unit_managers');
+    expect(sql).toContain('unnest(');
     expect(sql).toContain('on conflict do nothing');
-    // Each (workUnitId, userId) pair contributes 2 params; 2 users → 4 params.
-    expect(exec.calls[0].params).toEqual(['wu-1', 'u-1', 'wu-1', 'u-2']);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].params).toContainEqual(['u-1', 'u-2']);
   });
 });
 
@@ -94,15 +95,15 @@ describe('addUsersToUnit', () => {
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('emits a multi-row insert with ON CONFLICT DO NOTHING', async () => {
+  test('binds userIds as a single text[] param via unnest', async () => {
     exec.enqueue({ rows: [] });
     await workUnitsRepo.addUsersToUnit('wu-1', ['u-1', 'u-2'], testDb);
     const sql = exec.calls[0].sql.toLowerCase();
-    expect(sql).toContain('insert into "user_work_units"');
+    expect(sql).toContain('insert into user_work_units');
+    expect(sql).toContain('unnest(');
     expect(sql).toContain('on conflict do nothing');
-    // user_work_units schema declares (userId, workUnitId) so the bulk INSERT emits each
-    // pair in user-then-unit order.
-    expect(exec.calls[0].params).toEqual(['u-1', 'wu-1', 'u-2', 'wu-1']);
+    expect(exec.calls[0].params).toContain('wu-1');
+    expect(exec.calls[0].params).toContainEqual(['u-1', 'u-2']);
   });
 });
 
