@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as clientsRepo from '../../repositories/clientsRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
 const baseRow = {
@@ -37,6 +39,41 @@ const baseRow = {
   total_accepted_orders: '1500.5',
   created_at: '2026-01-15T00:00:00Z',
 };
+
+// Schema column declaration order for builder INSERT/RETURNING (.returning() with no
+// projection returns all schema columns in declaration order):
+//
+// id, name, is_disabled, created_at, type, contact_name, client_code, email, phone,
+// address, description, ateco_code, website, sector, number_of_employees, revenue,
+// fiscal_code, office_count_range, contacts, address_country, address_state, address_cap,
+// address_province, address_civic_number, address_line
+const POSITIONAL_CLIENT_ROW: readonly unknown[] = [
+  'c-1',
+  'Acme',
+  false,
+  new Date('2026-01-15T00:00:00Z'),
+  'company',
+  null, // contact_name
+  'AC-1',
+  null, // email
+  null, // phone
+  null, // address
+  'desc',
+  '12.34',
+  'https://acme.test',
+  'tech',
+  '10-50',
+  '1M-5M',
+  'IT12345',
+  '1',
+  [{ fullName: 'Alice', email: 'a@x.com', phone: '555', role: 'CEO' }],
+  'IT',
+  null, // address_state
+  '00100',
+  'RM',
+  '10',
+  'Via Roma',
+];
 
 describe('mapClientRow', () => {
   test('parses contacts JSONB and falls back to primary contact for primary fields', () => {
@@ -94,7 +131,7 @@ describe('mapClientRow', () => {
 describe('list', () => {
   test('runs the privileged query with no params when canViewAllClients=true', async () => {
     exec.enqueue({ rows: [baseRow] });
-    const result = await clientsRepo.list({ canViewAllClients: true }, exec);
+    const result = await clientsRepo.list({ canViewAllClients: true }, testDb);
     expect(exec.calls[0].sql).toContain('LEFT JOIN');
     expect(exec.calls[0].sql).toContain('total_sent_quotes');
     expect(exec.calls[0].params).toEqual([]);
@@ -103,60 +140,63 @@ describe('list', () => {
 
   test('runs the restricted query with userId param when canViewAllClients=false', async () => {
     exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
-    const result = await clientsRepo.list({ canViewAllClients: false, userId: 'u-1' }, exec);
+    const result = await clientsRepo.list({ canViewAllClients: false, userId: 'u-1' }, testDb);
     expect(exec.calls[0].sql).toContain('INNER JOIN user_clients');
-    expect(exec.calls[0].sql).toContain('WHERE uc.user_id = $1');
-    expect(exec.calls[0].params).toEqual(['u-1']);
+    expect(exec.calls[0].sql).toContain('uc.user_id =');
+    expect(exec.calls[0].params).toContain('u-1');
     expect(result[0].totalSentQuotes).toBeUndefined();
   });
 });
 
 describe('findContactsForUpdate', () => {
   test('returns parsed contacts when client exists', async () => {
-    exec.enqueue({ rows: [{ contacts: [{ fullName: 'A' }] }] });
-    const result = await clientsRepo.findContactsForUpdate('c-1', exec);
+    exec.enqueue({ rows: [[[{ fullName: 'A' }]]] });
+    const result = await clientsRepo.findContactsForUpdate('c-1', testDb);
     expect(result).toEqual({ contacts: [{ fullName: 'A' }] });
   });
 
   test('returns null when client not found', async () => {
     exec.enqueue({ rows: [] });
-    const result = await clientsRepo.findContactsForUpdate('c-x', exec);
+    const result = await clientsRepo.findContactsForUpdate('c-x', testDb);
     expect(result).toBeNull();
   });
 });
 
 describe('findByFiscalCode', () => {
   test('queries with LOWER for case-insensitive match without exclude', async () => {
-    exec.enqueue({ rows: [{ id: 'c-1' }] });
-    const result = await clientsRepo.findByFiscalCode('IT123', null, exec);
-    expect(exec.calls[0].sql).toContain('LOWER(fiscal_code) = LOWER($1)');
-    expect(exec.calls[0].sql).not.toContain('id <>');
-    expect(exec.calls[0].params).toEqual(['IT123']);
+    exec.enqueue({ rows: [['c-1']] });
+    const result = await clientsRepo.findByFiscalCode('IT123', null, testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower(');
+    expect(exec.calls[0].sql).not.toMatch(/"id"\s*<>/);
+    expect(exec.calls[0].params).toContain('IT123');
     expect(result).toBe(true);
   });
 
-  test('adds id <> $2 clause when excludeId provided', async () => {
+  test('adds id <> clause when excludeId provided', async () => {
     exec.enqueue({ rows: [] });
-    await clientsRepo.findByFiscalCode('IT123', 'c-1', exec);
-    expect(exec.calls[0].sql).toContain('id <> $2');
-    expect(exec.calls[0].params).toEqual(['IT123', 'c-1']);
+    await clientsRepo.findByFiscalCode('IT123', 'c-1', testDb);
+    expect(exec.calls[0].sql).toMatch(/"id"\s*<>/);
+    expect(exec.calls[0].params).toContain('IT123');
+    expect(exec.calls[0].params).toContain('c-1');
   });
 });
 
 describe('findByClientCode', () => {
   test('respects excludeId parameter', async () => {
     exec.enqueue({ rows: [] });
-    await clientsRepo.findByClientCode('AC-1', 'c-1', exec);
-    expect(exec.calls[0].sql).toContain('client_code = $1');
-    expect(exec.calls[0].sql).toContain('id <> $2');
-    expect(exec.calls[0].params).toEqual(['AC-1', 'c-1']);
+    await clientsRepo.findByClientCode('AC-1', 'c-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"client_code"');
+    expect(sql).toMatch(/"id"\s*<>/);
+    expect(exec.calls[0].params).toContain('AC-1');
+    expect(exec.calls[0].params).toContain('c-1');
   });
 });
 
 describe('create', () => {
-  test('inserts 24 fields with stringified contacts JSON', async () => {
-    exec.enqueue({ rows: [baseRow] });
-    await clientsRepo.create(
+  test('inserts client and returns the mapped row', async () => {
+    exec.enqueue({ rows: [makeRow(POSITIONAL_CLIENT_ROW)] });
+    const result = await clientsRepo.create(
       {
         id: 'c-1',
         name: 'Acme',
@@ -182,18 +222,20 @@ describe('create', () => {
         fiscalCode: 'IT12345',
         officeCountRange: null,
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('INSERT INTO clients');
-    expect(exec.calls[0].params).toHaveLength(24);
-    expect(exec.calls[0].params[0]).toBe('c-1');
-    expect(exec.calls[0].params[2]).toBe(false); // is_disabled
-    expect(exec.calls[0].params[4]).toBe('[{"fullName":"Alice"}]'); // contacts JSON
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "clients"');
+    expect(exec.calls[0].params).toContain('c-1');
+    expect(exec.calls[0].params).toContain(false);
+    expect(exec.calls[0].params).toContain('IT12345');
+    // Drizzle's jsonb encoder serializes JS arrays to JSON strings before passing to pg.
+    expect(exec.calls[0].params).toContain('[{"fullName":"Alice"}]');
+    expect(result.id).toBe('c-1');
   });
 });
 
 describe('update', () => {
-  test('passes 31 params including 7 boolean CASE WHEN flags', async () => {
+  test('passes provided fields with CASE WHEN flags', async () => {
     exec.enqueue({ rows: [baseRow] });
     await clientsRepo.update(
       'c-1',
@@ -229,16 +271,16 @@ describe('update', () => {
         officeCountRange: null,
         officeCountRangeProvided: false,
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('CASE WHEN $25');
-    expect(exec.calls[0].sql).toContain('CASE WHEN $28');
+    expect(exec.calls[0].sql).toContain('CASE WHEN');
+    expect(exec.calls[0].sql).toContain('COALESCE');
     expect(exec.calls[0].params).toHaveLength(31);
-    expect(exec.calls[0].params[0]).toBe('New'); // name
-    expect(exec.calls[0].params[23]).toBe('c-1'); // where id
-    expect(exec.calls[0].params[24]).toBe(true); // contactNameProvided
-    expect(exec.calls[0].params[25]).toBe(false); // emailProvided
-    expect(exec.calls[0].params[27]).toBe(true); // sectorProvided
+    expect(exec.calls[0].params).toContain('New'); // name
+    expect(exec.calls[0].params).toContain('c-1'); // where id
+    expect(exec.calls[0].params).toContain('X'); // contactName
+    expect(exec.calls[0].params).toContain(true); // contactNameProvided / sectorProvided
+    expect(exec.calls[0].params).toContain('tech');
   });
 
   test('JSON-stringifies contacts when present, passes null otherwise', async () => {
@@ -275,8 +317,8 @@ describe('update', () => {
       officeCountRange: null,
       officeCountRangeProvided: false,
     };
-    await clientsRepo.update('c-1', baseUpdate, exec);
-    expect(exec.calls[0].params[3]).toBe('[{"fullName":"A"}]');
+    await clientsRepo.update('c-1', baseUpdate, testDb);
+    expect(exec.calls[0].params).toContain('[{"fullName":"A"}]');
   });
 
   test('returns null when no row was updated', async () => {
@@ -315,7 +357,7 @@ describe('update', () => {
         officeCountRange: null,
         officeCountRangeProvided: false,
       },
-      exec,
+      testDb,
     );
     expect(result).toBeNull();
   });
@@ -323,8 +365,8 @@ describe('update', () => {
 
 describe('deleteById', () => {
   test('returns id, name, clientCode when row deleted', async () => {
-    exec.enqueue({ rows: [{ id: 'c-1', name: 'Acme', client_code: 'AC-1' }] });
-    expect(await clientsRepo.deleteById('c-1', exec)).toEqual({
+    exec.enqueue({ rows: [['c-1', 'Acme', 'AC-1']] });
+    expect(await clientsRepo.deleteById('c-1', testDb)).toEqual({
       id: 'c-1',
       name: 'Acme',
       clientCode: 'AC-1',
@@ -333,6 +375,6 @@ describe('deleteById', () => {
 
   test('returns null when no row deleted', async () => {
     exec.enqueue({ rows: [] });
-    expect(await clientsRepo.deleteById('c-x', exec)).toBeNull();
+    expect(await clientsRepo.deleteById('c-x', testDb)).toBeNull();
   });
 });

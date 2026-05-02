@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
@@ -540,7 +540,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (hasFieldUpdates) {
-        const updatedRow = await withTransaction(async (tx) => {
+        const updatedRow = await withDbTransaction(async (tx) => {
           const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
           if (row && roleValue !== null) {
             await usersRepo.clearUserRoles(idResult.value, tx);
@@ -697,7 +697,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const missing = roleIdsResult.value.filter((rid) => !found.has(rid));
       if (missing.length > 0) return badRequest(reply, `Invalid role(s): ${missing.join(', ')}`);
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         await usersRepo.replaceUserRoles(idResult.value, roleIdsResult.value, tx);
         await usersRepo.setPrimaryRole(idResult.value, primaryRoleIdResult.value, tx);
       });
@@ -817,7 +817,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const resolvedProjectIds = (projectIdsResult as { ok: true; value: string[] | null }).value;
       const resolvedTaskIds = (taskIdsResult as { ok: true; value: string[] | null }).value;
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         if (clientIds) {
           await usersRepo.replaceUserClients(
             idResult.value,

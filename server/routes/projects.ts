@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import {
@@ -209,7 +209,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let deletedProject: { projectName: string; clientId: string };
 
       try {
-        deletedProject = await withTransaction(async (tx) => {
+        deletedProject = await withDbTransaction(async (tx) => {
           const locked = await projectsRepo.lockNameAndClientById(idResult.value, tx);
           if (!locked) throw new NotFoundError('Project');
 
@@ -288,7 +288,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
 
       try {
-        updatedProject = await withTransaction(async (tx) => {
+        updatedProject = await withDbTransaction(async (tx) => {
           const previousClientId = await projectsRepo.lockClientIdById(idResult.value, tx);
           if (previousClientId === null) {
             throw new NotFoundError('Project');
@@ -417,7 +417,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let projectName: string;
 
       try {
-        projectName = await withTransaction(async (tx) => {
+        projectName = await withDbTransaction(async (tx) => {
           const locked = await projectsRepo.lockNameAndClientById(idResult.value, tx);
           if (!locked) throw new NotFoundError('Project');
 

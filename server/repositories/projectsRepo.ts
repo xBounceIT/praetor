@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { eq, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { projects } from '../db/schema/projects.ts';
 import { isForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import {
@@ -18,84 +20,86 @@ export type Project = {
   orderId: string | null;
 };
 
-type ProjectRaw = {
-  id: string;
-  name: string;
-  client_id: string;
-  color: string;
-  description: string | null;
-  is_disabled: boolean;
-  created_at: string | Date;
-  order_id: string | null;
-};
-
-const PROJECT_COLUMNS = `id, name, client_id, color, description, is_disabled, created_at, order_id`;
-
-const mapRow = (row: ProjectRaw): Project => ({
+const mapRow = (row: typeof projects.$inferSelect): Project => ({
   id: row.id,
   name: row.name,
-  clientId: row.client_id,
+  clientId: row.clientId,
   color: row.color,
   description: row.description,
-  isDisabled: row.is_disabled,
-  createdAt: new Date(row.created_at).getTime(),
-  orderId: row.order_id,
+  isDisabled: row.isDisabled ?? false,
+  // `created_at` has DEFAULT CURRENT_TIMESTAMP but is technically nullable in the schema;
+  // `?? 0` is a TS-strict appeasement for the unreachable branch.
+  createdAt: row.createdAt?.getTime() ?? 0,
+  orderId: row.orderId,
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<Project[]> => {
-  const { rows } = await exec.query<ProjectRaw>(
-    `SELECT ${PROJECT_COLUMNS} FROM projects ORDER BY name`,
-  );
+export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
+  const rows = await exec.select().from(projects).orderBy(projects.name);
   return rows.map(mapRow);
 };
 
-export const listForUser = async (
-  userId: string,
-  exec: QueryExecutor = pool,
-): Promise<Project[]> => {
-  const { rows } = await exec.query<ProjectRaw>(
-    `SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id
+export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Project[]> => {
+  // user_projects is un-modeled (Tier 5+); raw SQL with named-key rows.
+  type Row = {
+    id: string;
+    name: string;
+    client_id: string;
+    color: string;
+    description: string | null;
+    is_disabled: boolean | null;
+    created_at: string | Date | null;
+    order_id: string | null;
+  };
+  const rows = await executeRows<Row>(
+    exec,
+    sql`SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id
        FROM projects p
        INNER JOIN user_projects up ON p.id = up.project_id
-      WHERE up.user_id = $1
+      WHERE up.user_id = ${userId}
       ORDER BY p.name`,
-    [userId],
   );
-  return rows.map(mapRow);
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    clientId: row.client_id,
+    color: row.color,
+    description: row.description,
+    isDisabled: row.is_disabled ?? false,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
+    orderId: row.order_id,
+  }));
 };
 
-export const findClientId = async (
-  id: string,
-  exec: QueryExecutor = pool,
-): Promise<string | null> => {
-  const { rows } = await exec.query<{ client_id: string }>(
-    `SELECT client_id FROM projects WHERE id = $1`,
-    [id],
-  );
-  return rows[0]?.client_id ?? null;
+export const findClientId = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
+  const rows = await exec
+    .select({ clientId: projects.clientId })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0]?.clientId ?? null;
 };
 
 export const lockClientIdById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ client_id: string }>(
-    `SELECT client_id FROM projects WHERE id = $1 FOR UPDATE`,
-    [id],
-  );
-  return rows[0]?.client_id ?? null;
+  const rows = await exec
+    .select({ clientId: projects.clientId })
+    .from(projects)
+    .where(eq(projects.id, id))
+    .for('update');
+  return rows[0]?.clientId ?? null;
 };
 
 export const lockNameAndClientById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string; clientId: string } | null> => {
-  const { rows } = await exec.query<{ name: string; client_id: string }>(
-    `SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE`,
-    [id],
-  );
-  if (!rows[0]) return null;
-  return { name: rows[0].name, clientId: rows[0].client_id };
+  const rows = await exec
+    .select({ name: projects.name, clientId: projects.clientId })
+    .from(projects)
+    .where(eq(projects.id, id))
+    .for('update');
+  return rows[0] ?? null;
 };
 
 export type NewProject = {
@@ -110,22 +114,20 @@ export type NewProject = {
 
 const PROJECT_ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
 
-export const create = async (project: NewProject, exec: QueryExecutor = pool): Promise<Project> => {
+export const create = async (project: NewProject, exec: DbExecutor = db): Promise<Project> => {
   try {
-    const { rows } = await exec.query<ProjectRaw>(
-      `INSERT INTO projects (id, name, client_id, color, description, is_disabled, order_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING ${PROJECT_COLUMNS}`,
-      [
-        project.id,
-        project.name,
-        project.clientId,
-        project.color,
-        project.description,
-        project.isDisabled,
-        project.orderId ?? null,
-      ],
-    );
+    const rows = await exec
+      .insert(projects)
+      .values({
+        id: project.id,
+        name: project.name,
+        clientId: project.clientId,
+        color: project.color,
+        description: project.description,
+        isDisabled: project.isDisabled,
+        orderId: project.orderId ?? null,
+      })
+      .returning();
     return mapRow(rows[0]);
   } catch (err) {
     if (isForeignKeyViolation(err)) {
@@ -147,39 +149,22 @@ export type ProjectUpdate = {
 export const update = async (
   id: string,
   patch: ProjectUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Project | null> => {
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  let idx = 1;
-  const fields: Array<[string, unknown]> = [
-    ['name', patch.name],
-    ['client_id', patch.clientId],
-    ['color', patch.color],
-    ['description', patch.description],
-    ['is_disabled', patch.isDisabled],
-  ];
-  for (const [col, value] of fields) {
-    if (value !== undefined) {
-      sets.push(`${col} = $${idx++}`);
-      params.push(value);
-    }
-  }
+  const set: Record<string, unknown> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.clientId !== undefined) set.clientId = patch.clientId;
+  if (patch.color !== undefined) set.color = patch.color;
+  if (patch.description !== undefined) set.description = patch.description;
+  if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
 
-  if (sets.length === 0) {
-    const { rows } = await exec.query<ProjectRaw>(
-      `SELECT ${PROJECT_COLUMNS} FROM projects WHERE id = $1`,
-      [id],
-    );
+  if (Object.keys(set).length === 0) {
+    const rows = await exec.select().from(projects).where(eq(projects.id, id));
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
-  params.push(id);
   try {
-    const { rows } = await exec.query<ProjectRaw>(
-      `UPDATE projects SET ${sets.join(', ')} WHERE id = $${idx} RETURNING ${PROJECT_COLUMNS}`,
-      params,
-    );
+    const rows = await exec.update(projects).set(set).where(eq(projects.id, id)).returning();
     return rows[0] ? mapRow(rows[0]) : null;
   } catch (err) {
     if (isForeignKeyViolation(err)) throw new ForeignKeyError('Client');
@@ -187,85 +172,88 @@ export const update = async (
   }
 };
 
-export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<void> => {
-  await exec.query(`DELETE FROM projects WHERE id = $1`, [id]);
+export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
+  await exec.delete(projects).where(eq(projects.id, id));
 };
 
 export const findAssignedUserIds = async (
   projectId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string[]> => {
-  const { rows } = await exec.query<{ user_id: string }>(
-    `SELECT user_id FROM user_projects WHERE project_id = $1`,
-    [projectId],
+  const rows = await executeRows<{ user_id: string }>(
+    exec,
+    sql`SELECT user_id FROM user_projects WHERE project_id = ${projectId}`,
   );
   return rows.map((r) => r.user_id);
 };
 
 export const findNonTopManagerUserIds = async (
   projectId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string[]> => {
-  const { rows } = await exec.query<{ user_id: string }>(
-    `SELECT user_id FROM user_projects
-      WHERE project_id = $1 AND assignment_source != $2`,
-    [projectId, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE],
+  const rows = await executeRows<{ user_id: string }>(
+    exec,
+    sql`SELECT user_id FROM user_projects
+        WHERE project_id = ${projectId} AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}`,
   );
   return rows.map((r) => r.user_id);
 };
 
 export const clearNonTopManagerAssignments = async (
   projectId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`DELETE FROM user_projects WHERE project_id = $1 AND assignment_source != $2`, [
-    projectId,
-    TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
-  ]);
+  await executeRows(
+    exec,
+    sql`DELETE FROM user_projects
+        WHERE project_id = ${projectId} AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}`,
+  );
 };
 
 export const addManualAssignments = async (
   projectId: string,
   userIds: string[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec.query(
-    `INSERT INTO user_projects (user_id, project_id, assignment_source)
-     SELECT unnest($1::text[]), $2, $3 ON CONFLICT DO NOTHING`,
-    [userIds, projectId, MANUAL_ASSIGNMENT_SOURCE],
+  await executeRows(
+    exec,
+    sql`INSERT INTO user_projects (user_id, project_id, assignment_source)
+        SELECT unnest(${sql.param(userIds)}::text[]), ${projectId}, ${MANUAL_ASSIGNMENT_SOURCE}
+        ON CONFLICT DO NOTHING`,
   );
 };
 
 export const ensureClientCascadeAssignments = async (
   userIds: string[],
   clientId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec.query(
-    `INSERT INTO user_clients (user_id, client_id, assignment_source)
-     SELECT unnest($1::text[]), $2, $3 ON CONFLICT DO NOTHING`,
-    [userIds, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
+  await executeRows(
+    exec,
+    sql`INSERT INTO user_clients (user_id, client_id, assignment_source)
+        SELECT unnest(${sql.param(userIds)}::text[]), ${clientId}, ${PROJECT_CASCADE_ASSIGNMENT_SOURCE}
+        ON CONFLICT DO NOTHING`,
   );
 };
 
 export const removeClientCascadeForUsersIfUnused = async (
   userIds: string[],
   clientId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec.query(
-    `DELETE FROM user_clients uc
-      WHERE uc.user_id = ANY($1::text[])
-        AND uc.client_id = $2
-        AND uc.assignment_source = $3
-        AND NOT EXISTS (
-          SELECT 1 FROM user_projects up
-          INNER JOIN projects p ON up.project_id = p.id
-          WHERE up.user_id = uc.user_id AND p.client_id = $2
-        )`,
-    [userIds, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
+  await executeRows(
+    exec,
+    sql`DELETE FROM user_clients uc
+        WHERE uc.user_id = ANY(${sql.param(userIds)}::text[])
+          AND uc.client_id = ${clientId}
+          AND uc.assignment_source = ${PROJECT_CASCADE_ASSIGNMENT_SOURCE}
+          AND NOT EXISTS (
+            SELECT 1 FROM user_projects up
+            INNER JOIN projects p ON up.project_id = p.id
+            WHERE up.user_id = uc.user_id AND p.client_id = ${clientId}
+          )`,
   );
 };

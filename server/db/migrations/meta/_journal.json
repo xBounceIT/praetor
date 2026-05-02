@@ -43,6 +43,55 @@
       "when": 1777742281742,
       "tag": "0005_claim_customer_offer_items",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777757132864,
+      "tag": "0006_claim_suppliers",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777757574709,
+      "tag": "0007_claim_work_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777757970001,
+      "tag": "0008_claim_client_profile_options",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777758202809,
+      "tag": "0009_claim_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777758560634,
+      "tag": "0010_claim_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777758955008,
+      "tag": "0011_claim_clients",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777761992642,
+      "tag": "0012_schema_parity_catchup",
+      "breakpoints": true
     }
   ]
 }
