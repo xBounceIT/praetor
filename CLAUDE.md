@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Praetor is an AI-enhanced ERP application for time tracking, project management, CRM, and financial operations. React 19 + Vite frontend with Fastify + PostgreSQL backend.
+Praetor is an AI-enhanced ERP application for time tracking, project management, CRM, and financial operations. React 19 + Vite frontend with Fastify + PostgreSQL (Drizzle ORM) backend.
 
 ## Development Commands
 
@@ -39,8 +39,7 @@ bun run start        # Run compiled server
 - Server returns new token in `x-auth-token` header on each request
 
 ### Database
-- Direct PostgreSQL via `pg` driver (no ORM)
-- Raw SQL queries with parameterized inputs
+- PostgreSQL accessed via Drizzle ORM (`server/db/schema/`); migration is incremental, so some repositories still use the raw `pg` driver with parameterized SQL
 - Snake_case in DB → camelCase in API responses
 
 ### Database migrations

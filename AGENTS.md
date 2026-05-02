@@ -8,7 +8,7 @@
 - Client-side helpers: `services/` (API + Gemini integration), `utils/`, shared types in `types.ts` and `constants.tsx`.
 - Static assets: `public/`, translations in `locales/`.
 - Backend API (Fastify + TS) is in `server/`.
-- API entry/build: `server/index.ts`, app wiring in `server/app.ts`, routes in `server/routes/`, DB schema/seed in `server/db/`.
+- API entry/build: `server/index.ts`, app wiring in `server/app.ts`, routes in `server/routes/`, Drizzle schema in `server/db/schema/` and migrations in `server/db/migrations/`.
 - Generated docs are committed under `docs/` (`docs/frontend/`, `docs/api/openapi.json`).
 
 ## Build, Test, and Development Commands
