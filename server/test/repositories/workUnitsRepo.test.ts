@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { DbExecutor } from '../../db/drizzle.ts';
+import { sql } from 'drizzle-orm';
+import { type DbExecutor, executeRows } from '../../db/drizzle.ts';
 import * as workUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
@@ -235,5 +236,37 @@ describe('isUserManagedBy', () => {
   test('returns false when no row', async () => {
     exec.enqueue({ rows: [] });
     expect(await workUnitsRepo.isUserManagedBy('mgr', 'target', testDb)).toBe(false);
+  });
+});
+
+describe('listManagedUserIds', () => {
+  test('selects DISTINCT user_id joined through work_unit_managers and maps to strings', async () => {
+    exec.enqueue({ rows: [{ user_id: 'u-1' }, { user_id: 'u-2' }] });
+    const result = await workUnitsRepo.listManagedUserIds('mgr', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('select distinct');
+    expect(sql).toContain('user_work_units');
+    expect(sql).toContain('work_unit_managers');
+    expect(exec.calls[0].params).toContain('mgr');
+    expect(result).toEqual(['u-1', 'u-2']);
+  });
+
+  test('filters falsy values from the result', async () => {
+    exec.enqueue({ rows: [{ user_id: 'u-1' }, { user_id: '' }] });
+    const result = await workUnitsRepo.listManagedUserIds('mgr', testDb);
+    expect(result).toEqual(['u-1']);
+  });
+});
+
+describe('managedUserIdsSubquerySql', () => {
+  test('returns a SQL fragment that binds managerId and joins the right tables when embedded', async () => {
+    exec.enqueue({ rows: [] });
+    const fragment = workUnitsRepo.managedUserIdsSubquerySql('mgr');
+    await executeRows(testDb, sql`SELECT id FROM users WHERE id IN (${fragment})`);
+    const emitted = exec.calls[0].sql.toLowerCase();
+    expect(emitted).toContain('user_work_units');
+    expect(emitted).toContain('work_unit_managers');
+    expect(emitted).toContain('wum.user_id =');
+    expect(exec.calls[0].params).toContain('mgr');
   });
 });
