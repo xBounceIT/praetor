@@ -6,7 +6,8 @@
 --    office_count_range to varchar(120) via ALTER COLUMN TYPE. The 0011 CREATE TABLE
 --    declared the legacy narrow widths; this catches up so a fresh-DB shape matches.
 -- 2) Clients functional unique indexes: schema.sql defines idx_clients_fiscal_code_unique
---    (LOWER, partial) and idx_clients_client_code_unique (partial). Without these,
+--    (LOWER, partial) and idx_clients_client_code_unique (partial), and drops the legacy
+--    idx_clients_vat_number_unique that predates the rename to fiscal_code. Without these,
 --    findByFiscalCode/findByClientCode have no DB-level race-safety on a fresh DB.
 -- 3) Suppliers/projects/users carry-forward ADD COLUMN IF NOT EXISTS for columns that
 --    schema.sql adds via ALTER. DBs bootstrapped from a schema.sql revision predating
@@ -16,6 +17,7 @@ ALTER TABLE "clients" ALTER COLUMN "sector" SET DATA TYPE varchar(120);--> state
 ALTER TABLE "clients" ALTER COLUMN "number_of_employees" SET DATA TYPE varchar(120);--> statement-breakpoint
 ALTER TABLE "clients" ALTER COLUMN "revenue" SET DATA TYPE varchar(120);--> statement-breakpoint
 ALTER TABLE "clients" ALTER COLUMN "office_count_range" SET DATA TYPE varchar(120);--> statement-breakpoint
+DROP INDEX IF EXISTS "idx_clients_vat_number_unique";--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_clients_fiscal_code_unique" ON "clients" USING btree (LOWER("fiscal_code")) WHERE "clients"."fiscal_code" IS NOT NULL AND "clients"."fiscal_code" <> '';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_clients_client_code_unique" ON "clients" USING btree ("client_code") WHERE "clients"."client_code" IS NOT NULL AND "clients"."client_code" <> '';--> statement-breakpoint
 ALTER TABLE "suppliers" ADD COLUMN IF NOT EXISTS "is_disabled" boolean DEFAULT false;--> statement-breakpoint
