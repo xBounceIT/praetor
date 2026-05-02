@@ -1,5 +1,9 @@
-import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
-import { parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { customerOffers } from '../db/schema/customerOffers.ts';
+import { saleItems, sales } from '../db/schema/sales.ts';
+import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
+import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOrder = {
@@ -38,79 +42,7 @@ export type ClientOrderItem = {
   discount: number;
 };
 
-type ClientOrderRow = {
-  id: string;
-  linkedQuoteId: string | null;
-  linkedOfferId: string | null;
-  clientId: string;
-  clientName: string;
-  paymentTerms: string | null;
-  discount: string | number;
-  discountType: string;
-  status: string;
-  notes: string | null;
-  createdAt: string | number;
-  updatedAt: string | number;
-};
-
-type ClientOrderItemRow = {
-  id: string;
-  orderId: string;
-  productId: string | null;
-  productName: string;
-  quantity: string | number;
-  unitPrice: string | number;
-  productCost: string | number;
-  productMolPercentage: string | number | null;
-  supplierQuoteId: string | null;
-  supplierQuoteItemId: string | null;
-  supplierQuoteSupplierName: string | null;
-  supplierQuoteUnitPrice: string | number | null;
-  supplierSaleId: string | null;
-  supplierSaleItemId: string | null;
-  supplierSaleSupplierName: string | null;
-  unitType: string | null;
-  note: string | null;
-  discount: string | number;
-};
-
-const ORDER_COLUMNS = `
-  id,
-  linked_quote_id as "linkedQuoteId",
-  linked_offer_id as "linkedOfferId",
-  client_id as "clientId",
-  client_name as "clientName",
-  payment_terms as "paymentTerms",
-  discount,
-  discount_type as "discountType",
-  status,
-  notes,
-  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-`;
-
-const ITEM_COLUMNS = `
-  id,
-  sale_id as "orderId",
-  product_id as "productId",
-  product_name as "productName",
-  quantity,
-  unit_price as "unitPrice",
-  product_cost as "productCost",
-  product_mol_percentage as "productMolPercentage",
-  supplier_quote_id as "supplierQuoteId",
-  supplier_quote_item_id as "supplierQuoteItemId",
-  supplier_quote_supplier_name as "supplierQuoteSupplierName",
-  supplier_quote_unit_price as "supplierQuoteUnitPrice",
-  supplier_sale_id as "supplierSaleId",
-  supplier_sale_item_id as "supplierSaleItemId",
-  supplier_sale_supplier_name as "supplierSaleSupplierName",
-  unit_type as "unitType",
-  note,
-  discount
-`;
-
-const mapOrder = (row: ClientOrderRow): ClientOrder => ({
+const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
   id: row.id,
   linkedQuoteId: row.linkedQuoteId,
   linkedOfferId: row.linkedOfferId,
@@ -121,13 +53,14 @@ const mapOrder = (row: ClientOrderRow): ClientOrder => ({
   discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: row.status,
   notes: row.notes,
-  createdAt: parseDbNumber(row.createdAt, 0),
-  updatedAt: parseDbNumber(row.updatedAt, 0),
+  createdAt: row.createdAt?.getTime() ?? 0,
+  updatedAt: row.updatedAt?.getTime() ?? 0,
 });
 
-const mapItem = (row: ClientOrderItemRow): ClientOrderItem => ({
+// `sale_items.sale_id` is exposed as `orderId` in the domain type — public API contract.
+const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
   id: row.id,
-  orderId: row.orderId,
+  orderId: row.saleId,
   productId: row.productId,
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
@@ -146,34 +79,30 @@ const mapItem = (row: ClientOrderItemRow): ClientOrderItem => ({
   discount: parseDbNumber(row.discount, 0),
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<ClientOrder[]> => {
-  const { rows } = await exec.query<ClientOrderRow>(
-    `SELECT ${ORDER_COLUMNS} FROM sales ORDER BY created_at DESC`,
-  );
+export const listAll = async (exec: DbExecutor = db): Promise<ClientOrder[]> => {
+  const rows = await exec.select().from(sales).orderBy(desc(sales.createdAt));
   return rows.map(mapOrder);
 };
 
-export const listAllItems = async (exec: QueryExecutor = pool): Promise<ClientOrderItem[]> => {
-  const { rows } = await exec.query<ClientOrderItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM sale_items ORDER BY created_at ASC`,
-  );
+export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOrderItem[]> => {
+  const rows = await exec.select().from(saleItems).orderBy(saleItems.createdAt);
   return rows.map(mapItem);
 };
 
-export const existsById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(`SELECT id FROM sales WHERE id = $1`, [id]);
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec.select({ id: sales.id }).from(sales).where(eq(sales.id, id));
   return rows.length > 0;
 };
 
 export const findIdConflict = async (
   newId: string,
   currentId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM sales WHERE id = $1 AND id <> $2`,
-    [newId, currentId],
-  );
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .where(and(eq(sales.id, newId), ne(sales.id, currentId)));
   return rows.length > 0;
 };
 
@@ -191,32 +120,22 @@ export type ExistingClientOrder = {
 
 export const findForUpdate = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ExistingClientOrder | null> => {
-  const { rows } = await exec.query<{
-    id: string;
-    linkedQuoteId: string | null;
-    linkedOfferId: string | null;
-    clientId: string;
-    clientName: string;
-    paymentTerms: string | null;
-    discount: string | number;
-    status: string;
-    notes: string | null;
-  }>(
-    `SELECT id,
-            linked_quote_id as "linkedQuoteId",
-            linked_offer_id as "linkedOfferId",
-            client_id as "clientId",
-            client_name as "clientName",
-            payment_terms as "paymentTerms",
-            discount,
-            status,
-            notes
-       FROM sales
-      WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({
+      id: sales.id,
+      linkedQuoteId: sales.linkedQuoteId,
+      linkedOfferId: sales.linkedOfferId,
+      clientId: sales.clientId,
+      clientName: sales.clientName,
+      paymentTerms: sales.paymentTerms,
+      discount: sales.discount,
+      status: sales.status,
+      notes: sales.notes,
+    })
+    .from(sales)
+    .where(eq(sales.id, id));
   if (!rows[0]) return null;
   return {
     id: rows[0].id,
@@ -233,12 +152,12 @@ export const findForUpdate = async (
 
 export const findStatusAndClientName = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ status: string; clientName: string } | null> => {
-  const { rows } = await exec.query<{ status: string; clientName: string }>(
-    `SELECT status, client_name as "clientName" FROM sales WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({ status: sales.status, clientName: sales.clientName })
+    .from(sales)
+    .where(eq(sales.id, id));
   return rows[0] ?? null;
 };
 
@@ -250,42 +169,48 @@ export type OfferLink = {
 
 export const findOfferDetails = async (
   offerId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<OfferLink | null> => {
-  const { rows } = await exec.query<OfferLink>(
-    `SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1`,
-    [offerId],
-  );
+  const rows = await exec
+    .select({
+      id: customerOffers.id,
+      linkedQuoteId: customerOffers.linkedQuoteId,
+      status: customerOffers.status,
+    })
+    .from(customerOffers)
+    .where(eq(customerOffers.id, offerId));
   return rows[0] ?? null;
 };
 
 export const findExistingForOffer = async (
   offerId: string,
   excludeOrderId: string | null = null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  if (excludeOrderId) {
-    const { rows } = await exec.query<{ id: string }>(
-      `SELECT id FROM sales WHERE linked_offer_id = $1 AND id <> $2 LIMIT 1`,
-      [offerId, excludeOrderId],
-    );
-    return rows[0]?.id ?? null;
-  }
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM sales WHERE linked_offer_id = $1 LIMIT 1`,
-    [offerId],
-  );
+  // Drizzle's `and(...)` filters out `undefined` so the conditional clause appears only when
+  // `excludeOrderId` is provided.
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .where(
+      and(
+        eq(sales.linkedOfferId, offerId),
+        excludeOrderId ? ne(sales.id, excludeOrderId) : undefined,
+      ),
+    )
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const findItemsForOrder = async (
   orderId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOrderItem[]> => {
-  const { rows } = await exec.query<ClientOrderItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM sale_items WHERE sale_id = $1 ORDER BY created_at ASC`,
-    [orderId],
-  );
+  const rows = await exec
+    .select()
+    .from(saleItems)
+    .where(eq(saleItems.saleId, orderId))
+    .orderBy(saleItems.createdAt);
   return rows.map(mapItem);
 };
 
@@ -304,25 +229,23 @@ export type NewClientOrder = {
 
 export const create = async (
   input: NewClientOrder,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOrder> => {
-  const { rows } = await exec.query<ClientOrderRow>(
-    `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, discount_type, status, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING ${ORDER_COLUMNS}`,
-    [
-      input.id,
-      input.linkedQuoteId,
-      input.linkedOfferId,
-      input.clientId,
-      input.clientName,
-      input.paymentTerms,
-      input.discount,
-      input.discountType,
-      input.status,
-      input.notes,
-    ],
-  );
+  const rows = await exec
+    .insert(sales)
+    .values({
+      id: input.id,
+      linkedQuoteId: input.linkedQuoteId,
+      linkedOfferId: input.linkedOfferId,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      discount: numericForDb(input.discount),
+      discountType: input.discountType,
+      status: input.status,
+      notes: input.notes,
+    })
+    .returning();
   return mapOrder(rows[0]);
 };
 
@@ -342,37 +265,25 @@ export type ClientOrderUpdate = {
 export const update = async (
   id: string,
   patch: ClientOrderUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOrder | null> => {
-  const { rows } = await exec.query<ClientOrderRow>(
-    `UPDATE sales
-        SET id = COALESCE($1, id),
-            linked_offer_id = COALESCE($2, linked_offer_id),
-            linked_quote_id = COALESCE($3, linked_quote_id),
-            client_id = COALESCE($4, client_id),
-            client_name = COALESCE($5, client_name),
-            payment_terms = COALESCE($6, payment_terms),
-            discount = COALESCE($7, discount),
-            discount_type = COALESCE($8, discount_type),
-            status = COALESCE($9, status),
-            notes = COALESCE($10, notes),
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
-      RETURNING ${ORDER_COLUMNS}`,
-    [
-      patch.id ?? null,
-      patch.linkedOfferId ?? null,
-      patch.linkedQuoteId ?? null,
-      patch.clientId ?? null,
-      patch.clientName ?? null,
-      patch.paymentTerms ?? null,
-      patch.discount ?? null,
-      patch.discountType ?? null,
-      patch.status ?? null,
-      patch.notes ?? null,
-      id,
-    ],
-  );
+  const rows = await exec
+    .update(sales)
+    .set({
+      id: sql`COALESCE(${patch.id ?? null}, ${sales.id})`,
+      linkedOfferId: sql`COALESCE(${patch.linkedOfferId ?? null}, ${sales.linkedOfferId})`,
+      linkedQuoteId: sql`COALESCE(${patch.linkedQuoteId ?? null}, ${sales.linkedQuoteId})`,
+      clientId: sql`COALESCE(${patch.clientId ?? null}, ${sales.clientId})`,
+      clientName: sql`COALESCE(${patch.clientName ?? null}, ${sales.clientName})`,
+      paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${sales.paymentTerms})`,
+      discount: sql`COALESCE(${numericForDb(patch.discount) ?? null}::numeric, ${sales.discount})`,
+      discountType: sql`COALESCE(${patch.discountType ?? null}, ${sales.discountType})`,
+      status: sql`COALESCE(${patch.status ?? null}, ${sales.status})`,
+      notes: sql`COALESCE(${patch.notes ?? null}, ${sales.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(sales.id, id))
+    .returning();
   return rows[0] ? mapOrder(rows[0]) : null;
 };
 
@@ -396,64 +307,52 @@ export type NewClientOrderItem = {
   unitType: UnitType;
 };
 
-const buildItemInsertSql = (rowCount: number) =>
-  `INSERT INTO sale_items
-       (id, sale_id, product_id, product_name, quantity, unit_price, product_cost,
-        product_mol_percentage, discount, note,
-        supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-        supplier_quote_unit_price,
-        supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name,
-        unit_type)
-     VALUES ${buildBulkInsertPlaceholders(rowCount, 18)}
-     RETURNING ${ITEM_COLUMNS}`;
-
-const itemInsertParams = (orderId: string, items: NewClientOrderItem[]) =>
-  items.flatMap((item) => [
-    item.id,
-    orderId,
-    item.productId,
-    item.productName,
-    item.quantity,
-    item.unitPrice,
-    item.productCost,
-    item.productMolPercentage,
-    item.discount,
-    item.note,
-    item.supplierQuoteId,
-    item.supplierQuoteItemId,
-    item.supplierQuoteSupplierName,
-    item.supplierQuoteUnitPrice,
-    item.supplierSaleId,
-    item.supplierSaleItemId,
-    item.supplierSaleSupplierName,
-    item.unitType,
-  ]);
-
 export const insertItems = async (
   orderId: string,
   items: NewClientOrderItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOrderItem[]> => {
   if (items.length === 0) return [];
-  const { rows } = await exec.query<ClientOrderItemRow>(
-    buildItemInsertSql(items.length),
-    itemInsertParams(orderId, items),
-  );
+  const rows = await exec
+    .insert(saleItems)
+    .values(
+      items.map((item) => ({
+        id: item.id,
+        saleId: orderId,
+        productId: item.productId ?? '',
+        productName: item.productName,
+        quantity: numericForDb(item.quantity),
+        unitPrice: numericForDb(item.unitPrice),
+        productCost: numericForDb(item.productCost),
+        productMolPercentage: numericForDb(item.productMolPercentage),
+        discount: numericForDb(item.discount),
+        note: item.note,
+        supplierQuoteId: item.supplierQuoteId,
+        supplierQuoteItemId: item.supplierQuoteItemId,
+        supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
+        supplierSaleId: item.supplierSaleId,
+        supplierSaleItemId: item.supplierSaleItemId,
+        supplierSaleSupplierName: item.supplierSaleSupplierName,
+        unitType: item.unitType,
+      })),
+    )
+    .returning();
   return rows.map(mapItem);
 };
 
 export const replaceItems = async (
   orderId: string,
   items: NewClientOrderItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOrderItem[]> => {
-  await exec.query(`DELETE FROM sale_items WHERE sale_id = $1`, [orderId]);
+  await exec.delete(saleItems).where(eq(saleItems.saleId, orderId));
   return insertItems(orderId, items, exec);
 };
 
-export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rowCount } = await exec.query(`DELETE FROM sales WHERE id = $1`, [id]);
-  return (rowCount ?? 0) > 0;
+export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const result = await exec.delete(sales).where(eq(sales.id, id));
+  return (result.rowCount ?? 0) > 0;
 };
 
 export type NewSupplierOrderForAutoCreate = {
@@ -467,21 +366,17 @@ export type NewSupplierOrderForAutoCreate = {
 
 export const createSupplierOrder = async (
   input: NewSupplierOrderForAutoCreate,
-  exec: QueryExecutor,
+  exec: DbExecutor,
 ): Promise<void> => {
-  await exec.query(
-    `INSERT INTO supplier_sales
-        (id, linked_quote_id, supplier_id, supplier_name, payment_terms, status, notes)
-     VALUES ($1, $2, $3, $4, $5, 'draft', $6)`,
-    [
-      input.id,
-      input.linkedQuoteId,
-      input.supplierId,
-      input.supplierName,
-      input.paymentTerms,
-      input.notes,
-    ],
-  );
+  await exec.insert(supplierSales).values({
+    id: input.id,
+    linkedQuoteId: input.linkedQuoteId,
+    supplierId: input.supplierId,
+    supplierName: input.supplierName,
+    paymentTerms: input.paymentTerms,
+    status: 'draft',
+    notes: input.notes,
+  });
 };
 
 export type NewSupplierOrderItemForAutoCreate = {
@@ -496,23 +391,19 @@ export type NewSupplierOrderItemForAutoCreate = {
 export const bulkInsertSupplierOrderItems = async (
   supplierOrderId: string,
   items: NewSupplierOrderItemForAutoCreate[],
-  exec: QueryExecutor,
+  exec: DbExecutor,
 ): Promise<void> => {
   if (items.length === 0) return;
-  const placeholders = buildBulkInsertPlaceholders(items.length, 7);
-  const params = items.flatMap((item) => [
-    item.id,
-    supplierOrderId,
-    item.productId,
-    item.productName,
-    item.quantity,
-    item.unitPrice,
-    item.note,
-  ]);
-  await exec.query(
-    `INSERT INTO supplier_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, note)
-     VALUES ${placeholders}`,
-    params,
+  await exec.insert(supplierSaleItems).values(
+    items.map((item) => ({
+      id: item.id,
+      saleId: supplierOrderId,
+      productId: item.productId,
+      productName: item.productName,
+      quantity: numericForDb(item.quantity),
+      unitPrice: numericForDb(item.unitPrice),
+      note: item.note,
+    })),
   );
 };
 
@@ -523,15 +414,17 @@ export const linkSaleItemsToSupplierOrder = async (
     supplierOrderId: string;
     supplierName: string;
   },
-  exec: QueryExecutor,
+  exec: DbExecutor,
 ): Promise<void> => {
-  await exec.query(
-    `UPDATE sale_items
-        SET supplier_sale_id = $1,
-            supplier_sale_supplier_name = $2
-      WHERE sale_id = $3 AND supplier_quote_id = $4`,
-    [args.supplierOrderId, args.supplierName, args.orderId, args.supplierQuoteId],
-  );
+  await exec
+    .update(saleItems)
+    .set({
+      supplierSaleId: args.supplierOrderId,
+      supplierSaleSupplierName: args.supplierName,
+    })
+    .where(
+      and(eq(saleItems.saleId, args.orderId), eq(saleItems.supplierQuoteId, args.supplierQuoteId)),
+    );
 };
 
 export const mapSaleItemsToSupplierItems = async (
@@ -540,20 +433,16 @@ export const mapSaleItemsToSupplierItems = async (
     supplierQuoteId: string;
     mappings: Array<{ quoteItemId: string; saleItemId: string }>;
   },
-  exec: QueryExecutor,
+  exec: DbExecutor,
 ): Promise<void> => {
   if (args.mappings.length === 0) return;
-  const valuesPlaceholders = buildBulkInsertPlaceholders(args.mappings.length, 2, 3);
-  const mappingParams = args.mappings.flatMap(({ quoteItemId, saleItemId }) => [
-    quoteItemId,
-    saleItemId,
-  ]);
-  await exec.query(
-    `UPDATE sale_items si
+  const valuesTuples = args.mappings.map((m) => sql`(${m.quoteItemId}, ${m.saleItemId})`);
+  await exec.execute(
+    sql`UPDATE sale_items si
         SET supplier_sale_item_id = v.sale_item_id
-      FROM (VALUES ${valuesPlaceholders}) v(quote_item_id, sale_item_id)
-      WHERE si.sale_id = $1 AND si.supplier_quote_id = $2
+      FROM (VALUES ${sql.join(valuesTuples, sql`, `)}) v(quote_item_id, sale_item_id)
+      WHERE si.sale_id = ${args.orderId}
+        AND si.supplier_quote_id = ${args.supplierQuoteId}
         AND si.supplier_quote_item_id = v.quote_item_id`,
-    [args.orderId, args.supplierQuoteId, ...mappingParams],
   );
 };

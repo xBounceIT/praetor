@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
@@ -425,7 +425,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let createdOrder: clientsOrdersRepo.ClientOrder;
       let insertedItems: clientsOrdersRepo.ClientOrderItem[];
       try {
-        const result = await withTransaction(async (tx) => {
+        const result = await withDbTransaction(async (tx) => {
           const order = await clientsOrdersRepo.create(
             {
               id: orderId,
@@ -488,7 +488,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!supplierQuote || supplierQuote.status !== 'accepted') continue;
           if (existingSupplierOrderId) continue;
 
-          await withTransaction(async (tx) => {
+          await withDbTransaction(async (tx) => {
             const supplierOrderId = await generateSupplierOrderId(tx);
             await clientsOrdersRepo.createSupplierOrder(
               {
@@ -810,7 +810,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: clientsOrdersRepo.ClientOrderItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const order = await clientsOrdersRepo.update(
             idResult.value,
             {

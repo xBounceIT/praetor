@@ -1,6 +1,8 @@
-import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
-import { parseDbNumber } from '../utils/parse.ts';
+import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type Invoice = {
   id: string;
@@ -31,61 +33,7 @@ export type InvoiceItem = {
 
 export type InvoiceWithItems = Invoice & { items: InvoiceItem[] };
 
-type InvoiceRow = {
-  id: string;
-  linkedSaleId: string | null;
-  clientId: string;
-  clientName: string;
-  issueDate: string | Date | null;
-  dueDate: string | Date | null;
-  status: string;
-  subtotal: string | number;
-  total: string | number;
-  amountPaid: string | number;
-  notes: string | null;
-  createdAt: string | number;
-  updatedAt: string | number;
-};
-
-type InvoiceItemRow = {
-  id: string;
-  invoiceId: string;
-  productId: string | null;
-  description: string;
-  unitOfMeasure: string | null;
-  quantity: string | number;
-  unitPrice: string | number;
-  discount: string | number;
-};
-
-const INVOICE_COLUMNS = `
-  id,
-  linked_sale_id as "linkedSaleId",
-  client_id as "clientId",
-  client_name as "clientName",
-  issue_date as "issueDate",
-  due_date as "dueDate",
-  status,
-  subtotal,
-  total,
-  amount_paid as "amountPaid",
-  notes,
-  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-`;
-
-const ITEM_COLUMNS = `
-  id,
-  invoice_id as "invoiceId",
-  product_id as "productId",
-  description,
-  unit_of_measure as "unitOfMeasure",
-  quantity,
-  unit_price as "unitPrice",
-  discount
-`;
-
-const mapInvoice = (row: InvoiceRow): Invoice => ({
+const mapInvoice = (row: typeof invoices.$inferSelect): Invoice => ({
   id: row.id,
   linkedSaleId: row.linkedSaleId,
   clientId: row.clientId,
@@ -97,11 +45,11 @@ const mapInvoice = (row: InvoiceRow): Invoice => ({
   total: parseDbNumber(row.total, 0),
   amountPaid: parseDbNumber(row.amountPaid, 0),
   notes: row.notes,
-  createdAt: parseDbNumber(row.createdAt, 0),
-  updatedAt: parseDbNumber(row.updatedAt, 0),
+  createdAt: row.createdAt?.getTime() ?? 0,
+  updatedAt: row.updatedAt?.getTime() ?? 0,
 });
 
-const mapItem = (row: InvoiceItemRow): InvoiceItem => ({
+const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
   id: row.id,
   invoiceId: row.invoiceId,
   productId: row.productId,
@@ -112,40 +60,38 @@ const mapItem = (row: InvoiceItemRow): InvoiceItem => ({
   discount: parseDbNumber(row.discount, 0),
 });
 
-export const generateNextId = async (year: string, exec: QueryExecutor = pool): Promise<string> => {
-  const { rows } = await exec.query<{ maxSequence: string | number | null }>(
-    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
-       FROM invoices
-       WHERE id ~ $1`,
-    [`^INV-${year}-[0-9]+$`],
+export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
+  // PostgreSQL regex `~` operator + server-side split_part avoids round-tripping every
+  // matching id back to the app just to extract the sequence number.
+  const rows = await executeRows<{ maxSequence: string | number | null }>(
+    exec,
+    sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) AS "maxSequence"
+          FROM invoices
+         WHERE id ~ ${`^INV-${year}-[0-9]+$`}`,
   );
   const nextSequence = Number(rows[0]?.maxSequence ?? 0) + 1;
   return `INV-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<Invoice[]> => {
-  const { rows } = await exec.query<InvoiceRow>(
-    `SELECT ${INVOICE_COLUMNS} FROM invoices ORDER BY created_at DESC`,
-  );
+export const listAll = async (exec: DbExecutor = db): Promise<Invoice[]> => {
+  const rows = await exec.select().from(invoices).orderBy(desc(invoices.createdAt));
   return rows.map(mapInvoice);
 };
 
-export const listAllItems = async (exec: QueryExecutor = pool): Promise<InvoiceItem[]> => {
-  const { rows } = await exec.query<InvoiceItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM invoice_items ORDER BY created_at ASC`,
-  );
+export const listAllItems = async (exec: DbExecutor = db): Promise<InvoiceItem[]> => {
+  const rows = await exec.select().from(invoiceItems).orderBy(invoiceItems.createdAt);
   return rows.map(mapItem);
 };
 
-export const listAllWithItems = async (exec: QueryExecutor = pool): Promise<InvoiceWithItems[]> => {
-  const [invoices, items] = await Promise.all([listAll(exec), listAllItems(exec)]);
+export const listAllWithItems = async (exec: DbExecutor = db): Promise<InvoiceWithItems[]> => {
+  const [invoiceList, items] = await Promise.all([listAll(exec), listAllItems(exec)]);
   const itemsByInvoice = new Map<string, InvoiceItem[]>();
   for (const item of items) {
     const list = itemsByInvoice.get(item.invoiceId);
     if (list) list.push(item);
     else itemsByInvoice.set(item.invoiceId, [item]);
   }
-  return invoices.map((invoice) => ({
+  return invoiceList.map((invoice) => ({
     ...invoice,
     items: itemsByInvoice.get(invoice.id) ?? [],
   }));
@@ -153,14 +99,12 @@ export const listAllWithItems = async (exec: QueryExecutor = pool): Promise<Invo
 
 export const findDates = async (
   invoiceId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ issueDate: string; dueDate: string } | null> => {
-  const { rows } = await exec.query<{
-    issueDate: string | Date | null;
-    dueDate: string | Date | null;
-  }>(`SELECT issue_date as "issueDate", due_date as "dueDate" FROM invoices WHERE id = $1`, [
-    invoiceId,
-  ]);
+  const rows = await exec
+    .select({ issueDate: invoices.issueDate, dueDate: invoices.dueDate })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
   if (!rows[0]) return null;
   return {
     issueDate: requireDateOnly(rows[0].issueDate, 'invoice.issueDate'),
@@ -171,23 +115,20 @@ export const findDates = async (
 export const findIdConflict = async (
   newId: string,
   currentId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM invoices WHERE id = $1 AND id <> $2`,
-    [newId, currentId],
-  );
+  const rows = await exec
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.id, newId), ne(invoices.id, currentId)));
   return rows.length > 0;
 };
 
 export const findItemsForInvoice = async (
   invoiceId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InvoiceItem[]> => {
-  const { rows } = await exec.query<InvoiceItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM invoice_items WHERE invoice_id = $1`,
-    [invoiceId],
-  );
+  const rows = await exec.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   return rows.map(mapItem);
 };
 
@@ -205,27 +146,23 @@ export type NewInvoice = {
   notes: string | null;
 };
 
-export const create = async (input: NewInvoice, exec: QueryExecutor = pool): Promise<Invoice> => {
-  const { rows } = await exec.query<InvoiceRow>(
-    `INSERT INTO invoices (
-       id, linked_sale_id, client_id, client_name, issue_date, due_date,
-       status, subtotal, total, amount_paid, notes
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING ${INVOICE_COLUMNS}`,
-    [
-      input.id,
-      input.linkedSaleId,
-      input.clientId,
-      input.clientName,
-      input.issueDate,
-      input.dueDate,
-      input.status,
-      input.subtotal,
-      input.total,
-      input.amountPaid,
-      input.notes,
-    ],
-  );
+export const create = async (input: NewInvoice, exec: DbExecutor = db): Promise<Invoice> => {
+  const rows = await exec
+    .insert(invoices)
+    .values({
+      id: input.id,
+      linkedSaleId: input.linkedSaleId,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      issueDate: input.issueDate,
+      dueDate: input.dueDate,
+      status: input.status,
+      subtotal: numericForDb(input.subtotal),
+      total: numericForDb(input.total),
+      amountPaid: numericForDb(input.amountPaid),
+      notes: input.notes,
+    })
+    .returning();
   return mapInvoice(rows[0]);
 };
 
@@ -245,37 +182,25 @@ export type InvoiceUpdate = {
 export const update = async (
   id: string,
   patch: InvoiceUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Invoice | null> => {
-  const { rows } = await exec.query<InvoiceRow>(
-    `UPDATE invoices SET
-        id = COALESCE($1, id),
-        client_id = COALESCE($2, client_id),
-        client_name = COALESCE($3, client_name),
-        issue_date = COALESCE($4, issue_date),
-        due_date = COALESCE($5, due_date),
-        status = COALESCE($6, status),
-        subtotal = COALESCE($7, subtotal),
-        total = COALESCE($8, total),
-        amount_paid = COALESCE($9, amount_paid),
-        notes = COALESCE($10, notes),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
-      RETURNING ${INVOICE_COLUMNS}`,
-    [
-      patch.id ?? null,
-      patch.clientId ?? null,
-      patch.clientName ?? null,
-      patch.issueDate ?? null,
-      patch.dueDate ?? null,
-      patch.status ?? null,
-      patch.subtotal ?? null,
-      patch.total ?? null,
-      patch.amountPaid ?? null,
-      patch.notes ?? null,
-      id,
-    ],
-  );
+  const rows = await exec
+    .update(invoices)
+    .set({
+      id: sql`COALESCE(${patch.id ?? null}, ${invoices.id})`,
+      clientId: sql`COALESCE(${patch.clientId ?? null}, ${invoices.clientId})`,
+      clientName: sql`COALESCE(${patch.clientName ?? null}, ${invoices.clientName})`,
+      issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${invoices.issueDate})`,
+      dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${invoices.dueDate})`,
+      status: sql`COALESCE(${patch.status ?? null}, ${invoices.status})`,
+      subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${invoices.subtotal})`,
+      total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${invoices.total})`,
+      amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${invoices.amountPaid})`,
+      notes: sql`COALESCE(${patch.notes ?? null}, ${invoices.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(invoices.id, id))
+    .returning();
   return rows[0] ? mapInvoice(rows[0]) : null;
 };
 
@@ -292,46 +217,43 @@ export type NewInvoiceItem = {
 export const insertItems = async (
   invoiceId: string,
   items: NewInvoiceItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InvoiceItem[]> => {
   if (items.length === 0) return [];
-  const placeholders = buildBulkInsertPlaceholders(items.length, 8);
-  const params = items.flatMap((item) => [
-    item.id,
-    invoiceId,
-    item.productId,
-    item.description,
-    item.unitOfMeasure,
-    item.quantity,
-    item.unitPrice,
-    item.discount,
-  ]);
-  const { rows } = await exec.query<InvoiceItemRow>(
-    `INSERT INTO invoice_items (
-       id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount
-     ) VALUES ${placeholders}
-     RETURNING ${ITEM_COLUMNS}`,
-    params,
-  );
+  const rows = await exec
+    .insert(invoiceItems)
+    .values(
+      items.map((item) => ({
+        id: item.id,
+        invoiceId,
+        productId: item.productId,
+        description: item.description,
+        unitOfMeasure: item.unitOfMeasure,
+        quantity: numericForDb(item.quantity),
+        unitPrice: numericForDb(item.unitPrice),
+        discount: numericForDb(item.discount),
+      })),
+    )
+    .returning();
   return rows.map(mapItem);
 };
 
 export const replaceItems = async (
   invoiceId: string,
   items: NewInvoiceItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InvoiceItem[]> => {
-  await exec.query(`DELETE FROM invoice_items WHERE invoice_id = $1`, [invoiceId]);
+  await exec.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   return insertItems(invoiceId, items, exec);
 };
 
 export const deleteById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ id: string; clientName: string } | null> => {
-  const { rows } = await exec.query<{ id: string; clientName: string }>(
-    `DELETE FROM invoices WHERE id = $1 RETURNING id, client_name as "clientName"`,
-    [id],
-  );
+  const rows = await exec
+    .delete(invoices)
+    .where(eq(invoices.id, id))
+    .returning({ id: invoices.id, clientName: invoices.clientName });
   return rows[0] ?? null;
 };

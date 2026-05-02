@@ -1,6 +1,10 @@
-import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { customerOffers } from '../db/schema/customerOffers.ts';
+import { quoteItems, quotes } from '../db/schema/quotes.ts';
+import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
-import { parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientQuote = {
@@ -36,93 +40,58 @@ export type ClientQuoteItem = {
   unitType: UnitType;
 };
 
-type ClientQuoteRow = {
+// Correlated subquery used by list/find projections. create/update use `null::varchar`
+// instead because no offer can exist yet for a freshly-written row.
+const linkedOfferIdSubquery = sql<
+  string | null
+>`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${quotes.id} LIMIT 1)`;
+
+const QUOTE_LIST_PROJECTION = {
+  id: quotes.id,
+  linkedOfferId: linkedOfferIdSubquery,
+  clientId: quotes.clientId,
+  clientName: quotes.clientName,
+  paymentTerms: quotes.paymentTerms,
+  discount: quotes.discount,
+  discountType: quotes.discountType,
+  status: quotes.status,
+  expirationDate: quotes.expirationDate,
+  notes: quotes.notes,
+  createdAt: quotes.createdAt,
+  updatedAt: quotes.updatedAt,
+} as const;
+
+const QUOTE_BASE_PROJECTION = {
+  id: quotes.id,
+  linkedOfferId: sql<string | null>`null::varchar`,
+  clientId: quotes.clientId,
+  clientName: quotes.clientName,
+  paymentTerms: quotes.paymentTerms,
+  discount: quotes.discount,
+  discountType: quotes.discountType,
+  status: quotes.status,
+  expirationDate: quotes.expirationDate,
+  notes: quotes.notes,
+  createdAt: quotes.createdAt,
+  updatedAt: quotes.updatedAt,
+} as const;
+
+type ClientQuoteSelectRow = {
   id: string;
   linkedOfferId: string | null;
   clientId: string;
   clientName: string;
-  paymentTerms: string | null;
+  paymentTerms: string;
   discount: string | number;
   discountType: string;
   status: string;
-  expirationDate: string | Date | null;
+  expirationDate: string | null;
   notes: string | null;
-  createdAt: string | number;
-  updatedAt: string | number;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 };
 
-type ClientQuoteItemRow = {
-  id: string;
-  quoteId: string;
-  productId: string | null;
-  productName: string;
-  quantity: string | number;
-  unitPrice: string | number;
-  productCost: string | number;
-  productMolPercentage: string | number | null;
-  supplierQuoteId: string | null;
-  supplierQuoteItemId: string | null;
-  supplierQuoteSupplierName: string | null;
-  supplierQuoteUnitPrice: string | number | null;
-  discount: string | number;
-  note: string | null;
-  unitType: string | null;
-};
-
-const QUOTE_LIST_COLUMNS = `
-  id,
-  (
-    SELECT co.id
-    FROM customer_offers co
-    WHERE co.linked_quote_id = quotes.id
-    LIMIT 1
-  ) as "linkedOfferId",
-  client_id as "clientId",
-  client_name as "clientName",
-  payment_terms as "paymentTerms",
-  discount,
-  discount_type as "discountType",
-  status,
-  expiration_date as "expirationDate",
-  notes,
-  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-`;
-
-const QUOTE_BASE_COLUMNS = `
-  id,
-  null::varchar as "linkedOfferId",
-  client_id as "clientId",
-  client_name as "clientName",
-  payment_terms as "paymentTerms",
-  discount,
-  discount_type as "discountType",
-  status,
-  expiration_date as "expirationDate",
-  notes,
-  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-`;
-
-const ITEM_COLUMNS = `
-  id,
-  quote_id as "quoteId",
-  product_id as "productId",
-  product_name as "productName",
-  quantity,
-  unit_price as "unitPrice",
-  product_cost as "productCost",
-  product_mol_percentage as "productMolPercentage",
-  supplier_quote_id as "supplierQuoteId",
-  supplier_quote_item_id as "supplierQuoteItemId",
-  supplier_quote_supplier_name as "supplierQuoteSupplierName",
-  supplier_quote_unit_price as "supplierQuoteUnitPrice",
-  discount,
-  note,
-  unit_type as "unitType"
-`;
-
-const mapQuote = (row: ClientQuoteRow): ClientQuote => ({
+const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   id: row.id,
   linkedOfferId: row.linkedOfferId,
   clientId: row.clientId,
@@ -133,11 +102,11 @@ const mapQuote = (row: ClientQuoteRow): ClientQuote => ({
   status: row.status,
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
   notes: row.notes,
-  createdAt: parseDbNumber(row.createdAt, 0),
-  updatedAt: parseDbNumber(row.updatedAt, 0),
+  createdAt: row.createdAt?.getTime() ?? 0,
+  updatedAt: row.updatedAt?.getTime() ?? 0,
 });
 
-const mapItem = (row: ClientQuoteItemRow): ClientQuoteItem => ({
+const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   id: row.id,
   quoteId: row.quoteId,
   productId: row.productId ?? '',
@@ -155,109 +124,111 @@ const mapItem = (row: ClientQuoteItemRow): ClientQuoteItem => ({
   unitType: normalizeUnitType(row.unitType),
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<ClientQuote[]> => {
-  const { rows } = await exec.query<ClientQuoteRow>(
-    `SELECT ${QUOTE_LIST_COLUMNS} FROM quotes ORDER BY created_at DESC`,
-  );
+export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
+  const rows = await exec
+    .select(QUOTE_LIST_PROJECTION)
+    .from(quotes)
+    .orderBy(desc(quotes.createdAt));
   return rows.map(mapQuote);
 };
 
-export const listAllItems = async (exec: QueryExecutor = pool): Promise<ClientQuoteItem[]> => {
-  const { rows } = await exec.query<ClientQuoteItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM quote_items ORDER BY created_at ASC`,
-  );
+export const listAllItems = async (exec: DbExecutor = db): Promise<ClientQuoteItem[]> => {
+  const rows = await exec.select().from(quoteItems).orderBy(quoteItems.createdAt);
   return rows.map(mapItem);
 };
 
-export const existsById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(`SELECT id FROM quotes WHERE id = $1`, [id]);
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec.select({ id: quotes.id }).from(quotes).where(eq(quotes.id, id));
   return rows.length > 0;
 };
 
 export const findIdConflict = async (
   newId: string,
   currentId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM quotes WHERE id = $1 AND id <> $2`,
-    [newId, currentId],
-  );
+  const rows = await exec
+    .select({ id: quotes.id })
+    .from(quotes)
+    .where(and(eq(quotes.id, newId), ne(quotes.id, currentId)));
   return rows.length > 0;
 };
 
 export const findCurrentForUpdate = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{
   status: string;
   discount: number;
   discountType: 'percentage' | 'currency';
 } | null> => {
-  const { rows } = await exec.query<{
-    status: string;
-    discount: string | number | null;
-    discount_type: string | null;
-  }>(`SELECT status, discount, discount_type FROM quotes WHERE id = $1`, [id]);
+  const rows = await exec
+    .select({
+      status: quotes.status,
+      discount: quotes.discount,
+      discountType: quotes.discountType,
+    })
+    .from(quotes)
+    .where(eq(quotes.id, id));
   if (rows.length === 0) return null;
   return {
     status: rows[0].status,
     discount: parseDbNumber(rows[0].discount, 0),
-    discountType: rows[0].discount_type === 'currency' ? 'currency' : 'percentage',
+    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
   };
 };
 
 export const findStatusAndClientName = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ status: string; clientName: string } | null> => {
-  const { rows } = await exec.query<{ status: string; clientName: string }>(
-    `SELECT status, client_name as "clientName" FROM quotes WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({ status: quotes.status, clientName: quotes.clientName })
+    .from(quotes)
+    .where(eq(quotes.id, id));
   return rows[0] ?? null;
 };
 
 export const findLinkedOfferId = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1`,
-    [quoteId],
-  );
+  const rows = await exec
+    .select({ id: customerOffers.id })
+    .from(customerOffers)
+    .where(eq(customerOffers.linkedQuoteId, quoteId))
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const findNonDraftLinkedSale = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM sales WHERE linked_quote_id = $1 AND status <> $2 LIMIT 1`,
-    [quoteId, 'draft'],
-  );
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .where(and(eq(sales.linkedQuoteId, quoteId), ne(sales.status, 'draft')))
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const deleteDraftSalesForQuote = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`DELETE FROM sales WHERE linked_quote_id = $1 AND status = $2`, [
-    quoteId,
-    'draft',
-  ]);
+  await exec.delete(sales).where(and(eq(sales.linkedQuoteId, quoteId), eq(sales.status, 'draft')));
 };
 
 export const findAnyLinkedSale = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM sales WHERE linked_quote_id = $1 LIMIT 1`,
-    [quoteId],
-  );
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .where(eq(sales.linkedQuoteId, quoteId))
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
@@ -275,33 +246,22 @@ export type ExistingQuoteItemSnapshot = {
 
 export const findItemSnapshotsForQuote = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ExistingQuoteItemSnapshot[]> => {
-  const { rows } = await exec.query<{
-    id: string;
-    productId: string | null;
-    productCost: string | number | null;
-    productMolPercentage: string | number | null;
-    supplierQuoteId: string | null;
-    supplierQuoteItemId: string | null;
-    supplierQuoteSupplierName: string | null;
-    supplierQuoteUnitPrice: string | number | null;
-    unitType: string | null;
-  }>(
-    `SELECT
-        id,
-        product_id as "productId",
-        product_cost as "productCost",
-        product_mol_percentage as "productMolPercentage",
-        supplier_quote_id as "supplierQuoteId",
-        supplier_quote_item_id as "supplierQuoteItemId",
-        supplier_quote_supplier_name as "supplierQuoteSupplierName",
-        supplier_quote_unit_price as "supplierQuoteUnitPrice",
-        unit_type as "unitType"
-       FROM quote_items
-      WHERE quote_id = $1`,
-    [quoteId],
-  );
+  const rows = await exec
+    .select({
+      id: quoteItems.id,
+      productId: quoteItems.productId,
+      productCost: quoteItems.productCost,
+      productMolPercentage: quoteItems.productMolPercentage,
+      supplierQuoteId: quoteItems.supplierQuoteId,
+      supplierQuoteItemId: quoteItems.supplierQuoteItemId,
+      supplierQuoteSupplierName: quoteItems.supplierQuoteSupplierName,
+      supplierQuoteUnitPrice: quoteItems.supplierQuoteUnitPrice,
+      unitType: quoteItems.unitType,
+    })
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, quoteId));
   return rows.map((row) => ({
     id: row.id,
     productId: row.productId,
@@ -317,15 +277,16 @@ export const findItemSnapshotsForQuote = async (
 
 export const findItemTotals = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Array<{ quantity: number; unitPrice: number; discount: number }>> => {
-  const { rows } = await exec.query<{
-    quantity: string | number;
-    unitPrice: string | number;
-    discount: string | number | null;
-  }>(`SELECT quantity, unit_price as "unitPrice", discount FROM quote_items WHERE quote_id = $1`, [
-    quoteId,
-  ]);
+  const rows = await exec
+    .select({
+      quantity: quoteItems.quantity,
+      unitPrice: quoteItems.unitPrice,
+      discount: quoteItems.discount,
+    })
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, quoteId));
   return rows.map((row) => ({
     quantity: parseDbNumber(row.quantity, 0),
     unitPrice: parseDbNumber(row.unitPrice, 0),
@@ -335,12 +296,9 @@ export const findItemTotals = async (
 
 export const findItemsForQuote = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
-  const { rows } = await exec.query<ClientQuoteItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM quote_items WHERE quote_id = $1`,
-    [quoteId],
-  );
+  const rows = await exec.select().from(quoteItems).where(eq(quoteItems.quoteId, quoteId));
   return rows.map(mapItem);
 };
 
@@ -358,24 +316,22 @@ export type NewClientQuote = {
 
 export const create = async (
   input: NewClientQuote,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientQuote> => {
-  const { rows } = await exec.query<ClientQuoteRow>(
-    `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING ${QUOTE_BASE_COLUMNS}`,
-    [
-      input.id,
-      input.clientId,
-      input.clientName,
-      input.paymentTerms,
-      input.discount,
-      input.discountType,
-      input.status,
-      input.expirationDate,
-      input.notes,
-    ],
-  );
+  const rows = await exec
+    .insert(quotes)
+    .values({
+      id: input.id,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      discount: numericForDb(input.discount),
+      discountType: input.discountType,
+      status: input.status,
+      expirationDate: input.expirationDate,
+      notes: input.notes,
+    })
+    .returning(QUOTE_BASE_PROJECTION);
   return mapQuote(rows[0]);
 };
 
@@ -394,35 +350,24 @@ export type ClientQuoteUpdate = {
 export const update = async (
   id: string,
   patch: ClientQuoteUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientQuote | null> => {
-  const { rows } = await exec.query<ClientQuoteRow>(
-    `UPDATE quotes
-        SET id = COALESCE($1, id),
-            client_id = COALESCE($2, client_id),
-            client_name = COALESCE($3, client_name),
-            payment_terms = COALESCE($4, payment_terms),
-            discount = COALESCE($5, discount),
-            discount_type = COALESCE($6, discount_type),
-            status = COALESCE($7, status),
-            expiration_date = COALESCE($8, expiration_date),
-            notes = COALESCE($9, notes),
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10
-      RETURNING ${QUOTE_BASE_COLUMNS}`,
-    [
-      patch.id ?? null,
-      patch.clientId ?? null,
-      patch.clientName ?? null,
-      patch.paymentTerms ?? null,
-      patch.discount ?? null,
-      patch.discountType ?? null,
-      patch.status ?? null,
-      patch.expirationDate ?? null,
-      patch.notes ?? null,
-      id,
-    ],
-  );
+  const rows = await exec
+    .update(quotes)
+    .set({
+      id: sql`COALESCE(${patch.id ?? null}, ${quotes.id})`,
+      clientId: sql`COALESCE(${patch.clientId ?? null}, ${quotes.clientId})`,
+      clientName: sql`COALESCE(${patch.clientName ?? null}, ${quotes.clientName})`,
+      paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${quotes.paymentTerms})`,
+      discount: sql`COALESCE(${numericForDb(patch.discount) ?? null}::numeric, ${quotes.discount})`,
+      discountType: sql`COALESCE(${patch.discountType ?? null}, ${quotes.discountType})`,
+      status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
+      expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
+      notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(quotes.id, id))
+    .returning(QUOTE_BASE_PROJECTION);
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
@@ -446,52 +391,44 @@ export type NewClientQuoteItem = {
 export const insertItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
   if (items.length === 0) return [];
-  const placeholders = buildBulkInsertPlaceholders(items.length, 15);
-  const params = items.flatMap((item) => [
-    item.id,
-    quoteId,
-    item.productId,
-    item.productName,
-    item.quantity,
-    item.unitPrice,
-    item.productCost,
-    item.productMolPercentage,
-    item.discount,
-    item.note,
-    item.supplierQuoteId,
-    item.supplierQuoteItemId,
-    item.supplierQuoteSupplierName,
-    item.supplierQuoteUnitPrice,
-    item.unitType,
-  ]);
-  const { rows } = await exec.query<ClientQuoteItemRow>(
-    `INSERT INTO quote_items (
-       id, quote_id, product_id, product_name,
-       quantity, unit_price, product_cost, product_mol_percentage,
-       discount, note,
-       supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-       supplier_quote_unit_price,
-       unit_type
-     ) VALUES ${placeholders}
-     RETURNING ${ITEM_COLUMNS}`,
-    params,
-  );
+  const rows = await exec
+    .insert(quoteItems)
+    .values(
+      items.map((item) => ({
+        id: item.id,
+        quoteId,
+        productId: item.productId,
+        productName: item.productName,
+        quantity: numericForDb(item.quantity),
+        unitPrice: numericForDb(item.unitPrice),
+        productCost: numericForDb(item.productCost),
+        productMolPercentage: numericForDb(item.productMolPercentage),
+        discount: numericForDb(item.discount),
+        note: item.note,
+        supplierQuoteId: item.supplierQuoteId,
+        supplierQuoteItemId: item.supplierQuoteItemId,
+        supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
+        unitType: item.unitType,
+      })),
+    )
+    .returning();
   return rows.map(mapItem);
 };
 
 export const replaceItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
-  await exec.query(`DELETE FROM quote_items WHERE quote_id = $1`, [quoteId]);
+  await exec.delete(quoteItems).where(eq(quoteItems.quoteId, quoteId));
   return insertItems(quoteId, items, exec);
 };
 
-export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rowCount } = await exec.query(`DELETE FROM quotes WHERE id = $1`, [id]);
-  return (rowCount ?? 0) > 0;
+export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const result = await exec.delete(quotes).where(eq(quotes.id, id));
+  return (result.rowCount ?? 0) > 0;
 };

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
@@ -536,7 +536,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const { quote, createdItems } = await withTransaction(async (tx) => {
+        const { quote, createdItems } = await withDbTransaction(async (tx) => {
           const created = await clientQuotesRepo.create(
             {
               id: nextIdResult.value,
@@ -798,7 +798,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: clientQuotesRepo.ClientQuoteItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const quote = await clientQuotesRepo.update(
             idResult.value,
             {

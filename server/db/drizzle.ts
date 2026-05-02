@@ -1,4 +1,4 @@
-import type { ExtractTablesWithRelations } from 'drizzle-orm';
+import type { ExtractTablesWithRelations, SQL } from 'drizzle-orm';
 import { drizzle, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 import pool from './index.ts';
@@ -11,3 +11,20 @@ export type DbExecutor = PgDatabase<
   typeof schema,
   ExtractTablesWithRelations<typeof schema>
 >;
+
+// Drizzle analogue of `withTransaction` from `./index.ts`. Use this when the callback
+// invokes Drizzle-converted repos so the `tx` parameter satisfies `DbExecutor`.
+// The legacy `withTransaction` is still in use by un-converted repos.
+export const withDbTransaction = <T>(callback: (tx: DbExecutor) => Promise<T>): Promise<T> =>
+  db.transaction((tx) => callback(tx as unknown as DbExecutor));
+
+// `exec.execute(sql)` returns either `{ rows }` (real pg driver) or a bare array (some test
+// adapters). Normalize so callers always get `T[]`. Throws on an unrecognized shape so a
+// driver/adapter mismatch surfaces loudly instead of silently returning empty rows.
+export const executeRows = async <T>(exec: DbExecutor, query: SQL): Promise<T[]> => {
+  const result = await exec.execute(query);
+  const rows = (result as { rows?: T[] }).rows;
+  if (Array.isArray(rows)) return rows;
+  if (Array.isArray(result)) return result as T[];
+  throw new Error('executeRows: unexpected result shape from exec.execute');
+};

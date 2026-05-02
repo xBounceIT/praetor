@@ -1,8 +1,11 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { tasks, userTasks } from '../db/schema/tasks.ts';
+import { timeEntries } from '../db/schema/timeEntries.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { isForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
-import { parseDbNumber } from '../utils/parse.ts';
+import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type Task = {
   id: string;
@@ -21,61 +24,51 @@ export type Task = {
   createdAt: number;
 };
 
-type TaskRaw = {
-  id: string;
-  name: string;
-  project_id: string;
-  description: string | null;
-  is_recurring: boolean;
-  recurrence_pattern: string | null;
-  recurrence_start: string | Date | null;
-  recurrence_end: string | Date | null;
-  recurrence_duration: string | number | null;
-  expected_effort: string | number | null;
-  revenue: string | number | null;
-  notes: string | null;
-  is_disabled: boolean;
-  created_at: string | Date;
-};
-
-const TASK_COLUMNS = `id, name, project_id, description, is_recurring,
-  recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
-  expected_effort, revenue, notes, is_disabled, created_at`;
-
-const mapRow = (row: TaskRaw): Task => ({
+const mapRow = (row: typeof tasks.$inferSelect): Task => ({
   id: row.id,
   name: row.name,
-  projectId: row.project_id,
+  projectId: row.projectId,
   description: row.description,
-  isRecurring: row.is_recurring,
-  recurrencePattern: row.recurrence_pattern,
+  isRecurring: row.isRecurring ?? false,
+  recurrencePattern: row.recurrencePattern,
   recurrenceStart:
-    normalizeNullableDateOnly(row.recurrence_start, 'task.recurrenceStart') ?? undefined,
-  recurrenceEnd: normalizeNullableDateOnly(row.recurrence_end, 'task.recurrenceEnd') ?? undefined,
-  recurrenceDuration: parseDbNumber(row.recurrence_duration, 0),
-  expectedEffort: parseDbNumber(row.expected_effort, undefined),
+    normalizeNullableDateOnly(row.recurrenceStart, 'task.recurrenceStart') ?? undefined,
+  recurrenceEnd: normalizeNullableDateOnly(row.recurrenceEnd, 'task.recurrenceEnd') ?? undefined,
+  recurrenceDuration: parseDbNumber(row.recurrenceDuration, 0),
+  expectedEffort: parseDbNumber(row.expectedEffort, undefined),
   revenue: parseDbNumber(row.revenue, undefined),
   notes: row.notes ?? undefined,
-  isDisabled: row.is_disabled,
-  createdAt: new Date(row.created_at).getTime(),
+  isDisabled: row.isDisabled ?? false,
+  createdAt: row.createdAt?.getTime() ?? 0,
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<Task[]> => {
-  const { rows } = await exec.query<TaskRaw>(`SELECT ${TASK_COLUMNS} FROM tasks ORDER BY name`);
+export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
+  const rows = await exec.select().from(tasks).orderBy(tasks.name);
   return rows.map(mapRow);
 };
 
-export const listForUser = async (userId: string, exec: QueryExecutor = pool): Promise<Task[]> => {
-  const { rows } = await exec.query<TaskRaw>(
-    `SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
-            t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
-            t.expected_effort, t.revenue, t.notes, t.is_disabled, t.created_at
-       FROM tasks t
-       INNER JOIN user_tasks ut ON t.id = ut.task_id
-      WHERE ut.user_id = $1
-      ORDER BY t.name`,
-    [userId],
-  );
+export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Task[]> => {
+  const rows = await exec
+    .select({
+      id: tasks.id,
+      name: tasks.name,
+      projectId: tasks.projectId,
+      description: tasks.description,
+      isRecurring: tasks.isRecurring,
+      recurrencePattern: tasks.recurrencePattern,
+      recurrenceStart: tasks.recurrenceStart,
+      recurrenceEnd: tasks.recurrenceEnd,
+      recurrenceDuration: tasks.recurrenceDuration,
+      expectedEffort: tasks.expectedEffort,
+      revenue: tasks.revenue,
+      notes: tasks.notes,
+      isDisabled: tasks.isDisabled,
+      createdAt: tasks.createdAt,
+    })
+    .from(tasks)
+    .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
+    .where(eq(userTasks.userId, userId))
+    .orderBy(tasks.name);
   return rows.map(mapRow);
 };
 
@@ -94,27 +87,25 @@ export type NewTask = {
   isDisabled: boolean;
 };
 
-export const create = async (task: NewTask, exec: QueryExecutor = pool): Promise<Task> => {
+export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task> => {
   try {
-    const { rows } = await exec.query<TaskRaw>(
-      `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING ${TASK_COLUMNS}`,
-      [
-        task.id,
-        task.name,
-        task.projectId,
-        task.description,
-        task.isRecurring,
-        task.recurrencePattern,
-        task.recurrenceStart,
-        task.recurrenceDuration,
-        task.expectedEffort,
-        task.revenue,
-        task.notes,
-        task.isDisabled,
-      ],
-    );
+    const rows = await exec
+      .insert(tasks)
+      .values({
+        id: task.id,
+        name: task.name,
+        projectId: task.projectId,
+        description: task.description,
+        isRecurring: task.isRecurring,
+        recurrencePattern: task.recurrencePattern,
+        recurrenceStart: task.recurrenceStart,
+        recurrenceDuration: numericForDb(task.recurrenceDuration),
+        expectedEffort: numericForDb(task.expectedEffort),
+        revenue: numericForDb(task.revenue),
+        notes: task.notes,
+        isDisabled: task.isDisabled,
+      })
+      .returning();
     return mapRow(rows[0]);
   } catch (err) {
     if (isForeignKeyViolation(err)) throw new ForeignKeyError('Project');
@@ -139,105 +130,95 @@ export type TaskUpdate = {
 export const update = async (
   id: string,
   patch: TaskUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Task | null> => {
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  let idx = 1;
-  const fields: Array<[string, unknown]> = [
-    ['name', patch.name],
-    ['description', patch.description],
-    ['is_recurring', patch.isRecurring],
-    ['recurrence_pattern', patch.recurrencePattern],
-    ['recurrence_start', patch.recurrenceStart],
-    ['recurrence_end', patch.recurrenceEnd],
-    ['recurrence_duration', patch.recurrenceDuration],
-    ['is_disabled', patch.isDisabled],
-    ['expected_effort', patch.expectedEffort],
-    ['revenue', patch.revenue],
-    ['notes', patch.notes],
-  ];
-  for (const [col, value] of fields) {
-    if (value !== undefined) {
-      sets.push(`${col} = $${idx++}`);
-      params.push(value);
-    }
-  }
+  // Explicit null clears the column; undefined (key absent) leaves it unchanged. Don't
+  // collapse to `value != null` — that loses the clear-to-null semantic.
+  const set: Record<string, unknown> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.description !== undefined) set.description = patch.description;
+  if (patch.isRecurring !== undefined) set.isRecurring = patch.isRecurring;
+  if (patch.recurrencePattern !== undefined) set.recurrencePattern = patch.recurrencePattern;
+  if (patch.recurrenceStart !== undefined) set.recurrenceStart = patch.recurrenceStart;
+  if (patch.recurrenceEnd !== undefined) set.recurrenceEnd = patch.recurrenceEnd;
+  if (patch.recurrenceDuration !== undefined)
+    set.recurrenceDuration = numericForDb(patch.recurrenceDuration);
+  if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
+  if (patch.expectedEffort !== undefined) set.expectedEffort = numericForDb(patch.expectedEffort);
+  if (patch.revenue !== undefined) set.revenue = numericForDb(patch.revenue);
+  if (patch.notes !== undefined) set.notes = patch.notes;
 
-  if (sets.length === 0) {
-    const { rows } = await exec.query<TaskRaw>(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = $1`, [
-      id,
-    ]);
+  if (Object.keys(set).length === 0) {
+    // No fields to update. Routes rely on this branch to return the current row when called
+    // with an empty patch — `db.update(tasks).set({})` would emit invalid SQL.
+    const rows = await exec.select().from(tasks).where(eq(tasks.id, id));
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
-  params.push(id);
-  const { rows } = await exec.query<TaskRaw>(
-    `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${idx} RETURNING ${TASK_COLUMNS}`,
-    params,
-  );
+  const rows = await exec.update(tasks).set(set).where(eq(tasks.id, id)).returning();
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
 export const deleteById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string; projectId: string } | null> => {
-  const { rows } = await exec.query<{ name: string; project_id: string }>(
-    `DELETE FROM tasks WHERE id = $1 RETURNING name, project_id`,
-    [id],
-  );
+  const rows = await exec
+    .delete(tasks)
+    .where(eq(tasks.id, id))
+    .returning({ name: tasks.name, projectId: tasks.projectId });
   if (!rows[0]) return null;
-  return { name: rows[0].name, projectId: rows[0].project_id };
+  return { name: rows[0].name, projectId: rows[0].projectId };
 };
 
 export const findAssignedUserIds = async (
   taskId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string[]> => {
-  const { rows } = await exec.query<{ user_id: string }>(
-    `SELECT user_id FROM user_tasks WHERE task_id = $1`,
-    [taskId],
-  );
-  return rows.map((r) => r.user_id);
+  const rows = await exec
+    .select({ userId: userTasks.userId })
+    .from(userTasks)
+    .where(eq(userTasks.taskId, taskId));
+  return rows.map((r) => r.userId);
 };
 
 export const findNameAndProjectId = async (
   taskId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string; projectId: string } | null> => {
-  const { rows } = await exec.query<{ name: string; project_id: string }>(
-    `SELECT name, project_id FROM tasks WHERE id = $1`,
-    [taskId],
-  );
-  if (!rows[0]) return null;
-  return { name: rows[0].name, projectId: rows[0].project_id };
+  const rows = await exec
+    .select({ name: tasks.name, projectId: tasks.projectId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId));
+  return rows[0] ?? null;
 };
 
 export const clearUserAssignments = async (
   taskId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`DELETE FROM user_tasks WHERE task_id = $1`, [taskId]);
+  await exec.delete(userTasks).where(eq(userTasks.taskId, taskId));
 };
 
 export const addUserAssignments = async (
   taskId: string,
   userIds: string[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec.query(
-    `INSERT INTO user_tasks (task_id, user_id)
-     SELECT $1, unnest($2::text[])
-     ON CONFLICT DO NOTHING`,
-    [taskId, userIds],
-  );
+  await exec
+    .insert(userTasks)
+    .values(userIds.map((userId) => ({ taskId, userId })))
+    .onConflictDoNothing();
 };
 
 // Joins time_entries -> tasks via task_id when present, falling back to (project_id, name) for
 // rows where task_id is null (legacy entries, or entries created before the matching task
 // existed). Use as part of a larger query: caller adds te. alias and WHERE clauses.
+//
+// Exported as a raw SQL string because the not-yet-converted reportsHoursRepo composes it into
+// its own raw-SQL CTEs. When reportsHoursRepo is converted to Drizzle, this can become an
+// `sql` chunk and the consumers updated together.
 export const TIME_ENTRIES_TASKS_JOIN = `JOIN tasks t
     ON t.id = te.task_id
     OR (te.task_id IS NULL AND t.project_id = te.project_id AND t.name = te.task)`;
@@ -248,35 +229,34 @@ export const TIME_ENTRIES_TASKS_JOIN = `JOIN tasks t
 export const findIdByProjectAndName = async (
   projectId: string,
   name: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM tasks WHERE project_id = $1 AND name = $2 ORDER BY id LIMIT 1`,
-    [projectId, name],
-  );
+  const rows = await exec
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), eq(tasks.name, name)))
+    .orderBy(tasks.id)
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const sumHoursByProjects = async (
   projectIds: string[],
   userId: string | undefined,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Array<{ projectId: string; task: string; total: number }>> => {
-  const sql = userId
-    ? `SELECT te.project_id, te.task, COALESCE(SUM(te.duration), 0)::float AS total
-         FROM time_entries te
-         ${TIME_ENTRIES_TASKS_JOIN}
-         JOIN user_tasks ut ON ut.task_id = t.id
-        WHERE te.project_id = ANY($1) AND ut.user_id = $2
-        GROUP BY te.project_id, te.task`
-    : `SELECT project_id, task, COALESCE(SUM(duration), 0)::float AS total
-         FROM time_entries
-        WHERE project_id = ANY($1)
-        GROUP BY project_id, task`;
-  const params = userId ? [projectIds, userId] : [projectIds];
-  const { rows } = await exec.query<{ project_id: string; task: string; total: number }>(
-    sql,
-    params,
-  );
-  return rows.map((r) => ({ projectId: r.project_id, task: r.task, total: Number(r.total) }));
+  if (projectIds.length === 0) return [];
+  const query = userId
+    ? sql`SELECT te.project_id AS "projectId", te.task, COALESCE(SUM(te.duration), 0)::float AS total
+            FROM time_entries te
+            ${sql.raw(TIME_ENTRIES_TASKS_JOIN)}
+            JOIN user_tasks ut ON ut.task_id = t.id
+           WHERE ${inArray(timeEntries.projectId, projectIds)} AND ut.user_id = ${userId}
+           GROUP BY te.project_id, te.task`
+    : sql`SELECT project_id AS "projectId", task, COALESCE(SUM(duration), 0)::float AS total
+            FROM time_entries
+           WHERE ${inArray(timeEntries.projectId, projectIds)}
+           GROUP BY project_id, task`;
+  const rows = await executeRows<{ projectId: string; task: string; total: number }>(exec, query);
+  return rows.map((r) => ({ projectId: r.projectId, task: r.task, total: Number(r.total) }));
 };
