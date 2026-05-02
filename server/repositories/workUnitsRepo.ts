@@ -1,3 +1,4 @@
+import { type SQL, sql } from 'drizzle-orm';
 import pool, { type QueryExecutor } from '../db/index.ts';
 
 export type Manager = { id: string; name: string };
@@ -204,11 +205,13 @@ export const isUserManagedBy = async (
   return rows.length > 0;
 };
 
-export const managedUserIdsSubquery = (paramIdx: number) =>
-  `SELECT uwu.user_id
-     FROM user_work_units uwu
-     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-    WHERE wum.user_id = $${paramIdx}`;
+// Drizzle SQL fragment for the "user_ids managed by `managerId`" subquery, for embedding in
+// other repos' `sql\`\`` templates (e.g. entriesRepo's manager-scope filters).
+export const managedUserIdsSubquerySql = (managerId: string): SQL =>
+  sql`SELECT uwu.user_id
+        FROM user_work_units uwu
+        JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+       WHERE wum.user_id = ${managerId}`;
 
 export const listManagedUserIds = async (
   managerId: string,

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
@@ -375,7 +375,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: clientOffersRepo.ClientOfferItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const offer = await clientOffersRepo.create(
             {
               id: nextIdResult.value,
@@ -576,7 +576,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: clientOffersRepo.ClientOfferItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const offer = await clientOffersRepo.update(
             idResult.value,
             {

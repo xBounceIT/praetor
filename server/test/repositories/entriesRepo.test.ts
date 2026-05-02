@@ -1,25 +1,69 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as entriesRepo from '../../repositories/entriesRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
+
+// Builder fixtures match the column order in db/schema/timeEntries.ts. Raw-SQL fixtures
+// are objects keyed by SELECT column name (snake_case + an extra `created_at_text` for
+// cursor pagination — see ENTRY_COLUMNS_SQL).
+const ENTRY_BASE: readonly unknown[] = [
+  'e-1',
+  'u-1',
+  '2026-04-30',
+  'c-1',
+  'Acme',
+  'p-1',
+  'Alpha',
+  'Dev',
+  't-1',
+  'n',
+  '1.5',
+  '100',
+  false,
+  'remote',
+  new Date('2026-04-30T12:00:00Z'),
+];
+
+const entryRow = (overrides: Record<number, unknown> = {}) => makeRow(ENTRY_BASE, overrides);
+
+const rawRow = {
+  id: 'e-1',
+  user_id: 'u-1',
+  date: '2026-04-30',
+  client_id: 'c-1',
+  client_name: 'Acme',
+  project_id: 'p-1',
+  project_name: 'Alpha',
+  task: 'Dev',
+  task_id: 't-1',
+  notes: 'n',
+  duration: '1.5',
+  hourly_cost: '100',
+  is_placeholder: false,
+  location: 'remote',
+  created_at: new Date('2026-04-30T12:00:00Z'),
+  created_at_text: '2026-04-30 12:00:00.000000',
+};
 
 describe('listAll', () => {
   test('passes default limit and no cursor', async () => {
     exec.enqueue({ rows: [] });
-    const result = await entriesRepo.listAll({}, exec);
+    const result = await entriesRepo.listAll({}, testDb);
     expect(exec.calls[0].params).toEqual([200]);
-    expect(exec.calls[0].sql).toContain('LIMIT $1');
+    expect(exec.calls[0].sql).not.toContain('WHERE');
     expect(result.nextCursor).toBeNull();
   });
 
   test('caps limit at 500', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.listAll({ limit: 9999 }, exec);
+    await entriesRepo.listAll({ limit: 9999 }, testDb);
     expect(exec.calls[0].params).toEqual([500]);
   });
 
@@ -27,10 +71,11 @@ describe('listAll', () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listAll(
       { limit: 50, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-1' } },
-      exec,
+      testDb,
     );
     expect(exec.calls[0].params).toEqual(['2026-04-30 12:00:00.123456', 'e-1', 50]);
     expect(exec.calls[0].sql).toContain('::timestamp');
+    expect(exec.calls[0].sql).toContain('created_at_text');
     expect(exec.calls[0].sql).not.toContain('to_timestamp');
   });
 
@@ -42,7 +87,7 @@ describe('listAll', () => {
     ['fractional truncates via Math.floor', 1.7, 1],
   ])('resolveLimit treats %s (%p) as %p', async (_label, input, expected) => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.listAll({ limit: input }, exec);
+    await entriesRepo.listAll({ limit: input }, testDb);
     expect(exec.calls[0].params).toEqual([expected]);
   });
 });
@@ -50,47 +95,50 @@ describe('listAll', () => {
 describe('listForUser', () => {
   test('passes userId as $1 and limit at the end', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.listForUser('u-1', {}, exec);
+    await entriesRepo.listForUser('u-1', {}, testDb);
     expect(exec.calls[0].params).toEqual(['u-1', 200]);
-    expect(exec.calls[0].sql).toContain('WHERE user_id = $1');
+    expect(exec.calls[0].sql).toContain('user_id = $1');
   });
 
-  test('with cursor: cursor params start at $2, limit lands at $4', async () => {
+  test('with cursor: cursor params follow userId, limit lands last', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listForUser(
       'u-1',
       { limit: 50, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-9' } },
-      exec,
+      testDb,
     );
     expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30 12:00:00.123456', 'e-9', 50]);
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('WHERE user_id = $1');
+    expect(sql).toContain('user_id = $1');
     expect(sql).toContain('$2::timestamp');
     expect(sql).toContain('LIMIT $4');
   });
 });
 
 describe('listForManagerView', () => {
-  test('uses managerId for both own + managed subquery', async () => {
+  test('uses managerId for both own + managed subquery (Drizzle binds twice)', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.listForManagerView('mgr', {}, exec);
-    expect(exec.calls[0].params).toEqual(['mgr', 200]);
-    expect(exec.calls[0].sql).toContain('work_unit_managers');
-    expect(exec.calls[0].sql).toContain('user_id = $1');
-    expect(exec.calls[0].sql).toContain('wum.user_id = $1');
+    await entriesRepo.listForManagerView('mgr', {}, testDb);
+    // Drizzle's `sql\`\`` template doesn't dedupe interpolations — the managerId is bound
+    // once for `user_id = $1` and once for the subquery's `wum.user_id = $2`.
+    expect(exec.calls[0].params).toEqual(['mgr', 'mgr', 200]);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('work_unit_managers');
+    expect(sql).toContain('user_id = $1');
+    expect(sql).toContain('wum.user_id = $2');
   });
 
-  test('with cursor: cursor params start at $2, limit lands at $4', async () => {
+  test('with cursor: cursor params follow the manager scope params', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listForManagerView(
       'mgr',
       { limit: 25, cursor: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-9' } },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].params).toEqual(['mgr', '2026-04-30 12:00:00.123456', 'e-9', 25]);
+    expect(exec.calls[0].params).toEqual(['mgr', 'mgr', '2026-04-30 12:00:00.123456', 'e-9', 25]);
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('$2::timestamp');
-    expect(sql).toContain('LIMIT $4');
+    expect(sql).toContain('$3::timestamp');
+    expect(sql).toContain('LIMIT $5');
   });
 });
 
@@ -132,53 +180,50 @@ describe('encodeCursor / decodeCursor', () => {
   });
 
   test('produces a nextCursor that preserves µs precision from created_at_text', async () => {
-    const row = {
-      id: 'e-2',
-      user_id: 'u-1',
-      date: '2026-04-30',
-      client_id: 'c-1',
-      client_name: 'Acme',
-      project_id: 'p-1',
-      project_name: 'Alpha',
-      task: 'Dev',
-      task_id: 't-1',
-      notes: null,
-      duration: 1,
-      hourly_cost: 100,
-      is_placeholder: false,
-      location: 'remote',
-      created_at: new Date('2026-04-30T12:00:00.123Z'),
-      created_at_text: '2026-04-30 12:00:00.123456',
-    };
     exec.enqueue({
-      rows: [row, { ...row, id: 'e-1', created_at_text: '2026-04-30 12:00:00.123100' }],
+      rows: [rawRow, { ...rawRow, id: 'e-2', created_at_text: '2026-04-30 12:00:00.123100' }],
     });
-    const result = await entriesRepo.listAll({ limit: 2 }, exec);
+    const result = await entriesRepo.listAll({ limit: 2 }, testDb);
     expect(result.nextCursor).toEqual({
       createdAt: '2026-04-30 12:00:00.123100',
-      id: 'e-1',
+      id: 'e-2',
     });
+  });
+
+  test('null created_at_text on the last row suppresses nextCursor', async () => {
+    exec.enqueue({
+      rows: [rawRow, { ...rawRow, id: 'e-2', created_at: null, created_at_text: null }],
+    });
+    const result = await entriesRepo.listAll({ limit: 2 }, testDb);
+    expect(result.entries).toHaveLength(2);
+    expect(result.nextCursor).toBeNull();
+  });
+});
+
+describe('mapRawRow (exercised via listAll return path)', () => {
+  test('null created_at falls back to 0 (matches mapBuilderRow)', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, created_at: null, created_at_text: null }] });
+    const result = await entriesRepo.listAll({}, testDb);
+    expect(result.entries[0].createdAt).toBe(0);
   });
 });
 
 describe('findOwner', () => {
   test('returns owner id when entry exists', async () => {
-    exec.enqueue({ rows: [{ user_id: 'u-1' }] });
-    expect(await entriesRepo.findOwner('e-1', exec)).toBe('u-1');
+    exec.enqueue({ rows: [['u-1']] });
+    expect(await entriesRepo.findOwner('e-1', testDb)).toBe('u-1');
   });
 
   test('returns null when entry not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.findOwner('e-x', exec)).toBeNull();
+    expect(await entriesRepo.findOwner('e-x', testDb)).toBeNull();
   });
 });
 
 describe('findContext', () => {
   test('returns full context including taskId when present', async () => {
-    exec.enqueue({
-      rows: [{ user_id: 'u-1', project_id: 'p-1', task: 'Dev', task_id: 't-1' }],
-    });
-    expect(await entriesRepo.findContext('e-1', exec)).toEqual({
+    exec.enqueue({ rows: [['u-1', 'p-1', 'Dev', 't-1']] });
+    expect(await entriesRepo.findContext('e-1', testDb)).toEqual({
       userId: 'u-1',
       projectId: 'p-1',
       task: 'Dev',
@@ -187,39 +232,19 @@ describe('findContext', () => {
   });
 
   test('returns context with null taskId for orphaned entries', async () => {
-    exec.enqueue({
-      rows: [{ user_id: 'u-1', project_id: 'p-1', task: 'Dev', task_id: null }],
-    });
-    expect((await entriesRepo.findContext('e-1', exec))?.taskId).toBeNull();
+    exec.enqueue({ rows: [['u-1', 'p-1', 'Dev', null]] });
+    expect((await entriesRepo.findContext('e-1', testDb))?.taskId).toBeNull();
   });
 
   test('returns null when entry not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.findContext('e-x', exec)).toBeNull();
+    expect(await entriesRepo.findContext('e-x', testDb)).toBeNull();
   });
 });
 
-const rawRow = {
-  id: 'e-1',
-  user_id: 'u-1',
-  date: '2026-04-30',
-  client_id: 'c-1',
-  client_name: 'Acme',
-  project_id: 'p-1',
-  project_name: 'Alpha',
-  task: 'Dev',
-  task_id: 't-1',
-  notes: 'n',
-  duration: '1.5',
-  hourly_cost: '100',
-  is_placeholder: false,
-  location: 'remote',
-  created_at: new Date('2026-04-30T12:00:00Z'),
-};
-
 describe('create', () => {
   test('passes 14 params in expected order and returns mapped row', async () => {
-    exec.enqueue({ rows: [rawRow] });
+    exec.enqueue({ rows: [entryRow()] });
     const result = await entriesRepo.create(
       {
         id: 'e-1',
@@ -237,7 +262,7 @@ describe('create', () => {
         isPlaceholder: false,
         location: 'remote',
       },
-      exec,
+      testDb,
     );
     expect(exec.calls[0].params).toEqual([
       'e-1',
@@ -250,12 +275,12 @@ describe('create', () => {
       'Dev',
       't-1',
       'n',
-      1.5,
-      100,
+      '1.5',
+      '100',
       false,
       'remote',
     ]);
-    expect(exec.calls[0].sql).toContain('RETURNING');
+    expect(exec.calls[0].sql).toContain('returning');
     expect(result.duration).toBe(1.5);
     expect(result.hourlyCost).toBe(100);
     expect(result.userId).toBe('u-1');
@@ -263,7 +288,7 @@ describe('create', () => {
   });
 
   test('null taskId is passed through (task name has no matching task row)', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, task_id: null }] });
+    exec.enqueue({ rows: [entryRow({ 8: null })] });
     const result = await entriesRepo.create(
       {
         id: 'e-1',
@@ -281,7 +306,7 @@ describe('create', () => {
         isPlaceholder: false,
         location: 'remote',
       },
-      exec,
+      testDb,
     );
     expect(exec.calls[0].params[8]).toBeNull();
     expect(result.taskId).toBeNull();
@@ -305,124 +330,122 @@ const newEntry = {
   location: 'remote',
 };
 
-describe('mapRow (exercised via create return path)', () => {
+describe('mapBuilderRow (exercised via create return path)', () => {
   test('null duration falls back to 0', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, duration: null }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 10: null })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.duration).toBe(0);
   });
 
   test('null hourly_cost falls back to 0', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, hourly_cost: null }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 11: null })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.hourlyCost).toBe(0);
   });
 
   test('null is_placeholder coerces to false', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, is_placeholder: null }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 12: null })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.isPlaceholder).toBe(false);
   });
 
   test('null location falls back to "remote"', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, location: null }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 13: null })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.location).toBe('remote');
   });
 
   test('empty location falls back to "remote"', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, location: '' }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 13: '' })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.location).toBe('remote');
   });
 
   test('numeric-string duration is parsed to number', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, duration: '2.75' }] });
-    const result = await entriesRepo.create(newEntry, exec);
+    exec.enqueue({ rows: [entryRow({ 10: '2.75' })] });
+    const result = await entriesRepo.create(newEntry, testDb);
     expect(result.duration).toBe(2.75);
   });
 
-  test('string created_at is converted to ms epoch', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, created_at: '2026-04-30T12:00:00Z' }] });
-    const result = await entriesRepo.create(newEntry, exec);
-    expect(result.createdAt).toBe(new Date('2026-04-30T12:00:00Z').getTime());
+  test('null createdAt falls back to 0', async () => {
+    exec.enqueue({ rows: [entryRow({ 14: null })] });
+    const result = await entriesRepo.create(newEntry, testDb);
+    expect(result.createdAt).toBe(0);
   });
 
   test('throws TypeError when row.date is null', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, date: null }] });
-    await expect(entriesRepo.create(newEntry, exec)).rejects.toThrow(TypeError);
-  });
-
-  test('throws TypeError when row.date is an unsupported type', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, date: 12345 }] });
-    await expect(entriesRepo.create(newEntry, exec)).rejects.toThrow(TypeError);
+    exec.enqueue({ rows: [entryRow({ 2: null })] });
+    await expect(entriesRepo.create(newEntry, testDb)).rejects.toThrow(TypeError);
   });
 });
 
 describe('update', () => {
   test('only sets provided fields, id is the last param', async () => {
-    exec.enqueue({ rows: [rawRow] });
-    const result = await entriesRepo.update('e-1', { duration: 2 }, exec);
+    exec.enqueue({ rows: [entryRow()] });
+    const result = await entriesRepo.update('e-1', { duration: 2 }, testDb);
     expect(result?.id).toBe('e-1');
     expect(result?.userId).toBe('u-1');
     expect(result?.duration).toBe(1.5);
     expect(result?.hourlyCost).toBe(100);
     expect(result?.isPlaceholder).toBe(false);
-    expect(exec.calls[0].sql).toContain('SET duration = $1');
-    expect(exec.calls[0].sql).toContain('WHERE id = $2');
-    expect(exec.calls[0].params).toEqual([2, 'e-1']);
+    expect(exec.calls[0].sql).toContain('"duration" = $1');
+    expect(exec.calls[0].sql).toContain('"id" = $2');
+    expect(exec.calls[0].params).toEqual(['2', 'e-1']);
   });
 
-  test('builds SET list in column order from defined fields', async () => {
-    exec.enqueue({ rows: [rawRow] });
+  test('builds SET list in schema column order from defined fields', async () => {
+    exec.enqueue({ rows: [entryRow()] });
     await entriesRepo.update(
       'e-1',
       { duration: 2, notes: 'updated', isPlaceholder: true, location: 'office', taskId: 't-2' },
-      exec,
+      testDb,
     );
+    // Drizzle emits SET columns in schema column declaration order regardless of how the
+    // `.set({...})` object is constructed: task_id (col 9) → notes (10) → duration (11) →
+    // is_placeholder (13) → location (14).
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('duration = $1');
-    expect(sql).toContain('notes = $2');
-    expect(sql).toContain('is_placeholder = $3');
-    expect(sql).toContain('location = $4');
-    expect(sql).toContain('task_id = $5');
-    expect(sql).toContain('WHERE id = $6');
-    expect(exec.calls[0].params).toEqual([2, 'updated', true, 'office', 't-2', 'e-1']);
+    expect(sql).toContain('"task_id" = $1');
+    expect(sql).toContain('"notes" = $2');
+    expect(sql).toContain('"duration" = $3');
+    expect(sql).toContain('"is_placeholder" = $4');
+    expect(sql).toContain('"location" = $5');
+    expect(sql).toContain('"id" = $6');
+    expect(exec.calls[0].params).toEqual(['t-2', 'updated', '2', true, 'office', 'e-1']);
   });
 
   test('passes taskId through when set, omitting other fields', async () => {
-    exec.enqueue({ rows: [rawRow] });
-    await entriesRepo.update('e-1', { taskId: 't-2' }, exec);
-    expect(exec.calls[0].sql).toContain('SET task_id = $1');
-    expect(exec.calls[0].sql).toContain('WHERE id = $2');
+    exec.enqueue({ rows: [entryRow()] });
+    await entriesRepo.update('e-1', { taskId: 't-2' }, testDb);
+    expect(exec.calls[0].sql).toContain('"task_id" = $1');
+    expect(exec.calls[0].sql).toContain('"id" = $2');
     expect(exec.calls[0].params).toEqual(['t-2', 'e-1']);
   });
 
   test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
-    exec.enqueue({ rows: [rawRow] });
-    const result = await entriesRepo.update('e-1', {}, exec);
-    expect(exec.calls[0].sql).not.toContain('UPDATE');
-    expect(exec.calls[0].sql).toContain('SELECT');
+    exec.enqueue({ rows: [entryRow()] });
+    const result = await entriesRepo.update('e-1', {}, testDb);
+    expect(exec.calls[0].sql).not.toContain('update');
+    expect(exec.calls[0].sql).toContain('select');
     expect(exec.calls[0].params).toEqual(['e-1']);
     expect(result?.id).toBe('e-1');
   });
 
   test('returns null when no row matched (UPDATE path)', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.update('e-x', { duration: 2 }, exec)).toBeNull();
+    expect(await entriesRepo.update('e-x', { duration: 2 }, testDb)).toBeNull();
   });
 
   test('returns null when no row matched (SELECT fallback path)', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.update('e-x', {}, exec)).toBeNull();
+    expect(await entriesRepo.update('e-x', {}, testDb)).toBeNull();
   });
 
   test('notes: null clears the column (distinct from undefined which is skipped)', async () => {
-    exec.enqueue({ rows: [{ ...rawRow, notes: null }] });
-    const result = await entriesRepo.update('e-1', { notes: null }, exec);
-    expect(exec.calls[0].sql).toContain('UPDATE');
-    expect(exec.calls[0].sql).toContain('notes = $1');
-    expect(exec.calls[0].sql).toContain('WHERE id = $2');
+    exec.enqueue({ rows: [entryRow({ 9: null })] });
+    const result = await entriesRepo.update('e-1', { notes: null }, testDb);
+    expect(exec.calls[0].sql).toContain('update');
+    expect(exec.calls[0].sql).toContain('"notes" = $1');
+    expect(exec.calls[0].sql).toContain('"id" = $2');
     expect(exec.calls[0].params).toEqual([null, 'e-1']);
     expect(result?.notes).toBeNull();
   });
@@ -431,50 +454,50 @@ describe('update', () => {
 describe('deleteById', () => {
   test('passes id as $1 against time_entries', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.deleteById('e-1', exec);
+    await entriesRepo.deleteById('e-1', testDb);
     expect(exec.calls[0].params).toEqual(['e-1']);
-    expect(exec.calls[0].sql).toContain('DELETE FROM time_entries');
-    expect(exec.calls[0].sql).toContain('WHERE id = $1');
+    expect(exec.calls[0].sql).toContain('delete from "time_entries"');
+    expect(exec.calls[0].sql).toContain('"id" = $1');
   });
 });
 
 describe('bulkDelete', () => {
   test('minimal filters: project + task only, returns row count', async () => {
     exec.enqueue({ rows: [], rowCount: 2 });
-    const result = await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev' }, exec);
+    const result = await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev' }, testDb);
     expect(result).toBe(2);
     expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
-    expect(exec.calls[0].sql).toContain('project_id = $1');
-    expect(exec.calls[0].sql).toContain('task = $2');
-    expect(exec.calls[0].sql).not.toContain('RETURNING');
-    expect(exec.calls[0].sql).not.toContain('user_id =');
-    expect(exec.calls[0].sql).not.toContain('date >=');
+    expect(exec.calls[0].sql).toContain('"project_id" = $1');
+    expect(exec.calls[0].sql).toContain('"task" = $2');
+    expect(exec.calls[0].sql).not.toContain('returning');
+    expect(exec.calls[0].sql).not.toContain('user_id');
+    expect(exec.calls[0].sql).not.toContain('"date"');
     expect(exec.calls[0].sql).not.toContain('is_placeholder');
   });
 
   test('returns 0 when rowCount is null', async () => {
     exec.enqueue({ rows: [], rowCount: null });
-    const result = await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev' }, exec);
+    const result = await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev' }, testDb);
     expect(result).toBe(0);
   });
 
-  test('manager-scope restriction adds the user_id subquery, reusing $3', async () => {
+  test('manager-scope restriction adds the user_id subquery (managerId bound twice)', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.bulkDelete(
       { projectId: 'p-1', task: 'Dev', restrictToManagerScopeOf: 'mgr' },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr']);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', 'mgr']);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('user_id = $3');
-    expect(sql).toContain('wum.user_id = $3');
+    expect(sql).toContain('wum.user_id = $4');
   });
 
   test('fromDate appends date filter at the next index', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', fromDate: '2026-04-30' }, exec);
+    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', fromDate: '2026-04-30' }, testDb);
     expect(exec.calls[0].params).toEqual(['p-1', 'Dev', '2026-04-30']);
-    expect(exec.calls[0].sql).toContain('date >= $3');
+    expect(exec.calls[0].sql).toContain('"date" >= $3');
   });
 
   test('manager-scope + fromDate uses sequential indexes', async () => {
@@ -486,22 +509,22 @@ describe('bulkDelete', () => {
         restrictToManagerScopeOf: 'mgr',
         fromDate: '2026-04-30',
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', '2026-04-30']);
-    expect(exec.calls[0].sql).toContain('date >= $4');
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', 'mgr', '2026-04-30']);
+    expect(exec.calls[0].sql).toContain('"date" >= $5');
   });
 
-  test('placeholderOnly is appended as a literal predicate (no param)', async () => {
+  test('placeholderOnly: true binds `is_placeholder = $N` with true', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: true }, exec);
-    expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
-    expect(exec.calls[0].sql).toContain('is_placeholder = true');
+    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: true }, testDb);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', true]);
+    expect(exec.calls[0].sql).toContain('"is_placeholder" = $3');
   });
 
   test('placeholderOnly: false does NOT add the predicate (gated on === true)', async () => {
     exec.enqueue({ rows: [] });
-    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: false }, exec);
+    await entriesRepo.bulkDelete({ projectId: 'p-1', task: 'Dev', placeholderOnly: false }, testDb);
     expect(exec.calls[0].params).toEqual(['p-1', 'Dev']);
     expect(exec.calls[0].sql).not.toContain('is_placeholder');
   });
@@ -516,16 +539,16 @@ describe('bulkDelete', () => {
         fromDate: '2026-04-30',
         placeholderOnly: true,
       },
-      exec,
+      testDb,
     );
     expect(result).toBe(5);
-    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', '2026-04-30']);
+    expect(exec.calls[0].params).toEqual(['p-1', 'Dev', 'mgr', 'mgr', '2026-04-30', true]);
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('project_id = $1');
-    expect(sql).toContain('task = $2');
+    expect(sql).toContain('"project_id" = $1');
+    expect(sql).toContain('"task" = $2');
     expect(sql).toContain('user_id = $3');
-    expect(sql).toContain('wum.user_id = $3');
-    expect(sql).toContain('date >= $4');
-    expect(sql).toContain('is_placeholder = true');
+    expect(sql).toContain('wum.user_id = $4');
+    expect(sql).toContain('"date" >= $5');
+    expect(sql).toContain('"is_placeholder" = $6');
   });
 });
