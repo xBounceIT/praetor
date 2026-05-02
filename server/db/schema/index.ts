@@ -7,6 +7,7 @@ export * from './generalSettings.ts';
 export * from './invoices.ts';
 export * from './ldapConfig.ts';
 export * from './notifications.ts';
+export * from './projects.ts';
 export * from './quotes.ts';
 export * from './roles.ts';
 export * from './sales.ts';

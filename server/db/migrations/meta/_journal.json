@@ -64,6 +64,13 @@
       "when": 1777757970001,
       "tag": "0008_claim_client_profile_options",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777758202809,
+      "tag": "0009_claim_projects",
+      "breakpoints": true
     }
   ]
 }
