@@ -55,16 +55,21 @@ type LdapRow = {
 };
 
 // Schema columns are nullable but always populated at runtime via DB defaults on the seeded
-// id=1 row, so `?? <default>` is a TS-strict appeasement matching the non-nullable `LdapConfig`.
+// id=1 row, so the `??` fallbacks are a TS-strict appeasement matching the non-nullable
+// `LdapConfig`. Falling back to the corresponding `DEFAULT_CONFIG` value (rather than `''`)
+// keeps the read-with-null-column path consistent with the route's no-row fallback
+// (`(await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG`). `roleMappings` falls back to a
+// fresh `[]` rather than `DEFAULT_CONFIG.roleMappings` so the module-level default array
+// can't be aliased and mutated by callers.
 const mapRow = (row: LdapRow): LdapConfig => ({
-  enabled: row.enabled ?? false,
-  serverUrl: row.serverUrl ?? '',
-  baseDn: row.baseDn ?? '',
-  bindDn: row.bindDn ?? '',
-  bindPassword: row.bindPassword ?? '',
-  userFilter: row.userFilter ?? '',
-  groupBaseDn: row.groupBaseDn ?? '',
-  groupFilter: row.groupFilter ?? '',
+  enabled: row.enabled ?? DEFAULT_CONFIG.enabled,
+  serverUrl: row.serverUrl ?? DEFAULT_CONFIG.serverUrl,
+  baseDn: row.baseDn ?? DEFAULT_CONFIG.baseDn,
+  bindDn: row.bindDn ?? DEFAULT_CONFIG.bindDn,
+  bindPassword: row.bindPassword ?? DEFAULT_CONFIG.bindPassword,
+  userFilter: row.userFilter ?? DEFAULT_CONFIG.userFilter,
+  groupBaseDn: row.groupBaseDn ?? DEFAULT_CONFIG.groupBaseDn,
+  groupFilter: row.groupFilter ?? DEFAULT_CONFIG.groupFilter,
   roleMappings: row.roleMappings ?? [],
 });
 

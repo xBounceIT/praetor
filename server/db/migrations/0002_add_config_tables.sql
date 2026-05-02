@@ -6,7 +6,10 @@
 --     invariant from schema.sql on fresh DBs without colliding with the auto-named
 --     constraint that already exists on dev/prod (matched by `contype = 'c'` rather than by
 --     name because Postgres's auto-generated name for an inline column CHECK isn't
---     guaranteed across versions).
+--     guaranteed across versions). The guard treats "any CHECK constraint exists on the
+--     table" as a proxy for "the singleton CHECK exists" — correct for these tables, which
+--     only ever carry the singleton invariant. Adding any other CHECK to either table later
+--     would require revisiting this guard.
 --   * INSERT … ON CONFLICT DO NOTHING — seeds the singleton id=1 row so the first PUT to
 --     /email/config and /ldap/config succeeds; idempotent on existing DBs that already
 --     have the row from schema.sql.

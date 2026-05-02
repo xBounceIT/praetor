@@ -12,20 +12,40 @@ beforeEach(() => {
 });
 
 // drizzle-orm/node-postgres uses rowMode: 'array' for select queries; rows are positional
-// in the projection-declaration order from `LDAP_PROJECTION` in ldapRepo.ts:
-// [enabled, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, roleMappings]
+// in the projection-declaration order from `LDAP_PROJECTION` in ldapRepo.ts. Tests use
+// `buildRow` (below) to construct fixtures by field name rather than by index, so a column
+// reorder in the repo is caught either at TS compile time (unknown key) or at test time
+// (wrong-shaped row). PROJECTION_KEYS MUST stay in sync with `LDAP_PROJECTION`.
+const PROJECTION_KEYS = [
+  'enabled',
+  'serverUrl',
+  'baseDn',
+  'bindDn',
+  'bindPassword',
+  'userFilter',
+  'groupBaseDn',
+  'groupFilter',
+  'roleMappings',
+] as const;
+type ProjectionKey = (typeof PROJECTION_KEYS)[number];
+type RowFields = Record<ProjectionKey, unknown>;
 
-const baseRow = [
-  false,
-  'ldap://example',
-  'dc=example',
-  'cn=admin',
-  '',
-  '(uid={0})',
-  'ou=groups',
-  '(member={0})',
-  [] as LdapRoleMapping[],
-];
+const baseFields: RowFields = {
+  enabled: false,
+  serverUrl: 'ldap://example',
+  baseDn: 'dc=example',
+  bindDn: 'cn=admin',
+  bindPassword: '',
+  userFilter: '(uid={0})',
+  groupBaseDn: 'ou=groups',
+  groupFilter: '(member={0})',
+  roleMappings: [] as LdapRoleMapping[],
+};
+
+const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
+  const merged: RowFields = { ...baseFields, ...overrides };
+  return PROJECTION_KEYS.map((k) => merged[k]);
+};
 
 describe('get', () => {
   test('returns null when no row exists', async () => {
@@ -36,9 +56,7 @@ describe('get', () => {
 
   test('returns the row, including JSONB roleMappings as a JS array', async () => {
     const mappings: LdapRoleMapping[] = [{ ldapGroup: 'admins', role: 'admin' }];
-    const row = baseRow.slice();
-    row[8] = mappings;
-    exec.enqueue({ rows: [row] });
+    exec.enqueue({ rows: [buildRow({ roleMappings: mappings })] });
     const result = await ldapRepo.get(testDb);
     expect(result?.roleMappings).toEqual(mappings);
   });
@@ -59,11 +77,9 @@ describe('update', () => {
 
   test('returns the RETURNING row mapped to the LdapConfig shape', async () => {
     const mappings: LdapRoleMapping[] = [{ ldapGroup: 'g', role: 'r' }];
-    const returned = baseRow.slice();
-    returned[0] = true;
-    returned[1] = 'ldaps://x';
-    returned[8] = mappings;
-    exec.enqueue({ rows: [returned] });
+    exec.enqueue({
+      rows: [buildRow({ enabled: true, serverUrl: 'ldaps://x', roleMappings: mappings })],
+    });
     const result = await ldapRepo.update({ enabled: true, serverUrl: 'ldaps://x' }, testDb);
     expect(result.enabled).toBe(true);
     expect(result.serverUrl).toBe('ldaps://x');
@@ -71,20 +87,20 @@ describe('update', () => {
   });
 
   test('JSON-stringifies a non-empty roleMappings array as the bound parameter', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     const mappings = [{ ldapGroup: 'g', role: 'r' }];
     await ldapRepo.update({ roleMappings: mappings }, testDb);
     expect(exec.calls[0].params).toContain(JSON.stringify(mappings));
   });
 
   test('binds JSON "[]" for an empty roleMappings array (set-to-empty case)', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await ldapRepo.update({ roleMappings: [] }, testDb);
     expect(exec.calls[0].params).toContain('[]');
   });
 
   test('binds NULL for roleMappings when patch.roleMappings is undefined (COALESCE preserves)', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await ldapRepo.update({ enabled: true }, testDb);
     // The SET clause always includes role_mappings via COALESCE($N::jsonb, role_mappings);
     // when patch is undefined, $N binds to null and COALESCE returns the existing column.
@@ -93,7 +109,7 @@ describe('update', () => {
   });
 
   test('passes scalar patch values as bound parameters', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await ldapRepo.update(
       {
         enabled: true,
@@ -119,7 +135,7 @@ describe('update', () => {
   });
 
   test('targets the singleton row via WHERE id = 1', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await ldapRepo.update({ enabled: true }, testDb);
     expect(exec.calls[0].sql).toMatch(/"id"\s*=\s*\$\d+/);
     expect(exec.calls[0].params).toContain(1);

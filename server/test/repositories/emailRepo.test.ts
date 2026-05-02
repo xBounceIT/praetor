@@ -11,10 +11,40 @@ beforeEach(() => {
 });
 
 // drizzle-orm/node-postgres uses rowMode: 'array' for select queries; rows are positional
-// in the projection-declaration order from `EMAIL_PROJECTION` in emailRepo.ts:
-// [enabled, smtpHost, smtpPort, smtpEncryption, smtpRejectUnauthorized,
-//  smtpUser, smtpPassword, fromEmail, fromName]
-const baseRow: unknown[] = [false, '', 587, 'tls', true, '', '', '', 'Praetor'];
+// in the projection-declaration order from `EMAIL_PROJECTION` in emailRepo.ts. Tests use
+// `buildRow` (below) to construct fixtures by field name rather than by index, so a column
+// reorder in the repo is caught either at TS compile time (unknown key) or at test time
+// (wrong-shaped row). PROJECTION_KEYS MUST stay in sync with `EMAIL_PROJECTION`.
+const PROJECTION_KEYS = [
+  'enabled',
+  'smtpHost',
+  'smtpPort',
+  'smtpEncryption',
+  'smtpRejectUnauthorized',
+  'smtpUser',
+  'smtpPassword',
+  'fromEmail',
+  'fromName',
+] as const;
+type ProjectionKey = (typeof PROJECTION_KEYS)[number];
+type RowFields = Record<ProjectionKey, unknown>;
+
+const baseFields: RowFields = {
+  enabled: false,
+  smtpHost: '',
+  smtpPort: 587,
+  smtpEncryption: 'tls',
+  smtpRejectUnauthorized: true,
+  smtpUser: '',
+  smtpPassword: '',
+  fromEmail: '',
+  fromName: 'Praetor',
+};
+
+const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
+  const merged: RowFields = { ...baseFields, ...overrides };
+  return PROJECTION_KEYS.map((k) => merged[k]);
+};
 
 describe('get', () => {
   test('returns null when SELECT returns 0 rows', async () => {
@@ -26,17 +56,16 @@ describe('get', () => {
   test('returns the row mapped to EmailConfig when present', async () => {
     exec.enqueue({
       rows: [
-        [
-          true,
-          'smtp.example.com',
-          465,
-          'ssl',
-          true,
-          'noreply@example.com',
-          'enc:ciphertext',
-          'noreply@example.com',
-          'Acme',
-        ],
+        buildRow({
+          enabled: true,
+          smtpHost: 'smtp.example.com',
+          smtpPort: 465,
+          smtpEncryption: 'ssl',
+          smtpUser: 'noreply@example.com',
+          smtpPassword: 'enc:ciphertext',
+          fromEmail: 'noreply@example.com',
+          fromName: 'Acme',
+        }),
       ],
     });
     const result = await emailRepo.get(testDb);
@@ -54,9 +83,7 @@ describe('get', () => {
   });
 
   test('normalizes a legacy smtpEncryption value to tls', async () => {
-    const row = baseRow.slice();
-    row[3] = 'starttls';
-    exec.enqueue({ rows: [row] });
+    exec.enqueue({ rows: [buildRow({ smtpEncryption: 'starttls' })] });
     const result = await emailRepo.get(testDb);
     expect(result?.smtpEncryption).toBe('tls');
   });
@@ -78,7 +105,7 @@ describe('update', () => {
   });
 
   test('passes patch values as bound parameters', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await emailRepo.update(
       {
         enabled: true,
@@ -105,7 +132,7 @@ describe('update', () => {
   });
 
   test('binds null for omitted patch fields (COALESCE preserves the existing column)', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await emailRepo.update({ fromName: 'Acme' }, testDb);
     const params = exec.calls[0].params;
     // The COALESCE pattern binds NULL for every undefined patch field, plus the explicit
@@ -116,7 +143,7 @@ describe('update', () => {
   });
 
   test('binds the ciphertext (not the patch.smtpPassword field) when set', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await emailRepo.update({ smtpPasswordCiphertext: 'enc:ciphertext' }, testDb);
     expect(exec.calls[0].params).toContain('enc:ciphertext');
     // The patch type renames the password field; this test locks in that the renamed field
@@ -125,23 +152,19 @@ describe('update', () => {
   });
 
   test('returns the row from RETURNING', async () => {
-    const returned = baseRow.slice();
-    returned[8] = 'Acme';
-    exec.enqueue({ rows: [returned] });
+    exec.enqueue({ rows: [buildRow({ fromName: 'Acme' })] });
     const result = await emailRepo.update({ fromName: 'Acme' }, testDb);
     expect(result.fromName).toBe('Acme');
   });
 
   test('normalizes a legacy smtpEncryption from RETURNING to tls', async () => {
-    const returned = baseRow.slice();
-    returned[3] = 'starttls';
-    exec.enqueue({ rows: [returned] });
+    exec.enqueue({ rows: [buildRow({ smtpEncryption: 'starttls' })] });
     const result = await emailRepo.update({ fromName: 'Acme' }, testDb);
     expect(result.smtpEncryption).toBe('tls');
   });
 
   test('targets the singleton row via WHERE id = 1', async () => {
-    exec.enqueue({ rows: [baseRow] });
+    exec.enqueue({ rows: [buildRow()] });
     await emailRepo.update({ fromName: 'Acme' }, testDb);
     expect(exec.calls[0].sql).toMatch(/"id"\s*=\s*\$\d+/);
     expect(exec.calls[0].params).toContain(1);
