@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { check, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import type { UnitType } from '../../utils/unit-type.ts';
 import { customerOffers } from './customerOffers.ts';
 
 // Final shape after the ALTER TABLEs in schema.sql added unit_type, the supplier_quote_*
@@ -21,7 +22,7 @@ export const customerOfferItems = pgTable(
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    unitType: varchar('unit_type', { length: 10 }).default('hours'),
+    unitType: varchar('unit_type', { length: 10 }).$type<UnitType>().default('hours'),
     supplierQuoteId: varchar('supplier_quote_id', { length: 100 }),
     supplierQuoteItemId: varchar('supplier_quote_item_id', { length: 50 }),
     supplierQuoteSupplierName: varchar('supplier_quote_supplier_name', { length: 255 }),

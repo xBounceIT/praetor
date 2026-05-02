@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as clientOffersRepo from '../../repositories/clientOffersRepo.ts';
-import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -10,20 +10,16 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// Builder paths use rowMode: 'array' — fixture rows are positional in the schema's column
-// declaration order.
+// All paths are builder-based — fixture rows are positional arrays in schema column order:
 //
-// customerOffers columns (12): [id, linkedQuoteId, clientId, clientName, paymentTerms,
-//   discount, discountType, status, expirationDate, notes, createdAt, updatedAt]
+// customerOffers (12): [id, linkedQuoteId, clientId, clientName, paymentTerms, discount,
+//   discountType, status, expirationDate, notes, createdAt, updatedAt]
 //
-// customerOfferItems columns (16): [id, offerId, productId, productName, quantity, unitPrice,
+// customerOfferItems (16): [id, offerId, productId, productName, quantity, unitPrice,
 //   productCost, productMolPercentage, discount, note, createdAt, unitType, supplierQuoteId,
 //   supplierQuoteItemId, supplierQuoteSupplierName, supplierQuoteUnitPrice]
-//
-// Raw-SQL paths via `executeRows` (`update`, `insertItems`) return objects keyed by the
-// SELECT alias (camelCase via `as "fooBar"`), so those fixtures stay as objects.
 
-const offerBuilderRow: unknown[] = [
+const offerRow: unknown[] = [
   'co-1',
   'cq-1',
   'c-1',
@@ -38,7 +34,7 @@ const offerBuilderRow: unknown[] = [
   new Date('2026-01-01T00:01:40Z'),
 ];
 
-const itemBuilderRow: unknown[] = [
+const itemRow: unknown[] = [
   'coi-1',
   'co-1',
   'p-1',
@@ -57,42 +53,9 @@ const itemBuilderRow: unknown[] = [
   null,
 ];
 
-const offerRawRow = {
-  id: 'co-1',
-  linkedQuoteId: 'cq-1',
-  clientId: 'c-1',
-  clientName: 'Acme',
-  paymentTerms: 'net30',
-  discount: '5',
-  discountType: 'percentage',
-  status: 'draft',
-  expirationDate: new Date('2026-06-01T00:00:00Z'),
-  notes: null,
-  createdAt: 1735689600000,
-  updatedAt: 1735689700000,
-};
-
-const itemRawRow = {
-  id: 'coi-1',
-  offerId: 'co-1',
-  productId: 'p-1',
-  productName: 'Widget',
-  quantity: '2',
-  unitPrice: '10',
-  productCost: '5',
-  productMolPercentage: null,
-  supplierQuoteId: null,
-  supplierQuoteItemId: null,
-  supplierQuoteSupplierName: null,
-  supplierQuoteUnitPrice: null,
-  unitType: 'unit',
-  note: null,
-  discount: '0',
-};
-
 describe('listAll', () => {
   test('orders by created_at DESC and maps types', async () => {
-    exec.enqueue({ rows: [offerBuilderRow] });
+    exec.enqueue({ rows: [offerRow] });
     const result = await clientOffersRepo.listAll(testDb);
     expect(exec.calls[0].sql).toContain('from "customer_offers"');
     expect(exec.calls[0].sql).toContain('order by "customer_offers"."created_at" desc');
@@ -103,7 +66,7 @@ describe('listAll', () => {
 
 describe('listAllItems', () => {
   test('orders items by created_at ASC', async () => {
-    exec.enqueue({ rows: [itemBuilderRow] });
+    exec.enqueue({ rows: [itemRow] });
     const result = await clientOffersRepo.listAllItems(testDb);
     expect(exec.calls[0].sql).toContain('order by "customer_offer_items"."created_at" asc');
     expect(result[0].quantity).toBe(2);
@@ -164,7 +127,7 @@ describe('findLinkedSaleId', () => {
 
 describe('create', () => {
   test('inserts 10 fields and returns mapped offer', async () => {
-    exec.enqueue({ rows: [offerBuilderRow] });
+    exec.enqueue({ rows: [offerRow] });
     const result = await clientOffersRepo.create(
       {
         id: 'co-1',
@@ -182,21 +145,25 @@ describe('create', () => {
     );
     expect(exec.calls[0].sql).toContain('insert into "customer_offers"');
     expect(exec.calls[0].params).toHaveLength(10);
+    expect(exec.calls[0].params[5]).toBe('5'); // discount via numericForDb
     expect(result.id).toBe('co-1');
   });
 });
 
 describe('update', () => {
-  test('passes 10 params and uses COALESCE preservation (raw SQL)', async () => {
-    exec.enqueue({ rows: [offerRawRow] });
+  test('binds 9 patch values via COALESCE, WHERE id last', async () => {
+    exec.enqueue({ rows: [offerRow] });
     await clientOffersRepo.update('co-1', { status: 'accepted' }, testDb);
-    expect(exec.calls[0].sql).toContain('UPDATE customer_offers');
-    expect(exec.calls[0].sql).toContain('updated_at = CURRENT_TIMESTAMP');
-    expect(exec.calls[0].sql).toContain('COALESCE');
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('update "customer_offers"');
+    expect(sql).toContain('COALESCE');
+    expect(sql).toContain('CURRENT_TIMESTAMP');
+    expect(sql).toContain('"id" = $10');
+    // Drizzle's `sql\`COALESCE(${value}, ${col})\`` interpolates the column ref by name
+    // (not as a parameter), so each COALESCE adds exactly one param: 9 patch fields → $1..$9,
+    // then the WHERE id → $10. Only `status` has a non-null patch value here.
     expect(exec.calls[0].params).toHaveLength(10);
-    // Patch order in the COALESCE list: id, clientId, clientName, paymentTerms, discount,
-    // discountType, status, expirationDate, notes, then the WHERE id.
-    expect(exec.calls[0].params[6]).toBe('accepted'); // status
+    expect(exec.calls[0].params[6]).toBe('accepted'); // status (7th field, index 6)
     expect(exec.calls[0].params[9]).toBe('co-1'); // where id
   });
 
@@ -204,16 +171,68 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await clientOffersRepo.update('co-x', { status: 'accepted' }, testDb)).toBeNull();
   });
+
+  test('numericForDb stringifies discount before COALESCE', async () => {
+    exec.enqueue({ rows: [offerRow] });
+    await clientOffersRepo.update('co-1', { discount: 12.5 }, testDb);
+    expect(exec.calls[0].params).toContain('12.5');
+  });
+});
+
+describe('insertItems', () => {
+  test('binds 15 fields per row in column order, with numericForDb on numerics', async () => {
+    exec.enqueue({ rows: [itemRow] });
+    await clientOffersRepo.insertItems(
+      'co-1',
+      [
+        {
+          id: 'coi-1',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 2,
+          unitPrice: 10,
+          productCost: 5,
+          productMolPercentage: null,
+          discount: 0,
+          note: null,
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+          supplierQuoteUnitPrice: null,
+          unitType: 'unit',
+        },
+      ],
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain('insert into "customer_offer_items"');
+    // Drizzle emits columns in schema declaration order (createdAt is skipped — column has
+    // a CURRENT_TIMESTAMP default and isn't in the values object), so unitType lands between
+    // note and supplierQuoteId, matching its schema position.
+    expect(exec.calls[0].params).toEqual([
+      'coi-1',
+      'co-1',
+      'p-1',
+      'Widget',
+      '2', // quantity via numericForDb
+      '10',
+      '5',
+      null, // productMolPercentage null passes through
+      '0',
+      null, // note
+      'unit', // unitType — schema position 11
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
 });
 
 describe('replaceItems', () => {
   test('issues DELETE then a single multi-row INSERT and preserves order', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({
-      rows: [
-        { ...itemRawRow, id: 'a' },
-        { ...itemRawRow, id: 'b' },
-      ],
+      rows: [makeRow(itemRow, { 0: 'a' }), makeRow(itemRow, { 0: 'b' })],
     });
     const items: clientOffersRepo.NewClientOfferItem[] = [
       {
@@ -252,10 +271,7 @@ describe('replaceItems', () => {
     const result = await clientOffersRepo.replaceItems('co-1', items, testDb);
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql).toContain('delete from "customer_offer_items"');
-    expect(exec.calls[1].sql).toContain('INSERT INTO customer_offer_items');
-    expect(exec.calls[1].sql).toContain(
-      'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15), ($16',
-    );
+    expect(exec.calls[1].sql).toContain('insert into "customer_offer_items"');
     expect(exec.calls[1].params[0]).toBe('a');
     expect(exec.calls[1].params[15]).toBe('b'); // 15 fields per row, second row starts at index 15
     expect(result.map((i) => i.id)).toEqual(['a', 'b']);
@@ -279,5 +295,76 @@ describe('deleteById', () => {
   test('returns false when no row matched', async () => {
     exec.enqueue({ rows: [], rowCount: 0 });
     expect(await clientOffersRepo.deleteById('co-x', testDb)).toBe(false);
+  });
+});
+
+describe('mapOffer (exercised via create return path)', () => {
+  const baseInput: clientOffersRepo.NewClientOffer = {
+    id: 'co-1',
+    linkedQuoteId: 'cq-1',
+    clientId: 'c-1',
+    clientName: 'Acme',
+    paymentTerms: 'net30',
+    discount: 5,
+    discountType: 'percentage',
+    status: 'draft',
+    expirationDate: '2026-06-01',
+    notes: null,
+  };
+
+  test('numeric-string discount is parsed to number', async () => {
+    exec.enqueue({ rows: [makeRow(offerRow, { 5: '12.5' })] });
+    const result = await clientOffersRepo.create(baseInput, testDb);
+    expect(result.discount).toBe(12.5);
+  });
+
+  test('unknown discountType falls back to percentage', async () => {
+    exec.enqueue({ rows: [makeRow(offerRow, { 6: 'mystery' })] });
+    const result = await clientOffersRepo.create(baseInput, testDb);
+    expect(result.discountType).toBe('percentage');
+  });
+
+  test('null createdAt/updatedAt fall back to 0', async () => {
+    exec.enqueue({ rows: [makeRow(offerRow, { 10: null, 11: null })] });
+    const result = await clientOffersRepo.create(baseInput, testDb);
+    expect(result.createdAt).toBe(0);
+    expect(result.updatedAt).toBe(0);
+  });
+});
+
+describe('mapItem (exercised via insertItems return path)', () => {
+  const baseItem: clientOffersRepo.NewClientOfferItem = {
+    id: 'coi-1',
+    productId: 'p-1',
+    productName: 'Widget',
+    quantity: 2,
+    unitPrice: 10,
+    productCost: 5,
+    productMolPercentage: null,
+    discount: 0,
+    note: null,
+    supplierQuoteId: null,
+    supplierQuoteItemId: null,
+    supplierQuoteSupplierName: null,
+    supplierQuoteUnitPrice: null,
+    unitType: 'unit',
+  };
+
+  test('null productMolPercentage stays null (not coerced to 0)', async () => {
+    exec.enqueue({ rows: [makeRow(itemRow, { 7: null })] });
+    const [result] = await clientOffersRepo.insertItems('co-1', [baseItem], testDb);
+    expect(result.productMolPercentage).toBeNull();
+  });
+
+  test('numeric-string productMolPercentage is parsed to number', async () => {
+    exec.enqueue({ rows: [makeRow(itemRow, { 7: '12.5' })] });
+    const [result] = await clientOffersRepo.insertItems('co-1', [baseItem], testDb);
+    expect(result.productMolPercentage).toBe(12.5);
+  });
+
+  test('null unitType normalizes to default "hours"', async () => {
+    exec.enqueue({ rows: [makeRow(itemRow, { 11: null })] });
+    const [result] = await clientOffersRepo.insertItems('co-1', [baseItem], testDb);
+    expect(result.unitType).toBe('hours');
   });
 });

@@ -260,8 +260,8 @@ describe('create', () => {
       'Dev',
       't-1',
       'n',
-      1.5,
-      100,
+      '1.5',
+      '100',
       false,
       'remote',
     ]);
@@ -383,7 +383,7 @@ describe('update', () => {
     expect(result?.isPlaceholder).toBe(false);
     expect(exec.calls[0].sql).toContain('"duration" = $1');
     expect(exec.calls[0].sql).toContain('"id" = $2');
-    expect(exec.calls[0].params).toEqual([2, 'e-1']);
+    expect(exec.calls[0].params).toEqual(['2', 'e-1']);
   });
 
   test('builds SET list in schema column order from defined fields', async () => {
@@ -403,7 +403,7 @@ describe('update', () => {
     expect(sql).toContain('"is_placeholder" = $4');
     expect(sql).toContain('"location" = $5');
     expect(sql).toContain('"id" = $6');
-    expect(exec.calls[0].params).toEqual(['t-2', 'updated', 2, true, 'office', 'e-1']);
+    expect(exec.calls[0].params).toEqual(['t-2', 'updated', '2', true, 'office', 'e-1']);
   });
 
   test('passes taskId through when set, omitting other fields', async () => {

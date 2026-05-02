@@ -2,7 +2,7 @@ import { and, eq, gte, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
-import { parseDbNumber } from '../utils/parse.ts';
+import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import { managedUserIdsSubquerySql } from './workUnitsRepo.ts';
 
 export type TimeEntry = {
@@ -266,10 +266,8 @@ export const create = async (entry: NewEntry, exec: DbExecutor = db): Promise<Ti
       task: entry.task,
       taskId: entry.taskId,
       notes: entry.notes,
-      // numeric columns accept number or string at the wire level; the schema's TS
-      // type is `string` so cast through. The pg driver serializes both equivalently.
-      duration: entry.duration as unknown as string,
-      hourlyCost: entry.hourlyCost as unknown as string,
+      duration: numericForDb(entry.duration),
+      hourlyCost: numericForDb(entry.hourlyCost),
       isPlaceholder: entry.isPlaceholder,
       location: entry.location,
     })
@@ -293,7 +291,7 @@ export const update = async (
   exec: DbExecutor = db,
 ): Promise<TimeEntry | null> => {
   const setValues: Partial<typeof timeEntries.$inferInsert> = {};
-  if (patch.duration !== undefined) setValues.duration = patch.duration as unknown as string;
+  if (patch.duration !== undefined) setValues.duration = numericForDb(patch.duration);
   if (patch.notes !== undefined) setValues.notes = patch.notes;
   if (patch.isPlaceholder !== undefined) setValues.isPlaceholder = patch.isPlaceholder;
   if (patch.location !== undefined) setValues.location = patch.location;
