@@ -16,6 +16,7 @@ export * from './supplierSales.ts';
 export * from './suppliers.ts';
 export * from './tasks.ts';
 export * from './timeEntries.ts';
+export * from './users.ts';
 export * from './userWorkUnits.ts';
 export * from './workUnitManagers.ts';
 export * from './workUnits.ts';

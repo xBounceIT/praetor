@@ -71,6 +71,13 @@
       "when": 1777758202809,
       "tag": "0009_claim_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777758560634,
+      "tag": "0010_claim_users",
+      "breakpoints": true
     }
   ]
 }
