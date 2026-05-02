@@ -222,7 +222,12 @@ export const addUserAssignments = async (
 // alias (`"te"`), not `"time_entries" "te"`, so it can't be used directly in FROM. Column
 // references via `timeEntriesTe.X` / `tasksT.X` correctly compile to `"te"."x"` / `"t"."x"`
 // — that's the part the aliases buy us.
-export const timeEntriesTe = alias(timeEntries, 'te');
+//
+// `timeEntriesTe` is module-private — the JOIN chunk and `sumHoursByProjects` are the only
+// callers and they all live in this file. `tasksT` is exported because external consumers
+// (e.g. `reportsHoursRepo.getTasksSection`) need to reference `t` columns in their own
+// surrounding SELECT/JOIN/WHERE clauses (e.g. `JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`).
+const timeEntriesTe = alias(timeEntries, 'te');
 export const tasksT = alias(tasks, 't');
 
 // Joins time_entries -> tasks via task_id when present, falling back to (project_id, name) for

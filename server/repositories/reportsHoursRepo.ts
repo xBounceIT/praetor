@@ -1,7 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
-import { toDbNumber as toNumber, toDbText as toText } from '../utils/parse.ts';
+import { parseDbNumber, toDbText } from '../utils/parse.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
+
+// Aggregation rows project COALESCE'd numerics, so 0 is the right fallback for missing rows.
+// `parseDbNumber(v, 0)` is the Phase 3 convention; the previous `toNumber` alias has been
+// dropped to keep this file aligned with the rest of the converted repos.
+// `toDbText` (trim + fallback to '') is preserved because reportsHoursRepo reads from
+// un-modeled tables (`projects`/`clients`/`users`) where nullability isn't asserted via
+// Drizzle types and the trim-and-default contract is still useful.
 
 type ProjectRow = {
   id: string;
@@ -143,32 +150,32 @@ export const getTimesheetsSection = async (
       ),
     ]);
 
-  const totalHours = toNumber(totals[0]?.hours);
-  const totalEntries = toNumber(totals[0]?.entry_count);
+  const totalHours = parseDbNumber(totals[0]?.hours, 0);
+  const totalEntries = parseDbNumber(totals[0]?.entry_count, 0);
 
   const mapTopRow = (r: { label: string; value: string; entry_count: string }) => ({
-    label: toText(r.label),
-    value: toNumber(r.value),
-    entryCount: toNumber(r.entry_count),
+    label: toDbText(r.label),
+    value: parseDbNumber(r.value, 0),
+    entryCount: parseDbNumber(r.entry_count, 0),
   });
 
   return {
     totals: {
       hours: totalHours,
       entryCount: totalEntries,
-      cost: toNumber(totals[0]?.total_cost),
+      cost: parseDbNumber(totals[0]?.total_cost, 0),
       avgEntryHours: totalEntries > 0 ? totalHours / totalEntries : 0,
     },
     byMonth: byMonth.map((r) => ({
-      label: toText(r.label),
-      hours: toNumber(r.hours),
-      entryCount: toNumber(r.entry_count),
-      cost: toNumber(r.total_cost),
+      label: toDbText(r.label),
+      hours: parseDbNumber(r.hours, 0),
+      entryCount: parseDbNumber(r.entry_count, 0),
+      cost: parseDbNumber(r.total_cost, 0),
     })),
     byLocation: byLocation.map((r) => ({
-      location: toText(r.location),
-      hours: toNumber(r.hours),
-      entryCount: toNumber(r.entry_count),
+      location: toDbText(r.location),
+      hours: parseDbNumber(r.hours, 0),
+      entryCount: parseDbNumber(r.entry_count, 0),
     })),
     topHoursByUser: topUsers.map(mapTopRow),
     topHoursByClient: topClients.map(mapTopRow),
@@ -338,9 +345,9 @@ export const getProjectsSection = async (
 
   const projectStats = hoursRows
     ? hoursRows.map((r) => ({
-        label: toText(r.label),
-        hours: toNumber(r.hours),
-        cost: toNumber(r.cost),
+        label: toDbText(r.label),
+        hours: parseDbNumber(r.hours, 0),
+        cost: parseDbNumber(r.cost, 0),
       }))
     : [];
   const topByHours = [...projectStats]
@@ -352,18 +359,18 @@ export const getProjectsSection = async (
     .slice(0, topLimit)
     .map(({ label, hours, cost }) => ({ label, value: cost, hours }));
 
-  const projectCount = toNumber(summaryRows[0]?.count);
-  const disabledCount = toNumber(summaryRows[0]?.disabled_count);
+  const projectCount = parseDbNumber(summaryRows[0]?.count, 0);
+  const disabledCount = parseDbNumber(summaryRows[0]?.disabled_count, 0);
   return {
     count: projectCount,
     activeCount: Math.max(projectCount - disabledCount, 0),
     disabledCount,
     items: itemsRows.map((r) => ({
-      id: toText(r.id),
-      name: toText(r.name),
-      clientId: toText(r.client_id),
-      clientName: toText(r.client_name),
-      description: toText(r.description),
+      id: toDbText(r.id),
+      name: toDbText(r.name),
+      clientId: toDbText(r.client_id),
+      clientName: toDbText(r.client_name),
+      description: toDbText(r.description),
       isDisabled: Boolean(r.is_disabled),
     })),
     topByHours,
@@ -536,27 +543,27 @@ export const getTasksSection = async (
 
   const topByHours = taskHoursRows
     ? taskHoursRows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.hours),
-        entryCount: toNumber(r.entry_count),
+        label: toDbText(r.label),
+        value: parseDbNumber(r.hours, 0),
+        entryCount: parseDbNumber(r.entry_count, 0),
       }))
     : [];
 
-  const taskCount = toNumber(summaryRows[0]?.count);
-  const disabledCount = toNumber(summaryRows[0]?.disabled_count);
+  const taskCount = parseDbNumber(summaryRows[0]?.count, 0);
+  const disabledCount = parseDbNumber(summaryRows[0]?.disabled_count, 0);
   return {
     count: taskCount,
     activeCount: Math.max(taskCount - disabledCount, 0),
     disabledCount,
-    recurringCount: toNumber(summaryRows[0]?.recurring_count),
+    recurringCount: parseDbNumber(summaryRows[0]?.recurring_count, 0),
     items: itemsRows.map((r) => ({
-      id: toText(r.id),
-      name: toText(r.name),
-      projectId: toText(r.project_id),
-      projectName: toText(r.project_name),
+      id: toDbText(r.id),
+      name: toDbText(r.name),
+      projectId: toDbText(r.project_id),
+      projectName: toDbText(r.project_name),
       isDisabled: Boolean(r.is_disabled),
       isRecurring: Boolean(r.is_recurring),
-      recurrencePattern: toText(r.recurrence_pattern),
+      recurrencePattern: toDbText(r.recurrence_pattern),
     })),
     topByHours,
   };

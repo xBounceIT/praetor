@@ -306,8 +306,23 @@ describe('getTasksSection', () => {
   // These tests assert that BOTH branches of the JOIN's `OR` predicate ship in the emitted SQL,
   // so a future regression that drops one branch (e.g. only matching FK and losing legacy entries
   // whose `task_id` is NULL) would fail loudly here rather than at a customer reporting bug.
+  //
+  // The assertions extract the `JOIN tasks t ON ... (next-JOIN | WHERE)` substring and check
+  // both branches sit inside it. Substring-presence elsewhere in the query (e.g. a future
+  // CTE) wouldn't satisfy this — the whole `te.task_id IS NULL OR …` test has to live inside
+  // the ON clause, otherwise legacy entries with NULL `task_id` get filtered out instead of
+  // joined via the (project_id, name) fallback.
   describe('timeEntriesTasksJoin coverage in scoped task hours queries', () => {
-    test('matched-FK branch: t.id = te.task_id is present in the JOIN', async () => {
+    const extractTasksJoinOn = (sql: string): string => {
+      // Match from `JOIN tasks t` (or `JOIN tasks "t"`) up to the next JOIN/WHERE/GROUP keyword.
+      const match = sql.match(
+        /JOIN\s+tasks\s+"?t"?\s+ON\s+([\s\S]*?)(?=\s+(?:JOIN|WHERE|GROUP)\b)/,
+      );
+      if (!match) throw new Error(`No 'JOIN tasks t ON ...' found in:\n${sql}`);
+      return match[1];
+    };
+
+    test('matched-FK branch sits inside the JOIN ON clause', async () => {
       enqueueEmptyN(3);
       await repo.getTasksSection(
         {
@@ -324,11 +339,12 @@ describe('getTasksSection', () => {
         testDb,
       );
       const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
-      expect(hoursCall?.sql).toContain('JOIN tasks t');
-      expect(hoursCall?.sql).toContain('"t"."id" = "te"."task_id"');
+      expect(hoursCall).toBeDefined();
+      const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      expect(onClause).toContain('"t"."id" = "te"."task_id"');
     });
 
-    test('name-fallback branch: te.task_id IS NULL AND t.name = te.task is present', async () => {
+    test('name-fallback branch sits inside the JOIN ON clause, OR-combined with the FK branch', async () => {
       enqueueEmptyN(3);
       await repo.getTasksSection(
         {
@@ -345,9 +361,15 @@ describe('getTasksSection', () => {
         testDb,
       );
       const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
-      expect(hoursCall?.sql).toContain('"te"."task_id" IS NULL');
-      expect(hoursCall?.sql).toContain('"t"."project_id" = "te"."project_id"');
-      expect(hoursCall?.sql).toContain('"t"."name" = "te"."task"');
+      expect(hoursCall).toBeDefined();
+      const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      // Both branches must be in the same ON clause; the fallback's three predicates AND'd
+      // together inside parens, the whole thing OR'd against the FK match.
+      expect(onClause).toContain('"t"."id" = "te"."task_id"');
+      expect(onClause).toMatch(/\bOR\b/);
+      expect(onClause).toContain('"te"."task_id" IS NULL');
+      expect(onClause).toContain('"t"."project_id" = "te"."project_id"');
+      expect(onClause).toContain('"t"."name" = "te"."task"');
     });
   });
 });
