@@ -1,4 +1,8 @@
-import pool, { buildBulkInsertPlaceholders, type QueryExecutor } from '../db/index.ts';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
+import { customerOffers } from '../db/schema/customerOffers.ts';
+import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -36,6 +40,10 @@ export type ClientOfferItem = {
   discount: number;
 };
 
+// Snake-case-aliased shape returned by raw-SQL `executeRows` paths (`update`, `insertItems`).
+// The SELECT clauses below alias columns to camelCase via `AS "fooBar"`, so these row shapes
+// are camelCase as well — the difference vs. builder rows is that timestamp columns come back
+// as epoch-ms numbers (via `EXTRACT(EPOCH FROM ...) * 1000`) rather than `Date` objects.
 type ClientOfferRow = {
   id: string;
   linkedQuoteId: string;
@@ -69,7 +77,7 @@ type ClientOfferItemRow = {
   discount: string | number;
 };
 
-const OFFER_COLUMNS = `
+const OFFER_RETURNING_SQL = sql`
   id,
   linked_quote_id as "linkedQuoteId",
   client_id as "clientId",
@@ -84,7 +92,7 @@ const OFFER_COLUMNS = `
   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
 `;
 
-const ITEM_COLUMNS = `
+const ITEM_RETURNING_SQL = sql`
   id,
   offer_id as "offerId",
   product_id as "productId",
@@ -117,6 +125,21 @@ const mapOffer = (row: ClientOfferRow): ClientOffer => ({
   updatedAt: parseDbNumber(row.updatedAt, 0),
 });
 
+const mapBuilderOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
+  id: row.id,
+  linkedQuoteId: row.linkedQuoteId,
+  clientId: row.clientId,
+  clientName: row.clientName,
+  paymentTerms: row.paymentTerms,
+  discount: parseDbNumber(row.discount, 0),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
+  status: row.status,
+  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
+  notes: row.notes,
+  createdAt: row.createdAt?.getTime() ?? 0,
+  updatedAt: row.updatedAt?.getTime() ?? 0,
+});
+
 const mapItem = (row: ClientOfferItemRow): ClientOfferItem => ({
   id: row.id,
   offerId: row.offerId,
@@ -135,37 +158,54 @@ const mapItem = (row: ClientOfferItemRow): ClientOfferItem => ({
   discount: parseDbNumber(row.discount, 0),
 });
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<ClientOffer[]> => {
-  const { rows } = await exec.query<ClientOfferRow>(
-    `SELECT ${OFFER_COLUMNS} FROM customer_offers ORDER BY created_at DESC`,
-  );
-  return rows.map(mapOffer);
+const mapBuilderItem = (row: typeof customerOfferItems.$inferSelect): ClientOfferItem => ({
+  id: row.id,
+  offerId: row.offerId,
+  productId: row.productId,
+  productName: row.productName,
+  quantity: parseDbNumber(row.quantity, 0),
+  unitPrice: parseDbNumber(row.unitPrice, 0),
+  productCost: parseDbNumber(row.productCost, 0),
+  productMolPercentage: parseNullableDbNumber(row.productMolPercentage),
+  supplierQuoteId: row.supplierQuoteId,
+  supplierQuoteItemId: row.supplierQuoteItemId,
+  supplierQuoteSupplierName: row.supplierQuoteSupplierName,
+  supplierQuoteUnitPrice: parseNullableDbNumber(row.supplierQuoteUnitPrice),
+  unitType: normalizeUnitType(row.unitType),
+  note: row.note,
+  discount: parseDbNumber(row.discount, 0),
+});
+
+export const listAll = async (exec: DbExecutor = db): Promise<ClientOffer[]> => {
+  const rows = await exec.select().from(customerOffers).orderBy(desc(customerOffers.createdAt));
+  return rows.map(mapBuilderOffer);
 };
 
-export const listAllItems = async (exec: QueryExecutor = pool): Promise<ClientOfferItem[]> => {
-  const { rows } = await exec.query<ClientOfferItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM customer_offer_items ORDER BY created_at ASC`,
-  );
-  return rows.map(mapItem);
+export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOfferItem[]> => {
+  const rows = await exec
+    .select()
+    .from(customerOfferItems)
+    .orderBy(asc(customerOfferItems.createdAt));
+  return rows.map(mapBuilderItem);
 };
 
-export const existsById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM customer_offers WHERE id = $1`,
-    [id],
-  );
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: customerOffers.id })
+    .from(customerOffers)
+    .where(eq(customerOffers.id, id));
   return rows.length > 0;
 };
 
 export const findIdConflict = async (
   newId: string,
   currentId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM customer_offers WHERE id = $1 AND id <> $2`,
-    [newId, currentId],
-  );
+  const rows = await exec
+    .select({ id: customerOffers.id })
+    .from(customerOffers)
+    .where(and(eq(customerOffers.id, newId), ne(customerOffers.id, currentId)));
   return rows.length > 0;
 };
 
@@ -179,63 +219,65 @@ export type ExistingOffer = {
 
 export const findForUpdate = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ExistingOffer | null> => {
-  const { rows } = await exec.query<ExistingOffer>(
-    `SELECT id,
-            linked_quote_id as "linkedQuoteId",
-            client_id as "clientId",
-            client_name as "clientName",
-            status
-       FROM customer_offers
-      WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({
+      id: customerOffers.id,
+      linkedQuoteId: customerOffers.linkedQuoteId,
+      clientId: customerOffers.clientId,
+      clientName: customerOffers.clientName,
+      status: customerOffers.status,
+    })
+    .from(customerOffers)
+    .where(eq(customerOffers.id, id));
   return rows[0] ?? null;
 };
 
 export const findStatusAndClientName = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ status: string; clientName: string } | null> => {
-  const { rows } = await exec.query<{ status: string; clientName: string }>(
-    `SELECT status, client_name as "clientName" FROM customer_offers WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({ status: customerOffers.status, clientName: customerOffers.clientName })
+    .from(customerOffers)
+    .where(eq(customerOffers.id, id));
   return rows[0] ?? null;
 };
 
 export const findExistingForQuote = async (
   quoteId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1`,
-    [quoteId],
-  );
+  const rows = await exec
+    .select({ id: customerOffers.id })
+    .from(customerOffers)
+    .where(eq(customerOffers.linkedQuoteId, quoteId))
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const findLinkedSaleId = async (
   offerId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM sales WHERE linked_offer_id = $1 LIMIT 1`,
-    [offerId],
-  );
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .where(eq(sales.linkedOfferId, offerId))
+    .limit(1);
   return rows[0]?.id ?? null;
 };
 
 export const findItemsForOffer = async (
   offerId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOfferItem[]> => {
-  const { rows } = await exec.query<ClientOfferItemRow>(
-    `SELECT ${ITEM_COLUMNS} FROM customer_offer_items WHERE offer_id = $1`,
-    [offerId],
-  );
-  return rows.map(mapItem);
+  const rows = await exec
+    .select()
+    .from(customerOfferItems)
+    .where(eq(customerOfferItems.offerId, offerId));
+  return rows.map(mapBuilderItem);
 };
 
 export type NewClientOffer = {
@@ -253,27 +295,26 @@ export type NewClientOffer = {
 
 export const create = async (
   input: NewClientOffer,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOffer> => {
-  const { rows } = await exec.query<ClientOfferRow>(
-    `INSERT INTO customer_offers
-        (id, linked_quote_id, client_id, client_name, payment_terms, discount, discount_type, status, expiration_date, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING ${OFFER_COLUMNS}`,
-    [
-      input.id,
-      input.linkedQuoteId,
-      input.clientId,
-      input.clientName,
-      input.paymentTerms,
-      input.discount,
-      input.discountType,
-      input.status,
-      input.expirationDate,
-      input.notes,
-    ],
-  );
-  return mapOffer(rows[0]);
+  const [row] = await exec
+    .insert(customerOffers)
+    .values({
+      id: input.id,
+      linkedQuoteId: input.linkedQuoteId,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      // numeric columns accept number or string at the wire level; the schema's TS
+      // type is `string` so cast through. The pg driver serializes both equivalently.
+      discount: input.discount as unknown as string,
+      discountType: input.discountType,
+      status: input.status,
+      expirationDate: input.expirationDate,
+      notes: input.notes,
+    })
+    .returning();
+  return mapBuilderOffer(row);
 };
 
 export type ClientOfferUpdate = {
@@ -291,34 +332,26 @@ export type ClientOfferUpdate = {
 export const update = async (
   id: string,
   patch: ClientOfferUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOffer | null> => {
-  const { rows } = await exec.query<ClientOfferRow>(
-    `UPDATE customer_offers
-        SET id = COALESCE($1, id),
-            client_id = COALESCE($2, client_id),
-            client_name = COALESCE($3, client_name),
-            payment_terms = COALESCE($4, payment_terms),
-            discount = COALESCE($5, discount),
-            discount_type = COALESCE($6, discount_type),
-            status = COALESCE($7, status),
-            expiration_date = COALESCE($8, expiration_date),
-            notes = COALESCE($9, notes),
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10
-      RETURNING ${OFFER_COLUMNS}`,
-    [
-      patch.id ?? null,
-      patch.clientId ?? null,
-      patch.clientName ?? null,
-      patch.paymentTerms ?? null,
-      patch.discount ?? null,
-      patch.discountType ?? null,
-      patch.status ?? null,
-      patch.expirationDate ?? null,
-      patch.notes ?? null,
-      id,
-    ],
+  // The COALESCE pattern preserves the existing column when the patch field is null —
+  // matches the pre-Drizzle contract callers rely on (the client-offers route always
+  // passes a value, using `null` to mean "keep existing" for fields that weren't sent).
+  const rows = await executeRows<ClientOfferRow>(
+    exec,
+    sql`UPDATE customer_offers
+           SET id = COALESCE(${patch.id ?? null}, id),
+               client_id = COALESCE(${patch.clientId ?? null}, client_id),
+               client_name = COALESCE(${patch.clientName ?? null}, client_name),
+               payment_terms = COALESCE(${patch.paymentTerms ?? null}, payment_terms),
+               discount = COALESCE(${patch.discount ?? null}, discount),
+               discount_type = COALESCE(${patch.discountType ?? null}, discount_type),
+               status = COALESCE(${patch.status ?? null}, status),
+               expiration_date = COALESCE(${patch.expirationDate ?? null}, expiration_date),
+               notes = COALESCE(${patch.notes ?? null}, notes),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ${id}
+         RETURNING ${OFFER_RETURNING_SQL}`,
   );
   return rows[0] ? mapOffer(rows[0]) : null;
 };
@@ -343,36 +376,24 @@ export type NewClientOfferItem = {
 export const insertItems = async (
   offerId: string,
   items: NewClientOfferItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOfferItem[]> => {
   if (items.length === 0) return [];
-  const placeholders = buildBulkInsertPlaceholders(items.length, 15);
-  const params = items.flatMap((item) => [
-    item.id,
-    offerId,
-    item.productId,
-    item.productName,
-    item.quantity,
-    item.unitPrice,
-    item.productCost,
-    item.productMolPercentage,
-    item.discount,
-    item.note,
-    item.supplierQuoteId,
-    item.supplierQuoteItemId,
-    item.supplierQuoteSupplierName,
-    item.supplierQuoteUnitPrice,
-    item.unitType,
-  ]);
-  const { rows } = await exec.query<ClientOfferItemRow>(
-    `INSERT INTO customer_offer_items
-       (id, offer_id, product_id, product_name, quantity, unit_price, product_cost,
-        product_mol_percentage, discount, note,
-        supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
-        supplier_quote_unit_price, unit_type)
-     VALUES ${placeholders}
-     RETURNING ${ITEM_COLUMNS}`,
-    params,
+  // Multi-row INSERT via `sql.join` of per-row tuples. Drizzle's tagged template handles
+  // parameter numbering; preserves the existing single-statement bulk insert.
+  const valuesTuples = items.map(
+    (item) =>
+      sql`(${item.id}, ${offerId}, ${item.productId}, ${item.productName}, ${item.quantity}, ${item.unitPrice}, ${item.productCost}, ${item.productMolPercentage}, ${item.discount}, ${item.note}, ${item.supplierQuoteId}, ${item.supplierQuoteItemId}, ${item.supplierQuoteSupplierName}, ${item.supplierQuoteUnitPrice}, ${item.unitType})`,
+  );
+  const rows = await executeRows<ClientOfferItemRow>(
+    exec,
+    sql`INSERT INTO customer_offer_items
+           (id, offer_id, product_id, product_name, quantity, unit_price, product_cost,
+            product_mol_percentage, discount, note,
+            supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
+            supplier_quote_unit_price, unit_type)
+         VALUES ${sql.join(valuesTuples, sql`, `)}
+         RETURNING ${ITEM_RETURNING_SQL}`,
   );
   return rows.map(mapItem);
 };
@@ -380,13 +401,13 @@ export const insertItems = async (
 export const replaceItems = async (
   offerId: string,
   items: NewClientOfferItem[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientOfferItem[]> => {
-  await exec.query(`DELETE FROM customer_offer_items WHERE offer_id = $1`, [offerId]);
+  await exec.delete(customerOfferItems).where(eq(customerOfferItems.offerId, offerId));
   return insertItems(offerId, items, exec);
 };
 
-export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rowCount } = await exec.query(`DELETE FROM customer_offers WHERE id = $1`, [id]);
-  return (rowCount ?? 0) > 0;
+export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const result = await exec.delete(customerOffers).where(eq(customerOffers.id, id));
+  return (result.rowCount ?? 0) > 0;
 };

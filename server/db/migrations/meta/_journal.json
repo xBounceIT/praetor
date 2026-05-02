@@ -36,6 +36,13 @@
       "when": 1777736290821,
       "tag": "0004_claim_audit_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777742281742,
+      "tag": "0005_claim_customer_offer_items",
+      "breakpoints": true
     }
   ]
 }
