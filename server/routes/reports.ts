@@ -1,7 +1,10 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { QueryResultRow } from 'pg';
+import type { DbExecutor } from '../db/drizzle.ts';
 import pool, { type QueryExecutor } from '../db/index.ts';
+import * as schema from '../db/schema/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
@@ -34,13 +37,40 @@ type GeneralAiConfig = {
 type DatasetQueryCounterStore = { count: number };
 const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
 
+const incrementDatasetCounter = () => {
+  const counter = datasetQueryCounterStorage.getStore();
+  if (counter) counter.count += 1;
+};
+
+// Two parallel "counting" executors that share the same AsyncLocalStorage counter:
+//   - `datasetExec` (legacy `QueryExecutor`) for repos still on raw `pg`
+//   - `datasetDb` (Drizzle `DbExecutor`) for repos converted in Phase 3+
+// Each request handler enters `datasetQueryCounterStorage` once and any query through either
+// executor increments the same counter, so dataset query budgets stay consistent across the
+// mixed-mode period of the migration.
+//
+// IMPORTANT: counting only happens when callers use these exact instances. If a future caller
+// wraps a converted reports repo in `withDbTransaction(tx => repo.fn(opts, tx))`, the `tx`
+// argument is a fresh Drizzle transaction without the `logger` hook attached, so its queries
+// won't increment the counter. Today reporting is read-only and never transactional, but if
+// that changes the wrapping needs to move (e.g. a `withCountingTransaction` helper that
+// re-attaches the logger to the tx).
 const datasetExec: QueryExecutor = {
   query: <T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => {
-    const counter = datasetQueryCounterStorage.getStore();
-    if (counter) counter.count += 1;
+    incrementDatasetCounter();
     return pool.query<T>(text, params);
   },
 };
+
+// `schema` is required for the return type to satisfy `DbExecutor`
+// (`PgDatabase<…, typeof schema, …>`) — without it the inferred type is
+// `PgDatabase<…, Record<string, never>, …>` which isn't assignable. The query builder is
+// not used through this exec today (reports use raw `sql` template literals via `executeRows`),
+// so the schema isn't load-bearing at runtime.
+const datasetDb: DbExecutor = drizzle(pool, {
+  schema,
+  logger: { logQuery: incrementDatasetCounter },
+});
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const settings = await generalSettingsRepo.get();
@@ -855,7 +885,7 @@ const buildBusinessDataset = async (
           allowedTimesheetUserIds,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 
@@ -968,7 +998,7 @@ const buildBusinessDataset = async (
           itemsLimit: listLimits.items,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 
@@ -1004,7 +1034,7 @@ const buildBusinessDataset = async (
           itemsLimit: listLimits.items,
           topLimit: listLimits.top,
         },
-        datasetExec,
+        datasetDb,
       );
     }
 

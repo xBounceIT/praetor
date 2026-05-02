@@ -8,6 +8,13 @@
       "when": 1777665958326,
       "tag": "0000_baseline_pre_drizzle",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777679280848,
+      "tag": "0001_add_phase3_tables",
+      "breakpoints": true
     }
   ]
 }

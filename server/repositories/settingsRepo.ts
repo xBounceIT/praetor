@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { eq, sql } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { settings } from '../db/schema/settings.ts';
 
 export const LANGUAGES = ['en', 'it', 'auto'] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -10,55 +12,60 @@ export type Settings = {
   language: Language;
 };
 
-type SettingsRow = {
-  fullName: string | null;
-  email: string | null;
-  language: Language | null;
-};
+const SETTINGS_PROJECTION = {
+  fullName: settings.fullName,
+  email: settings.email,
+  language: settings.language,
+} as const;
 
-const SELECT_COLUMNS = `full_name as "fullName", email, language`;
+type SettingsRow = { fullName: string | null; email: string | null; language: string | null };
 
 const mapRow = (row: SettingsRow): Settings => ({
   fullName: row.fullName,
   email: row.email,
-  language: row.language ?? DEFAULT_LANGUAGE,
+  language: (row.language as Language | null) ?? DEFAULT_LANGUAGE,
 });
 
 export const getOrCreateForUser = async (
   userId: string,
   defaults: { fullName: string | null; email: string | null },
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Settings> => {
-  const existing = await exec.query<SettingsRow>(
-    `SELECT ${SELECT_COLUMNS} FROM settings WHERE user_id = $1`,
-    [userId],
-  );
-  if (existing.rows.length > 0) return mapRow(existing.rows[0]);
+  const existing = await exec
+    .select(SETTINGS_PROJECTION)
+    .from(settings)
+    .where(eq(settings.userId, userId));
+  if (existing.length > 0) return mapRow(existing[0]);
 
-  const inserted = await exec.query<SettingsRow>(
-    `INSERT INTO settings (user_id, full_name, email)
-     VALUES ($1, $2, $3)
-     RETURNING ${SELECT_COLUMNS}`,
-    [userId, defaults.fullName, defaults.email],
-  );
-  return mapRow(inserted.rows[0]);
+  const inserted = await exec
+    .insert(settings)
+    .values({ userId, fullName: defaults.fullName, email: defaults.email })
+    .returning(SETTINGS_PROJECTION);
+  return mapRow(inserted[0]);
 };
 
 export const upsertForUser = async (
   userId: string,
   patch: { fullName: string | null; email: string | null; language: Language | null },
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Settings> => {
-  const { rows } = await exec.query<SettingsRow>(
-    `INSERT INTO settings (user_id, full_name, email, language)
-     VALUES ($1, $2, $3, COALESCE($4, $5))
-     ON CONFLICT (user_id) DO UPDATE SET
-       full_name = COALESCE($2, settings.full_name),
-       email = COALESCE($3, settings.email),
-       language = COALESCE($4, settings.language),
-       updated_at = CURRENT_TIMESTAMP
-     RETURNING ${SELECT_COLUMNS}`,
-    [userId, patch.fullName, patch.email, patch.language, DEFAULT_LANGUAGE],
-  );
-  return mapRow(rows[0]);
+  const result = await exec
+    .insert(settings)
+    .values({
+      userId,
+      fullName: patch.fullName,
+      email: patch.email,
+      language: patch.language ?? DEFAULT_LANGUAGE,
+    })
+    .onConflictDoUpdate({
+      target: settings.userId,
+      set: {
+        fullName: sql`COALESCE(${patch.fullName}, ${settings.fullName})`,
+        email: sql`COALESCE(${patch.email}, ${settings.email})`,
+        language: sql`COALESCE(${patch.language}, ${settings.language})`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      },
+    })
+    .returning(SETTINGS_PROJECTION);
+  return mapRow(result[0]);
 };

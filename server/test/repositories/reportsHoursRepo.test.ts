@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as repo from '../../repositories/reportsHoursRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { extractTasksJoinOn } from '../helpers/sqlAssertions.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
 const FROM = '2026-01-01';
@@ -20,7 +23,7 @@ describe('getTimesheetsSection', () => {
     enqueueEmptyN(7);
     await repo.getTimesheetsSection(
       { fromDate: FROM, toDate: TO, allowedTimesheetUserIds: null, topLimit: 10 },
-      exec,
+      testDb,
     );
     expect(exec.calls).toHaveLength(7);
     // totals/byMonth/byLocation use baseWhere.params (2 elements)
@@ -40,7 +43,7 @@ describe('getTimesheetsSection', () => {
         allowedTimesheetUserIds: ['u1', 'u2'],
         topLimit: 5,
       },
-      exec,
+      testDb,
     );
     const limited = exec.calls.filter((c) => /LIMIT \$\d+/.test(c.sql));
     for (const call of limited) {
@@ -54,7 +57,7 @@ describe('getTimesheetsSection', () => {
     enqueueEmptyN(6);
     const result = await repo.getTimesheetsSection(
       { fromDate: FROM, toDate: TO, allowedTimesheetUserIds: null, topLimit: 10 },
-      exec,
+      testDb,
     );
     expect(result.totals).toEqual({
       hours: 40,
@@ -69,7 +72,7 @@ describe('getTimesheetsSection', () => {
     enqueueEmptyN(6);
     const result = await repo.getTimesheetsSection(
       { fromDate: FROM, toDate: TO, allowedTimesheetUserIds: null, topLimit: 10 },
-      exec,
+      testDb,
     );
     expect(result.totals.avgEntryHours).toBe(0);
   });
@@ -90,7 +93,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(exec.calls).toHaveLength(3);
   });
@@ -109,7 +112,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(exec.calls).toHaveLength(2);
   });
@@ -130,7 +133,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(result).toMatchObject({ count: 5, activeCount: 3, disabledCount: 2 });
   });
@@ -157,7 +160,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(result.topByHours.map((r) => r.label)).toEqual(['B', 'A', 'C']);
     expect(result.topByCost.map((r) => r.label)).toEqual(['C', 'A', 'B']);
@@ -185,7 +188,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 3,
       },
-      exec,
+      testDb,
     );
     expect(result.topByHours).toHaveLength(3);
     expect(result.topByCost).toHaveLength(3);
@@ -205,7 +208,7 @@ describe('getProjectsSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(exec.calls[0].sql).toContain('JOIN user_projects');
     expect(exec.calls[0].params).toEqual(['u1']);
@@ -228,7 +231,7 @@ describe('getTasksSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(exec.calls).toHaveLength(2);
   });
@@ -247,7 +250,7 @@ describe('getTasksSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
     expect(hoursCall?.sql).toContain('LIMIT $3');
@@ -268,7 +271,7 @@ describe('getTasksSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
     expect(hoursCall?.sql).toContain('LIMIT $5');
@@ -290,13 +293,74 @@ describe('getTasksSection', () => {
         itemsLimit: 50,
         topLimit: 10,
       },
-      exec,
+      testDb,
     );
     expect(result).toMatchObject({
       count: 8,
       activeCount: 7,
       disabledCount: 1,
       recurringCount: 3,
+    });
+  });
+
+  // The !canViewAllTasks branches funnel through `timeEntriesTasksJoin` (defined in tasksRepo).
+  // These tests assert that BOTH branches of the JOIN's `OR` predicate ship in the emitted SQL,
+  // so a future regression that drops one branch (e.g. only matching FK and losing legacy entries
+  // whose `task_id` is NULL) would fail loudly here rather than at a customer reporting bug.
+  // `extractTasksJoinOn` (test/helpers/sqlAssertions.ts) constrains the assertions to the actual
+  // ON-clause body, not the whole SQL — so a future change that moved one branch into a CTE or
+  // WHERE filter would not satisfy these tests.
+  describe('timeEntriesTasksJoin coverage in scoped task hours queries', () => {
+    test('matched-FK branch sits inside the JOIN ON clause', async () => {
+      enqueueEmptyN(3);
+      await repo.getTasksSection(
+        {
+          viewerId: 'u1',
+          fromDate: FROM,
+          toDate: TO,
+          canViewAllTasks: false,
+          canViewTimesheets: true,
+          canViewAllTimesheets: true,
+          allowedTimesheetUserIds: null,
+          itemsLimit: 50,
+          topLimit: 10,
+        },
+        testDb,
+      );
+      const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
+      expect(hoursCall).toBeDefined();
+      const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      expect(onClause).not.toBeNull();
+      expect(onClause).toContain('"t"."id" = "te"."task_id"');
+    });
+
+    test('name-fallback branch sits inside the JOIN ON clause, OR-combined with the FK branch', async () => {
+      enqueueEmptyN(3);
+      await repo.getTasksSection(
+        {
+          viewerId: 'u1',
+          fromDate: FROM,
+          toDate: TO,
+          canViewAllTasks: false,
+          canViewTimesheets: true,
+          canViewAllTimesheets: false,
+          allowedTimesheetUserIds: ['u1'],
+          itemsLimit: 50,
+          topLimit: 10,
+        },
+        testDb,
+      );
+      const hoursCall = exec.calls.find((c) => c.sql.includes('te.task as label'));
+      expect(hoursCall).toBeDefined();
+      const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
+      expect(onClause).not.toBeNull();
+      // Both branches must be in the same ON clause; the fallback's three predicates AND'd
+      // together inside parens, the whole thing OR'd against the FK match.
+      expect(onClause).toContain('"t"."id" = "te"."task_id"');
+      expect(onClause).toMatch(/\bOR\b/);
+      expect(onClause).toContain('"te"."task_id" IS NULL');
+      expect(onClause).toContain('"t"."project_id" = "te"."project_id"');
+      expect(onClause).toContain('"t"."name" = "te"."task"');
     });
   });
 });

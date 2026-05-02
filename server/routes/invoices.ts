@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -332,7 +332,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const invoice = await invoicesRepo.create(
             {
               id: invoiceId,
@@ -531,7 +531,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: invoicesRepo.InvoiceItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const updated = await invoicesRepo.update(idResult.value, patch, tx);
           if (!updated) return { invoice: null, items: [] };
           const itemsOut = normalizedItemsForUpdate

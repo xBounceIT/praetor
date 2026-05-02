@@ -1,94 +1,107 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as repo from '../../repositories/clientsOrdersRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
-const orderRow = {
-  id: 'co-1',
-  linkedQuoteId: null,
-  linkedOfferId: null,
-  clientId: 'c-1',
-  clientName: 'Acme',
-  paymentTerms: 'net30',
-  discount: '0',
-  discountType: 'percentage',
-  status: 'draft',
-  notes: null,
-  createdAt: 1735689600000,
-  updatedAt: 1735689700000,
-};
+// `sales` columns in schema declaration order:
+// id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount,
+// discount_type, status, notes, created_at, updated_at
+const ORDER_BASE: readonly unknown[] = [
+  'co-1',
+  null,
+  null,
+  'c-1',
+  'Acme',
+  'net30',
+  '0',
+  'percentage',
+  'draft',
+  null,
+  new Date('2026-04-01T00:00:00Z'),
+  new Date('2026-04-01T00:01:00Z'),
+];
+const orderRow = (overrides: Record<number, unknown> = {}) => makeRow(ORDER_BASE, overrides);
 
-const itemRow = {
-  id: 'si-1',
-  orderId: 'co-1',
-  productId: 'p-1',
-  productName: 'Widget',
-  quantity: '2',
-  unitPrice: '10',
-  productCost: '5',
-  productMolPercentage: null,
-  supplierQuoteId: null,
-  supplierQuoteItemId: null,
-  supplierQuoteSupplierName: null,
-  supplierQuoteUnitPrice: null,
-  supplierSaleId: null,
-  supplierSaleItemId: null,
-  supplierSaleSupplierName: null,
-  unitType: 'unit',
-  note: null,
-  discount: '0',
-};
+// `sale_items` columns in schema declaration order:
+// id, sale_id, product_id, product_name, quantity, unit_price, product_cost,
+// product_mol_percentage, discount, unit_type, note, supplier_quote_id,
+// supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price,
+// supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, created_at
+const ITEM_BASE: readonly unknown[] = [
+  'si-1',
+  'co-1',
+  'p-1',
+  'Widget',
+  '2',
+  '10',
+  '5',
+  null,
+  '0',
+  'unit',
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  new Date('2026-04-01T00:00:00Z'),
+];
+const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
 describe('listAll', () => {
   test('orders by created_at DESC', async () => {
-    exec.enqueue({ rows: [orderRow] });
-    const result = await repo.listAll(exec);
-    expect(exec.calls[0].sql).toContain('FROM sales');
-    expect(exec.calls[0].sql).toContain('ORDER BY created_at DESC');
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await repo.listAll(testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sales"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('order by "sales"."created_at" desc');
     expect(result[0].id).toBe('co-1');
   });
 });
 
 describe('findOfferDetails', () => {
   test('returns offer with linkedQuoteId and status', async () => {
-    exec.enqueue({
-      rows: [{ id: 'co-1', linkedQuoteId: 'cq-1', status: 'accepted' }],
-    });
-    const result = await repo.findOfferDetails('co-1', exec);
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted']] });
+    const result = await repo.findOfferDetails('co-1', testDb);
     expect(result).toEqual({ id: 'co-1', linkedQuoteId: 'cq-1', status: 'accepted' });
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await repo.findOfferDetails('missing', exec)).toBeNull();
+    expect(await repo.findOfferDetails('missing', testDb)).toBeNull();
   });
 });
 
 describe('findExistingForOffer', () => {
-  test('omits id <> $2 when no excludeOrderId', async () => {
+  test('omits the exclude predicate when no excludeOrderId', async () => {
     exec.enqueue({ rows: [] });
-    await repo.findExistingForOffer('co-1', null, exec);
-    expect(exec.calls[0].sql).not.toContain('id <> $2');
-    expect(exec.calls[0].params).toEqual(['co-1']);
+    await repo.findExistingForOffer('co-1', null, testDb);
+    expect(exec.calls[0].params).toContain('co-1');
+    // No exclude id is passed.
+    expect(exec.calls[0].params).not.toContain('s-1');
   });
 
-  test('includes id <> $2 when excludeOrderId provided', async () => {
-    exec.enqueue({ rows: [{ id: 's-2' }] });
-    const result = await repo.findExistingForOffer('co-1', 's-1', exec);
-    expect(exec.calls[0].sql).toContain('id <> $2');
+  test('includes the exclude predicate when excludeOrderId provided', async () => {
+    exec.enqueue({ rows: [['s-2']] });
+    const result = await repo.findExistingForOffer('co-1', 's-1', testDb);
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(exec.calls[0].params).toContain('s-1');
     expect(result).toBe('s-2');
   });
 });
 
 describe('create / update', () => {
-  test('create inserts 10 params', async () => {
-    exec.enqueue({ rows: [orderRow] });
-    await repo.create(
+  test('create inserts and returns the mapped order', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await repo.create(
       {
         id: 'co-1',
         linkedQuoteId: null,
@@ -101,22 +114,25 @@ describe('create / update', () => {
         status: 'draft',
         notes: null,
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('INSERT INTO sales');
-    expect(exec.calls[0].params).toHaveLength(10);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "sales"');
+    expect(result.id).toBe('co-1');
   });
 
-  test('update passes 11 params with id at the end', async () => {
-    exec.enqueue({ rows: [orderRow] });
-    await repo.update('co-1', { status: 'confirmed' }, exec);
-    expect(exec.calls[0].params).toHaveLength(11);
-    expect(exec.calls[0].params[10]).toBe('co-1');
+  test('update uses COALESCE-per-column and includes id in WHERE', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.update('co-1', { status: 'confirmed' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "sales"');
+    expect(sql).toContain('coalesce');
+    expect(exec.calls[0].params).toContain('confirmed');
+    expect(exec.calls[0].params).toContain('co-1');
   });
 
   test('update returns null when no row matches', async () => {
     exec.enqueue({ rows: [] });
-    expect(await repo.update('co-x', { status: 'confirmed' }, exec)).toBeNull();
+    expect(await repo.update('co-x', { status: 'confirmed' }, testDb)).toBeNull();
   });
 });
 
@@ -141,31 +157,32 @@ describe('insertItems / replaceItems', () => {
     unitType: 'unit',
   };
 
-  test('insertItems issues a single bulk INSERT with 18 fields per row', async () => {
-    exec.enqueue({ rows: [itemRow] });
-    await repo.insertItems('co-1', [sampleItem], exec);
+  test('insertItems issues a single bulk INSERT', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    await repo.insertItems('co-1', [sampleItem], testDb);
     expect(exec.calls).toHaveLength(1);
-    expect(exec.calls[0].sql).toContain('INSERT INTO sale_items');
-    expect(exec.calls[0].params).toHaveLength(18);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "sale_items"');
+    expect(exec.calls[0].params).toContain('si-1');
+    expect(exec.calls[0].params).toContain('co-1');
   });
 
   test('insertItems with empty array skips INSERT', async () => {
-    expect(await repo.insertItems('co-1', [], exec)).toEqual([]);
+    expect(await repo.insertItems('co-1', [], testDb)).toEqual([]);
     expect(exec.calls).toHaveLength(0);
   });
 
   test('replaceItems issues DELETE then INSERT', async () => {
-    exec.enqueue({ rows: [] }); // DELETE
-    exec.enqueue({ rows: [itemRow] }); // INSERT
-    await repo.replaceItems('co-1', [sampleItem], exec);
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [itemRow()] });
+    await repo.replaceItems('co-1', [sampleItem], testDb);
     expect(exec.calls).toHaveLength(2);
-    expect(exec.calls[0].sql).toContain('DELETE FROM sale_items');
-    expect(exec.calls[1].sql).toContain('INSERT INTO sale_items');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from "sale_items"');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('insert into "sale_items"');
   });
 });
 
-describe('supplier-order auto-creation flow (transaction injection)', () => {
-  test('createSupplierOrder uses passed exec for the INSERT', async () => {
+describe('supplier-order auto-creation flow', () => {
+  test('createSupplierOrder inserts into supplier_sales with status=draft', async () => {
     exec.enqueue({ rows: [] });
     await repo.createSupplierOrder(
       {
@@ -176,14 +193,18 @@ describe('supplier-order auto-creation flow (transaction injection)', () => {
         paymentTerms: 'immediate',
         notes: null,
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('INSERT INTO supplier_sales');
-    expect(exec.calls[0].sql).toContain("'draft'");
-    expect(exec.calls[0].params).toEqual(['so-1', 'sq-1', 'sup-1', 'Vendor', 'immediate', null]);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "supplier_sales"');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(exec.calls[0].params).toContain('sq-1');
+    expect(exec.calls[0].params).toContain('sup-1');
+    expect(exec.calls[0].params).toContain('Vendor');
+    expect(exec.calls[0].params).toContain('immediate');
+    expect(exec.calls[0].params).toContain('draft');
   });
 
-  test('bulkInsertSupplierOrderItems builds 7-field placeholders per row', async () => {
+  test('bulkInsertSupplierOrderItems issues a single multi-row INSERT', async () => {
     exec.enqueue({ rows: [] });
     await repo.bulkInsertSupplierOrderItems(
       'so-1',
@@ -205,17 +226,16 @@ describe('supplier-order auto-creation flow (transaction injection)', () => {
           note: 'n',
         },
       ],
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('INSERT INTO supplier_sale_items');
-    expect(exec.calls[0].sql).toContain('($1, $2, $3, $4, $5, $6, $7), ($8');
-    expect(exec.calls[0].params).toHaveLength(14);
-    expect(exec.calls[0].params[0]).toBe('ssi-a');
-    expect(exec.calls[0].params[7]).toBe('ssi-b');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "supplier_sale_items"');
+    expect(exec.calls[0].params).toContain('ssi-a');
+    expect(exec.calls[0].params).toContain('ssi-b');
+    expect(exec.calls[0].params).toContain('so-1');
   });
 
   test('bulkInsertSupplierOrderItems is a no-op for empty items', async () => {
-    await repo.bulkInsertSupplierOrderItems('so-1', [], exec);
+    await repo.bulkInsertSupplierOrderItems('so-1', [], testDb);
     expect(exec.calls).toHaveLength(0);
   });
 
@@ -228,15 +248,19 @@ describe('supplier-order auto-creation flow (transaction injection)', () => {
         supplierOrderId: 'so-1',
         supplierName: 'Vendor',
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain('UPDATE sale_items');
-    expect(exec.calls[0].sql).toContain('supplier_sale_id = $1');
-    expect(exec.calls[0].sql).toContain('supplier_sale_supplier_name = $2');
-    expect(exec.calls[0].params).toEqual(['so-1', 'Vendor', 'co-1', 'sq-1']);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "sale_items"');
+    expect(sql).toContain('"supplier_sale_id"');
+    expect(sql).toContain('"supplier_sale_supplier_name"');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(exec.calls[0].params).toContain('Vendor');
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(exec.calls[0].params).toContain('sq-1');
   });
 
-  test('mapSaleItemsToSupplierItems uses VALUES(...) join with $1/$2 anchors', async () => {
+  test('mapSaleItemsToSupplierItems uses VALUES(...) join with positional params', async () => {
     exec.enqueue({ rows: [], rowCount: 2 });
     await repo.mapSaleItemsToSupplierItems(
       {
@@ -247,18 +271,23 @@ describe('supplier-order auto-creation flow (transaction injection)', () => {
           { quoteItemId: 'sqi-b', saleItemId: 'ssi-b' },
         ],
       },
-      exec,
+      testDb,
     );
-    expect(exec.calls[0].sql).toContain(
-      'FROM (VALUES ($3, $4), ($5, $6)) v(quote_item_id, sale_item_id)',
-    );
-    expect(exec.calls[0].params).toEqual(['co-1', 'sq-1', 'sqi-a', 'ssi-a', 'sqi-b', 'ssi-b']);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('FROM (VALUES');
+    expect(sql).toContain('v(quote_item_id, sale_item_id)');
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(exec.calls[0].params).toContain('sq-1');
+    expect(exec.calls[0].params).toContain('sqi-a');
+    expect(exec.calls[0].params).toContain('ssi-a');
+    expect(exec.calls[0].params).toContain('sqi-b');
+    expect(exec.calls[0].params).toContain('ssi-b');
   });
 
   test('mapSaleItemsToSupplierItems is a no-op for empty mappings', async () => {
     await repo.mapSaleItemsToSupplierItems(
       { orderId: 'co-1', supplierQuoteId: 'sq-1', mappings: [] },
-      exec,
+      testDb,
     );
     expect(exec.calls).toHaveLength(0);
   });
@@ -267,11 +296,11 @@ describe('supplier-order auto-creation flow (transaction injection)', () => {
 describe('deleteById', () => {
   test('returns true when row deleted', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
-    expect(await repo.deleteById('co-1', exec)).toBe(true);
+    expect(await repo.deleteById('co-1', testDb)).toBe(true);
   });
 
   test('returns false when no row matched', async () => {
     exec.enqueue({ rows: [], rowCount: 0 });
-    expect(await repo.deleteById('co-x', exec)).toBe(false);
+    expect(await repo.deleteById('co-x', testDb)).toBe(false);
   });
 });

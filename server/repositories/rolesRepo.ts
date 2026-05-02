@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { rolePermissions, roles, userRoles } from '../db/schema/roles.ts';
 
 export type Role = {
   id: string;
@@ -7,82 +9,93 @@ export type Role = {
   isAdmin: boolean;
 };
 
-const roleColumns = (prefix = '') =>
-  `${prefix}id, ${prefix}name, ${prefix}is_system AS "isSystem", ${prefix}is_admin AS "isAdmin"`;
+const ROLE_PROJECTION = {
+  id: roles.id,
+  name: roles.name,
+  isSystem: roles.isSystem,
+  isAdmin: roles.isAdmin,
+} as const;
+
+const mapRole = (row: {
+  id: string;
+  name: string;
+  isSystem: boolean | null;
+  isAdmin: boolean | null;
+}): Role => ({
+  id: row.id,
+  name: row.name,
+  isSystem: row.isSystem ?? false,
+  isAdmin: row.isAdmin ?? false,
+});
 
 export const findExistingIds = async (
   ids: string[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Set<string>> => {
   if (ids.length === 0) return new Set();
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM roles WHERE id = ANY($1::text[])`,
-    [ids],
-  );
+  const rows = await exec.select({ id: roles.id }).from(roles).where(inArray(roles.id, ids));
   return new Set(rows.map((r) => r.id));
 };
 
 export const userHasRole = async (
   userId: string,
   roleId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query(
-    `SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1`,
-    [userId, roleId],
-  );
+  const rows = await exec
+    .select({ exists: sql`1` })
+    .from(userRoles)
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)))
+    .limit(1);
   return rows.length > 0;
 };
 
 export const listAvailableRolesForUser = async (
   userId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Role[]> => {
-  const { rows } = await exec.query<Role>(
-    `SELECT ${roleColumns('r.')}
-       FROM user_roles ur
-       JOIN roles r ON r.id = ur.role_id
-      WHERE ur.user_id = $1
-      ORDER BY r.name`,
-    [userId],
-  );
-  return rows;
+  const rows = await exec
+    .select(ROLE_PROJECTION)
+    .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId))
+    .where(eq(userRoles.userId, userId))
+    .orderBy(roles.name);
+  return rows.map(mapRole);
 };
 
-export const listAll = async (exec: QueryExecutor = pool): Promise<Role[]> => {
-  const { rows } = await exec.query<Role>(`SELECT ${roleColumns()} FROM roles ORDER BY name`);
-  return rows;
+export const listAll = async (exec: DbExecutor = db): Promise<Role[]> => {
+  const rows = await exec.select(ROLE_PROJECTION).from(roles).orderBy(roles.name);
+  return rows.map(mapRole);
 };
 
-export const findById = async (id: string, exec: QueryExecutor = pool): Promise<Role | null> => {
-  const { rows } = await exec.query<Role>(`SELECT ${roleColumns()} FROM roles WHERE id = $1`, [id]);
-  return rows[0] ?? null;
+export const findById = async (id: string, exec: DbExecutor = db): Promise<Role | null> => {
+  const rows = await exec.select(ROLE_PROJECTION).from(roles).where(eq(roles.id, id));
+  return rows[0] ? mapRole(rows[0]) : null;
 };
 
 export const listExplicitPermissions = async (
   roleId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string[]> => {
-  const { rows } = await exec.query<{ permission: string }>(
-    `SELECT permission FROM role_permissions WHERE role_id = $1`,
-    [roleId],
-  );
+  const rows = await exec
+    .select({ permission: rolePermissions.permission })
+    .from(rolePermissions)
+    .where(eq(rolePermissions.roleId, roleId));
   return rows.map((r) => r.permission);
 };
 
 export const listExplicitPermissionsForRoles = async (
   roleIds: string[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Map<string, string[]>> => {
   const result = new Map<string, string[]>();
   if (roleIds.length === 0) return result;
+  // Pre-populate so callers can `.get(id)` for every requested id without a presence check.
   for (const id of roleIds) result.set(id, []);
-  const { rows } = await exec.query<{ roleId: string; permission: string }>(
-    `SELECT role_id AS "roleId", permission
-       FROM role_permissions
-      WHERE role_id = ANY($1::text[])`,
-    [roleIds],
-  );
+  const rows = await exec
+    .select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission })
+    .from(rolePermissions)
+    .where(inArray(rolePermissions.roleId, roleIds));
   for (const row of rows) result.get(row.roleId)?.push(row.permission);
   return result;
 };
@@ -90,45 +103,38 @@ export const listExplicitPermissionsForRoles = async (
 export const insertRole = async (
   id: string,
   name: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(
-    `INSERT INTO roles (id, name, is_system, is_admin) VALUES ($1, $2, FALSE, FALSE)`,
-    [id, name],
-  );
+  await exec.insert(roles).values({ id, name, isSystem: false, isAdmin: false });
 };
 
 export const updateRoleName = async (
   id: string,
   name: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`UPDATE roles SET name = $1 WHERE id = $2`, [name, id]);
+  await exec.update(roles).set({ name }).where(eq(roles.id, id));
 };
 
-export const deleteRole = async (id: string, exec: QueryExecutor = pool): Promise<void> => {
-  await exec.query(`DELETE FROM roles WHERE id = $1`, [id]);
+export const deleteRole = async (id: string, exec: DbExecutor = db): Promise<void> => {
+  await exec.delete(roles).where(eq(roles.id, id));
 };
 
 export const insertPermission = async (
   roleId: string,
   permission: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(
-    `INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [roleId, permission],
-  );
+  await exec.insert(rolePermissions).values({ roleId, permission }).onConflictDoNothing();
 };
 
-export const clearPermissions = async (
-  roleId: string,
-  exec: QueryExecutor = pool,
-): Promise<void> => {
-  await exec.query(`DELETE FROM role_permissions WHERE role_id = $1`, [roleId]);
+export const clearPermissions = async (roleId: string, exec: DbExecutor = db): Promise<void> => {
+  await exec.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
 };
 
-export const isRoleInUse = async (roleId: string, exec: QueryExecutor = pool): Promise<boolean> => {
-  const { rows } = await exec.query(`SELECT 1 FROM users WHERE role = $1 LIMIT 1`, [roleId]);
+// `users` is not yet modeled in TS schema; use a raw SQL probe. When usersRepo is converted,
+// this can become `db.select({ exists: sql`1` }).from(users)...`.
+export const isRoleInUse = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await executeRows(exec, sql`SELECT 1 FROM users WHERE role = ${roleId} LIMIT 1`);
   return rows.length > 0;
 };

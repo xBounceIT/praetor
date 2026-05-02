@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
@@ -565,7 +565,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         await tasksRepo.clearUserAssignments(idResult.value, tx);
         await tasksRepo.addUserAssignments(idResult.value, validUserIds, tx);
       });

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -179,7 +179,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         await rolesRepo.insertRole(id, nameResult.value, tx);
 
         for (const permission of normalizedPermissions) {
@@ -370,7 +370,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      await withTransaction(async (tx) => {
+      await withDbTransaction(async (tx) => {
         await rolesRepo.clearPermissions(idResult.value, tx);
         for (const permission of normalizedPermissions) {
           await rolesRepo.insertPermission(idResult.value, permission, tx);
