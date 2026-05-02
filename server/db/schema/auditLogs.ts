@@ -1,6 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
-import type { AuditLogDetails } from '../../utils/audit.ts';
+
+export interface AuditLogDetails {
+  targetLabel?: string;
+  secondaryLabel?: string;
+  changedFields?: string[];
+  counts?: Record<string, number>;
+  fromValue?: string;
+  toValue?: string;
+}
 
 export const auditLogs = pgTable(
   'audit_logs',

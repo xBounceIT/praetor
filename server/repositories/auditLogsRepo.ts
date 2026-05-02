@@ -1,7 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
-import { auditLogs } from '../db/schema/auditLogs.ts';
-import type { AuditLogDetails } from '../utils/audit.ts';
+import { type AuditLogDetails, auditLogs } from '../db/schema/auditLogs.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
 export type AuditLog = {
