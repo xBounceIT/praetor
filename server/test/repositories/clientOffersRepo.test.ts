@@ -78,7 +78,7 @@ describe('existsById / findIdConflict', () => {
     expect(await clientOffersRepo.existsById('co-1', testDb)).toBe(true);
   });
 
-  test('findIdConflict pins the != predicate so the row being renamed is excluded', async () => {
+  test('findIdConflict excludes the current id via <> predicate', async () => {
     exec.enqueue({ rows: [] });
     await clientOffersRepo.findIdConflict('new', 'cur', testDb);
     expect(exec.calls[0].sql).toContain('"id" <> $2');
