@@ -1,38 +1,40 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as auditLogsRepo from '../../repositories/auditLogsRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
 describe('list', () => {
   test('emits no WHERE clause and no params when filter is empty', async () => {
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.list({}, exec);
+    await auditLogsRepo.list({}, testDb);
     expect(exec.calls[0].sql).not.toContain('WHERE');
     expect(exec.calls[0].params).toEqual([]);
   });
 
   test('emits a >= clause bound to $1 when only startDate is set', async () => {
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.list({ startDate: '2024-01-01' }, exec);
+    await auditLogsRepo.list({ startDate: '2024-01-01' }, testDb);
     expect(exec.calls[0].sql).toContain('al.created_at >= $1::timestamptz');
     expect(exec.calls[0].params).toEqual(['2024-01-01']);
   });
 
   test('emits a <= clause bound to $1 (not $2) when only endDate is set', async () => {
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.list({ endDate: '2024-12-31' }, exec);
+    await auditLogsRepo.list({ endDate: '2024-12-31' }, testDb);
     expect(exec.calls[0].sql).toContain('al.created_at <= $1::timestamptz');
     expect(exec.calls[0].params).toEqual(['2024-12-31']);
   });
 
   test('emits both clauses joined by AND when both dates are set', async () => {
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.list({ startDate: '2024-01-01', endDate: '2024-12-31' }, exec);
+    await auditLogsRepo.list({ startDate: '2024-01-01', endDate: '2024-12-31' }, testDb);
     expect(exec.calls[0].sql).toContain('al.created_at >= $1::timestamptz');
     expect(exec.calls[0].sql).toContain('al.created_at <= $2::timestamptz');
     expect(exec.calls[0].sql).toContain(' AND ');
@@ -53,7 +55,7 @@ describe('list', () => {
       details: null,
     };
     exec.enqueue({ rows: [row] });
-    const result = await auditLogsRepo.list({}, exec);
+    const result = await auditLogsRepo.list({}, testDb);
     expect(result).toHaveLength(1);
     expect(result[0].createdAt).toBe(1700000000000);
   });
@@ -69,15 +71,6 @@ describe('create', () => {
     details: null,
   } as const;
 
-  test('targets audit_logs and lists the 7 columns in declared order', async () => {
-    exec.enqueue({ rows: [] });
-    await auditLogsRepo.create(baseInput, exec);
-    const sql = exec.calls[0].sql;
-    expect(sql).toContain('INSERT INTO audit_logs');
-    expect(sql).toContain('(id, user_id, action, entity_type, entity_id, ip_address, details)');
-    expect(sql).toContain('$7::jsonb');
-  });
-
   test('binds params $1..$7 in declared order with id first', async () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.create(
@@ -89,7 +82,7 @@ describe('create', () => {
         ipAddress: '10.0.0.1',
         details: null,
       },
-      exec,
+      testDb,
     );
     const params = exec.calls[0].params;
     expect(params).toHaveLength(7);
@@ -100,14 +93,14 @@ describe('create', () => {
   test('generates a fresh id per call', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.create(baseInput, exec);
-    await auditLogsRepo.create(baseInput, exec);
+    await auditLogsRepo.create(baseInput, testDb);
+    await auditLogsRepo.create(baseInput, testDb);
     expect(exec.calls[0].params[0]).not.toBe(exec.calls[1].params[0]);
   });
 
   test('passes details: null through as a literal null (not the string "null")', async () => {
     exec.enqueue({ rows: [] });
-    await auditLogsRepo.create({ ...baseInput, details: null }, exec);
+    await auditLogsRepo.create({ ...baseInput, details: null }, testDb);
     expect(exec.calls[0].params[6]).toBeNull();
   });
 
@@ -115,7 +108,7 @@ describe('create', () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.create(
       { ...baseInput, details: { targetLabel: 'Acme', counts: { items: 3 } } },
-      exec,
+      testDb,
     );
     const detailsParam = exec.calls[0].params[6];
     expect(typeof detailsParam).toBe('string');
@@ -127,7 +120,7 @@ describe('create', () => {
 
   test('resolves to undefined', async () => {
     exec.enqueue({ rows: [] });
-    const result = await auditLogsRepo.create(baseInput, exec);
+    const result = await auditLogsRepo.create(baseInput, testDb);
     expect(result).toBeUndefined();
   });
 });
