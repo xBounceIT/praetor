@@ -1,4 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { eq, sql } from 'drizzle-orm';
+import { type DbExecutor, db } from '../db/drizzle.ts';
+import { ldapConfig } from '../db/schema/ldapConfig.ts';
 
 export type LdapRoleMapping = { ldapGroup: string; role: string };
 
@@ -28,56 +30,82 @@ export const DEFAULT_CONFIG: LdapConfig = {
   roleMappings: [],
 };
 
-const SELECT_COLUMNS = `enabled,
-        server_url as "serverUrl",
-        base_dn as "baseDn",
-        bind_dn as "bindDn",
-        bind_password as "bindPassword",
-        user_filter as "userFilter",
-        group_base_dn as "groupBaseDn",
-        group_filter as "groupFilter",
-        COALESCE(role_mappings, '[]'::jsonb) as "roleMappings"`;
+const LDAP_PROJECTION = {
+  enabled: ldapConfig.enabled,
+  serverUrl: ldapConfig.serverUrl,
+  baseDn: ldapConfig.baseDn,
+  bindDn: ldapConfig.bindDn,
+  bindPassword: ldapConfig.bindPassword,
+  userFilter: ldapConfig.userFilter,
+  groupBaseDn: ldapConfig.groupBaseDn,
+  groupFilter: ldapConfig.groupFilter,
+  roleMappings: ldapConfig.roleMappings,
+} as const;
 
-export const get = async (exec: QueryExecutor = pool): Promise<LdapConfig | null> => {
-  const { rows } = await exec.query<LdapConfig>(
-    `SELECT ${SELECT_COLUMNS} FROM ldap_config WHERE id = 1`,
-  );
-  if (rows.length === 0) return null;
-  return rows[0];
+type LdapRow = {
+  enabled: boolean | null;
+  serverUrl: string | null;
+  baseDn: string | null;
+  bindDn: string | null;
+  bindPassword: string | null;
+  userFilter: string | null;
+  groupBaseDn: string | null;
+  groupFilter: string | null;
+  roleMappings: LdapRoleMapping[] | null;
+};
+
+// Schema columns are nullable but always populated at runtime via DB defaults on the seeded
+// id=1 row, so the `??` fallbacks are a TS-strict appeasement matching the non-nullable
+// `LdapConfig`. Falling back to the corresponding `DEFAULT_CONFIG` value (rather than `''`)
+// keeps the read-with-null-column path consistent with the route's no-row fallback
+// (`(await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG`). `roleMappings` falls back to a
+// fresh `[]` rather than `DEFAULT_CONFIG.roleMappings` so the module-level default array
+// can't be aliased and mutated by callers.
+const mapRow = (row: LdapRow): LdapConfig => ({
+  enabled: row.enabled ?? DEFAULT_CONFIG.enabled,
+  serverUrl: row.serverUrl ?? DEFAULT_CONFIG.serverUrl,
+  baseDn: row.baseDn ?? DEFAULT_CONFIG.baseDn,
+  bindDn: row.bindDn ?? DEFAULT_CONFIG.bindDn,
+  bindPassword: row.bindPassword ?? DEFAULT_CONFIG.bindPassword,
+  userFilter: row.userFilter ?? DEFAULT_CONFIG.userFilter,
+  groupBaseDn: row.groupBaseDn ?? DEFAULT_CONFIG.groupBaseDn,
+  groupFilter: row.groupFilter ?? DEFAULT_CONFIG.groupFilter,
+  roleMappings: row.roleMappings ?? [],
+});
+
+export const get = async (exec: DbExecutor = db): Promise<LdapConfig | null> => {
+  const rows = await exec.select(LDAP_PROJECTION).from(ldapConfig).where(eq(ldapConfig.id, 1));
+  return rows[0] ? mapRow(rows[0]) : null;
 };
 
 export const update = async (
   patch: LdapConfigPatch,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<LdapConfig> => {
-  const { rows } = await exec.query<LdapConfig>(
-    `UPDATE ldap_config SET
-        enabled = COALESCE($1, enabled),
-        server_url = COALESCE($2, server_url),
-        base_dn = COALESCE($3, base_dn),
-        bind_dn = COALESCE($4, bind_dn),
-        bind_password = COALESCE($5, bind_password),
-        user_filter = COALESCE($6, user_filter),
-        group_base_dn = COALESCE($7, group_base_dn),
-        group_filter = COALESCE($8, group_filter),
-        role_mappings = COALESCE($9, role_mappings),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1
-      RETURNING ${SELECT_COLUMNS}`,
-    [
-      patch.enabled,
-      patch.serverUrl,
-      patch.baseDn,
-      patch.bindDn,
-      patch.bindPassword,
-      patch.userFilter,
-      patch.groupBaseDn,
-      patch.groupFilter,
-      patch.roleMappings === undefined ? null : JSON.stringify(patch.roleMappings),
-    ],
-  );
-  if (rows.length === 0) {
+  // COALESCE preserves the existing column when the patch value is undefined (legacy
+  // "undefined leaves column unchanged" semantic). Same pattern as settingsRepo.upsertForUser.
+  // `role_mappings` needs the explicit `::jsonb` cast on the bound text param so COALESCE's
+  // both branches share the JSONB type.
+  const roleMappingsParam =
+    patch.roleMappings === undefined ? null : JSON.stringify(patch.roleMappings);
+  const result = await exec
+    .update(ldapConfig)
+    .set({
+      enabled: sql`COALESCE(${patch.enabled ?? null}, ${ldapConfig.enabled})`,
+      serverUrl: sql`COALESCE(${patch.serverUrl ?? null}, ${ldapConfig.serverUrl})`,
+      baseDn: sql`COALESCE(${patch.baseDn ?? null}, ${ldapConfig.baseDn})`,
+      bindDn: sql`COALESCE(${patch.bindDn ?? null}, ${ldapConfig.bindDn})`,
+      bindPassword: sql`COALESCE(${patch.bindPassword ?? null}, ${ldapConfig.bindPassword})`,
+      userFilter: sql`COALESCE(${patch.userFilter ?? null}, ${ldapConfig.userFilter})`,
+      groupBaseDn: sql`COALESCE(${patch.groupBaseDn ?? null}, ${ldapConfig.groupBaseDn})`,
+      groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
+      roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(ldapConfig.id, 1))
+    .returning(LDAP_PROJECTION);
+  if (result.length === 0) {
     throw new Error('ldap_config row (id=1) not found; seed missing');
   }
-  return rows[0];
+  return mapRow(result[0]);
 };

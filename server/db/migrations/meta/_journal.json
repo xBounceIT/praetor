@@ -15,6 +15,13 @@
       "when": 1777679280848,
       "tag": "0001_add_phase3_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777727920962,
+      "tag": "0002_add_config_tables",
+      "breakpoints": true
     }
   ]
 }
