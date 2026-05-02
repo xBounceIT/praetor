@@ -1,21 +1,28 @@
 -- First-time-modeling migration for the `general_settings` single-row config table (see
 -- db/README.md). The table already exists in dev/prod from schema.sql; CREATE TABLE,
 -- ADD CONSTRAINT, and INSERT are all guarded so this is a no-op on existing DBs while
--- bootstrapping a fresh DB cleanly. Same overall pattern as 0002_add_config_tables.sql.
+-- bootstrapping a fresh DB cleanly. Same overall pattern as 0002_add_config_tables.sql,
+-- with extra CHECKs unique to this table.
 --
 --   * CREATE TABLE IF NOT EXISTS — table-creation guard.
---   * pg_constraint guard around ADD CONSTRAINT — re-adds the CHECK (id = 1) singleton
---     invariant from schema.sql on fresh DBs without colliding with the auto-named
---     constraint that already exists on dev/prod (matched by `contype = 'c'` rather than
---     by name because Postgres's auto-generated name for an inline column CHECK isn't
---     guaranteed across versions).
 --
---     Note vs. 0002: `general_settings` has *additional* CHECKs in schema.sql beyond the
---     singleton (`start_of_week IN ('Monday','Sunday')`, `ai_provider IN (...)`). On every
---     realistic DB state — fresh from schema.sql or pre-seeded prod — all three CHECKs are
---     present together, so the "any CHECK exists" proxy still correctly treats the singleton
---     as already-present and skips. A future migration that drops one CHECK while leaving
---     others would defeat this guard and need explicit handling.
+--   * pg_constraint guard around the singleton CHECK (id = 1) — re-adds the invariant
+--     from schema.sql on fresh DBs without colliding with the auto-named constraint that
+--     already exists on dev/prod (matched by `contype = 'c'` rather than by name because
+--     Postgres's auto-generated name for an inline column CHECK isn't guaranteed across
+--     versions). The "any CHECK exists" proxy works on every realistic DB state — on
+--     existing DBs all three CHECKs are present together so the guard skips; on
+--     fresh-from-migration DBs the table starts with zero CHECKs so the guard fires
+--     before the column-CHECK guards below add the others.
+--
+--   * pg_constraint guards around the column-level CHECKs (`start_of_week IN
+--     ('Monday','Sunday')`, `ai_provider IN ('gemini','openrouter')`) — schema.sql carries
+--     these CHECKs on the live tables (lines 697 and 1037-1044 respectively). Adding them
+--     here lets a fresh-from-migration DB (one bootstrapped purely via Drizzle migrations
+--     without first running schema.sql) enforce the same invariants as schema.sql-seeded
+--     installs. Matched by `pg_get_constraintdef` substring rather than by name because
+--     the start_of_week CHECK is auto-named (inline `CHECK` in schema.sql); using the
+--     same definition-match shape for ai_provider keeps both guards uniform.
 --
 --   * INSERT … ON CONFLICT DO NOTHING — seeds the singleton id=1 row so the first PUT to
 --     /general-settings succeeds; idempotent on existing DBs that already have the row
@@ -46,6 +53,28 @@ DO $$ BEGIN
 		WHERE t.relname = 'general_settings' AND n.nspname = 'public' AND c.contype = 'c'
 	) THEN
 		ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_id_check" CHECK ("id" = 1);
+	END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint c
+		JOIN pg_class t ON c.conrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = 'general_settings' AND n.nspname = 'public' AND c.contype = 'c'
+		AND pg_get_constraintdef(c.oid) ILIKE '%start_of_week%'
+	) THEN
+		ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_start_of_week_check" CHECK ("start_of_week" IN ('Monday', 'Sunday'));
+	END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint c
+		JOIN pg_class t ON c.conrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = 'general_settings' AND n.nspname = 'public' AND c.contype = 'c'
+		AND pg_get_constraintdef(c.oid) ILIKE '%ai_provider%'
+	) THEN
+		ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ai_provider_check" CHECK ("ai_provider" IN ('gemini', 'openrouter'));
 	END IF;
 END $$;--> statement-breakpoint
 INSERT INTO "general_settings" ("id") VALUES (1) ON CONFLICT ("id") DO NOTHING;
