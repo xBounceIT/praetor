@@ -1,7 +1,9 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
+import { and, eq, gte, type SQL, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { timeEntries } from '../db/schema/timeEntries.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { parseDbNumber } from '../utils/parse.ts';
-import { managedUserIdsSubquery } from './workUnitsRepo.ts';
+import { managedUserIdsSubquerySql } from './workUnitsRepo.ts';
 
 export type TimeEntry = {
   id: string;
@@ -21,6 +23,8 @@ export type TimeEntry = {
   createdAt: number;
 };
 
+// Snake-case row shape returned by raw-SQL `executeRows` paths. Carries the extra
+// `created_at_text` column that the cursor pagination needs (see `ENTRY_COLUMNS_SQL`).
 type TimeEntryRow = {
   id: string;
   user_id: string;
@@ -43,11 +47,11 @@ type TimeEntryRow = {
   created_at_text: string;
 };
 
-const ENTRY_COLUMNS = `id, user_id, date, client_id, client_name, project_id,
+const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project_id,
   project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at,
   created_at::text AS created_at_text`;
 
-const mapRow = (row: TimeEntryRow): TimeEntry => {
+const mapRawRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
   if (!date) throw new TypeError('Invalid date value for entry.date');
   return {
@@ -66,6 +70,31 @@ const mapRow = (row: TimeEntryRow): TimeEntry => {
     isPlaceholder: !!row.is_placeholder,
     location: row.location || 'remote',
     createdAt: new Date(row.created_at).getTime(),
+  };
+};
+
+// Builder paths receive Drizzle's inferred camelCase row. Coercion is otherwise the
+// same as `mapRawRow`. Two mappers (rather than one) avoid synthesizing a missing
+// `created_at_text` for builder paths that never read it.
+const mapBuilderRow = (row: typeof timeEntries.$inferSelect): TimeEntry => {
+  const date = normalizeNullableDateOnly(row.date, 'entry.date');
+  if (!date) throw new TypeError('Invalid date value for entry.date');
+  return {
+    id: row.id,
+    userId: row.userId,
+    date,
+    clientId: row.clientId,
+    clientName: row.clientName,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    task: row.task,
+    taskId: row.taskId,
+    notes: row.notes,
+    duration: parseDbNumber(row.duration, 0),
+    hourlyCost: parseDbNumber(row.hourlyCost, 0),
+    isPlaceholder: !!row.isPlaceholder,
+    location: row.location || 'remote',
+    createdAt: row.createdAt?.getTime() ?? 0,
   };
 };
 
@@ -89,11 +118,8 @@ const resolveLimit = (limit?: number): number => {
   return Math.min(Math.floor(limit), MAX_LIMIT);
 };
 
-const buildCursorClause = (cursor: EntriesCursor | undefined, startIdx: number) => {
-  if (!cursor) return { sql: '', params: [], nextIdx: startIdx };
-  const sql = `(created_at, id) < ($${startIdx}::timestamp, $${startIdx + 1})`;
-  return { sql, params: [cursor.createdAt, cursor.id], nextIdx: startIdx + 2 };
-};
+const cursorClause = (cursor: EntriesCursor | undefined): SQL | null =>
+  cursor ? sql`(created_at, id) < (${cursor.createdAt}::timestamp, ${cursor.id})` : null;
 
 export type ListEntriesResult = {
   entries: TimeEntry[];
@@ -101,7 +127,7 @@ export type ListEntriesResult = {
 };
 
 const buildResult = (rows: TimeEntryRow[], limit: number): ListEntriesResult => {
-  const entries = rows.map(mapRow);
+  const entries = rows.map(mapRawRow);
   const lastRow = rows[rows.length - 1];
   const nextCursor =
     entries.length === limit && lastRow
@@ -110,16 +136,21 @@ const buildResult = (rows: TimeEntryRow[], limit: number): ListEntriesResult => 
   return { entries, nextCursor };
 };
 
+const joinAnd = (clauses: Array<SQL | null>): SQL | null => {
+  const filtered = clauses.filter((c): c is SQL => c !== null);
+  if (filtered.length === 0) return null;
+  return sql.join(filtered, sql` AND `);
+};
+
 export const listAll = async (
   options: ListEntriesOptions = {},
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const cursor = buildCursorClause(options.cursor, 1);
-  const where = cursor.sql ? `WHERE ${cursor.sql}` : '';
-  const { rows } = await exec.query<TimeEntryRow>(
-    `SELECT ${ENTRY_COLUMNS} FROM time_entries ${where} ORDER BY created_at DESC, id DESC LIMIT $${cursor.nextIdx}`,
-    [...cursor.params, limit],
+  const where = cursorClause(options.cursor);
+  const rows = await executeRows<TimeEntryRow>(
+    exec,
+    sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries${where ? sql` WHERE ${where}` : sql``} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
   );
   return buildResult(rows, limit);
 };
@@ -127,18 +158,13 @@ export const listAll = async (
 export const listForUser = async (
   userId: string,
   options: ListEntriesOptions = {},
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const cursor = buildCursorClause(options.cursor, 2);
-  const cursorClause = cursor.sql ? ` AND ${cursor.sql}` : '';
-  const { rows } = await exec.query<TimeEntryRow>(
-    `SELECT ${ENTRY_COLUMNS}
-       FROM time_entries
-      WHERE user_id = $1${cursorClause}
-      ORDER BY created_at DESC, id DESC
-      LIMIT $${cursor.nextIdx}`,
-    [userId, ...cursor.params, limit],
+  const where = joinAnd([sql`user_id = ${userId}`, cursorClause(options.cursor)]);
+  const rows = await executeRows<TimeEntryRow>(
+    exec,
+    sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
   );
   return buildResult(rows, limit);
 };
@@ -146,18 +172,14 @@ export const listForUser = async (
 export const listForManagerView = async (
   managerId: string,
   options: ListEntriesOptions = {},
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const cursor = buildCursorClause(options.cursor, 2);
-  const cursorClause = cursor.sql ? ` AND ${cursor.sql}` : '';
-  const { rows } = await exec.query<TimeEntryRow>(
-    `SELECT ${ENTRY_COLUMNS}
-       FROM time_entries
-      WHERE (user_id = $1 OR user_id IN (${managedUserIdsSubquery(1)}))${cursorClause}
-      ORDER BY created_at DESC, id DESC
-      LIMIT $${cursor.nextIdx}`,
-    [managerId, ...cursor.params, limit],
+  const managerScope = sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`;
+  const where = joinAnd([managerScope, cursorClause(options.cursor)]);
+  const rows = await executeRows<TimeEntryRow>(
+    exec,
+    sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
   );
   return buildResult(rows, limit);
 };
@@ -182,12 +204,12 @@ export const decodeCursor = (raw: string): EntriesCursor | null => {
   }
 };
 
-export const findOwner = async (id: string, exec: QueryExecutor = pool): Promise<string | null> => {
-  const { rows } = await exec.query<{ user_id: string }>(
-    `SELECT user_id FROM time_entries WHERE id = $1`,
-    [id],
-  );
-  return rows[0]?.user_id ?? null;
+export const findOwner = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
+  const rows = await exec
+    .select({ userId: timeEntries.userId })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, id));
+  return rows[0]?.userId ?? null;
 };
 
 export type EntryContext = {
@@ -199,21 +221,18 @@ export type EntryContext = {
 
 export const findContext = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<EntryContext | null> => {
-  const { rows } = await exec.query<{
-    user_id: string;
-    project_id: string;
-    task: string;
-    task_id: string | null;
-  }>(`SELECT user_id, project_id, task, task_id FROM time_entries WHERE id = $1`, [id]);
-  if (!rows[0]) return null;
-  return {
-    userId: rows[0].user_id,
-    projectId: rows[0].project_id,
-    task: rows[0].task,
-    taskId: rows[0].task_id,
-  };
+  const rows = await exec
+    .select({
+      userId: timeEntries.userId,
+      projectId: timeEntries.projectId,
+      task: timeEntries.task,
+      taskId: timeEntries.taskId,
+    })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, id));
+  return rows[0] ?? null;
 };
 
 export type NewEntry = {
@@ -233,29 +252,29 @@ export type NewEntry = {
   location: string;
 };
 
-export const create = async (entry: NewEntry, exec: QueryExecutor = pool): Promise<TimeEntry> => {
-  const { rows } = await exec.query<TimeEntryRow>(
-    `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-     RETURNING ${ENTRY_COLUMNS}`,
-    [
-      entry.id,
-      entry.userId,
-      entry.date,
-      entry.clientId,
-      entry.clientName,
-      entry.projectId,
-      entry.projectName,
-      entry.task,
-      entry.taskId,
-      entry.notes,
-      entry.duration,
-      entry.hourlyCost,
-      entry.isPlaceholder,
-      entry.location,
-    ],
-  );
-  return mapRow(rows[0]);
+export const create = async (entry: NewEntry, exec: DbExecutor = db): Promise<TimeEntry> => {
+  const [row] = await exec
+    .insert(timeEntries)
+    .values({
+      id: entry.id,
+      userId: entry.userId,
+      date: entry.date,
+      clientId: entry.clientId,
+      clientName: entry.clientName,
+      projectId: entry.projectId,
+      projectName: entry.projectName,
+      task: entry.task,
+      taskId: entry.taskId,
+      notes: entry.notes,
+      // numeric columns accept number or string at the wire level; the schema's TS
+      // type is `string` so cast through. The pg driver serializes both equivalently.
+      duration: entry.duration as unknown as string,
+      hourlyCost: entry.hourlyCost as unknown as string,
+      isPlaceholder: entry.isPlaceholder,
+      location: entry.location,
+    })
+    .returning();
+  return mapBuilderRow(row);
 };
 
 export type EntryUpdate = {
@@ -271,43 +290,30 @@ export type EntryUpdate = {
 export const update = async (
   id: string,
   patch: EntryUpdate,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<TimeEntry | null> => {
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  let idx = 1;
-  const fields: Array<[string, unknown]> = [
-    ['duration', patch.duration],
-    ['notes', patch.notes],
-    ['is_placeholder', patch.isPlaceholder],
-    ['location', patch.location],
-    ['task_id', patch.taskId],
-  ];
-  for (const [col, value] of fields) {
-    if (value !== undefined) {
-      sets.push(`${col} = $${idx++}`);
-      params.push(value);
-    }
+  const setValues: Partial<typeof timeEntries.$inferInsert> = {};
+  if (patch.duration !== undefined) setValues.duration = patch.duration as unknown as string;
+  if (patch.notes !== undefined) setValues.notes = patch.notes;
+  if (patch.isPlaceholder !== undefined) setValues.isPlaceholder = patch.isPlaceholder;
+  if (patch.location !== undefined) setValues.location = patch.location;
+  if (patch.taskId !== undefined) setValues.taskId = patch.taskId;
+
+  if (Object.keys(setValues).length === 0) {
+    const [row] = await exec.select().from(timeEntries).where(eq(timeEntries.id, id));
+    return row ? mapBuilderRow(row) : null;
   }
 
-  if (sets.length === 0) {
-    const { rows } = await exec.query<TimeEntryRow>(
-      `SELECT ${ENTRY_COLUMNS} FROM time_entries WHERE id = $1`,
-      [id],
-    );
-    return rows[0] ? mapRow(rows[0]) : null;
-  }
-
-  params.push(id);
-  const { rows } = await exec.query<TimeEntryRow>(
-    `UPDATE time_entries SET ${sets.join(', ')} WHERE id = $${idx} RETURNING ${ENTRY_COLUMNS}`,
-    params,
-  );
-  return rows[0] ? mapRow(rows[0]) : null;
+  const [row] = await exec
+    .update(timeEntries)
+    .set(setValues)
+    .where(eq(timeEntries.id, id))
+    .returning();
+  return row ? mapBuilderRow(row) : null;
 };
 
-export const deleteById = async (id: string, exec: QueryExecutor = pool): Promise<void> => {
-  await exec.query(`DELETE FROM time_entries WHERE id = $1`, [id]);
+export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
+  await exec.delete(timeEntries).where(eq(timeEntries.id, id));
 };
 
 export type BulkDeleteFilters = {
@@ -322,27 +328,24 @@ export type BulkDeleteFilters = {
 
 export const bulkDelete = async (
   filters: BulkDeleteFilters,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<number> => {
-  let sql = 'DELETE FROM time_entries WHERE project_id = $1 AND task = $2';
-  const params: unknown[] = [filters.projectId, filters.task];
-  let idx = 3;
-
+  const conditions: SQL[] = [
+    eq(timeEntries.projectId, filters.projectId),
+    eq(timeEntries.task, filters.task),
+  ];
   if (filters.restrictToManagerScopeOf) {
-    sql += ` AND (user_id = $${idx} OR user_id IN (${managedUserIdsSubquery(idx)}))`;
-    params.push(filters.restrictToManagerScopeOf);
-    idx++;
+    const managerId = filters.restrictToManagerScopeOf;
+    conditions.push(
+      sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`,
+    );
   }
-
   if (filters.fromDate) {
-    sql += ` AND date >= $${idx++}`;
-    params.push(filters.fromDate);
+    conditions.push(gte(timeEntries.date, filters.fromDate));
   }
-
   if (filters.placeholderOnly === true) {
-    sql += ' AND is_placeholder = true';
+    conditions.push(eq(timeEntries.isPlaceholder, true));
   }
-
-  const result = await exec.query(sql, params);
+  const result = await exec.delete(timeEntries).where(and(...conditions));
   return result.rowCount ?? 0;
 };
