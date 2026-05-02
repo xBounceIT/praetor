@@ -57,6 +57,13 @@
       "when": 1777757574709,
       "tag": "0007_claim_work_units",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777757970001,
+      "tag": "0008_claim_client_profile_options",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
@@ -1003,7 +1003,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const sortOrderValue = Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : null;
-      const updated = await withTransaction((tx) =>
+      const updated = await withDbTransaction((tx) =>
         clientProfileOptionsRepo.update(
           categoryResult.value,
           idResult.value,

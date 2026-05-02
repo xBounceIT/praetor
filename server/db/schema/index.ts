@@ -1,4 +1,5 @@
 export * from './auditLogs.ts';
+export * from './clientProfileOptions.ts';
 export * from './customerOfferItems.ts';
 export * from './customerOffers.ts';
 export * from './emailConfig.ts';
