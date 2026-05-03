@@ -1,7 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { Pool, QueryResult, QueryResultRow } from 'pg';
 import type { DbExecutor } from '../../db/drizzle.ts';
-import type { QueryExecutor } from '../../db/index.ts';
 import * as schema from '../../db/schema/index.ts';
 
 export type FakeCall = { sql: string; params: unknown[] };
@@ -13,7 +12,18 @@ export type FakeResponse = {
 
 type ResponseFactory = (sql: string, params: unknown[]) => FakeResponse;
 
-export type FakeExecutor = QueryExecutor & {
+// Minimal pg-shaped contract Drizzle's `node-postgres` driver invokes via the pool adapter.
+// Defined inline because no production code uses it — only this fake. The fake's role is to
+// capture the SQL Drizzle generates (via `makePoolAdapter` + a real `drizzle(...)` instance)
+// so tests can assert against the rendered SQL string instead of mocking the query builder.
+type FakeQueryShape = {
+  query: <T extends QueryResultRow = QueryResultRow>(
+    text: string,
+    params?: unknown[],
+  ) => Promise<QueryResult<T>>;
+};
+
+export type FakeExecutor = FakeQueryShape & {
   readonly calls: readonly FakeCall[];
   enqueue: (response: FakeResponse | ResponseFactory) => void;
   enqueueEmptyN: (n: number) => void;

@@ -12,9 +12,13 @@ export type DbExecutor = PgDatabase<
   ExtractTablesWithRelations<typeof schema>
 >;
 
-// Drizzle analogue of `withTransaction` from `./index.ts`. Use this when the callback
-// invokes Drizzle-converted repos so the `tx` parameter satisfies `DbExecutor`.
-// The legacy `withTransaction` is still in use by un-converted repos.
+// Wraps a Drizzle transaction so the callback receives a `tx` typed as `DbExecutor`. Routes
+// call this when they need to compose multiple repo calls atomically:
+//
+//   await withDbTransaction(async (tx) => {
+//     await fooRepo.create(input, tx);
+//     await barRepo.update(input, tx);
+//   });
 //
 // The `tx as unknown as DbExecutor` cast bridges Drizzle's `PgTransaction` and `PgDatabase`
 // types — both implement the same query-builder surface (`select`, `insert`, `update`,

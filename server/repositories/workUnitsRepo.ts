@@ -149,8 +149,8 @@ export const deleteById = async (
 };
 
 export const findUserIds = async (unitId: string, exec: DbExecutor = db): Promise<string[]> => {
-  // JOIN users (un-modeled): keep as raw SQL. The JOIN filters out user_work_units rows
-  // pointing to deleted users — defensive even though the FK has ON DELETE CASCADE.
+  // The JOIN filters out user_work_units rows pointing to deleted users — defensive even
+  // though the FK has ON DELETE CASCADE.
   const rows = await executeRows<{ id: string }>(
     exec,
     sql`SELECT u.id
@@ -218,5 +218,5 @@ export const listManagedUserIds = async (
           JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
          WHERE wum.user_id = ${managerId}`,
   );
-  return rows.map((r) => String(r.user_id)).filter(Boolean);
+  return rows.map((r) => String(r.user_id));
 };

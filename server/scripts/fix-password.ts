@@ -1,10 +1,15 @@
 import bcrypt from 'bcryptjs';
-import pool from './db/index.ts';
+import pool from '../db/index.ts';
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('Refusing to run fix-password.ts against a production database.');
+  process.exit(1);
+}
 
 async function fixPassword() {
   try {
     console.log('Generating new hash for "password"...');
-    const newHash = await bcrypt.hash('password', 10);
+    const newHash = await bcrypt.hash('password', 12);
     console.log('New Hash:', newHash);
 
     console.log('Updating admin user...');

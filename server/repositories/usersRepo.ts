@@ -3,7 +3,11 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { users } from '../db/schema/users.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
-import type { AssignmentSource } from '../utils/top-manager-assignments.ts';
+import {
+  ASSIGNMENT_SPECS,
+  type AssignmentSource,
+  type AssignmentSpec,
+} from './userAssignmentsRepo.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 
@@ -249,21 +253,18 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
 });
 
-// SAFE: TOP_MANAGER_ROLE_ID and ADMIN_ROLE_ID are compile-time string constants from
-// utils/permissions.ts. Never interpolate dynamic / user-supplied values into this fragment —
-// pass them as bind parameters instead.
 const USER_LIST_FLAG_COLUMNS = sql`
   EXISTS (
     SELECT 1
     FROM user_roles ur
-    WHERE ur.user_id = u.id AND ur.role_id = '${sql.raw(TOP_MANAGER_ROLE_ID)}'
+    WHERE ur.user_id = u.id AND ur.role_id = ${TOP_MANAGER_ROLE_ID}
   ) AS "hasTopManagerRole",
   (
-    u.role = '${sql.raw(ADMIN_ROLE_ID)}'
+    u.role = ${ADMIN_ROLE_ID}
     AND NOT EXISTS (
       SELECT 1
       FROM user_roles ur_admin_only
-      WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> '${sql.raw(ADMIN_ROLE_ID)}'
+      WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> ${ADMIN_ROLE_ID}
     )
   ) AS "isAdminOnly"
 `;
@@ -319,7 +320,7 @@ export const listScopedForManager = async (
        WHERE (${whereClause})
          AND NOT EXISTS (
            SELECT 1 FROM user_roles ur_tm
-           WHERE ur_tm.user_id = u.id AND ur_tm.role_id = '${sql.raw(TOP_MANAGER_ROLE_ID)}'
+           WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
          )
        ORDER BY u.name`,
   );
@@ -437,10 +438,6 @@ export const addUserRole = async (
   );
 };
 
-export const clearUserRoles = async (userId: string, exec: DbExecutor = db): Promise<void> => {
-  await executeRows(exec, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
-};
-
 export const replaceUserRoles = async (
   userId: string,
   roleIds: string[],
@@ -513,32 +510,21 @@ export const getAssignments = async (
   };
 };
 
-type AssignmentTable = {
-  table: 'user_clients' | 'user_projects' | 'user_tasks';
-  column: 'client_id' | 'project_id' | 'task_id';
-};
-
-const ASSIGNMENT_TABLES = {
-  clients: { table: 'user_clients', column: 'client_id' },
-  projects: { table: 'user_projects', column: 'project_id' },
-  tasks: { table: 'user_tasks', column: 'task_id' },
-} as const satisfies Record<'clients' | 'projects' | 'tasks', AssignmentTable>;
-
 const replaceAssignments = async (
-  spec: AssignmentTable,
+  spec: AssignmentSpec,
   userId: string,
   ids: string[],
   source: AssignmentSource,
   exec: DbExecutor,
 ): Promise<void> => {
-  // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_TABLES.
+  // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
   await executeRows(exec, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
   if (ids.length === 0) return;
 
   const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
   await executeRows(
     exec,
-    sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.column)}, assignment_source)
+    sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
         VALUES ${sql.join(valueRows, sql`, `)}
         ON CONFLICT DO NOTHING`,
   );
@@ -549,44 +535,18 @@ export const replaceUserClients = (
   clientIds: string[],
   source: AssignmentSource,
   exec: DbExecutor = db,
-): Promise<void> => replaceAssignments(ASSIGNMENT_TABLES.clients, userId, clientIds, source, exec);
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.clients, userId, clientIds, source, exec);
 
 export const replaceUserProjects = (
   userId: string,
   projectIds: string[],
   source: AssignmentSource,
   exec: DbExecutor = db,
-): Promise<void> =>
-  replaceAssignments(ASSIGNMENT_TABLES.projects, userId, projectIds, source, exec);
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.projects, userId, projectIds, source, exec);
 
 export const replaceUserTasks = (
   userId: string,
   taskIds: string[],
   source: AssignmentSource,
   exec: DbExecutor = db,
-): Promise<void> => replaceAssignments(ASSIGNMENT_TABLES.tasks, userId, taskIds, source, exec);
-
-export const clearProjectCascadeAssignments = async (
-  userId: string,
-  exec: DbExecutor = db,
-): Promise<void> => {
-  await executeRows(
-    exec,
-    sql`DELETE FROM user_clients WHERE user_id = ${userId} AND assignment_source = 'project_cascade'`,
-  );
-};
-
-export const applyProjectCascadeToClients = async (
-  userId: string,
-  exec: DbExecutor = db,
-): Promise<void> => {
-  await executeRows(
-    exec,
-    sql`INSERT INTO user_clients (user_id, client_id, assignment_source)
-        SELECT ${userId}, p.client_id, 'project_cascade'
-          FROM user_projects up
-          JOIN projects p ON up.project_id = p.id
-         WHERE up.user_id = ${userId}
-        ON CONFLICT (user_id, client_id) DO NOTHING`,
-  );
-};
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.tasks, userId, taskIds, source, exec);

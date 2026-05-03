@@ -174,10 +174,10 @@ const sampleListRow = {
 };
 
 describe('listAllForAdmin', () => {
-  test('takes no params and maps rows', async () => {
+  test('binds the role-flag constants and maps rows', async () => {
     exec.enqueue({ rows: [sampleListRow] });
     const result = await usersRepo.listAllForAdmin(testDb);
-    expect(exec.calls[0].params).toEqual([]);
+    expect(exec.calls[0].params).toEqual(['top_manager', 'admin', 'admin']);
     expect(result).toEqual([
       {
         id: 'user-1',
@@ -230,7 +230,7 @@ describe('listScopedForManager', () => {
       testDb,
     );
     expect(exec.calls[0].sql).toContain('NOT EXISTS');
-    expect(exec.calls[0].sql).toContain("role_id = 'top_manager'");
+    expect(exec.calls[0].params).toContain('top_manager');
   });
 });
 
@@ -383,20 +383,13 @@ describe('updateUserDynamic', () => {
   });
 });
 
-describe('addUserRole / clearUserRoles / setPrimaryRole', () => {
+describe('addUserRole / setPrimaryRole', () => {
   test('addUserRole inserts ON CONFLICT DO NOTHING', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
     await usersRepo.addUserRole('user-1', 'manager', testDb);
     expect(exec.calls[0].sql).toContain('ON CONFLICT DO NOTHING');
     expect(exec.calls[0].params).toContain('user-1');
     expect(exec.calls[0].params).toContain('manager');
-  });
-
-  test('clearUserRoles deletes all rows for the user', async () => {
-    exec.enqueue({ rows: [], rowCount: 3 });
-    await usersRepo.clearUserRoles('user-1', testDb);
-    expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
-    expect(exec.calls[0].params).toContain('user-1');
   });
 
   test('setPrimaryRole updates the role column', async () => {
@@ -514,25 +507,5 @@ describe('replaceUserTasks', () => {
     expect(exec.calls[0].sql).toContain('user_tasks');
     expect(exec.calls[1].sql).toContain('user_tasks');
     expect(exec.calls[1].params).toEqual(['user-1', 't1', 'manual']);
-  });
-});
-
-describe('clearProjectCascadeAssignments', () => {
-  test('only deletes rows whose assignment_source is project_cascade', async () => {
-    exec.enqueue({ rows: [], rowCount: 0 });
-    await usersRepo.clearProjectCascadeAssignments('user-1', testDb);
-    expect(exec.calls[0].sql).toContain("assignment_source = 'project_cascade'");
-    expect(exec.calls[0].params).toContain('user-1');
-  });
-});
-
-describe('applyProjectCascadeToClients', () => {
-  test('inserts derived rows from user_projects join projects with project_cascade source', async () => {
-    exec.enqueue({ rows: [], rowCount: 0 });
-    await usersRepo.applyProjectCascadeToClients('user-1', testDb);
-    expect(exec.calls[0].sql).toContain("'project_cascade'");
-    expect(exec.calls[0].sql).toContain('JOIN projects');
-    expect(exec.calls[0].sql).toContain('ON CONFLICT (user_id, client_id) DO NOTHING');
-    expect(exec.calls[0].params).toContain('user-1');
   });
 });

@@ -1,4 +1,4 @@
-import { query } from '../db/index.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -206,19 +206,20 @@ export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
-  const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
-  if (roleResult.rows.length === 0) return [];
-
-  const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
-    roleId,
+  // Auth hot path — parallelize the role and permissions lookups.
+  const [role, rawExplicit] = await Promise.all([
+    rolesRepo.findById(roleId),
+    rolesRepo.listExplicitPermissions(roleId),
   ]);
-  const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
+  if (!role) return [];
+
+  const explicit = rawExplicit.map((p) => normalizePermission(p) as Permission);
 
   const withNotifications = Array.from(
     new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
   );
 
-  if (roleResult.rows[0].is_admin) {
+  if (role.isAdmin) {
     return Array.from(
       new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...withNotifications]),
     );

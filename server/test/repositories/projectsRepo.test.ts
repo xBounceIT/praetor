@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { DatabaseError } from 'pg';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as projectsRepo from '../../repositories/projectsRepo.ts';
-import { ForeignKeyError } from '../../utils/http-errors.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
-} from '../../utils/top-manager-assignments.ts';
+} from '../../repositories/userAssignmentsRepo.ts';
+import { ForeignKeyError } from '../../utils/http-errors.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;

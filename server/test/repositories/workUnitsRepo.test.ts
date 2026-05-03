@@ -250,12 +250,6 @@ describe('listManagedUserIds', () => {
     expect(exec.calls[0].params).toContain('mgr');
     expect(result).toEqual(['u-1', 'u-2']);
   });
-
-  test('filters falsy values from the result', async () => {
-    exec.enqueue({ rows: [{ user_id: 'u-1' }, { user_id: '' }] });
-    const result = await workUnitsRepo.listManagedUserIds('mgr', testDb);
-    expect(result).toEqual(['u-1']);
-  });
 });
 
 describe('managedUserIdsSubquerySql', () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
+import { syncTopManagerAssignmentsForUser } from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
-import { syncTopManagerAssignmentsForUser } from '../utils/top-manager-assignments.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
   DEMO_CLIENTS,

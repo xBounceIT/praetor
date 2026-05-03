@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { users } from './users.ts';
 
 export interface AuditLogDetails {
   targetLabel?: string;
@@ -14,7 +15,9 @@ export const auditLogs = pgTable(
   'audit_logs',
   {
     id: varchar('id', { length: 50 }).primaryKey(),
-    userId: varchar('user_id', { length: 50 }).notNull(),
+    userId: varchar('user_id', { length: 50 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     action: varchar('action', { length: 100 }).notNull().default('user.login'),
     entityType: varchar('entity_type', { length: 50 }),
     entityId: varchar('entity_id', { length: 100 }),

@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { products } from './products.ts';
 import { supplierSales } from './supplierSales.ts';
 import { suppliers } from './suppliers.ts';
 
@@ -50,8 +51,6 @@ export const supplierInvoices = pgTable(
   ],
 );
 
-// `product_id` runtime FK to `products(id) ON DELETE SET NULL` (un-modeled — products is in
-// Tier 5).
 export const supplierInvoiceItems = pgTable(
   'supplier_invoice_items',
   {
@@ -59,7 +58,9 @@ export const supplierInvoiceItems = pgTable(
     invoiceId: varchar('invoice_id', { length: 100 })
       .notNull()
       .references(() => supplierInvoices.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    productId: varchar('product_id', { length: 50 }),
+    productId: varchar('product_id', { length: 50 }).references(() => products.id, {
+      onDelete: 'set null',
+    }),
     description: varchar('description', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
