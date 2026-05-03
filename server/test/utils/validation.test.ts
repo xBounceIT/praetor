@@ -83,6 +83,14 @@ describe('parseOptionalStringFields', () => {
     }
   });
 
+  test('rejects whitespace-only strings as invalid (not coerced to null)', () => {
+    const result = parseOptionalStringFields({ phone: '   ' }, ['phone'] as const);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.field).toBe('phone');
+    }
+  });
+
   test('short-circuits on first failure and does not validate later fields', () => {
     const result = parseOptionalStringFields({ phone: 42, address: 99 }, [
       'phone',
