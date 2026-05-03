@@ -319,30 +319,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('u');
 
       try {
-        await usersRepo.insertUser({
-          id,
-          name: nameResult.value,
-          username: usernameValue,
-          passwordHash,
-          role: roleValue,
-          avatarInitials,
-          costPerHour: costPerHourResult.value || 0,
-          isDisabled: false,
-          employeeType: effectiveEmployeeType,
+        // Atomic create: user row, primary user_roles entry, settings row, and (for top
+        // managers) auto-assignment fan-out commit or roll back together. Mirrors the PUT
+        // handler so a failed sync can't leave a user with TOP_MANAGER role but no
+        // auto-assignments — recovering from that requires re-saving the role manually.
+        await withDbTransaction(async (tx) => {
+          await usersRepo.insertUser(
+            {
+              id,
+              name: nameResult.value,
+              username: usernameValue,
+              passwordHash,
+              role: roleValue,
+              avatarInitials,
+              costPerHour: costPerHourResult.value || 0,
+              isDisabled: false,
+              employeeType: effectiveEmployeeType,
+            },
+            tx,
+          );
+
+          // Keep user_roles in sync with users.role (primary/default role).
+          await usersRepo.addUserRole(id, roleValue, tx);
+
+          await settingsRepo.upsertForUser(
+            id,
+            {
+              fullName: nameResult.value,
+              email: emailResult.value || '',
+              language: null,
+            },
+            tx,
+          );
+
+          if (roleValue === TOP_MANAGER_ROLE_ID) {
+            await syncTopManagerAssignmentsForUser(id, tx);
+          }
         });
-
-        // Keep user_roles in sync with users.role (primary/default role).
-        await usersRepo.addUserRole(id, roleValue);
-
-        await settingsRepo.upsertForUser(id, {
-          fullName: nameResult.value,
-          email: emailResult.value || '',
-          language: null,
-        });
-
-        if (roleValue === TOP_MANAGER_ROLE_ID) {
-          await syncTopManagerAssignmentsForUser(id);
-        }
 
         await logAudit({
           request,

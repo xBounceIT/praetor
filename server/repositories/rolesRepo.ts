@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db } from '../db/drizzle.ts';
 import { rolePermissions, roles, userRoles } from '../db/schema/roles.ts';
+import { users } from '../db/schema/users.ts';
 
 export type Role = {
   id: string;
@@ -132,9 +133,11 @@ export const clearPermissions = async (roleId: string, exec: DbExecutor = db): P
   await exec.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
 };
 
-// `users` is not yet modeled in TS schema; use a raw SQL probe. When usersRepo is converted,
-// this can become `db.select({ exists: sql`1` }).from(users)...`.
 export const isRoleInUse = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
-  const rows = await executeRows(exec, sql`SELECT 1 FROM users WHERE role = ${roleId} LIMIT 1`);
+  const rows = await exec
+    .select({ exists: sql`1` })
+    .from(users)
+    .where(eq(users.role, roleId))
+    .limit(1);
   return rows.length > 0;
 };

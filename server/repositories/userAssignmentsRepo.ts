@@ -174,8 +174,9 @@ export const applyProjectCascadeToClients = async (
   );
 };
 
-// The cascade rebuild must run *after* the deletes resolve — it reads from user_projects,
-// which the second parallel delete may have just modified.
+// The cascade rebuild reads from `user_projects`, which the parallel deletes above may have
+// just modified — keep it sequenced after `await Promise.all([...])` so it sees the final
+// state, never an interleaved view.
 export const syncTopManagerAssignmentsForUser = async (
   userId: string,
   exec: DbExecutor = db,
