@@ -31,7 +31,7 @@ import workUnitsRoutes from './routes/work-units.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const parseTrustProxyEnv = (value: string | undefined): boolean | string | number => {
   if (!value) return false;
@@ -63,6 +63,7 @@ export const buildApp = async () => {
   await fastify.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   await fastify.register(rateLimit, {

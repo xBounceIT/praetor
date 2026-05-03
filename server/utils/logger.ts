@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import pino, { type Bindings, type Logger, type LoggerOptions } from 'pino';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const isProduction = NODE_ENV === 'production';
