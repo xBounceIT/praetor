@@ -1,10 +1,18 @@
 import { sql } from 'drizzle-orm';
-import { date, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  check,
+  date,
+  index,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { suppliers } from './suppliers.ts';
 
-// Status CHECK ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')
-// is enforced at the DB level. The route layer normalizes legacy values ('received' → 'sent',
-// 'approved' → 'accepted', 'rejected' → 'denied') on the way out.
+// The route layer normalizes legacy status values ('received' → 'sent', 'approved' → 'accepted',
+// 'rejected' → 'denied') on the way out, but the DB still accepts both forms.
 export const supplierQuotes = pgTable(
   'supplier_quotes',
   {
@@ -24,6 +32,10 @@ export const supplierQuotes = pgTable(
     index('idx_supplier_quotes_supplier_id').on(table.supplierId),
     index('idx_supplier_quotes_status').on(table.status),
     index('idx_supplier_quotes_created_at').on(table.createdAt),
+    check(
+      'supplier_quotes_status_check',
+      sql`${table.status} IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')`,
+    ),
   ],
 );
 
@@ -44,5 +56,13 @@ export const supplierQuoteItems = pgTable(
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),
   },
-  (table) => [index('idx_supplier_quote_items_quote_id').on(table.quoteId)],
+  (table) => [
+    index('idx_supplier_quote_items_quote_id').on(table.quoteId),
+    // NULL passes a PG CHECK by default (comparison yields NULL, not FALSE), so this allows
+    // legacy rows with null unit_type while constraining new writes to the enum.
+    check(
+      'chk_supplier_quote_items_unit_type',
+      sql`${table.unitType} IN ('hours', 'days', 'unit')`,
+    ),
+  ],
 );

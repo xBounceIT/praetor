@@ -140,6 +140,15 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await supplierOrdersRepo.update('so-x', { status: 'sent' }, testDb)).toBeNull();
   });
+
+  test('empty patch falls back to SELECT (no UPDATE issued, updated_at preserved)', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await supplierOrdersRepo.update('so-1', {}, testDb);
+    const sqlText = exec.calls[0].sql.toLowerCase();
+    expect(sqlText).not.toContain('update "supplier_sales"');
+    expect(sqlText).toContain('select');
+    expect(result?.id).toBe('so-1');
+  });
 });
 
 describe('replaceItems', () => {

@@ -165,6 +165,12 @@ export const update = async (
   patch: SupplierQuoteUpdate,
   exec: DbExecutor = db,
 ): Promise<SupplierQuote | null> => {
+  // Empty patch → fall back to SELECT so the row (and updated_at) is left untouched.
+  // Matches pre-Drizzle behavior; without this guard, an empty PUT would bump updated_at
+  // and create a misleading audit trail.
+  if (!Object.values(patch).some((v) => v !== undefined)) {
+    return findById(id, exec);
+  }
   const [row] = await exec
     .update(supplierQuotes)
     .set({

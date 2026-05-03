@@ -213,6 +213,25 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await supplierInvoicesRepo.update('SINV-X', { status: 'paid' }, testDb)).toBeNull();
   });
+
+  test('empty patch falls back to SELECT (no UPDATE issued, updated_at preserved)', async () => {
+    exec.enqueue({ rows: [invoiceRow()] });
+    const result = await supplierInvoicesRepo.update('SINV-2026-0001', {}, testDb);
+    const sqlText = exec.calls[0].sql.toLowerCase();
+    expect(sqlText).not.toContain('update "supplier_invoices"');
+    expect(sqlText).toContain('select');
+    expect(result?.id).toBe('SINV-2026-0001');
+  });
+
+  test('patch with only undefined values also falls back to SELECT', async () => {
+    exec.enqueue({ rows: [invoiceRow()] });
+    await supplierInvoicesRepo.update(
+      'SINV-2026-0001',
+      { status: undefined, notes: undefined },
+      testDb,
+    );
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('update "supplier_invoices"');
+  });
 });
 
 describe('replaceItems', () => {

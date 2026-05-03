@@ -127,6 +127,15 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.update('q-x', { status: 'sent' }, testDb)).toBeNull();
   });
+
+  test('empty patch falls back to SELECT (no UPDATE issued, updated_at preserved)', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    const result = await supplierQuotesRepo.update('q-1', {}, testDb);
+    const sqlText = exec.calls[0].sql.toLowerCase();
+    expect(sqlText).not.toContain('update "supplier_quotes"');
+    expect(sqlText).toContain('select');
+    expect(result?.id).toBe('q-1');
+  });
 });
 
 describe('replaceItems', () => {

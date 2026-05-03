@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   date,
   index,
   numeric,
@@ -12,7 +13,6 @@ import {
 import { supplierSales } from './supplierSales.ts';
 import { suppliers } from './suppliers.ts';
 
-// Status CHECK ('draft', 'sent', 'paid', 'overdue', 'cancelled') is enforced at the DB level.
 export const supplierInvoices = pgTable(
   'supplier_invoices',
   {
@@ -43,6 +43,10 @@ export const supplierInvoices = pgTable(
     uniqueIndex('idx_supplier_invoices_linked_sale_id_unique')
       .on(table.linkedSaleId)
       .where(sql`${table.linkedSaleId} IS NOT NULL`),
+    check(
+      'supplier_invoices_status_check',
+      sql`${table.status} IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')`,
+    ),
   ],
 );
 
