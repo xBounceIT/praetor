@@ -26,8 +26,7 @@ export async function getSSLConfig(domain: string): Promise<SSLConfig> {
   const { generate } = await import('selfsigned');
 
   const attrs = [{ name: 'commonName', value: domain }];
-  const pems = generate(attrs, {
-    days: 365,
+  const pems = await generate(attrs, {
     keySize: 2048,
     algorithm: 'sha256',
     extensions: [

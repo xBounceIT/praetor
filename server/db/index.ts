@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import pg from 'pg';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const { Pool } = pg;
 const logger = createChildLogger({ module: 'db' });
