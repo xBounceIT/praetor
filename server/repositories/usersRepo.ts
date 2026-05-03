@@ -3,11 +3,6 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { users } from '../db/schema/users.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
-import {
-  ASSIGNMENT_SPECS,
-  type AssignmentSource,
-  type AssignmentSpec,
-} from './userAssignmentsRepo.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 
@@ -509,44 +504,3 @@ export const getAssignments = async (
     taskIds: tasksRows.map((r) => r.taskId),
   };
 };
-
-const replaceAssignments = async (
-  spec: AssignmentSpec,
-  userId: string,
-  ids: string[],
-  source: AssignmentSource,
-  exec: DbExecutor,
-): Promise<void> => {
-  // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
-  await executeRows(exec, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
-  if (ids.length === 0) return;
-
-  const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
-  await executeRows(
-    exec,
-    sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
-        VALUES ${sql.join(valueRows, sql`, `)}
-        ON CONFLICT DO NOTHING`,
-  );
-};
-
-export const replaceUserClients = (
-  userId: string,
-  clientIds: string[],
-  source: AssignmentSource,
-  exec: DbExecutor = db,
-): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.clients, userId, clientIds, source, exec);
-
-export const replaceUserProjects = (
-  userId: string,
-  projectIds: string[],
-  source: AssignmentSource,
-  exec: DbExecutor = db,
-): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.projects, userId, projectIds, source, exec);
-
-export const replaceUserTasks = (
-  userId: string,
-  taskIds: string[],
-  source: AssignmentSource,
-  exec: DbExecutor = db,
-): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.tasks, userId, taskIds, source, exec);

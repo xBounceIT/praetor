@@ -276,61 +276,32 @@ export const getProjectsSection = async (
           LIMIT ${itemsLimit}`,
       );
 
-  // Per-project hours come from time_entries; user/project scoping selects one of four variants.
-  // The promise stays null when the viewer can't see any timesheets — caller falls back to [].
+  // Per-project hours come from time_entries; user/project scoping toggles a JOIN and two
+  // optional WHERE-clause filters. The promise stays null when the viewer can't see any
+  // timesheets — caller falls back to [].
+  const projectScopeJoin = canViewAllProjects
+    ? sql``
+    : sql`JOIN user_projects up ON up.project_id = te.project_id`;
+  const userScopeFilter = canViewAllTimesheets
+    ? sql``
+    : sql`AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})`;
+  const viewerScopeFilter = canViewAllProjects ? sql`` : sql`AND up.user_id = ${viewerId}`;
+
   const projectHoursQuery = canViewTimesheets
-    ? canViewAllProjects
-      ? canViewAllTimesheets
-        ? executeRows<{ label: string; hours: string; cost: string }>(
-            exec,
-            sql`SELECT
-                te.project_name as label,
-                COALESCE(SUM(te.duration), 0) as hours,
-                COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-              WHERE te.date >= ${fromDate} AND te.date <= ${toDate}
-              GROUP BY te.project_name`,
-          )
-        : executeRows<{ label: string; hours: string; cost: string }>(
-            exec,
-            sql`SELECT
-                te.project_name as label,
-                COALESCE(SUM(te.duration), 0) as hours,
-                COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})
-              GROUP BY te.project_name`,
-          )
-      : canViewAllTimesheets
-        ? executeRows<{ label: string; hours: string; cost: string }>(
-            exec,
-            sql`SELECT
-                te.project_name as label,
-                COALESCE(SUM(te.duration), 0) as hours,
-                COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               JOIN user_projects up ON up.project_id = te.project_id
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND up.user_id = ${viewerId}
-              GROUP BY te.project_name`,
-          )
-        : executeRows<{ label: string; hours: string; cost: string }>(
-            exec,
-            sql`SELECT
-                te.project_name as label,
-                COALESCE(SUM(te.duration), 0) as hours,
-                COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
-               FROM time_entries te
-               JOIN user_projects up ON up.project_id = te.project_id
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})
-                AND up.user_id = ${viewerId}
-              GROUP BY te.project_name`,
-          )
+    ? executeRows<{ label: string; hours: string; cost: string }>(
+        exec,
+        sql`SELECT
+            te.project_name as label,
+            COALESCE(SUM(te.duration), 0) as hours,
+            COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
+           FROM time_entries te
+           ${projectScopeJoin}
+          WHERE te.date >= ${fromDate}
+            AND te.date <= ${toDate}
+            ${userScopeFilter}
+            ${viewerScopeFilter}
+          GROUP BY te.project_name`,
+      )
     : null;
 
   const [summaryRows, itemsRows, hoursRows] = await Promise.all([
@@ -475,60 +446,33 @@ export const getTasksSection = async (
           LIMIT ${itemsLimit}`,
       );
 
-  // Top-N tasks by hours; the !canViewAllTasks branches use timeEntriesTasksJoin so legacy
-  // entries (where time_entries.task_id is NULL) still attribute to the right task by
-  // (project_id, name) fallback.
+  // Top-N tasks by hours; user/task scoping toggles a JOIN block and two optional WHERE-clause
+  // filters. The !canViewAllTasks JOIN uses `timeEntriesTasksJoin` so legacy entries (where
+  // time_entries.task_id is NULL) still attribute to the right task by (project_id, name)
+  // fallback before the user_tasks scoping JOIN runs.
+  const taskScopeJoin = canViewAllTasks
+    ? sql``
+    : sql`${timeEntriesTasksJoin}
+       JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`;
+  const userScopeFilter = canViewAllTimesheets
+    ? sql``
+    : sql`AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})`;
+  const viewerScopeFilter = canViewAllTasks ? sql`` : sql`AND ut.user_id = ${viewerId}`;
+
   const taskHoursQuery = canViewTimesheets
-    ? canViewAllTasks
-      ? canViewAllTimesheets
-        ? executeRows<{ label: string; hours: string; entry_count: string }>(
-            exec,
-            sql`SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-              WHERE te.date >= ${fromDate} AND te.date <= ${toDate}
-              GROUP BY te.task
-              ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-          )
-        : executeRows<{ label: string; hours: string; entry_count: string }>(
-            exec,
-            sql`SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})
-              GROUP BY te.task
-              ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-          )
-      : canViewAllTimesheets
-        ? executeRows<{ label: string; hours: string; entry_count: string }>(
-            exec,
-            sql`SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               ${timeEntriesTasksJoin}
-               JOIN user_tasks ut ON ut.task_id = ${tasksT.id}
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND ut.user_id = ${viewerId}
-              GROUP BY te.task
-              ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-          )
-        : executeRows<{ label: string; hours: string; entry_count: string }>(
-            exec,
-            sql`SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
-               FROM time_entries te
-               ${timeEntriesTasksJoin}
-               JOIN user_tasks ut ON ut.task_id = ${tasksT.id}
-              WHERE te.date >= ${fromDate}
-                AND te.date <= ${toDate}
-                AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})
-                AND ut.user_id = ${viewerId}
-              GROUP BY te.task
-              ORDER BY hours DESC
-              LIMIT ${topLimit}`,
-          )
+    ? executeRows<{ label: string; hours: string; entry_count: string }>(
+        exec,
+        sql`SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
+           FROM time_entries te
+           ${taskScopeJoin}
+          WHERE te.date >= ${fromDate}
+            AND te.date <= ${toDate}
+            ${userScopeFilter}
+            ${viewerScopeFilter}
+          GROUP BY te.task
+          ORDER BY hours DESC
+          LIMIT ${topLimit}`,
+      )
     : null;
 
   const [summaryRows, itemsRows, taskHoursRows] = await Promise.all([

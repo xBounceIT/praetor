@@ -1,16 +1,7 @@
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  check,
-  index,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
-import { users } from './users.ts';
 
 export const projects = pgTable(
   'projects',
@@ -33,28 +24,8 @@ export const projects = pgTable(
   (table) => [index('idx_projects_client_id').on(table.clientId)],
 );
 
-// Many-to-many users ↔ projects with assignment provenance. Mirrors `userClients` and
-// `userTasks` — `assignment_source` distinguishes manual rows from auto-managed rows.
-export const userProjects = pgTable(
-  'user_projects',
-  {
-    userId: varchar('user_id', { length: 50 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    projectId: varchar('project_id', { length: 50 })
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    assignmentSource: varchar('assignment_source', { length: 20 })
-      .$type<'manual' | 'top_manager_auto' | 'project_cascade'>()
-      .notNull()
-      .default('manual'),
-    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    primaryKey({ columns: [table.userId, table.projectId] }),
-    check(
-      'user_projects_assignment_source_check',
-      sql`${table.assignmentSource} IN ('manual', 'top_manager_auto', 'project_cascade')`,
-    ),
-  ],
-);
+export const userProjects = defineUserAssignmentTable({
+  tableName: 'user_projects',
+  fkColumnKey: 'projectId',
+  fkTarget: () => projects.id,
+});

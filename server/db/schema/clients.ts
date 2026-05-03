@@ -1,16 +1,14 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
-  check,
   jsonb,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.ts';
+import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 
 // Stored shape of a contact in the `contacts` JSONB column. Looser than the domain
 // `ClientContact` type because legacy rows may have varying field presence; the repo's
@@ -62,29 +60,8 @@ export const clients = pgTable(
   }),
 );
 
-// Many-to-many users ↔ clients with assignment provenance. `assignment_source` distinguishes
-// manual assignments from automatic ones (top-manager auto-assign, project-cascade) so the
-// sync logic in `userAssignmentsRepo` can preserve manual edits while reconciling auto rows.
-export const userClients = pgTable(
-  'user_clients',
-  {
-    userId: varchar('user_id', { length: 50 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    clientId: varchar('client_id', { length: 50 })
-      .notNull()
-      .references(() => clients.id, { onDelete: 'cascade' }),
-    assignmentSource: varchar('assignment_source', { length: 20 })
-      .$type<'manual' | 'top_manager_auto' | 'project_cascade'>()
-      .notNull()
-      .default('manual'),
-    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    primaryKey({ columns: [table.userId, table.clientId] }),
-    check(
-      'user_clients_assignment_source_check',
-      sql`${table.assignmentSource} IN ('manual', 'top_manager_auto', 'project_cascade')`,
-    ),
-  ],
-);
+export const userClients = defineUserAssignmentTable({
+  tableName: 'user_clients',
+  fkColumnKey: 'clientId',
+  fkTarget: () => clients.id,
+});

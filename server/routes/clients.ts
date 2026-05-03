@@ -3,10 +3,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
-import {
-  assignClientToTopManagers,
-  assignClientToUser,
-} from '../repositories/userAssignmentsRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -22,6 +19,7 @@ import {
   badRequest,
   optionalEmail,
   optionalNonEmptyString,
+  parseOptionalStringFields,
   requireNonEmptyString,
   validateClientIdentifier,
 } from '../utils/validation.ts';
@@ -29,6 +27,25 @@ import {
 const PROFILE_OPTION_CATEGORIES = clientProfileOptionsRepo.PROFILE_OPTION_CATEGORIES;
 type ProfileOptionCategory = clientProfileOptionsRepo.ProfileOptionCategory;
 const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
+
+const PATCH_OPTIONAL_STRING_FIELDS = [
+  'phone',
+  'contactName',
+  'address',
+  'addressCountry',
+  'addressState',
+  'addressCap',
+  'addressProvince',
+  'addressCivicNumber',
+  'addressLine',
+  'description',
+  'atecoCode',
+  'website',
+  'sector',
+  'numberOfEmployees',
+  'revenue',
+  'officeCountRange',
+] as const;
 
 type ClientContactInput = {
   fullName: unknown;
@@ -494,9 +511,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
 
         if (request.user?.id) {
-          await assignClientToUser(request.user.id, id);
+          await userAssignmentsRepo.assignClientToUser(request.user.id, id);
         }
-        await assignClientToTopManagers(id);
+        await userAssignmentsRepo.assignClientToTopManagers(id);
         await logAudit({
           request,
           action: 'client.created',
@@ -629,62 +646,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(body.email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      const phoneResult = optionalNonEmptyString(body.phone, 'phone');
-      if (!phoneResult.ok) return badRequest(reply, phoneResult.message);
-
-      const contactNameResult = optionalNonEmptyString(body.contactName, 'contactName');
-      if (!contactNameResult.ok) return badRequest(reply, contactNameResult.message);
-
-      const addressResult = optionalNonEmptyString(body.address, 'address');
-      if (!addressResult.ok) return badRequest(reply, addressResult.message);
-
-      const addressCountryResult = optionalNonEmptyString(body.addressCountry, 'addressCountry');
-      if (!addressCountryResult.ok) return badRequest(reply, addressCountryResult.message);
-
-      const addressStateResult = optionalNonEmptyString(body.addressState, 'addressState');
-      if (!addressStateResult.ok) return badRequest(reply, addressStateResult.message);
-
-      const addressCapResult = optionalNonEmptyString(body.addressCap, 'addressCap');
-      if (!addressCapResult.ok) return badRequest(reply, addressCapResult.message);
-
-      const addressProvinceResult = optionalNonEmptyString(body.addressProvince, 'addressProvince');
-      if (!addressProvinceResult.ok) return badRequest(reply, addressProvinceResult.message);
-
-      const addressCivicNumberResult = optionalNonEmptyString(
-        body.addressCivicNumber,
-        'addressCivicNumber',
-      );
-      if (!addressCivicNumberResult.ok) return badRequest(reply, addressCivicNumberResult.message);
-
-      const addressLineResult = optionalNonEmptyString(body.addressLine, 'addressLine');
-      if (!addressLineResult.ok) return badRequest(reply, addressLineResult.message);
-
-      const descriptionResult = optionalNonEmptyString(body.description, 'description');
-      if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-
-      const atecoCodeResult = optionalNonEmptyString(body.atecoCode, 'atecoCode');
-      if (!atecoCodeResult.ok) return badRequest(reply, atecoCodeResult.message);
-
-      const websiteResult = optionalNonEmptyString(body.website, 'website');
-      if (!websiteResult.ok) return badRequest(reply, websiteResult.message);
-
-      const sectorResult = optionalNonEmptyString(body.sector, 'sector');
-      if (!sectorResult.ok) return badRequest(reply, sectorResult.message);
-
-      const numberOfEmployeesResult = optionalNonEmptyString(
-        body.numberOfEmployees,
-        'numberOfEmployees',
-      );
-      if (!numberOfEmployeesResult.ok) return badRequest(reply, numberOfEmployeesResult.message);
-
-      const revenueResult = optionalNonEmptyString(body.revenue, 'revenue');
-      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
-
-      const officeCountRangeResult = optionalNonEmptyString(
-        body.officeCountRange,
-        'officeCountRange',
-      );
-      if (!officeCountRangeResult.ok) return badRequest(reply, officeCountRangeResult.message);
+      const optionalFields = parseOptionalStringFields(body, PATCH_OPTIONAL_STRING_FIELDS);
+      if (!optionalFields.ok) return badRequest(reply, optionalFields.message);
+      const opt = optionalFields.values;
 
       const [fiscalCodeConflict, clientCodeConflict, current] = await Promise.all([
         resolvedFiscalCode
@@ -709,7 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const primaryFromContacts = buildPrimaryFieldsFromContacts(effectiveContacts);
 
       const finalContactName = hasContactName
-        ? contactNameResult.value
+        ? (opt.contactName ?? null)
         : hasContacts
           ? primaryFromContacts.contactName
           : null;
@@ -719,7 +683,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? primaryFromContacts.email
           : null;
       const finalPhone = hasPhone
-        ? phoneResult.value
+        ? (opt.phone ?? null)
         : hasContacts
           ? primaryFromContacts.phone
           : null;
@@ -734,16 +698,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: hasType ? (body.type as string | null) : null,
           contacts: hasContacts ? effectiveContacts : null,
           clientCode: hasClientCode ? clientCodeValue : null,
-          address: hasAddress ? addressResult.value : null,
-          addressCountry: hasAddressCountry ? addressCountryResult.value : null,
-          addressState: hasAddressState ? addressStateResult.value : null,
-          addressCap: hasAddressCap ? addressCapResult.value : null,
-          addressProvince: hasAddressProvince ? addressProvinceResult.value : null,
-          addressCivicNumber: hasAddressCivicNumber ? addressCivicNumberResult.value : null,
-          addressLine: hasAddressLine ? addressLineResult.value : null,
-          description: hasDescription ? descriptionResult.value : null,
-          atecoCode: hasAtecoCode ? atecoCodeResult.value : null,
-          website: hasWebsite ? websiteResult.value : null,
+          address: opt.address ?? null,
+          addressCountry: opt.addressCountry ?? null,
+          addressState: opt.addressState ?? null,
+          addressCap: opt.addressCap ?? null,
+          addressProvince: opt.addressProvince ?? null,
+          addressCivicNumber: opt.addressCivicNumber ?? null,
+          addressLine: opt.addressLine ?? null,
+          description: opt.description ?? null,
+          atecoCode: opt.atecoCode ?? null,
+          website: opt.website ?? null,
           fiscalCode: hasFiscalUpdate ? resolvedFiscalCode : null,
           contactName: finalContactName,
           contactNameProvided: shouldUpdateContactName,
@@ -751,13 +715,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           emailProvided: shouldUpdateEmail,
           phone: finalPhone,
           phoneProvided: shouldUpdatePhone,
-          sector: hasSector ? sectorResult.value : null,
+          sector: opt.sector ?? null,
           sectorProvided: hasSector,
-          numberOfEmployees: hasNumberOfEmployees ? numberOfEmployeesResult.value : null,
+          numberOfEmployees: opt.numberOfEmployees ?? null,
           numberOfEmployeesProvided: hasNumberOfEmployees,
-          revenue: hasRevenue ? revenueResult.value : null,
+          revenue: opt.revenue ?? null,
           revenueProvided: hasRevenue,
-          officeCountRange: hasOfficeCountRange ? officeCountRangeResult.value : null,
+          officeCountRange: opt.officeCountRange ?? null,
           officeCountRangeProvided: hasOfficeCountRange,
         });
 

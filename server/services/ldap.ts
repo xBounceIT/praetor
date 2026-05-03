@@ -1,6 +1,5 @@
 import fs from 'fs';
 import ldap from 'ldapjs';
-import type { LdapConfig } from '../repositories/ldapRepo.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
@@ -45,7 +44,7 @@ interface LdapSearchEntry {
 }
 
 class LDAPService {
-  config: LdapConfig | null;
+  config: ldapRepo.LdapConfig | null;
 
   constructor() {
     this.config = null;

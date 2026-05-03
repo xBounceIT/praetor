@@ -1,20 +1,27 @@
 import { and, eq, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import {
+  type AssignmentSource,
+  MANUAL_ASSIGNMENT_SOURCE,
+  PROJECT_CASCADE_ASSIGNMENT_SOURCE,
+  TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
+} from '../db/schema/_userAssignmentTable.ts';
 import { userClients } from '../db/schema/clients.ts';
 import { userProjects } from '../db/schema/projects.ts';
 import { userTasks } from '../db/schema/tasks.ts';
 import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import * as rolesRepo from './rolesRepo.ts';
 
-export const MANUAL_ASSIGNMENT_SOURCE = 'manual';
-export const TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE = 'top_manager_auto';
-export const PROJECT_CASCADE_ASSIGNMENT_SOURCE = 'project_cascade';
-
-export type AssignmentSource =
-  | typeof MANUAL_ASSIGNMENT_SOURCE
-  | typeof TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE
-  | typeof PROJECT_CASCADE_ASSIGNMENT_SOURCE;
+// Re-export so existing callsites keep importing from `userAssignmentsRepo` even though the
+// canonical definitions live in the schema-level `_userAssignmentTable.ts` (where the CHECK
+// constraint and column type also reference them).
+export {
+  type AssignmentSource,
+  MANUAL_ASSIGNMENT_SOURCE,
+  PROJECT_CASCADE_ASSIGNMENT_SOURCE,
+  TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
+};
 
 // Conflict resolution for the upsert: manual wins over top_manager_auto wins over the existing
 // row's source. `excluded.assignment_source` references the proposed-insert row (PG syntax).
@@ -220,3 +227,44 @@ export const syncTopManagerAssignmentsForUser = async (
     assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, exec),
   ]);
 };
+
+const replaceAssignments = async (
+  spec: AssignmentSpec,
+  userId: string,
+  ids: string[],
+  source: AssignmentSource,
+  exec: DbExecutor,
+): Promise<void> => {
+  // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
+  await executeRows(exec, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
+  if (ids.length === 0) return;
+
+  const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
+  await executeRows(
+    exec,
+    sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
+        VALUES ${sql.join(valueRows, sql`, `)}
+        ON CONFLICT DO NOTHING`,
+  );
+};
+
+export const replaceUserClients = (
+  userId: string,
+  clientIds: string[],
+  source: AssignmentSource,
+  exec: DbExecutor = db,
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.clients, userId, clientIds, source, exec);
+
+export const replaceUserProjects = (
+  userId: string,
+  projectIds: string[],
+  source: AssignmentSource,
+  exec: DbExecutor = db,
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.projects, userId, projectIds, source, exec);
+
+export const replaceUserTasks = (
+  userId: string,
+  taskIds: string[],
+  source: AssignmentSource,
+  exec: DbExecutor = db,
+): Promise<void> => replaceAssignments(ASSIGNMENT_SPECS.tasks, userId, taskIds, source, exec);
