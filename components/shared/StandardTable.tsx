@@ -235,6 +235,18 @@ const StandardTable = <T extends object>({
     return null;
   }, []);
 
+  // Normalize empty raw values to a single sentinel so the filter list shows
+  // one "N/A" entry instead of "", "null", "undefined" duplicates. Columns
+  // with their own `filterFormat` returning a placeholder (e.g. '-') are
+  // unaffected because their raw value isn't null/empty.
+  const formatForFilter = useCallback(
+    (rawVal: T[keyof T] | string | number | boolean | null | undefined, col: Column<T>): string => {
+      if (rawVal === null || rawVal === undefined || rawVal === '') return '';
+      return col.filterFormat ? col.filterFormat(rawVal) : String(rawVal);
+    },
+    [],
+  );
+
   // Derived Data
   const processedData = useMemo(() => {
     if (!data || !columns) return [];
@@ -248,7 +260,7 @@ const StandardTable = <T extends object>({
         if (col) {
           result = result.filter((row) => {
             const rawVal = getValue(row, col);
-            const val = col.filterFormat ? col.filterFormat(rawVal) : String(rawVal);
+            const val = formatForFilter(rawVal, col);
             return selectedValues.includes(val);
           });
         }
@@ -277,7 +289,7 @@ const StandardTable = <T extends object>({
     }
 
     return result;
-  }, [data, columns, filterState, sortState, getValue, getColId]);
+  }, [data, columns, filterState, sortState, getValue, getColId, formatForFilter]);
 
   // Pagination
   const totalItems = data ? processedData.length : externalTotalCount || 0;
@@ -295,7 +307,7 @@ const StandardTable = <T extends object>({
     const values = new Set<string>();
     data.forEach((row) => {
       const val = getValue(row, col);
-      values.add(col.filterFormat ? col.filterFormat(val) : String(val));
+      values.add(formatForFilter(val, col));
     });
     return Array.from(values).sort();
   };
