@@ -80,7 +80,7 @@ const assignAllToUserAsTopManager = (
     SET assignment_source = ${mergedSource(tableAssignmentSourceCol(spec))}
   `);
 
-export const userHasTopManagerRole = (userId: string, exec: DbExecutor = db) =>
+export const userHasTopManagerRole = (userId: string, exec: DbExecutor = db): Promise<boolean> =>
   rolesRepo.userHasRole(userId, TOP_MANAGER_ROLE_ID, exec);
 
 export const assignClientToUser = async (
@@ -174,9 +174,6 @@ export const applyProjectCascadeToClients = async (
   );
 };
 
-// The cascade rebuild reads from `user_projects`, which the parallel deletes above may have
-// just modified — keep it sequenced after `await Promise.all([...])` so it sees the final
-// state, never an interleaved view.
 export const syncTopManagerAssignmentsForUser = async (
   userId: string,
   exec: DbExecutor = db,
@@ -210,6 +207,9 @@ export const syncTopManagerAssignmentsForUser = async (
           ),
         ),
     ]);
+    // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
+    // modified — sequenced after the `await Promise.all(...)` so it sees the final state,
+    // never an interleaved view.
     await applyProjectCascadeToClients(userId, exec);
     return;
   }

@@ -15,6 +15,8 @@ const envInt = (key: string, fallback: number) => {
 };
 
 // The pg pool that backs `db/drizzle.ts`'s `db` instance. Exported so that:
+//   - `index.ts` (server bootstrap) can run the schema-bootstrap, table-existence probe,
+//     and DB-readiness `SELECT 1` via the `query` helper below before the app starts;
 //   - the demo-seed scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`) and the legacy
 //     `db/add_*.ts` artifacts can issue raw parameterized queries via `query` below;
 //   - `routes/reports.ts` can build a separate `drizzle(pool, …)` instance with a query-
@@ -35,7 +37,8 @@ pool.on('error', (err) => {
   logger.error({ err: serializeError(err) }, 'Unexpected error on idle database client');
 });
 
-// Used only by the demo-seed bootstrap scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`),
+// Used by the server-bootstrap path in `index.ts` (raw schema apply, table probe, DB
+// readiness check) and by the demo-seed scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`),
 // which intentionally bypass Drizzle for predictable raw-SQL inserts.
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 

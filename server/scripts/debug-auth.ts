@@ -23,8 +23,12 @@ async function checkAuth() {
         `Password hash present: ${hashPresent} (length: ${user.password_hash?.length ?? 0})`,
       );
 
-      const isMatch = await bcrypt.compare('password', user.password_hash);
-      console.log(`Password "password" match: ${isMatch}`);
+      if (hashPresent) {
+        const isMatch = await bcrypt.compare('password', user.password_hash);
+        console.log(`Password "password" match: ${isMatch}`);
+      } else {
+        console.log('Skipping bcrypt.compare: password_hash is missing or empty.');
+      }
     }
   } catch (err) {
     console.error('Database connection error:', err);
