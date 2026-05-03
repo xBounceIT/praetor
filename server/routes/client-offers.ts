@@ -5,7 +5,7 @@ import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -400,10 +400,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { offer, items: createdItems };
         });
       } catch (err) {
-        if (
-          isUniqueViolation(err) &&
-          (err.constraint === 'customer_offers_pkey' || err.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(err);
+        if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;
@@ -603,10 +601,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { offer, items: updatedItems };
         });
       } catch (err) {
-        if (
-          isUniqueViolation(err) &&
-          (err.constraint === 'customer_offers_pkey' || err.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(err);
+        if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;

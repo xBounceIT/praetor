@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as supplierInvoicesRepo from '../repositories/supplierInvoicesRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { type DatabaseError, isUniqueViolation } from '../utils/db-errors.ts';
+import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -348,7 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           try {
             const idForAttempt = resolvedInvoiceId;
-            result = await withTransaction(async (tx) => {
+            result = await withDbTransaction(async (tx) => {
               const invoice = await supplierInvoicesRepo.create(
                 {
                   id: idForAttempt,
@@ -365,7 +365,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 },
                 tx,
               );
-              const createdItems = await supplierInvoicesRepo.replaceItems(
+              const createdItems = await supplierInvoicesRepo.insertItems(
                 invoice.id,
                 normalizedItems,
                 tx,
@@ -374,10 +374,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             });
             break;
           } catch (error) {
+            const dup = getUniqueViolation(error);
             if (
               !nextIdResult.value &&
-              isUniqueViolation(error) &&
-              isSupplierInvoiceIdConflict(error) &&
+              dup &&
+              isSupplierInvoiceIdConflict(dup) &&
               attempt < maxInsertAttempts - 1
             ) {
               resolvedInvoiceId = null;
@@ -406,9 +407,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           items: result.items,
         });
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          return reply.code(409).send({ error: duplicateInvoiceError(error) });
-        }
+        const dup = getUniqueViolation(error);
+        if (dup) return reply.code(409).send({ error: duplicateInvoiceError(dup) });
         throw error;
       }
     },
@@ -565,7 +565,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let updated: supplierInvoicesRepo.SupplierInvoice | null;
       let resultItems: supplierInvoicesRepo.SupplierInvoiceItem[];
       try {
-        const txResult = await withTransaction(async (tx) => {
+        const txResult = await withDbTransaction(async (tx) => {
           const invoice = await supplierInvoicesRepo.update(idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
@@ -577,9 +577,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updated = txResult.invoice;
         resultItems = txResult.items;
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          return reply.code(409).send({ error: duplicateInvoiceError(error) });
-        }
+        const dup = getUniqueViolation(error);
+        if (dup) return reply.code(409).send({ error: duplicateInvoiceError(dup) });
         throw error;
       }
 

@@ -4,7 +4,7 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
-import { isForeignKeyViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
@@ -109,7 +109,7 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
       .returning();
     return mapRow(rows[0]);
   } catch (err) {
-    if (isForeignKeyViolation(err)) throw new ForeignKeyError('Project');
+    if (getForeignKeyViolation(err)) throw new ForeignKeyError('Project');
     throw err;
   }
 };

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { projects } from '../db/schema/projects.ts';
-import { isForeignKeyViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
@@ -130,8 +130,9 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
       .returning();
     return mapRow(rows[0]);
   } catch (err) {
-    if (isForeignKeyViolation(err)) {
-      if (err.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+    const fk = getForeignKeyViolation(err);
+    if (fk) {
+      if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
       throw new ForeignKeyError('Client');
     }
     throw err;
@@ -167,7 +168,7 @@ export const update = async (
     const rows = await exec.update(projects).set(set).where(eq(projects.id, id)).returning();
     return rows[0] ? mapRow(rows[0]) : null;
   } catch (err) {
-    if (isForeignKeyViolation(err)) throw new ForeignKeyError('Client');
+    if (getForeignKeyViolation(err)) throw new ForeignKeyError('Client');
     throw err;
   }
 };

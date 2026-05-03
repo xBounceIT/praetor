@@ -7,7 +7,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -576,10 +576,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isExpired: isQuoteExpired(quote.status, quote.expirationDate),
         });
       } catch (err) {
-        if (
-          isUniqueViolation(err) &&
-          (err.constraint === 'quotes_pkey' || err.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(err);
+        if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
@@ -825,10 +823,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { quote, items };
         });
       } catch (err) {
-        if (
-          isUniqueViolation(err) &&
-          (err.constraint === 'quotes_pkey' || err.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(err);
+        if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
         throw err;

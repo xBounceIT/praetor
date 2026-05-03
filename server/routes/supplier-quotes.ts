@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -264,7 +264,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: supplierQuotesRepo.SupplierQuoteItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const quote = await supplierQuotesRepo.create(
             {
               id: nextIdResult.value,
@@ -277,14 +277,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await supplierQuotesRepo.replaceItems(quote.id, normalizedItems, tx);
+          const createdItems = await supplierQuotesRepo.insertItems(quote.id, normalizedItems, tx);
           return { quote, items: createdItems };
         });
       } catch (error) {
-        if (
-          isUniqueViolation(error) &&
-          (error.constraint === 'supplier_quotes_pkey' || error.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(error);
+        if (dup && (dup.constraint === 'supplier_quotes_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
         throw error;
@@ -416,7 +414,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let updated: supplierQuotesRepo.SupplierQuote | null;
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
-        const txResult = await withTransaction(async (tx) => {
+        const txResult = await withDbTransaction(async (tx) => {
           const quote = await supplierQuotesRepo.update(idResult.value, patch, tx);
           if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
           const finalItems = normalizedItems
@@ -427,10 +425,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updated = txResult.quote;
         resultItems = txResult.items;
       } catch (error) {
-        if (
-          isUniqueViolation(error) &&
-          (error.constraint === 'supplier_quotes_pkey' || error.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(error);
+        if (dup && (dup.constraint === 'supplier_quotes_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Quote ID already exists' });
         }
         throw error;
