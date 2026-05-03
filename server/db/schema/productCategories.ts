@@ -1,0 +1,23 @@
+import { sql } from 'drizzle-orm';
+import { check, index, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import type { CostUnit } from '../../utils/cost-unit.ts';
+
+export const productCategories = pgTable(
+  'internal_product_categories',
+  {
+    id: varchar('id', { length: 50 }).primaryKey(),
+    name: varchar('name', { length: 100 }).notNull(),
+    type: varchar('type', { length: 20 }).notNull(),
+    costUnit: varchar('cost_unit', { length: 20 }).$type<CostUnit>().notNull().default('unit'),
+    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index('idx_internal_product_categories_type').on(table.type),
+    uniqueIndex('internal_product_categories_name_type_key').on(table.name, table.type),
+    check(
+      'internal_product_categories_cost_unit_check',
+      sql`${table.costUnit} IN ('unit', 'hours')`,
+    ),
+  ],
+);

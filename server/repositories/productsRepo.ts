@@ -1,8 +1,24 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
-import { parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { productCategories } from '../db/schema/productCategories.ts';
+import { productSubcategories } from '../db/schema/productSubcategories.ts';
+import { products } from '../db/schema/products.ts';
+import { productTypes } from '../db/schema/productTypes.ts';
+import { suppliers } from '../db/schema/suppliers.ts';
+import type { CostUnit } from '../utils/cost-unit.ts';
+import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 
-// Transaction-item tables that hold a `product_id` foreign key. Used in linked-products
-// existence checks when renaming/deleting categories, subcategories, and types.
+// Accepts whatever pg returns for a timestamp column. Drizzle's typed `.select()` paths
+// give us `Date`, but raw `executeRows` queries (this file uses both) can surface a string
+// if the pg type parsers are reconfigured — coerce defensively, like projectsRepo does.
+const epochMs = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  return new Date(v as string | number | Date).getTime();
+};
+
+const LEGACY_HOURS_TYPES = new Set(['service', 'consulting']);
+
+// Transaction-item tables holding a `product_id` foreign key.
 const TRANSACTION_ITEM_TABLES = [
   'quote_items',
   'customer_offer_items',
@@ -13,9 +29,12 @@ const TRANSACTION_ITEM_TABLES = [
   'supplier_invoice_items',
 ] as const;
 
-const PRODUCT_LINKED_EXISTS_CLAUSE = TRANSACTION_ITEM_TABLES.map(
-  (t) => `SELECT 1 FROM ${t} WHERE product_id = pr.id`,
-).join(' UNION ALL ');
+const PRODUCT_LINKED_EXISTS_CLAUSE = sql.join(
+  TRANSACTION_ITEM_TABLES.map(
+    (t) => sql`SELECT 1 FROM ${sql.identifier(t)} WHERE product_id = pr.id`,
+  ),
+  sql` UNION ALL `,
+);
 
 export type ProductSnapshot = {
   productCost: number;
@@ -28,22 +47,20 @@ export type ProductSnapshot = {
  */
 export const getSnapshots = async (
   productIds: string[],
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<Map<string, ProductSnapshot>> => {
   const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
   const snapshots = new Map<string, ProductSnapshot>();
   if (uniqueIds.length === 0) return snapshots;
 
-  const { rows } = await exec.query<{
-    id: string;
-    costo: string | number | null;
-    molPercentage: string | number | null;
-  }>(
-    `SELECT id, costo, mol_percentage as "molPercentage"
-       FROM products
-      WHERE id = ANY($1)`,
-    [uniqueIds],
-  );
+  const rows = await exec
+    .select({
+      id: products.id,
+      costo: products.costo,
+      molPercentage: products.molPercentage,
+    })
+    .from(products)
+    .where(inArray(products.id, uniqueIds));
 
   for (const row of rows) {
     snapshots.set(row.id, {
@@ -57,8 +74,6 @@ export const getSnapshots = async (
 // ===========================================================================
 // Product CRUD endpoints
 // ===========================================================================
-
-export type CostUnit = 'unit' | 'hours';
 
 export type ProductRow = {
   id: string;
@@ -111,206 +126,159 @@ export type ProductUpdateFields = Partial<{
   isDisabled: boolean;
 }>;
 
-const toEpochMs = (v: unknown): number | null =>
-  v === null || v === undefined ? null : new Date(v as string | Date).getTime();
+type ProductSelectRow = typeof products.$inferSelect & { supplierName?: string | null };
 
-const mapProductRow = (row: Record<string, unknown>): ProductRow => ({
-  ...(row as Omit<ProductRow, 'createdAt' | 'costo' | 'molPercentage'>),
-  costo: parseDbNumber(row.costo as string | number | null | undefined, 0),
-  molPercentage: parseDbNumber(row.molPercentage as string | number | null | undefined, 0),
-  createdAt: toEpochMs(row.createdAt),
+const mapProductRow = (row: ProductSelectRow): ProductRow => ({
+  id: row.id,
+  name: row.name,
+  productCode: row.productCode,
+  createdAt: epochMs(row.createdAt),
+  description: row.description,
+  costo: parseDbNumber(row.costo, 0),
+  molPercentage: parseDbNumber(row.molPercentage, 0),
+  costUnit: row.costUnit,
+  category: row.category,
+  subcategory: row.subcategory,
+  type: row.type,
+  supplierId: row.supplierId,
+  supplierName: row.supplierName ?? null,
+  isDisabled: row.isDisabled ?? false,
 });
 
-const PRODUCT_LIST_COLUMNS = `
-  p.id,
-  p.name,
-  p.product_code as "productCode",
-  p.created_at as "createdAt",
-  p.description,
-  p.costo,
-  p.mol_percentage as "molPercentage",
-  p.cost_unit as "costUnit",
-  p.category,
-  p.subcategory,
-  p.type,
-  p.supplier_id as "supplierId",
-  s.name as "supplierName",
-  p.is_disabled as "isDisabled"
-`;
+const PRODUCT_COLUMNS = {
+  id: products.id,
+  name: products.name,
+  productCode: products.productCode,
+  createdAt: products.createdAt,
+  description: products.description,
+  costo: products.costo,
+  molPercentage: products.molPercentage,
+  costUnit: products.costUnit,
+  category: products.category,
+  subcategory: products.subcategory,
+  type: products.type,
+  supplierId: products.supplierId,
+  isDisabled: products.isDisabled,
+} as const;
 
-const PRODUCT_DETAIL_COLUMNS = `
-  id,
-  name,
-  product_code as "productCode",
-  created_at as "createdAt",
-  description,
-  costo,
-  mol_percentage as "molPercentage",
-  cost_unit as "costUnit",
-  category,
-  subcategory,
-  type,
-  is_disabled as "isDisabled",
-  supplier_id as "supplierId"
-`;
-
-const PRODUCT_INSERT_RETURNING = `
-  id,
-  name,
-  product_code as "productCode",
-  created_at as "createdAt",
-  description,
-  costo,
-  mol_percentage as "molPercentage",
-  cost_unit as "costUnit",
-  category,
-  subcategory,
-  type,
-  supplier_id as "supplierId"
-`;
-
-export const listAllProducts = async (exec: QueryExecutor = pool): Promise<ProductRow[]> => {
-  const { rows } = await exec.query(
-    `SELECT ${PRODUCT_LIST_COLUMNS}
-       FROM products p
-       LEFT JOIN suppliers s ON p.supplier_id = s.id
-      ORDER BY p.name ASC`,
-  );
+export const listAllProducts = async (exec: DbExecutor = db): Promise<ProductRow[]> => {
+  const rows = await exec
+    .select({ ...PRODUCT_COLUMNS, supplierName: suppliers.name })
+    .from(products)
+    .leftJoin(suppliers, eq(products.supplierId, suppliers.id))
+    .orderBy(asc(products.name));
   return rows.map(mapProductRow);
 };
 
 export const findProductById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductRow | null> => {
-  const { rows } = await exec.query(
-    `SELECT ${PRODUCT_DETAIL_COLUMNS}
-       FROM products
-      WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec.select(PRODUCT_COLUMNS).from(products).where(eq(products.id, id));
   return rows[0] ? mapProductRow(rows[0]) : null;
 };
 
 export const findProductCoreById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductCore | null> => {
-  const { rows } = await exec.query<{
-    type: string;
-    supplierId: string | null;
-    category: string | null;
-  }>(
-    `SELECT type, supplier_id AS "supplierId", category
-       FROM products
-      WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({
+      type: products.type,
+      supplierId: products.supplierId,
+      category: products.category,
+    })
+    .from(products)
+    .where(eq(products.id, id));
   return rows[0] ?? null;
 };
 
 export const existsProductByName = async (
   name: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = excludeId
-    ? await exec.query(`SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2`, [
-        name,
-        excludeId,
-      ])
-    : await exec.query(`SELECT id FROM products WHERE LOWER(name) = LOWER($1)`, [name]);
+  const conditions = [sql`LOWER(${products.name}) = LOWER(${name})`];
+  if (excludeId) conditions.push(ne(products.id, excludeId));
+  const rows = await exec
+    .select({ id: products.id })
+    .from(products)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
 export const existsProductByCode = async (
   code: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = excludeId
-    ? await exec.query(`SELECT id FROM products WHERE product_code = $1 AND id != $2`, [
-        code,
-        excludeId,
-      ])
-    : await exec.query(`SELECT id FROM products WHERE product_code = $1`, [code]);
+  const conditions = [eq(products.productCode, code)];
+  if (excludeId) conditions.push(ne(products.id, excludeId));
+  const rows = await exec
+    .select({ id: products.id })
+    .from(products)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
 export const insertProduct = async (
   product: NewProduct,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductRow> => {
-  const { rows } = await exec.query(
-    `INSERT INTO products (id, name, product_code, description, costo, mol_percentage, cost_unit, category, subcategory, type, supplier_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING ${PRODUCT_INSERT_RETURNING}`,
-    [
-      product.id,
-      product.name,
-      product.productCode,
-      product.description,
-      product.costo,
-      product.molPercentage,
-      product.costUnit,
-      product.category,
-      product.subcategory,
-      product.type,
-      product.supplierId,
-    ],
-  );
+  const rows = await exec
+    .insert(products)
+    .values({
+      id: product.id,
+      name: product.name,
+      productCode: product.productCode,
+      description: product.description,
+      costo: numericForDb(product.costo),
+      molPercentage: numericForDb(product.molPercentage),
+      costUnit: product.costUnit,
+      category: product.category,
+      subcategory: product.subcategory,
+      type: product.type,
+      supplierId: product.supplierId,
+    })
+    .returning();
   return mapProductRow(rows[0]);
 };
 
 export const updateProductDynamic = async (
   id: string,
   fields: ProductUpdateFields,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductRow | null> => {
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  let idx = 1;
+  const setClause: Partial<typeof products.$inferInsert> = {};
+  if (fields.name !== undefined) setClause.name = fields.name;
+  if (fields.productCode !== undefined) setClause.productCode = fields.productCode;
+  if (fields.description !== undefined) setClause.description = fields.description;
+  if (fields.costo !== undefined) setClause.costo = numericForDb(fields.costo);
+  if (fields.molPercentage !== undefined)
+    setClause.molPercentage = numericForDb(fields.molPercentage);
+  if (fields.type !== undefined) setClause.type = fields.type;
+  if (fields.category !== undefined) setClause.category = fields.category;
+  if (fields.subcategory !== undefined) setClause.subcategory = fields.subcategory;
+  if (fields.supplierId !== undefined) setClause.supplierId = fields.supplierId;
+  if (fields.costUnit !== undefined) setClause.costUnit = fields.costUnit;
+  if (fields.isDisabled !== undefined) setClause.isDisabled = fields.isDisabled;
 
-  const push = (column: string, value: unknown) => {
-    sets.push(`${column} = $${idx++}`);
-    params.push(value);
-  };
+  if (Object.keys(setClause).length === 0) return null;
 
-  if (fields.name !== undefined) push('name', fields.name);
-  if (fields.productCode !== undefined) push('product_code', fields.productCode);
-  if (fields.description !== undefined) push('description', fields.description);
-  if (fields.costo !== undefined) push('costo', fields.costo);
-  if (fields.molPercentage !== undefined) push('mol_percentage', fields.molPercentage);
-  if (fields.type !== undefined) push('type', fields.type);
-  if (fields.category !== undefined) push('category', fields.category);
-  if (fields.subcategory !== undefined) push('subcategory', fields.subcategory);
-  if (fields.supplierId !== undefined) push('supplier_id', fields.supplierId);
-  if (fields.costUnit !== undefined) push('cost_unit', fields.costUnit);
-  if (fields.isDisabled !== undefined) push('is_disabled', fields.isDisabled);
-
-  if (sets.length === 0) return null;
-
-  params.push(id);
-  const { rows } = await exec.query(
-    `UPDATE products
-        SET ${sets.join(', ')}
-      WHERE id = $${idx}
-   RETURNING ${PRODUCT_DETAIL_COLUMNS}`,
-    params,
-  );
+  const rows = await exec.update(products).set(setClause).where(eq(products.id, id)).returning();
   return rows[0] ? mapProductRow(rows[0]) : null;
 };
 
 export const deleteProductById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string; productCode: string } | null> => {
-  const { rows } = await exec.query<{ name: string; productCode: string }>(
-    `DELETE FROM products
-      WHERE id = $1
-   RETURNING name, product_code as "productCode"`,
-    [id],
-  );
+  const rows = await exec
+    .delete(products)
+    .where(eq(products.id, id))
+    .returning({ name: products.name, productCode: products.productCode });
   return rows[0] ?? null;
 };
 
@@ -334,84 +302,90 @@ export type ProductTypeCore = {
   costUnit: CostUnit;
 };
 
-const mapProductTypeRow = (row: Record<string, unknown>): ProductTypeRow => ({
-  id: row.id as string,
-  name: row.name as string,
-  costUnit: row.costUnit as CostUnit,
-  createdAt: toEpochMs(row.createdAt),
-  updatedAt: toEpochMs(row.updatedAt),
-  productCount: parseDbNumber(row.productCount as string | number | null | undefined, 0),
-  categoryCount: parseDbNumber(row.categoryCount as string | number | null | undefined, 0),
+type ProductTypeSelectRow = typeof productTypes.$inferSelect & {
+  productCount?: string | number | null;
+  categoryCount?: string | number | null;
+};
+
+const mapProductTypeRow = (row: ProductTypeSelectRow): ProductTypeRow => ({
+  id: row.id,
+  name: row.name,
+  costUnit: row.costUnit,
+  createdAt: epochMs(row.createdAt),
+  updatedAt: epochMs(row.updatedAt),
+  productCount: parseDbNumber(row.productCount, 0),
+  categoryCount: parseDbNumber(row.categoryCount, 0),
 });
 
 export const listAllProductTypesWithCounts = async (
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductTypeRow[]> => {
-  const { rows } = await exec.query(
-    `SELECT
-        t.id,
-        t.name,
-        t.cost_unit as "costUnit",
-        t.created_at as "createdAt",
-        t.updated_at as "updatedAt",
-        COALESCE(p.count, 0) as "productCount",
-        COALESCE(c.count, 0) as "categoryCount"
-       FROM product_types t
-       LEFT JOIN (
-         SELECT type, COUNT(*) as count FROM products GROUP BY type
-       ) p ON t.name = p.type
-       LEFT JOIN (
-         SELECT type, COUNT(*) as count FROM internal_product_categories GROUP BY type
-       ) c ON t.name = c.type
-       ORDER BY t.name ASC`,
+  const rows = await executeRows<ProductTypeSelectRow>(
+    exec,
+    sql`SELECT
+          t.id,
+          t.name,
+          t.cost_unit AS "costUnit",
+          t.created_at AS "createdAt",
+          t.updated_at AS "updatedAt",
+          COALESCE(p.count, 0) AS "productCount",
+          COALESCE(c.count, 0) AS "categoryCount"
+        FROM product_types t
+        LEFT JOIN (
+          SELECT type, COUNT(*) AS count FROM products GROUP BY type
+        ) p ON t.name = p.type
+        LEFT JOIN (
+          SELECT type, COUNT(*) AS count FROM internal_product_categories GROUP BY type
+        ) c ON t.name = c.type
+        ORDER BY t.name ASC`,
   );
   return rows.map(mapProductTypeRow);
 };
 
 export const findProductTypeByName = async (
   name: string,
-  exec: QueryExecutor = pool,
-): Promise<{ costUnit: CostUnit } | null> => {
-  const { rows } = await exec.query<{ costUnit: CostUnit }>(
-    `SELECT cost_unit AS "costUnit" FROM product_types WHERE name = $1`,
-    [name],
-  );
-  return rows[0] ?? null;
+  exec: DbExecutor = db,
+): Promise<CostUnit | null> => {
+  const rows = await exec
+    .select({ costUnit: productTypes.costUnit })
+    .from(productTypes)
+    .where(eq(productTypes.name, name));
+  return rows[0]?.costUnit ?? null;
 };
 
-// Returns the cost_unit registered for `typeName`, falling back to the historical defaults
-// for service/consulting types when the registered row is missing.
+// Falls back to the historical defaults for service/consulting types when the row is missing.
 export const getCostUnitForType = async (
   typeName: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<CostUnit> => {
   const found = await findProductTypeByName(typeName, exec);
-  if (found) return found.costUnit;
-  return typeName === 'service' || typeName === 'consulting' ? 'hours' : 'unit';
+  if (found !== null) return found;
+  return LEGACY_HOURS_TYPES.has(typeName) ? 'hours' : 'unit';
 };
 
 export const existsProductTypeByName = async (
   name: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = excludeId
-    ? await exec.query(`SELECT id FROM product_types WHERE LOWER(name) = LOWER($1) AND id != $2`, [
-        name,
-        excludeId,
-      ])
-    : await exec.query(`SELECT id FROM product_types WHERE LOWER(name) = LOWER($1)`, [name]);
+  const conditions = [sql`LOWER(${productTypes.name}) = LOWER(${name})`];
+  if (excludeId) conditions.push(ne(productTypes.id, excludeId));
+  const rows = await exec
+    .select({ id: productTypes.id })
+    .from(productTypes)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
 export const findProductTypeById = async (
   id: string,
-  exec: QueryExecutor = pool,
-): Promise<{ id: string; name: string; costUnit: CostUnit } | null> => {
-  const { rows } = await exec.query<{ id: string; name: string; costUnit: CostUnit }>(
-    `SELECT id, name, cost_unit AS "costUnit" FROM product_types WHERE id = $1`,
-    [id],
-  );
+  exec: DbExecutor = db,
+): Promise<ProductTypeCore | null> => {
+  const rows = await exec
+    .select({ id: productTypes.id, name: productTypes.name, costUnit: productTypes.costUnit })
+    .from(productTypes)
+    .where(eq(productTypes.id, id));
   return rows[0] ?? null;
 };
 
@@ -419,90 +393,81 @@ export const insertProductType = async (
   id: string,
   name: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductTypeRow> => {
-  const { rows } = await exec.query(
-    `INSERT INTO product_types (id, name, cost_unit)
-     VALUES ($1, $2, $3)
-     RETURNING id, name, cost_unit as "costUnit",
-               created_at as "createdAt", updated_at as "updatedAt"`,
-    [id, name, costUnit],
-  );
-  return mapProductTypeRow({ ...rows[0], productCount: 0, categoryCount: 0 });
+  const rows = await exec.insert(productTypes).values({ id, name, costUnit }).returning();
+  return mapProductTypeRow(rows[0]);
 };
 
 export const updateProductTypeFields = async (
   id: string,
   name: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ProductTypeRow | null> => {
-  const { rows } = await exec.query(
-    `UPDATE product_types
-        SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-   RETURNING id, name, cost_unit as "costUnit",
-             created_at as "createdAt", updated_at as "updatedAt"`,
-    [name, costUnit, id],
-  );
-  return rows[0] ? mapProductTypeRow({ ...rows[0], productCount: 0, categoryCount: 0 }) : null;
+  const rows = await exec
+    .update(productTypes)
+    .set({ name, costUnit, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(productTypes.id, id))
+    .returning();
+  return rows[0] ? mapProductTypeRow(rows[0]) : null;
 };
 
 export const propagateProductTypeName = async (
   oldName: string,
   newName: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`UPDATE products SET type = $1 WHERE type = $2`, [newName, oldName]);
-  await exec.query(`UPDATE internal_product_categories SET type = $1 WHERE type = $2`, [
-    newName,
-    oldName,
-  ]);
+  await exec.update(products).set({ type: newName }).where(eq(products.type, oldName));
+  await exec
+    .update(productCategories)
+    .set({ type: newName })
+    .where(eq(productCategories.type, oldName));
 };
 
 export const propagateProductTypeCostUnit = async (
   typeName: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(`UPDATE products SET cost_unit = $1 WHERE type = $2 AND supplier_id IS NULL`, [
-    costUnit,
-    typeName,
-  ]);
-  await exec.query(`UPDATE internal_product_categories SET cost_unit = $1 WHERE type = $2`, [
-    costUnit,
-    typeName,
-  ]);
+  await exec
+    .update(products)
+    .set({ costUnit })
+    .where(and(eq(products.type, typeName), isNull(products.supplierId)));
+  await exec
+    .update(productCategories)
+    .set({ costUnit })
+    .where(eq(productCategories.type, typeName));
 };
 
 export const countProductsForType = async (
   typeName: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<number> => {
-  const { rows } = await exec.query<{ count: string }>(
-    `SELECT COUNT(*) as count FROM products WHERE type = $1`,
-    [typeName],
-  );
-  return parseDbNumber(rows[0]?.count, 0);
+  const [row] = await exec
+    .select({ value: count() })
+    .from(products)
+    .where(eq(products.type, typeName));
+  return row?.value ?? 0;
 };
 
 export const countCategoriesForType = async (
   typeName: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<number> => {
-  const { rows } = await exec.query<{ count: string }>(
-    `SELECT COUNT(*) as count FROM internal_product_categories WHERE type = $1`,
-    [typeName],
-  );
-  return parseDbNumber(rows[0]?.count, 0);
+  const [row] = await exec
+    .select({ value: count() })
+    .from(productCategories)
+    .where(eq(productCategories.type, typeName));
+  return row?.value ?? 0;
 };
 
 export const deleteProductTypeById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rowCount } = await exec.query(`DELETE FROM product_types WHERE id = $1`, [id]);
-  return (rowCount ?? 0) > 0;
+  const result = await exec.delete(productTypes).where(eq(productTypes.id, id));
+  return (result.rowCount ?? 0) > 0;
 };
 
 // ===========================================================================
@@ -520,69 +485,78 @@ export type InternalCategoryRow = {
   hasLinkedProducts: boolean;
 };
 
-const mapInternalCategoryRow = (row: Record<string, unknown>): InternalCategoryRow => ({
-  id: row.id as string,
-  name: row.name as string,
-  type: row.type as string,
-  costUnit: row.costUnit as CostUnit,
-  createdAt: toEpochMs(row.createdAt),
-  updatedAt: toEpochMs(row.updatedAt),
-  productCount: parseDbNumber(row.productCount as string | number | null | undefined, 0),
-  hasLinkedProducts: !!row.hasLinkedProducts,
+type InternalCategorySelectRow = typeof productCategories.$inferSelect & {
+  productCount?: string | number | null;
+  hasLinkedProducts?: boolean | null;
+};
+
+const mapInternalCategoryRow = (row: InternalCategorySelectRow): InternalCategoryRow => ({
+  id: row.id,
+  name: row.name,
+  type: row.type,
+  costUnit: row.costUnit,
+  createdAt: epochMs(row.createdAt),
+  updatedAt: epochMs(row.updatedAt),
+  productCount: parseDbNumber(row.productCount, 0),
+  hasLinkedProducts: row.hasLinkedProducts ?? false,
 });
 
 export const listInternalCategoriesByType = async (
   type: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InternalCategoryRow[]> => {
-  const { rows } = await exec.query(
-    `SELECT c.id, c.name, c.type,
-            c.cost_unit as "costUnit",
-            c.created_at as "createdAt", c.updated_at as "updatedAt",
-            COALESCE(p.count, 0) as "productCount",
-            COALESCE(lp.has_linked, false) as "hasLinkedProducts"
-       FROM internal_product_categories c
-       LEFT JOIN (
-         SELECT category, COUNT(*) as count
-           FROM products
-          WHERE type = $1 AND supplier_id IS NULL
-          GROUP BY category
-       ) p ON c.name = p.category
-       LEFT JOIN (
-         SELECT pr.category, true as has_linked
-           FROM products pr
-          WHERE pr.type = $1
-            AND pr.supplier_id IS NULL
-            AND EXISTS (${PRODUCT_LINKED_EXISTS_CLAUSE})
-          GROUP BY pr.category
-       ) lp ON c.name = lp.category
-      WHERE c.type = $1
-      ORDER BY c.name ASC`,
-    [type],
+  const rows = await executeRows<InternalCategorySelectRow>(
+    exec,
+    sql`SELECT c.id, c.name, c.type,
+              c.cost_unit AS "costUnit",
+              c.created_at AS "createdAt", c.updated_at AS "updatedAt",
+              COALESCE(p.count, 0) AS "productCount",
+              COALESCE(lp.has_linked, false) AS "hasLinkedProducts"
+        FROM internal_product_categories c
+        LEFT JOIN (
+          SELECT category, COUNT(*) AS count
+            FROM products
+           WHERE type = ${type} AND supplier_id IS NULL
+           GROUP BY category
+        ) p ON c.name = p.category
+        LEFT JOIN (
+          SELECT pr.category, true AS has_linked
+            FROM products pr
+           WHERE pr.type = ${type}
+             AND pr.supplier_id IS NULL
+             AND EXISTS (${PRODUCT_LINKED_EXISTS_CLAUSE})
+           GROUP BY pr.category
+        ) lp ON c.name = lp.category
+        WHERE c.type = ${type}
+        ORDER BY c.name ASC`,
   );
   return rows.map(mapInternalCategoryRow);
 };
 
 export const findInternalCategoryById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ id: string; name: string; type: string } | null> => {
-  const { rows } = await exec.query<{ id: string; name: string; type: string }>(
-    `SELECT id, name, type FROM internal_product_categories WHERE id = $1`,
-    [id],
-  );
+  const rows = await exec
+    .select({
+      id: productCategories.id,
+      name: productCategories.name,
+      type: productCategories.type,
+    })
+    .from(productCategories)
+    .where(eq(productCategories.id, id));
   return rows[0] ?? null;
 };
 
 export const findCategoryIdByNameAndType = async (
   name: string,
   type: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<string | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `SELECT id FROM internal_product_categories WHERE name = $1 AND type = $2`,
-    [name, type],
-  );
+  const rows = await exec
+    .select({ id: productCategories.id })
+    .from(productCategories)
+    .where(and(eq(productCategories.name, name), eq(productCategories.type, type)));
   return rows[0]?.id ?? null;
 };
 
@@ -590,19 +564,18 @@ export const existsInternalCategoryByNameType = async (
   name: string,
   type: string,
   excludeId: string | null,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = excludeId
-    ? await exec.query(
-        `SELECT id FROM internal_product_categories
-          WHERE LOWER(name) = LOWER($1) AND type = $2 AND id != $3`,
-        [name, type, excludeId],
-      )
-    : await exec.query(
-        `SELECT id FROM internal_product_categories
-          WHERE LOWER(name) = LOWER($1) AND type = $2`,
-        [name, type],
-      );
+  const conditions = [
+    sql`LOWER(${productCategories.name}) = LOWER(${name})`,
+    eq(productCategories.type, type),
+  ];
+  if (excludeId) conditions.push(ne(productCategories.id, excludeId));
+  const rows = await exec
+    .select({ id: productCategories.id })
+    .from(productCategories)
+    .where(and(...conditions))
+    .limit(1);
   return rows.length > 0;
 };
 
@@ -611,39 +584,27 @@ export const insertInternalCategory = async (
   name: string,
   type: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InternalCategoryRow> => {
-  const { rows } = await exec.query(
-    `INSERT INTO internal_product_categories (id, name, type, cost_unit)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, name, type, cost_unit as "costUnit",
-               created_at as "createdAt", updated_at as "updatedAt"`,
-    [id, name, type, costUnit],
-  );
-  return mapInternalCategoryRow({
-    ...rows[0],
-    productCount: 0,
-    hasLinkedProducts: false,
-  });
+  const rows = await exec
+    .insert(productCategories)
+    .values({ id, name, type, costUnit })
+    .returning();
+  return mapInternalCategoryRow(rows[0]);
 };
 
 export const updateInternalCategoryFields = async (
   id: string,
   name: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InternalCategoryRow | null> => {
-  const { rows } = await exec.query(
-    `UPDATE internal_product_categories
-        SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-   RETURNING id, name, type, cost_unit as "costUnit",
-             created_at as "createdAt", updated_at as "updatedAt"`,
-    [name, costUnit, id],
-  );
-  return rows[0]
-    ? mapInternalCategoryRow({ ...rows[0], productCount: 0, hasLinkedProducts: false })
-    : null;
+  const rows = await exec
+    .update(productCategories)
+    .set({ name, costUnit, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(productCategories.id, id))
+    .returning();
+  return rows[0] ? mapInternalCategoryRow(rows[0]) : null;
 };
 
 export const propagateCategoryNameToProducts = async (
@@ -651,51 +612,46 @@ export const propagateCategoryNameToProducts = async (
   newName: string,
   type: string,
   costUnit: CostUnit,
-  exec: QueryExecutor = pool,
-): Promise<void> => {
-  await exec.query(
-    `UPDATE products
-        SET category = $1, cost_unit = $2
-      WHERE category = $3 AND type = $4 AND supplier_id IS NULL`,
-    [newName, costUnit, oldName, type],
-  );
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const result = await exec
+    .update(products)
+    .set({ category: newName, costUnit })
+    .where(
+      and(eq(products.category, oldName), eq(products.type, type), isNull(products.supplierId)),
+    );
+  return result.rowCount ?? 0;
 };
 
 export const clearProductsCategoryByName = async (
   name: string,
   type: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(
-    `UPDATE products
-        SET category = NULL, subcategory = NULL
-      WHERE category = $1 AND type = $2 AND supplier_id IS NULL`,
-    [name, type],
-  );
+  await exec
+    .update(products)
+    .set({ category: null, subcategory: null })
+    .where(and(eq(products.category, name), eq(products.type, type), isNull(products.supplierId)));
 };
 
 export const deleteInternalCategoryById = async (
   id: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rowCount } = await exec.query(`DELETE FROM internal_product_categories WHERE id = $1`, [
-    id,
-  ]);
-  return (rowCount ?? 0) > 0;
+  const result = await exec.delete(productCategories).where(eq(productCategories.id, id));
+  return (result.rowCount ?? 0) > 0;
 };
 
 export const countProductsForCategory = async (
   name: string,
   type: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<number> => {
-  const { rows } = await exec.query<{ count: string }>(
-    `SELECT COUNT(*) as count
-       FROM products
-      WHERE category = $1 AND type = $2 AND supplier_id IS NULL`,
-    [name, type],
-  );
-  return parseDbNumber(rows[0]?.count, 0);
+  const [row] = await exec
+    .select({ value: count() })
+    .from(products)
+    .where(and(eq(products.category, name), eq(products.type, type), isNull(products.supplierId)));
+  return row?.value ?? 0;
 };
 
 // ===========================================================================
@@ -710,57 +666,61 @@ export type SubcategoryRow = {
 
 export const listInternalSubcategoriesByType = async (
   categoryId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<SubcategoryRow[]> => {
-  const { rows } = await exec.query<{
+  const rows = await executeRows<{
     name: string;
-    productCount: string | number;
-    hasLinkedProducts: boolean;
+    productCount: string | number | null;
+    hasLinkedProducts: boolean | null;
   }>(
-    `SELECT s.name,
-            COALESCE(p.count, 0) as "productCount",
-            COALESCE(lp.has_linked, false) as "hasLinkedProducts"
-       FROM internal_product_subcategories s
-       LEFT JOIN (
-         SELECT pr.subcategory, COUNT(*) as count
-           FROM products pr
-           JOIN internal_product_categories c
-             ON c.name = pr.category AND c.type = pr.type
-          WHERE c.id = $1 AND pr.supplier_id IS NULL
-          GROUP BY pr.subcategory
-       ) p ON s.name = p.subcategory
-       LEFT JOIN (
-         SELECT pr.subcategory, true as has_linked
-           FROM products pr
-           JOIN internal_product_categories c
-             ON c.name = pr.category AND c.type = pr.type
-          WHERE c.id = $1
-            AND pr.supplier_id IS NULL
-            AND EXISTS (${PRODUCT_LINKED_EXISTS_CLAUSE})
-          GROUP BY pr.subcategory
-       ) lp ON s.name = lp.subcategory
-      WHERE s.category_id = $1
-      ORDER BY s.name ASC`,
-    [categoryId],
+    exec,
+    sql`SELECT s.name,
+              COALESCE(p.count, 0) AS "productCount",
+              COALESCE(lp.has_linked, false) AS "hasLinkedProducts"
+        FROM internal_product_subcategories s
+        LEFT JOIN (
+          SELECT pr.subcategory, COUNT(*) AS count
+            FROM products pr
+            JOIN internal_product_categories c
+              ON c.name = pr.category AND c.type = pr.type
+           WHERE c.id = ${categoryId} AND pr.supplier_id IS NULL
+           GROUP BY pr.subcategory
+        ) p ON s.name = p.subcategory
+        LEFT JOIN (
+          SELECT pr.subcategory, true AS has_linked
+            FROM products pr
+            JOIN internal_product_categories c
+              ON c.name = pr.category AND c.type = pr.type
+           WHERE c.id = ${categoryId}
+             AND pr.supplier_id IS NULL
+             AND EXISTS (${PRODUCT_LINKED_EXISTS_CLAUSE})
+           GROUP BY pr.subcategory
+        ) lp ON s.name = lp.subcategory
+        WHERE s.category_id = ${categoryId}
+        ORDER BY s.name ASC`,
   );
   return rows.map((row) => ({
     name: row.name,
     productCount: parseDbNumber(row.productCount, 0),
-    hasLinkedProducts: !!row.hasLinkedProducts,
+    hasLinkedProducts: row.hasLinkedProducts ?? false,
   }));
 };
 
 export const existsInternalSubcategoryByNameInCategory = async (
   name: string,
   categoryId: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const { rows } = await exec.query(
-    `SELECT 1 FROM internal_product_subcategories
-      WHERE category_id = $1 AND LOWER(name) = LOWER($2)
-      LIMIT 1`,
-    [categoryId, name],
-  );
+  const rows = await exec
+    .select({ id: productSubcategories.id })
+    .from(productSubcategories)
+    .where(
+      and(
+        eq(productSubcategories.categoryId, categoryId),
+        sql`LOWER(${productSubcategories.name}) = LOWER(${name})`,
+      ),
+    )
+    .limit(1);
   return rows.length > 0;
 };
 
@@ -768,14 +728,12 @@ export const insertInternalSubcategory = async (
   id: string,
   categoryId: string,
   name: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ name: string }> => {
-  const { rows } = await exec.query<{ name: string }>(
-    `INSERT INTO internal_product_subcategories (id, category_id, name)
-     VALUES ($1, $2, $3)
-     RETURNING name`,
-    [id, categoryId, name],
-  );
+  const rows = await exec
+    .insert(productSubcategories)
+    .values({ id, categoryId, name })
+    .returning({ name: productSubcategories.name });
   return rows[0];
 };
 
@@ -783,15 +741,15 @@ export const updateInternalSubcategoryName = async (
   categoryId: string,
   oldName: string,
   newName: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ id: string } | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `UPDATE internal_product_subcategories
-        SET name = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE category_id = $2 AND name = $3
-   RETURNING id`,
-    [newName, categoryId, oldName],
-  );
+  const rows = await exec
+    .update(productSubcategories)
+    .set({ name: newName, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(
+      and(eq(productSubcategories.categoryId, categoryId), eq(productSubcategories.name, oldName)),
+    )
+    .returning({ id: productSubcategories.id });
   return rows[0] ?? null;
 };
 
@@ -800,88 +758,105 @@ export const propagateSubcategoryNameToProducts = async (
   newName: string,
   type: string,
   category: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<number> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `UPDATE products
-        SET subcategory = $1
-      WHERE type = $2
-        AND category = $3
-        AND supplier_id IS NULL
-        AND subcategory = $4
-   RETURNING id`,
-    [newName, type, category, oldName],
-  );
-  return rows.length;
+  const result = await exec
+    .update(products)
+    .set({ subcategory: newName })
+    .where(
+      and(
+        eq(products.type, type),
+        eq(products.category, category),
+        isNull(products.supplierId),
+        eq(products.subcategory, oldName),
+      ),
+    );
+  return result.rowCount ?? 0;
 };
 
 export const clearProductsSubcategoryByName = async (
   name: string,
   type: string,
   category: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.query(
-    `UPDATE products
-        SET subcategory = NULL
-      WHERE type = $1
-        AND category = $2
-        AND supplier_id IS NULL
-        AND subcategory = $3`,
-    [type, category, name],
-  );
+  await exec
+    .update(products)
+    .set({ subcategory: null })
+    .where(
+      and(
+        eq(products.type, type),
+        eq(products.category, category),
+        isNull(products.supplierId),
+        eq(products.subcategory, name),
+      ),
+    );
 };
 
 export const deleteInternalSubcategoryByCategoryAndName = async (
   categoryId: string,
   name: string,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ id: string } | null> => {
-  const { rows } = await exec.query<{ id: string }>(
-    `DELETE FROM internal_product_subcategories
-      WHERE category_id = $1 AND name = $2
-   RETURNING id`,
-    [categoryId, name],
-  );
+  const rows = await exec
+    .delete(productSubcategories)
+    .where(
+      and(eq(productSubcategories.categoryId, categoryId), eq(productSubcategories.name, name)),
+    )
+    .returning({ id: productSubcategories.id });
   return rows[0] ?? null;
+};
+
+export const countProductsForSubcategory = async (
+  name: string,
+  type: string,
+  category: string,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const [row] = await exec
+    .select({ value: count() })
+    .from(products)
+    .where(
+      and(
+        eq(products.type, type),
+        eq(products.category, category),
+        isNull(products.supplierId),
+        eq(products.subcategory, name),
+      ),
+    );
+  return row?.value ?? 0;
 };
 
 // ===========================================================================
 // Cross-domain link checks
 // ===========================================================================
 
-const TRANSACTION_LINK_COUNT_SUBQUERIES = TRANSACTION_ITEM_TABLES.map(
-  (t) => `SELECT COUNT(*)::bigint AS c FROM ${t} WHERE product_id = ANY($1)`,
-).join(' UNION ALL ');
-
 export const checkProductsLinkedToTransactions = async (
   category: string,
   type: string,
   subcategory: string | undefined,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<{ linked: boolean; count: number }> => {
-  const subcategoryCondition = subcategory !== undefined ? `AND subcategory = $3` : '';
-  const params = subcategory !== undefined ? [category, type, subcategory] : [category, type];
-
-  const productResult = await exec.query<{ id: string }>(
-    `SELECT id FROM products
-       WHERE category = $1
-         AND type = $2
-         AND supplier_id IS NULL
-         ${subcategoryCondition}`,
-    params,
+  const subcategoryClause =
+    subcategory !== undefined ? sql`AND subcategory = ${subcategory}` : sql``;
+  const linkCountSubqueries = sql.join(
+    TRANSACTION_ITEM_TABLES.map(
+      (t) =>
+        sql`SELECT COUNT(*)::bigint AS c FROM ${sql.identifier(t)} WHERE product_id IN (SELECT id FROM matched)`,
+    ),
+    sql` UNION ALL `,
   );
 
-  if (productResult.rows.length === 0) {
-    return { linked: false, count: 0 };
-  }
-
-  const productIds = productResult.rows.map((r) => r.id);
-  const linkResult = await exec.query<{ total: string }>(
-    `SELECT SUM(c)::bigint AS total FROM (${TRANSACTION_LINK_COUNT_SUBQUERIES}) sub`,
-    [productIds],
+  const rows = await executeRows<{ total: string | number | null }>(
+    exec,
+    sql`WITH matched AS (
+          SELECT id FROM products
+          WHERE category = ${category} AND type = ${type} AND supplier_id IS NULL
+                ${subcategoryClause}
+        )
+        SELECT COALESCE(SUM(c), 0)::bigint AS total FROM (${linkCountSubqueries}) sub`,
   );
-  const totalLinks = parseDbNumber(linkResult.rows[0]?.total, 0);
+  const totalLinks = parseDbNumber(rows[0]?.total, 0);
 
   return { linked: totalLinks > 0, count: totalLinks };
 };
