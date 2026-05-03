@@ -1,5 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
-import { toDbNumber as toNumber, toDbText as toText } from '../utils/parse.ts';
+import { sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { toDbNumber, toDbText } from '../utils/parse.ts';
 
 type SupplierRow = {
   id: string;
@@ -48,19 +49,21 @@ export type SuppliersSection = {
 
 export const getSuppliersSection = async (
   opts: SuppliersSectionOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<SuppliersSection> => {
   const { fromDate, toDate, canViewSupplierQuotes, canListProducts, itemsLimit } = opts;
 
-  const [summaryRes, listRes] = await Promise.all([
-    exec.query<{ count: string; disabled_count: string }>(
-      `SELECT
+  const [summaryRows, listRows] = await Promise.all([
+    executeRows<{ count: string; disabled_count: string }>(
+      exec,
+      sql`SELECT
           COUNT(*) as count,
           SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
          FROM suppliers`,
     ),
-    exec.query<SupplierRow>(
-      `SELECT
+    executeRows<SupplierRow>(
+      exec,
+      sql`SELECT
           id,
           name,
           supplier_code,
@@ -71,19 +74,18 @@ export const getSuppliersSection = async (
           is_disabled
          FROM suppliers
         ORDER BY name ASC
-        LIMIT $1`,
-      [itemsLimit],
+        LIMIT ${itemsLimit}`,
     ),
   ]);
 
-  const items: SupplierInfo[] = listRes.rows.map((r) => ({
-    id: toText(r.id),
-    name: toText(r.name),
-    supplierCode: toText(r.supplier_code),
-    contactName: toText(r.contact_name),
-    email: toText(r.email),
-    phone: toText(r.phone),
-    address: toText(r.address),
+  const items: SupplierInfo[] = listRows.map((r) => ({
+    id: toDbText(r.id),
+    name: toDbText(r.name),
+    supplierCode: toDbText(r.supplier_code),
+    contactName: toDbText(r.contact_name),
+    email: toDbText(r.email),
+    phone: toDbText(r.phone),
+    address: toDbText(r.address),
     isDisabled: Boolean(r.is_disabled),
   }));
 
@@ -100,17 +102,18 @@ export const getSuppliersSection = async (
 
   if (supplierIds.length > 0) {
     const quoteStatsPromise = canViewSupplierQuotes
-      ? exec.query<{ supplier_id: string; quote_count: string; net_value: string }>(
-          `WITH per_quote AS (
+      ? executeRows<{ supplier_id: string; quote_count: string; net_value: string }>(
+          exec,
+          sql`WITH per_quote AS (
               SELECT
                 sq.id,
                 sq.supplier_id,
                 SUM(sqi.quantity * sqi.unit_price) as net_value
               FROM supplier_quotes sq
               JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-             WHERE sq.created_at::date >= $1
-               AND sq.created_at::date <= $2
-               AND sq.supplier_id = ANY($3)
+             WHERE sq.created_at::date >= ${fromDate}
+               AND sq.created_at::date <= ${toDate}
+               AND sq.supplier_id = ANY(${sql.param(supplierIds)})
              GROUP BY sq.id
            )
           SELECT
@@ -119,51 +122,51 @@ export const getSuppliersSection = async (
             COALESCE(SUM(net_value), 0) as net_value
             FROM per_quote
            GROUP BY supplier_id`,
-          [fromDate, toDate, supplierIds],
         )
       : null;
 
     const productStatsPromise = canListProducts
-      ? exec.query<{ supplier_id: string; product_count: string }>(
-          `SELECT supplier_id, COUNT(*) as product_count
+      ? executeRows<{ supplier_id: string; product_count: string }>(
+          exec,
+          sql`SELECT supplier_id, COUNT(*) as product_count
              FROM products
-            WHERE supplier_id = ANY($1)
+            WHERE supplier_id = ANY(${sql.param(supplierIds)})
             GROUP BY supplier_id`,
-          [supplierIds],
         )
       : null;
 
-    const [quoteStats, productStats] = await Promise.all([quoteStatsPromise, productStatsPromise]);
+    const [quoteStatsRows, productStatsRows] = await Promise.all([
+      quoteStatsPromise,
+      productStatsPromise,
+    ]);
 
-    if (quoteStats) {
-      for (const row of quoteStats.rows) {
-        const target = activityBySupplier.get(toText(row.supplier_id));
+    if (quoteStatsRows) {
+      for (const row of quoteStatsRows) {
+        const target = activityBySupplier.get(toDbText(row.supplier_id));
         if (!target) continue;
-        target.quotesCount = toNumber(row.quote_count);
-        target.quotesNet = toNumber(row.net_value);
+        target.quotesCount = toDbNumber(row.quote_count);
+        target.quotesNet = toDbNumber(row.net_value);
       }
     }
 
-    if (productStats) {
-      for (const row of productStats.rows) {
-        const target = activityBySupplier.get(toText(row.supplier_id));
+    if (productStatsRows) {
+      for (const row of productStatsRows) {
+        const target = activityBySupplier.get(toDbText(row.supplier_id));
         if (!target) continue;
-        target.productsCount = toNumber(row.product_count);
+        target.productsCount = toDbNumber(row.product_count);
       }
     }
   }
 
-  const supplierCount = toNumber(summaryRes.rows[0]?.count);
-  const supplierDisabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
+  const supplierCount = toDbNumber(summaryRows[0]?.count);
+  const supplierDisabledCount = toDbNumber(summaryRows[0]?.disabled_count);
 
   return {
     count: supplierCount,
     activeCount: Math.max(supplierCount - supplierDisabledCount, 0),
     disabledCount: supplierDisabledCount,
     items,
-    activitySummary: supplierIds
-      .map((id) => activityBySupplier.get(id))
-      .filter((a): a is SupplierActivity => a !== undefined),
+    activitySummary: Array.from(activityBySupplier.values()),
   };
 };
 
@@ -190,19 +193,20 @@ export type SupplierQuotesSection = {
 
 export const getSupplierQuotesSection = async (
   opts: SupplierQuotesSectionOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<SupplierQuotesSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
   const [totals, byStatus, byMonth, topSuppliers, topQuotes] = await Promise.all([
-    exec.query<{ count: string; total_net: string; avg_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ count: string; total_net: string; avg_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             sq.id,
             SUM(sqi.quantity * sqi.unit_price) as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-           WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+           WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
            GROUP BY sq.id
          )
         SELECT
@@ -210,10 +214,10 @@ export const getSupplierQuotesSection = async (
           COALESCE(SUM(net_value), 0) as total_net,
           COALESCE(AVG(net_value), 0) as avg_net
           FROM per_quote`,
-      [fromDate, toDate],
     ),
-    exec.query<{ status: string; count: string; total_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ status: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             sq.id,
             sq.status,
@@ -222,24 +226,24 @@ export const getSupplierQuotesSection = async (
             SUM(sqi.quantity * sqi.unit_price) as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-           WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+           WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
            GROUP BY sq.id
          )
         SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
           FROM per_quote
          GROUP BY status
          ORDER BY count DESC`,
-      [fromDate, toDate],
     ),
-    exec.query<{ label: string; count: string; total_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ label: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             sq.id,
             sq.created_at,
             SUM(sqi.quantity * sqi.unit_price) as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-           WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+           WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
            GROUP BY sq.id
          )
         SELECT
@@ -249,17 +253,17 @@ export const getSupplierQuotesSection = async (
           FROM per_quote
          GROUP BY DATE_TRUNC('month', created_at)
          ORDER BY label ASC`,
-      [fromDate, toDate],
     ),
-    exec.query<{ label: string; quote_count: string; value: string }>(
-      `WITH per_quote AS (
+    executeRows<{ label: string; quote_count: string; value: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             sq.id,
             sq.supplier_name,
             SUM(sqi.quantity * sqi.unit_price) as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-           WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+           WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
            GROUP BY sq.id
          )
         SELECT
@@ -269,17 +273,17 @@ export const getSupplierQuotesSection = async (
           FROM per_quote
          GROUP BY supplier_name
          ORDER BY value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
-    exec.query<{
+    executeRows<{
       id: string;
       supplier_name: string;
       status: string;
       net_value: string;
       created_at: string;
     }>(
-      `WITH per_quote AS (
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             sq.id,
             sq.supplier_name,
@@ -288,7 +292,7 @@ export const getSupplierQuotesSection = async (
             SUM(sqi.quantity * sqi.unit_price) as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
-           WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+           WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
            GROUP BY sq.id
          )
         SELECT
@@ -299,39 +303,41 @@ export const getSupplierQuotesSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_quote
          ORDER BY net_value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
   ]);
 
   return {
     totals: {
-      count: toNumber(totals.rows[0]?.count),
-      totalNet: toNumber(totals.rows[0]?.total_net),
-      avgNet: toNumber(totals.rows[0]?.avg_net),
+      count: toDbNumber(totals[0]?.count),
+      totalNet: toDbNumber(totals[0]?.total_net),
+      avgNet: toDbNumber(totals[0]?.avg_net),
     },
-    byMonth: byMonth.rows.map((r) => ({
-      label: toText(r.label),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byMonth: byMonth.map((r) => ({
+      label: toDbText(r.label),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    byStatus: byStatus.rows.map((r) => ({
-      status: toText(r.status),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byStatus: byStatus.map((r) => ({
+      status: toDbText(r.status),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    topQuotesByNet: topQuotes.rows.map((r) => ({
-      id: toText(r.id),
-      supplierName: toText(r.supplier_name),
-      purchaseOrderNumber: toText(r.id),
-      status: toText(r.status),
-      netValue: toNumber(r.net_value),
-      createdAt: toNumber(r.created_at),
-    })),
-    topSuppliersByNet: topSuppliers.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
-      quoteCount: toNumber(r.quote_count),
+    topQuotesByNet: topQuotes.map((r) => {
+      const id = toDbText(r.id);
+      return {
+        id,
+        supplierName: toDbText(r.supplier_name),
+        purchaseOrderNumber: id,
+        status: toDbText(r.status),
+        netValue: toDbNumber(r.net_value),
+        createdAt: toDbNumber(r.created_at),
+      };
+    }),
+    topSuppliersByNet: topSuppliers.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
+      quoteCount: toDbNumber(r.quote_count),
     })),
   };
 };
@@ -363,7 +369,7 @@ export type CatalogSection = {
 
 export const getCatalogSection = async (
   opts: CatalogSectionOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<CatalogSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
@@ -376,64 +382,69 @@ export const getCatalogSection = async (
     topProductsByUsage,
     topProductsByRevenue,
   ] = await Promise.all([
-    exec.query<{ internal_count: string; external_count: string; disabled_count: string }>(
-      `SELECT
+    executeRows<{ internal_count: string; external_count: string; disabled_count: string }>(
+      exec,
+      sql`SELECT
           SUM(CASE WHEN supplier_id IS NULL THEN 1 ELSE 0 END) as internal_count,
           SUM(CASE WHEN supplier_id IS NOT NULL THEN 1 ELSE 0 END) as external_count,
           SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
          FROM products`,
     ),
-    exec.query<{ label: string; value: string }>(
-      `SELECT COALESCE(NULLIF(type, ''), 'unknown') as label, COUNT(*) as value
+    executeRows<{ label: string; value: string }>(
+      exec,
+      sql`SELECT COALESCE(NULLIF(type, ''), 'unknown') as label, COUNT(*) as value
          FROM products
         GROUP BY COALESCE(NULLIF(type, ''), 'unknown')
         ORDER BY value DESC`,
     ),
-    exec.query<{ label: string; value: string }>(
-      `SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as label, COUNT(*) as value
+    executeRows<{ label: string; value: string }>(
+      exec,
+      sql`SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as label, COUNT(*) as value
          FROM products
         GROUP BY COALESCE(NULLIF(category, ''), 'uncategorized')
         ORDER BY value DESC`,
     ),
-    exec.query<{ label: string; value: string }>(
-      `SELECT COALESCE(NULLIF(subcategory, ''), 'none') as label, COUNT(*) as value
+    executeRows<{ label: string; value: string }>(
+      exec,
+      sql`SELECT COALESCE(NULLIF(subcategory, ''), 'none') as label, COUNT(*) as value
          FROM products
         GROUP BY COALESCE(NULLIF(subcategory, ''), 'none')
         ORDER BY value DESC`,
     ),
-    exec.query<{ label: string; value: string }>(
-      `SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
+    executeRows<{ label: string; value: string }>(
+      exec,
+      sql`SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
          FROM products p
          LEFT JOIN suppliers s ON s.id = p.supplier_id
         WHERE p.supplier_id IS NOT NULL
         GROUP BY COALESCE(s.name, 'Unknown')
         ORDER BY value DESC
-        LIMIT $1`,
-      [topLimit],
+        LIMIT ${topLimit}`,
     ),
-    exec.query<{
+    executeRows<{
       product_id: string;
       product_name: string;
       usage_count: string;
       quantity_total: string;
     }>(
-      `WITH usage_rows AS (
+      exec,
+      sql`WITH usage_rows AS (
           SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
             FROM quote_items qi
             JOIN quotes q ON q.id = qi.quote_id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY qi.product_id, qi.product_name
           UNION ALL
           SELECT si.product_id, si.product_name, COUNT(*) as use_count, COALESCE(SUM(si.quantity), 0) as quantity_total
             FROM sale_items si
             JOIN sales s ON s.id = si.sale_id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY si.product_id, si.product_name
           UNION ALL
           SELECT ii.product_id, ii.description as product_name, COUNT(*) as use_count, COALESCE(SUM(ii.quantity), 0) as quantity_total
             FROM invoice_items ii
             JOIN invoices i ON i.id = ii.invoice_id
-           WHERE i.issue_date >= $1 AND i.issue_date <= $2 AND ii.product_id IS NOT NULL
+           WHERE i.issue_date >= ${fromDate} AND i.issue_date <= ${toDate} AND ii.product_id IS NOT NULL
            GROUP BY ii.product_id, ii.description
          )
         SELECT
@@ -444,11 +455,11 @@ export const getCatalogSection = async (
           FROM usage_rows
          GROUP BY product_id, product_name
          ORDER BY usage_count DESC, quantity_total DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
-    exec.query<{ product_id: string; product_name: string; value: string }>(
-      `SELECT
+    executeRows<{ product_id: string; product_name: string; value: string }>(
+      exec,
+      sql`SELECT
           si.product_id,
           si.product_name,
           COALESCE(
@@ -462,43 +473,42 @@ export const getCatalogSection = async (
           ) as value
          FROM sale_items si
          JOIN sales s ON s.id = si.sale_id
-        WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+        WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
         GROUP BY si.product_id, si.product_name
         ORDER BY value DESC
-        LIMIT $3`,
-      [fromDate, toDate, topLimit],
+        LIMIT ${topLimit}`,
     ),
   ]);
 
   return {
     productCounts: {
-      internal: toNumber(counts.rows[0]?.internal_count),
-      external: toNumber(counts.rows[0]?.external_count),
-      disabled: toNumber(counts.rows[0]?.disabled_count),
+      internal: toDbNumber(counts[0]?.internal_count),
+      external: toDbNumber(counts[0]?.external_count),
+      disabled: toDbNumber(counts[0]?.disabled_count),
     },
-    byType: byType.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-    byCategory: byCategory.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
+    byType: byType.map((r) => ({ label: toDbText(r.label), value: toDbNumber(r.value) })),
+    byCategory: byCategory.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
     })),
-    bySubcategory: bySubcategory.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
+    bySubcategory: bySubcategory.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
     })),
-    productsBySupplierCount: productsBySupplier.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
+    productsBySupplierCount: productsBySupplier.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
     })),
-    topProductsByUsage: topProductsByUsage.rows.map((r) => ({
-      productId: toText(r.product_id),
-      productName: toText(r.product_name),
-      usageCount: toNumber(r.usage_count),
-      quantity: toNumber(r.quantity_total),
+    topProductsByUsage: topProductsByUsage.map((r) => ({
+      productId: toDbText(r.product_id),
+      productName: toDbText(r.product_name),
+      usageCount: toDbNumber(r.usage_count),
+      quantity: toDbNumber(r.quantity_total),
     })),
-    topProductsByRevenue: topProductsByRevenue.rows.map((r) => ({
-      productId: toText(r.product_id),
-      productName: toText(r.product_name),
-      value: toNumber(r.value),
+    topProductsByRevenue: topProductsByRevenue.map((r) => ({
+      productId: toDbText(r.product_id),
+      productName: toDbText(r.product_name),
+      value: toDbNumber(r.value),
     })),
   };
 };

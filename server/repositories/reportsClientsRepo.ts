@@ -1,5 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
-import { toDbNumber as toNumber, toDbText as toText } from '../utils/parse.ts';
+import { sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { toDbNumber, toDbText } from '../utils/parse.ts';
 
 type ClientRow = {
   id: string;
@@ -59,7 +60,7 @@ export type ClientsSection = {
 
 export const getClientsSection = async (
   opts: ClientsSectionOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<ClientsSection> => {
   const {
     viewerId,
@@ -76,62 +77,62 @@ export const getClientsSection = async (
   } = opts;
 
   const countQuery = canViewAllClients
-    ? exec.query<{ count: string }>(`SELECT COUNT(*) as count FROM clients`)
-    : exec.query<{ count: string }>(
-        `SELECT COUNT(*) as count
-           FROM clients c
-           JOIN user_clients uc ON uc.client_id = c.id
-          WHERE uc.user_id = $1`,
-        [viewerId],
+    ? executeRows<{ count: string }>(exec, sql`SELECT COUNT(*) as count FROM clients`)
+    : executeRows<{ count: string }>(
+        exec,
+        sql`SELECT COUNT(*) as count
+              FROM clients c
+              JOIN user_clients uc ON uc.client_id = c.id
+             WHERE uc.user_id = ${viewerId}`,
       );
 
   const listQuery = canViewAllClients
-    ? exec.query<ClientRow>(
-        `SELECT
-            c.id,
-            c.name,
-            c.client_code,
-            c.type,
-            c.contact_name,
-            c.email,
-            c.phone,
-            c.address,
-            c.is_disabled
-           FROM clients c
-          ORDER BY c.name ASC
-          LIMIT $1`,
-        [itemsLimit],
+    ? executeRows<ClientRow>(
+        exec,
+        sql`SELECT
+              c.id,
+              c.name,
+              c.client_code,
+              c.type,
+              c.contact_name,
+              c.email,
+              c.phone,
+              c.address,
+              c.is_disabled
+             FROM clients c
+            ORDER BY c.name ASC
+            LIMIT ${itemsLimit}`,
       )
-    : exec.query<ClientRow>(
-        `SELECT DISTINCT
-            c.id,
-            c.name,
-            c.client_code,
-            c.type,
-            c.contact_name,
-            c.email,
-            c.phone,
-            c.address,
-            c.is_disabled
-           FROM clients c
-           JOIN user_clients uc ON uc.client_id = c.id
-          WHERE uc.user_id = $1
-          ORDER BY c.name ASC
-          LIMIT $2`,
-        [viewerId, itemsLimit],
+    : executeRows<ClientRow>(
+        exec,
+        sql`SELECT DISTINCT
+              c.id,
+              c.name,
+              c.client_code,
+              c.type,
+              c.contact_name,
+              c.email,
+              c.phone,
+              c.address,
+              c.is_disabled
+             FROM clients c
+             JOIN user_clients uc ON uc.client_id = c.id
+            WHERE uc.user_id = ${viewerId}
+            ORDER BY c.name ASC
+            LIMIT ${itemsLimit}`,
       );
 
-  const [countRes, listRes] = await Promise.all([countQuery, listQuery]);
+  const [countRows, listRows] = await Promise.all([countQuery, listQuery]);
 
-  const items: ClientInfo[] = listRes.rows.map((r) => ({
-    id: toText(r.id),
-    name: toText(r.name),
-    clientCode: toText(r.client_code),
-    type: toText(r.type),
-    contactName: toText(r.contact_name),
-    email: toText(r.email),
-    phone: toText(r.phone),
-    address: toText(r.address),
+  const items: ClientInfo[] = listRows.map((r) => ({
+    id: toDbText(r.id),
+    name: toDbText(r.name),
+    clientCode: toDbText(r.client_code),
+    type: toDbText(r.type),
+    contactName: toDbText(r.contact_name),
+    email: toDbText(r.email),
+    phone: toDbText(r.phone),
+    address: toDbText(r.address),
     isDisabled: Boolean(r.is_disabled),
   }));
 
@@ -154,8 +155,9 @@ export const getClientsSection = async (
 
   if (clientIds.length > 0) {
     const quotesPromise = canViewQuotes
-      ? exec.query<{ client_id: string; quote_count: string; net_value: string }>(
-          `WITH per_quote AS (
+      ? executeRows<{ client_id: string; quote_count: string; net_value: string }>(
+          exec,
+          sql`WITH per_quote AS (
                 SELECT
                   q.id,
                   q.client_id,
@@ -163,9 +165,9 @@ export const getClientsSection = async (
                     * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
                 FROM quotes q
                 JOIN quote_items qi ON qi.quote_id = q.id
-               WHERE q.created_at::date >= $1
-                 AND q.created_at::date <= $2
-                 AND q.client_id = ANY($3)
+               WHERE q.created_at::date >= ${fromDate}
+                 AND q.created_at::date <= ${toDate}
+                 AND q.client_id = ANY(${sql.param(clientIds)})
                GROUP BY q.id
              )
              SELECT
@@ -174,13 +176,13 @@ export const getClientsSection = async (
                COALESCE(SUM(net_value), 0) as net_value
                FROM per_quote
                GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
         )
       : null;
 
     const ordersPromise = canViewOrders
-      ? exec.query<{ client_id: string; order_count: string; net_value: string }>(
-          `WITH per_order AS (
+      ? executeRows<{ client_id: string; order_count: string; net_value: string }>(
+          exec,
+          sql`WITH per_order AS (
                 SELECT
                   s.id,
                   s.client_id,
@@ -188,9 +190,9 @@ export const getClientsSection = async (
                     * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
                 FROM sales s
                 JOIN sale_items si ON si.sale_id = s.id
-               WHERE s.created_at::date >= $1
-                 AND s.created_at::date <= $2
-                 AND s.client_id = ANY($3)
+               WHERE s.created_at::date >= ${fromDate}
+                 AND s.created_at::date <= ${toDate}
+                 AND s.client_id = ANY(${sql.param(clientIds)})
                GROUP BY s.id
              )
              SELECT
@@ -199,104 +201,92 @@ export const getClientsSection = async (
                COALESCE(SUM(net_value), 0) as net_value
                FROM per_order
                GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
         )
       : null;
 
     const invoicesPromise = canViewInvoices
-      ? exec.query<{
+      ? executeRows<{
           client_id: string;
           invoice_count: string;
           total_sum: string;
           outstanding_sum: string;
         }>(
-          `SELECT
+          exec,
+          sql`SELECT
                 client_id,
                 COUNT(*) as invoice_count,
                 COALESCE(SUM(total), 0) as total_sum,
                 COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
                FROM invoices
-              WHERE issue_date >= $1
-                AND issue_date <= $2
-                AND client_id = ANY($3)
+              WHERE issue_date >= ${fromDate}
+                AND issue_date <= ${toDate}
+                AND client_id = ANY(${sql.param(clientIds)})
               GROUP BY client_id`,
-          [fromDate, toDate, clientIds],
         )
       : null;
 
+    const timesheetUserFilter = canViewAllTimesheets
+      ? sql``
+      : sql`AND te.user_id = ANY(${sql.param(allowedTimesheetUserIds || [])})`;
     const timesheetsPromise = canViewTimesheets
-      ? canViewAllTimesheets
-        ? exec.query<{ client_id: string; hours: string }>(
-            `SELECT
-                te.client_id,
-                COALESCE(SUM(te.duration), 0) as hours
-               FROM time_entries te
-              WHERE te.date >= $1
-                AND te.date <= $2
-                AND te.client_id = ANY($3)
-              GROUP BY te.client_id`,
-            [fromDate, toDate, clientIds],
-          )
-        : exec.query<{ client_id: string; hours: string }>(
-            `SELECT
-                te.client_id,
-                COALESCE(SUM(te.duration), 0) as hours
-               FROM time_entries te
-              WHERE te.date >= $1
-                AND te.date <= $2
-                AND te.user_id = ANY($3)
-                AND te.client_id = ANY($4)
-              GROUP BY te.client_id`,
-            [fromDate, toDate, allowedTimesheetUserIds || [], clientIds],
-          )
+      ? executeRows<{ client_id: string; hours: string }>(
+          exec,
+          sql`SELECT
+              te.client_id,
+              COALESCE(SUM(te.duration), 0) as hours
+             FROM time_entries te
+            WHERE te.date >= ${fromDate}
+              AND te.date <= ${toDate}
+              ${timesheetUserFilter}
+              AND te.client_id = ANY(${sql.param(clientIds)})
+            GROUP BY te.client_id`,
+        )
       : null;
 
-    const [quotesRes, ordersRes, invoicesRes, timesheetsRes] = await Promise.all([
+    const [quotesRows, ordersRows, invoicesRows, timesheetsRows] = await Promise.all([
       quotesPromise,
       ordersPromise,
       invoicesPromise,
       timesheetsPromise,
     ]);
 
-    if (quotesRes) {
-      for (const row of quotesRes.rows) {
-        const target = activityByClient.get(toText(row.client_id));
+    if (quotesRows) {
+      for (const row of quotesRows) {
+        const target = activityByClient.get(toDbText(row.client_id));
         if (!target) continue;
-        target.quotesCount = toNumber(row.quote_count);
-        target.quotesNet = toNumber(row.net_value);
+        target.quotesCount = toDbNumber(row.quote_count);
+        target.quotesNet = toDbNumber(row.net_value);
       }
     }
-    if (ordersRes) {
-      for (const row of ordersRes.rows) {
-        const target = activityByClient.get(toText(row.client_id));
+    if (ordersRows) {
+      for (const row of ordersRows) {
+        const target = activityByClient.get(toDbText(row.client_id));
         if (!target) continue;
-        target.ordersCount = toNumber(row.order_count);
-        target.ordersNet = toNumber(row.net_value);
+        target.ordersCount = toDbNumber(row.order_count);
+        target.ordersNet = toDbNumber(row.net_value);
       }
     }
-    if (invoicesRes) {
-      for (const row of invoicesRes.rows) {
-        const target = activityByClient.get(toText(row.client_id));
+    if (invoicesRows) {
+      for (const row of invoicesRows) {
+        const target = activityByClient.get(toDbText(row.client_id));
         if (!target) continue;
-        target.invoicesCount = toNumber(row.invoice_count);
-        target.invoicesTotal = toNumber(row.total_sum);
-        target.invoicesOutstanding = toNumber(row.outstanding_sum);
+        target.invoicesCount = toDbNumber(row.invoice_count);
+        target.invoicesTotal = toDbNumber(row.total_sum);
+        target.invoicesOutstanding = toDbNumber(row.outstanding_sum);
       }
     }
-    if (timesheetsRes) {
-      for (const row of timesheetsRes.rows) {
-        const target = activityByClient.get(toText(row.client_id));
+    if (timesheetsRows) {
+      for (const row of timesheetsRows) {
+        const target = activityByClient.get(toDbText(row.client_id));
         if (!target) continue;
-        target.timesheetHours = toNumber(row.hours);
+        target.timesheetHours = toDbNumber(row.hours);
       }
     }
   }
 
   return {
-    count: toNumber(countRes.rows[0]?.count),
+    count: toDbNumber(countRows[0]?.count),
     items,
-    activitySummary: clientIds
-      .map((id) => activityByClient.get(id))
-      .filter((a): a is ClientActivity => a !== undefined),
+    activitySummary: Array.from(activityByClient.values()),
   };
 };

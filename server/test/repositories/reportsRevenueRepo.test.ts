@@ -1,24 +1,22 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as repo from '../../repositories/reportsRevenueRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
 const FROM = '2026-01-01';
 const TO = '2026-01-31';
 
-const enqueueEmptyN = (n: number) => {
-  for (let i = 0; i < n; i++) exec.enqueue({ rows: [] });
-};
-
 describe('getQuotesSection', () => {
   test('dispatches 5 parallel queries, each scoped to [fromDate, toDate, ...]', async () => {
-    enqueueEmptyN(5);
-    await repo.getQuotesSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, exec);
+    exec.enqueueEmptyN(5);
+    await repo.getQuotesSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, testDb);
     expect(exec.calls).toHaveLength(5);
     for (const call of exec.calls) {
       expect(call.params[0]).toBe(FROM);
@@ -27,8 +25,8 @@ describe('getQuotesSection', () => {
   });
 
   test('parameterizes LIMIT (no string interpolation)', async () => {
-    enqueueEmptyN(5);
-    await repo.getQuotesSection({ fromDate: FROM, toDate: TO, topLimit: 25 }, exec);
+    exec.enqueueEmptyN(5);
+    await repo.getQuotesSection({ fromDate: FROM, toDate: TO, topLimit: 25 }, testDb);
     const limited = exec.calls.filter((c) => /LIMIT \$\d+/.test(c.sql));
     expect(limited.length).toBeGreaterThan(0);
     for (const call of limited) {
@@ -53,7 +51,10 @@ describe('getQuotesSection', () => {
     });
     exec.enqueue({ rows: [{ label: 'Acme', quote_count: '2', value: '500' }] });
 
-    const result = await repo.getQuotesSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, exec);
+    const result = await repo.getQuotesSection(
+      { fromDate: FROM, toDate: TO, topLimit: 10 },
+      testDb,
+    );
 
     expect(result.totals).toEqual({ count: 3, totalNet: 600, avgNet: 200 });
     expect(result.byStatus).toEqual([{ status: 'won', count: 2, totalNet: 400 }]);
@@ -74,8 +75,8 @@ describe('getQuotesSection', () => {
 
 describe('getOrdersSection', () => {
   test('dispatches 5 parallel queries on sales/sale_items', async () => {
-    enqueueEmptyN(5);
-    await repo.getOrdersSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, exec);
+    exec.enqueueEmptyN(5);
+    await repo.getOrdersSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, testDb);
     expect(exec.calls).toHaveLength(5);
     for (const call of exec.calls) {
       expect(call.sql).toContain('FROM sales s');
@@ -99,7 +100,10 @@ describe('getOrdersSection', () => {
     });
     exec.enqueue({ rows: [{ label: 'Acme', order_count: '2', value: '900' }] });
 
-    const result = await repo.getOrdersSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, exec);
+    const result = await repo.getOrdersSection(
+      { fromDate: FROM, toDate: TO, topLimit: 10 },
+      testDb,
+    );
     expect(result.totals.count).toBe(2);
     expect(result.topOrdersByNet).toEqual([
       {
@@ -116,8 +120,8 @@ describe('getOrdersSection', () => {
 
 describe('getInvoicesSection', () => {
   test('dispatches 6 parallel queries on invoices', async () => {
-    enqueueEmptyN(6);
-    await repo.getInvoicesSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, exec);
+    exec.enqueueEmptyN(6);
+    await repo.getInvoicesSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, testDb);
     expect(exec.calls).toHaveLength(6);
     for (const call of exec.calls) {
       expect(call.sql).toContain('FROM invoices');
@@ -157,7 +161,7 @@ describe('getInvoicesSection', () => {
 
     const result = await repo.getInvoicesSection(
       { fromDate: FROM, toDate: TO, topLimit: 10 },
-      exec,
+      testDb,
     );
     expect(result.totals).toEqual({ count: 4, total: 1000, outstanding: 300, paidAmount: 700 });
     expect(result.aging).toEqual([{ bucket: '0-30', count: 1, outstanding: 300 }]);

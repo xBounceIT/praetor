@@ -120,6 +120,13 @@
       "when": 1777810497762,
       "tag": "0016_claim_products_and_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777820744011,
+      "tag": "0017_claim_report_chat_tables",
+      "breakpoints": true
     }
   ]
 }

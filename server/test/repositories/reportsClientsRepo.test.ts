@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { DbExecutor } from '../../db/drizzle.ts';
 import * as repo from '../../repositories/reportsClientsRepo.ts';
-import { type FakeExecutor, makeFakeExecutor } from '../helpers/fakeExecutor.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 beforeEach(() => {
-  exec = makeFakeExecutor();
+  ({ exec, testDb } = setupTestDb());
 });
 
 const FROM = '2026-01-01';
@@ -24,29 +26,25 @@ const baseOpts = {
   itemsLimit: 50,
 };
 
-const enqueueEmptyN = (n: number) => {
-  for (let i = 0; i < n; i++) exec.enqueue({ rows: [] });
-};
-
 describe('getClientsSection', () => {
   test('admin viewer: count + list run in parallel; no activity queries when permissions disabled', async () => {
-    enqueueEmptyN(2);
+    exec.enqueueEmptyN(2);
     exec.enqueue({ rows: [{ count: '0' }] });
-    await repo.getClientsSection({ ...baseOpts }, exec);
+    await repo.getClientsSection({ ...baseOpts }, testDb);
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql).toContain('SELECT COUNT(*)');
     expect(exec.calls[1].sql).not.toContain('user_clients');
   });
 
   test('non-admin viewer joins user_clients with viewerId', async () => {
-    enqueueEmptyN(2);
-    await repo.getClientsSection({ ...baseOpts, canViewAllClients: false }, exec);
+    exec.enqueueEmptyN(2);
+    await repo.getClientsSection({ ...baseOpts, canViewAllClients: false }, testDb);
     expect(exec.calls[0].sql).toContain('JOIN user_clients');
     expect(exec.calls[0].params).toEqual(['u1']);
     expect(exec.calls[1].params).toEqual(['u1', 50]);
   });
 
-  test('client list maps row shape with toText/Boolean coercion', async () => {
+  test('client list maps row shape with toDbText/Boolean coercion', async () => {
     exec.enqueue({ rows: [{ count: '1' }] });
     exec.enqueue({
       rows: [
@@ -63,7 +61,7 @@ describe('getClientsSection', () => {
         },
       ],
     });
-    const result = await repo.getClientsSection({ ...baseOpts }, exec);
+    const result = await repo.getClientsSection({ ...baseOpts }, testDb);
     expect(result.count).toBe(1);
     expect(result.items).toEqual([
       {
@@ -91,7 +89,7 @@ describe('getClientsSection', () => {
         canViewInvoices: true,
         canViewTimesheets: true,
       },
-      exec,
+      testDb,
     );
     // only count + list — activity Promise.all is short-circuited because clientIds is empty
     expect(exec.calls).toHaveLength(2);
@@ -116,7 +114,7 @@ describe('getClientsSection', () => {
     });
     exec.enqueue({ rows: [{ client_id: 'c1', quote_count: '2', net_value: '500' }] });
     // canViewQuotes=true only; orders/invoices/timesheets stay null
-    const result = await repo.getClientsSection({ ...baseOpts, canViewQuotes: true }, exec);
+    const result = await repo.getClientsSection({ ...baseOpts, canViewQuotes: true }, testDb);
     expect(exec.calls).toHaveLength(3);
     expect(result.activitySummary).toEqual([
       {
@@ -158,7 +156,7 @@ describe('getClientsSection', () => {
         canViewAllTimesheets: false,
         allowedTimesheetUserIds: ['u1', 'u2'],
       },
-      exec,
+      testDb,
     );
     const tsCall = exec.calls.find((c) => c.sql.includes('time_entries'));
     expect(tsCall?.params).toEqual([FROM, TO, ['u1', 'u2'], ['c1']]);
