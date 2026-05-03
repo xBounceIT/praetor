@@ -459,7 +459,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 {weekDays.map((day) => (
                   <th
                     key={day.dateStr}
-                    className={`px-2 py-2 text-center relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={`w-28 px-2 py-2 text-center relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
                     <div
                       className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
@@ -578,7 +578,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   {weekDays.map((day) => (
                     <td
                       key={day.dateStr}
-                      className={`px-2 py-4 transition-all duration-700 ${day.isToday ? 'bg-slate-50' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30' : ''} ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'bg-emerald-50' : ''}`}
+                      className={`w-28 px-2 py-4 transition-all duration-700 ${day.isToday ? 'bg-slate-50' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30' : ''} ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'bg-emerald-50' : ''}`}
                     >
                       <div className="flex flex-col gap-2 items-center relative">
                         {showSuccess && row.days[day.dateStr]?.duration > 0 && (
@@ -641,7 +641,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 {weekDays.map((day) => (
                   <td
                     key={day.dateStr}
-                    className={`px-2 py-4 text-center ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={`w-28 px-2 py-4 text-center ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
                     <p
                       className={`text-xs font-black ${(dayTotals[day.dateStr] as number) > 8 ? 'text-red-600' : 'text-praetor'}`}
