@@ -82,10 +82,15 @@ BEGIN
 END $$;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_internal_product_categories_type" ON "internal_product_categories" USING btree ("type");--> statement-breakpoint
+-- Pre-existing DBs already have these composite UNIQUEs from schema.sql under PG's
+-- default `<table>_<cols>_key` names. Naming our index identically lets `IF NOT EXISTS`
+-- be a no-op there while still bootstrapping the constraint on a fresh DB.
+CREATE UNIQUE INDEX IF NOT EXISTS "internal_product_categories_name_type_key" ON "internal_product_categories" USING btree ("name", "type");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_products_name" ON "products" USING btree ("name");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_products_name_unique" ON "products" USING btree ("name");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_products_product_code_unique" ON "products" USING btree ("product_code");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_products_supplier_id" ON "products" USING btree ("supplier_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_products_type" ON "products" USING btree ("type");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_internal_product_subcategories_category_id" ON "internal_product_subcategories" USING btree ("category_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "internal_product_subcategories_category_id_name_key" ON "internal_product_subcategories" USING btree ("category_id", "name");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_product_types_name" ON "product_types" USING btree ("name");

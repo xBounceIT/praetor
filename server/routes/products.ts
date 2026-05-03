@@ -673,7 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const result = await withDbTransaction(async (tx) => {
+      const updated = await withDbTransaction(async (tx) => {
         const row = await productsRepo.updateInternalCategoryFields(
           idResult.value,
           newName,
@@ -681,19 +681,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           tx,
         );
         if (!row) return null;
-        const renamedCount = isRename
-          ? await productsRepo.propagateCategoryNameToProducts(
-              current.name,
-              newName,
-              current.type,
-              expectedCostUnit,
-              tx,
-            )
-          : null;
-        return { row, renamedCount };
+        if (isRename) {
+          await productsRepo.propagateCategoryNameToProducts(
+            current.name,
+            newName,
+            current.type,
+            expectedCostUnit,
+            tx,
+          );
+        }
+        return row;
       });
 
-      if (!result) {
+      if (!updated) {
         return reply.code(404).send({ error: 'Category not found' });
       }
 
@@ -708,13 +708,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      // On rename, the propagation rowcount is exactly the new productCount (the unique-name
-      // check guarantees no pre-existing rows under newName). Otherwise we have to query.
-      const productCount =
-        result.renamedCount ?? (await productsRepo.countProductsForCategory(newName, current.type));
+      // Count after the transaction: `products.category` is free-form (no FK to
+      // internal_product_categories), so the propagation rowcount alone can under-report
+      // when pre-existing rows already used `newName`.
+      const productCount = await productsRepo.countProductsForCategory(newName, current.type);
 
       return {
-        ...result.row,
+        ...updated,
         productCount,
         hasLinkedProducts: false, // Rename only succeeds if no products were linked
       };

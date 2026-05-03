@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { index, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { productCategories } from './productCategories.ts';
 
 export const productSubcategories = pgTable(
@@ -13,5 +13,11 @@ export const productSubcategories = pgTable(
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index('idx_internal_product_subcategories_category_id').on(table.categoryId)],
+  (table) => [
+    index('idx_internal_product_subcategories_category_id').on(table.categoryId),
+    uniqueIndex('internal_product_subcategories_category_id_name_key').on(
+      table.categoryId,
+      table.name,
+    ),
+  ],
 );
