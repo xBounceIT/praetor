@@ -438,10 +438,6 @@ export const addUserRole = async (
   );
 };
 
-export const clearUserRoles = async (userId: string, exec: DbExecutor = db): Promise<void> => {
-  await executeRows(exec, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
-};
-
 export const replaceUserRoles = async (
   userId: string,
   roleIds: string[],

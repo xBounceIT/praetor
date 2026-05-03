@@ -383,20 +383,13 @@ describe('updateUserDynamic', () => {
   });
 });
 
-describe('addUserRole / clearUserRoles / setPrimaryRole', () => {
+describe('addUserRole / setPrimaryRole', () => {
   test('addUserRole inserts ON CONFLICT DO NOTHING', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
     await usersRepo.addUserRole('user-1', 'manager', testDb);
     expect(exec.calls[0].sql).toContain('ON CONFLICT DO NOTHING');
     expect(exec.calls[0].params).toContain('user-1');
     expect(exec.calls[0].params).toContain('manager');
-  });
-
-  test('clearUserRoles deletes all rows for the user', async () => {
-    exec.enqueue({ rows: [], rowCount: 3 });
-    await usersRepo.clearUserRoles('user-1', testDb);
-    expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
-    expect(exec.calls[0].params).toContain('user-1');
   });
 
   test('setPrimaryRole updates the role column', async () => {
