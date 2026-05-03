@@ -2,12 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
-import {
-  assignClientToTopManagers,
-  assignClientToUser,
-  assignProjectToTopManagers,
-  assignProjectToUser,
-} from '../repositories/userAssignmentsRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -163,10 +158,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
 
         await Promise.all([
-          assignClientToUser(request.user.id, clientIdResult.value),
-          assignProjectToUser(request.user.id, id),
-          assignClientToTopManagers(clientIdResult.value),
-          assignProjectToTopManagers(id),
+          userAssignmentsRepo.assignClientToUser(request.user.id, clientIdResult.value),
+          userAssignmentsRepo.assignProjectToUser(request.user.id, id),
+          userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value),
+          userAssignmentsRepo.assignProjectToTopManagers(id),
         ]);
         await logAudit({
           request,

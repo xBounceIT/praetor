@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
-import { syncTopManagerAssignmentsForUser } from '../repositories/userAssignmentsRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
@@ -727,7 +727,7 @@ export const runDemoSeedRefresh = async ({
 
     for (const user of DEMO_USERS) {
       if (user.role === 'top_manager') {
-        await syncTopManagerAssignmentsForUser(user.id);
+        await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id);
       }
     }
   } catch (err) {

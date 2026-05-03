@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
-import {
+import * as userAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
+import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions.ts';
+import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+
+// Local destructure: the namespace import satisfies CLAUDE.md, and shorter names keep the
+// `describe.each` tables and assertion bodies readable.
+const {
   applyProjectCascadeToClients,
   assignClientToTopManagers,
   assignClientToUser,
@@ -11,12 +17,13 @@ import {
   clearProjectCascadeAssignments,
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
+  replaceUserClients,
+  replaceUserProjects,
+  replaceUserTasks,
   syncTopManagerAssignmentsForUser,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
   userHasTopManagerRole,
-} from '../../repositories/userAssignmentsRepo.ts';
-import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions.ts';
-import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+} = userAssignmentsRepo;
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -226,5 +233,51 @@ describe('syncTopManagerAssignmentsForUser', () => {
       const anyDelete = exec.calls.find((c) => /delete\s+from/i.test(c.sql));
       expect(anyDelete).toBeUndefined();
     });
+  });
+});
+
+describe('replaceUserClients', () => {
+  test('issues DELETE then a single bulk INSERT for the id list', async () => {
+    exec.enqueue({ rows: [], rowCount: 5 });
+    exec.enqueue({ rows: [], rowCount: 2 });
+    await replaceUserClients('user-1', ['c1', 'c2'], 'manual', testDb);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain('DELETE FROM');
+    expect(exec.calls[0].sql).toContain('user_clients');
+    expect(exec.calls[1].sql).toContain('INSERT INTO');
+    expect(exec.calls[1].sql).toContain('user_clients');
+    expect(exec.calls[1].sql).toContain('ON CONFLICT DO NOTHING');
+    expect(exec.calls[1].params).toEqual(['user-1', 'c1', 'manual', 'user-1', 'c2', 'manual']);
+  });
+
+  test('only issues the DELETE when the id list is empty', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    await replaceUserClients('user-1', [], 'manual', testDb);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql).toContain('DELETE');
+  });
+});
+
+describe('replaceUserProjects', () => {
+  test('issues DELETE then a single bulk INSERT into user_projects', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await replaceUserProjects('user-1', ['p1', 'p2'], 'manual', testDb);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain('user_projects');
+    expect(exec.calls[1].sql).toContain('user_projects');
+    expect(exec.calls[1].params).toEqual(['user-1', 'p1', 'manual', 'user-1', 'p2', 'manual']);
+  });
+});
+
+describe('replaceUserTasks', () => {
+  test('issues DELETE then a single bulk INSERT into user_tasks', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await replaceUserTasks('user-1', ['t1'], 'manual', testDb);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain('user_tasks');
+    expect(exec.calls[1].sql).toContain('user_tasks');
+    expect(exec.calls[1].params).toEqual(['user-1', 't1', 'manual']);
   });
 });

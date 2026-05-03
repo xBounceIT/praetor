@@ -3,14 +3,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
-import {
-  assignClientToTopManagers,
-  assignClientToUser,
-  assignProjectToTopManagers,
-  assignProjectToUser,
-  assignTaskToTopManagers,
-  assignTaskToUser,
-} from '../repositories/userAssignmentsRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -219,12 +212,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         await Promise.all(
           [
-            clientId ? assignClientToUser(request.user.id, clientId) : null,
-            assignProjectToUser(request.user.id, projectIdResult.value),
-            assignTaskToUser(request.user.id, id),
-            clientId ? assignClientToTopManagers(clientId) : null,
-            assignProjectToTopManagers(projectIdResult.value),
-            assignTaskToTopManagers(id),
+            clientId ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId) : null,
+            userAssignmentsRepo.assignProjectToUser(request.user.id, projectIdResult.value),
+            userAssignmentsRepo.assignTaskToUser(request.user.id, id),
+            clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId) : null,
+            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value),
+            userAssignmentsRepo.assignTaskToTopManagers(id),
           ].filter((p): p is Promise<void> => p !== null),
         );
         await logAudit({

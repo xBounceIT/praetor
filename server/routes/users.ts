@@ -5,13 +5,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
-import {
-  applyProjectCascadeToClients,
-  clearProjectCascadeAssignments,
-  MANUAL_ASSIGNMENT_SOURCE,
-  syncTopManagerAssignmentsForUser,
-  userHasTopManagerRole,
-} from '../repositories/userAssignmentsRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
   messageResponseSchema,
@@ -353,7 +347,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
 
           if (roleValue === TOP_MANAGER_ROLE_ID) {
-            await syncTopManagerAssignmentsForUser(id, tx);
+            await userAssignmentsRepo.syncTopManagerAssignmentsForUser(id, tx);
           }
         });
 
@@ -561,7 +555,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
           if (row && roleValue !== null) {
             await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
-            await syncTopManagerAssignmentsForUser(idResult.value, tx);
+            await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
           }
           return row;
         });
@@ -714,7 +708,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await usersRepo.setPrimaryRole(idResult.value, primaryRoleIdResult.value, tx);
         // Sync runs inside the transaction so the role updates and the resulting
         // top-manager auto-assignments commit (or roll back) together.
-        await syncTopManagerAssignmentsForUser(idResult.value, tx);
+        await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
       });
       await logAudit({
         request,
@@ -819,7 +813,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const [targetUser, isTopManager] = await Promise.all([
         usersRepo.findCoreById(idResult.value),
-        userHasTopManagerRole(idResult.value),
+        userAssignmentsRepo.userHasTopManagerRole(idResult.value),
       ]);
       if (!targetUser) return reply.code(404).send({ error: 'User not found' });
 
@@ -831,37 +825,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await withDbTransaction(async (tx) => {
         if (clientIds) {
-          await usersRepo.replaceUserClients(
+          await userAssignmentsRepo.replaceUserClients(
             idResult.value,
             resolvedClientIds ?? [],
-            MANUAL_ASSIGNMENT_SOURCE,
+            userAssignmentsRepo.MANUAL_ASSIGNMENT_SOURCE,
             tx,
           );
         }
 
         if (projectIds) {
-          await usersRepo.replaceUserProjects(
+          await userAssignmentsRepo.replaceUserProjects(
             idResult.value,
             resolvedProjectIds ?? [],
-            MANUAL_ASSIGNMENT_SOURCE,
+            userAssignmentsRepo.MANUAL_ASSIGNMENT_SOURCE,
             tx,
           );
         }
 
         if (taskIds) {
-          await usersRepo.replaceUserTasks(
+          await userAssignmentsRepo.replaceUserTasks(
             idResult.value,
             resolvedTaskIds ?? [],
-            MANUAL_ASSIGNMENT_SOURCE,
+            userAssignmentsRepo.MANUAL_ASSIGNMENT_SOURCE,
             tx,
           );
         }
 
         if (projectIds || clientIds) {
-          await clearProjectCascadeAssignments(idResult.value, tx);
+          await userAssignmentsRepo.clearProjectCascadeAssignments(idResult.value, tx);
         }
 
-        await applyProjectCascadeToClients(idResult.value, tx);
+        await userAssignmentsRepo.applyProjectCascadeToClients(idResult.value, tx);
       });
 
       await logAudit({

@@ -1,12 +1,11 @@
 import nodemailer from 'nodemailer';
-import type { EmailConfig } from '../repositories/emailRepo.ts';
 import * as emailRepo from '../repositories/emailRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 
 // Plaintext input for `saveConfig`. Distinct from `EmailConfigPatch` (which carries
 // `smtpPasswordCiphertext`) so the encrypt step can't be skipped: anything reaching the repo
 // has already passed through this service's encryption boundary.
-export type EmailConfigInput = Partial<Omit<EmailConfig, 'smtpPassword'>> & {
+export type EmailConfigInput = Partial<Omit<emailRepo.EmailConfig, 'smtpPassword'>> & {
   smtpPassword?: string;
 };
 
@@ -15,7 +14,7 @@ class EmailService {
   // miss; subsequent reads are sticky until `saveConfig` overwrites it. External DB mutation or
   // multi-instance deployments would see stale config until restart — fine for single-instance
   // Praetor today, since writes flow through `saveConfig`.
-  private config: EmailConfig | null;
+  private config: emailRepo.EmailConfig | null;
 
   constructor() {
     this.config = null;
@@ -25,7 +24,7 @@ class EmailService {
     this.config = (await emailRepo.get()) ?? emailRepo.DEFAULT_CONFIG;
   }
 
-  async saveConfig(input: EmailConfigInput): Promise<EmailConfig> {
+  async saveConfig(input: EmailConfigInput): Promise<emailRepo.EmailConfig> {
     const { smtpPassword, ...rest } = input;
     const updated = await emailRepo.update({
       ...rest,
@@ -37,7 +36,7 @@ class EmailService {
   }
 
   private async ensureReady(): Promise<
-    { ok: true; config: EmailConfig } | { ok: false; code: string }
+    { ok: true; config: emailRepo.EmailConfig } | { ok: false; code: string }
   > {
     if (!this.config) await this.loadConfig();
     if (!this.config?.enabled) return { ok: false, code: 'EMAIL_NOT_ENABLED' };

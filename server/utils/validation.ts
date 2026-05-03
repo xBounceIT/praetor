@@ -49,6 +49,27 @@ export function optionalNonEmptyString(
 }
 
 /**
+ * Validate a batch of optional string fields against `optionalNonEmptyString`. Only fields
+ * present on `body` (per `Object.hasOwn`) are validated; absent fields are omitted from `values`
+ * so callers can still distinguish "not provided" from "explicitly null/empty".
+ */
+export function parseOptionalStringFields<F extends string>(
+  body: Record<string, unknown>,
+  fields: readonly F[],
+):
+  | { ok: true; values: Partial<Record<F, string | null>> }
+  | { ok: false; field: F; message: string } {
+  const values: Partial<Record<F, string | null>> = {};
+  for (const field of fields) {
+    if (!Object.hasOwn(body, field)) continue;
+    const result = optionalNonEmptyString(body[field], field);
+    if (!result.ok) return { ok: false, field, message: result.message };
+    values[field] = result.value;
+  }
+  return { ok: true, values };
+}
+
+/**
  * Parse a number (accept number or numeric string)
  */
 export function parseNumber(

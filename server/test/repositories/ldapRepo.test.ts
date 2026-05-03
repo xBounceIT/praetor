@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
-import type { LdapRoleMapping } from '../../repositories/ldapRepo.ts';
 import * as ldapRepo from '../../repositories/ldapRepo.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
@@ -39,7 +38,7 @@ const baseFields: RowFields = {
   userFilter: '(uid={0})',
   groupBaseDn: 'ou=groups',
   groupFilter: '(member={0})',
-  roleMappings: [] as LdapRoleMapping[],
+  roleMappings: [] as ldapRepo.LdapRoleMapping[],
 };
 
 const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
@@ -55,7 +54,7 @@ describe('get', () => {
   });
 
   test('returns the row, including JSONB roleMappings as a JS array', async () => {
-    const mappings: LdapRoleMapping[] = [{ ldapGroup: 'admins', role: 'admin' }];
+    const mappings: ldapRepo.LdapRoleMapping[] = [{ ldapGroup: 'admins', role: 'admin' }];
     exec.enqueue({ rows: [buildRow({ roleMappings: mappings })] });
     const result = await ldapRepo.get(testDb);
     expect(result?.roleMappings).toEqual(mappings);
@@ -76,7 +75,7 @@ describe('update', () => {
   });
 
   test('returns the RETURNING row mapped to the LdapConfig shape', async () => {
-    const mappings: LdapRoleMapping[] = [{ ldapGroup: 'g', role: 'r' }];
+    const mappings: ldapRepo.LdapRoleMapping[] = [{ ldapGroup: 'g', role: 'r' }];
     exec.enqueue({
       rows: [buildRow({ enabled: true, serverUrl: 'ldaps://x', roleMappings: mappings })],
     });

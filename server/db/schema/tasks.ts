@@ -1,17 +1,7 @@
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  check,
-  date,
-  numeric,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { boolean, date, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { projects } from './projects.ts';
-import { users } from './users.ts';
 
 export const tasks = pgTable('tasks', {
   id: varchar('id', { length: 50 }).primaryKey(),
@@ -32,28 +22,10 @@ export const tasks = pgTable('tasks', {
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
-// Many-to-many users ↔ tasks with assignment provenance. Mirrors `userClients` and
-// `userProjects`.
-export const userTasks = pgTable(
-  'user_tasks',
-  {
-    userId: varchar('user_id', { length: 50 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    taskId: varchar('task_id', { length: 50 })
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
-    assignmentSource: varchar('assignment_source', { length: 20 })
-      .$type<'manual' | 'top_manager_auto' | 'project_cascade'>()
-      .notNull()
-      .default('manual'),
-    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    primaryKey({ columns: [table.userId, table.taskId] }),
-    check(
-      'user_tasks_assignment_source_check',
-      sql`${table.assignmentSource} IN ('manual', 'top_manager_auto', 'project_cascade')`,
-    ),
-  ],
-);
+export const userTasks = defineUserAssignmentTable({
+  tableName: 'user_tasks',
+  fkColumnName: 'task_id',
+  fkColumnKey: 'taskId',
+  fkTarget: () => tasks.id,
+  checkName: 'user_tasks_assignment_source_check',
+});
