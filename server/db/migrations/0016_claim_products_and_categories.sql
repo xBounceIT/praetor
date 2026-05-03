@@ -93,4 +93,36 @@ CREATE INDEX IF NOT EXISTS "idx_products_supplier_id" ON "products" USING btree 
 CREATE INDEX IF NOT EXISTS "idx_products_type" ON "products" USING btree ("type");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_internal_product_subcategories_category_id" ON "internal_product_subcategories" USING btree ("category_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "internal_product_subcategories_category_id_name_key" ON "internal_product_subcategories" USING btree ("category_id", "name");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_product_types_name" ON "product_types" USING btree ("name");
+CREATE INDEX IF NOT EXISTS "idx_product_types_name" ON "product_types" USING btree ("name");--> statement-breakpoint
+-- Pre-existing dev/prod DBs already carry these CHECK constraints from schema.sql under
+-- PG's auto-generated names. Skip if any check constraint exists on the column,
+-- regardless of name, so we don't add a duplicate alongside the existing one.
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+		WHERE c.contype = 'c'
+			AND t.relname = 'internal_product_categories'
+			AND a.attname = 'cost_unit'
+	) THEN
+		ALTER TABLE "internal_product_categories" ADD CONSTRAINT "internal_product_categories_cost_unit_check" CHECK ("internal_product_categories"."cost_unit" IN ('unit', 'hours'));
+	END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+		WHERE c.contype = 'c'
+			AND t.relname = 'product_types'
+			AND a.attname = 'cost_unit'
+	) THEN
+		ALTER TABLE "product_types" ADD CONSTRAINT "product_types_cost_unit_check" CHECK ("product_types"."cost_unit" IN ('unit', 'hours'));
+	END IF;
+END $$;

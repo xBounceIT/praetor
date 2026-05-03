@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import { check, index, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import type { CostUnit } from '../../utils/cost-unit.ts';
 
 export const productCategories = pgTable(
@@ -15,5 +15,9 @@ export const productCategories = pgTable(
   (table) => [
     index('idx_internal_product_categories_type').on(table.type),
     uniqueIndex('internal_product_categories_name_type_key').on(table.name, table.type),
+    check(
+      'internal_product_categories_cost_unit_check',
+      sql`${table.costUnit} IN ('unit', 'hours')`,
+    ),
   ],
 );

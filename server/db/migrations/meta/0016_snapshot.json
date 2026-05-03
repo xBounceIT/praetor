@@ -1426,7 +1426,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "internal_product_categories_cost_unit_check": {
+          "name": "internal_product_categories_cost_unit_check",
+          "value": "\"internal_product_categories\".\"cost_unit\" IN ('unit', 'hours')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.products": {
@@ -1769,7 +1774,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "product_types_cost_unit_check": {
+          "name": "product_types_cost_unit_check",
+          "value": "\"product_types\".\"cost_unit\" IN ('unit', 'hours')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.projects": {
