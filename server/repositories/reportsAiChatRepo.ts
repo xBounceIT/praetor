@@ -54,7 +54,7 @@ export const listSessionsForUser = async (
     .limit(50);
   return rows.map((r) => ({
     id: r.id,
-    title: r.title ?? '',
+    title: r.title,
     // `created_at`/`updated_at` are nullable in the schema but have DEFAULT
     // CURRENT_TIMESTAMP — `?? 0` is a TS-strict appeasement for the unreachable branch.
     createdAt: r.createdAt?.getTime() ?? 0,
@@ -119,7 +119,7 @@ export const getActiveSessionForUser = async (
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  return { title: row.title ?? '' };
+  return { title: row.title };
 };
 
 export const updateSessionTitleAndTouch = async (
@@ -183,9 +183,11 @@ export const listMessagesForSession = async (
   return rows.map((r) => ({
     id: r.id,
     sessionId: r.sessionId,
-    role: r.role ?? '',
-    content: r.content ?? '',
+    role: r.role,
+    content: r.content,
     thoughtContent: r.thoughtContent || null,
+    // `created_at` is nullable in the schema but has DEFAULT CURRENT_TIMESTAMP —
+    // `?? 0` is a TS-strict appeasement for the unreachable branch.
     createdAt: r.createdAt?.getTime() ?? 0,
   }));
 };
@@ -210,7 +212,7 @@ export const listRecentMessages = async (
     .where(where)
     .orderBy(desc(reportChatMessages.createdAt))
     .limit(limit);
-  return rows.map((r) => ({ role: r.role ?? '', content: r.content ?? '' }));
+  return rows.map((r) => ({ role: r.role, content: r.content }));
 };
 
 export const insertUserMessage = async (

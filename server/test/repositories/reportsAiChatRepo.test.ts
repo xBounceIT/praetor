@@ -27,7 +27,7 @@ describe('listSessionsForUser', () => {
     expect(exec.calls[0].params).toContain(50);
   });
 
-  test('returns rows with title fallback to "" and timestamps coerced to epoch ms', async () => {
+  test('returns rows with timestamps coerced to epoch ms', async () => {
     const created = new Date(1);
     const updated = new Date(2);
     exec.enqueue({ rows: [['s1', 'Hello', created, updated]] });
@@ -35,10 +35,10 @@ describe('listSessionsForUser', () => {
     expect(result).toEqual([{ id: 's1', title: 'Hello', createdAt: 1, updatedAt: 2 }]);
   });
 
-  test('null title coerces to ""; null timestamps coerce to 0', async () => {
-    exec.enqueue({ rows: [['s1', null, null, null]] });
+  test('null timestamps coerce to 0', async () => {
+    exec.enqueue({ rows: [['s1', 'Hello', null, null]] });
     const [result] = await repo.listSessionsForUser('user-1', testDb);
-    expect(result).toEqual({ id: 's1', title: '', createdAt: 0, updatedAt: 0 });
+    expect(result).toEqual({ id: 's1', title: 'Hello', createdAt: 0, updatedAt: 0 });
   });
 });
 
@@ -96,16 +96,10 @@ describe('getActiveSessionForUser', () => {
     expect(result).toBeNull();
   });
 
-  test('returns first row with title fallback to ""', async () => {
+  test('returns first row', async () => {
     exec.enqueue({ rows: [['Hello']] });
     const result = await repo.getActiveSessionForUser('s1', 'user-1', testDb);
     expect(result).toEqual({ title: 'Hello' });
-  });
-
-  test('null title coerces to ""', async () => {
-    exec.enqueue({ rows: [[null]] });
-    const result = await repo.getActiveSessionForUser('s1', 'user-1', testDb);
-    expect(result).toEqual({ title: '' });
   });
 
   test('filters on is_archived=false (bound as a param) and binds [id, userId]', async () => {
@@ -182,11 +176,9 @@ describe('listMessagesForSession', () => {
     expect(m.thoughtContent).toBeNull();
   });
 
-  test('null role/content coerce to ""', async () => {
-    exec.enqueue({ rows: [['m1', 's1', null, null, null, null]] });
+  test('null thoughtContent and null createdAt coerce safely', async () => {
+    exec.enqueue({ rows: [['m1', 's1', 'user', 'hi', null, null]] });
     const [m] = await repo.listMessagesForSession('s1', { beforeMs: null, limit: 1 }, testDb);
-    expect(m.role).toBe('');
-    expect(m.content).toBe('');
     expect(m.thoughtContent).toBeNull();
     expect(m.createdAt).toBe(0);
   });
@@ -213,12 +205,6 @@ describe('listRecentMessages', () => {
     await repo.listRecentMessages('s1', { beforeOrAt: cutoff, limit: 10 }, testDb);
     expect(exec.calls[0].params).toEqual(['s1', cutoff.toISOString(), 10]);
     expect(exec.calls[0].sql).toContain('<=');
-  });
-
-  test('null role/content coerce to ""', async () => {
-    exec.enqueue({ rows: [[null, null]] });
-    const [t] = await repo.listRecentMessages('s1', {}, testDb);
-    expect(t).toEqual({ role: '', content: '' });
   });
 });
 
