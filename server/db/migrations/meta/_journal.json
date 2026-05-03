@@ -113,6 +113,13 @@
       "when": 1777803773830,
       "tag": "0015_add_supplier_check_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1777810497762,
+      "tag": "0016_claim_products_and_categories",
+      "breakpoints": true
     }
   ]
 }

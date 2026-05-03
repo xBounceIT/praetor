@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import type { CostUnit } from '../utils/cost-unit.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -82,19 +83,17 @@ const productUpdateBodySchema = {
 // Returns the row's costUnit so callers don't need a follow-up lookup.
 const requireValidType = async (
   typeName: unknown,
-): Promise<
-  { ok: true; value: string; costUnit: productsRepo.CostUnit } | { ok: false; message: string }
-> => {
+): Promise<{ ok: true; value: string; costUnit: CostUnit } | { ok: false; message: string }> => {
   const r = requireNonEmptyString(typeName, 'type');
   if (!r.ok) return r;
-  const found = await productsRepo.findProductTypeByName(r.value);
-  if (!found) {
+  const costUnit = await productsRepo.findProductTypeByName(r.value);
+  if (costUnit === null) {
     return {
       ok: false,
       message: `Invalid type "${r.value}". Type must be a registered product type.`,
     };
   }
-  return { ok: true, value: r.value, costUnit: found.costUnit };
+  return { ok: true, value: r.value, costUnit };
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -211,7 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Internal products always derive their unit from type.
       // External products keep their explicitly configured unit.
-      let expectedCostUnit: productsRepo.CostUnit = typeResult.costUnit;
+      let expectedCostUnit: CostUnit = typeResult.costUnit;
       if (supplierId) {
         const costUnitResult = validateEnum(costUnit, ['unit', 'hours'] as const, 'costUnit');
         if (costUnitResult.ok) expectedCostUnit = costUnitResult.value;
@@ -353,7 +352,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body.costUnit !== undefined;
 
       let updatedType: string | null = null;
-      let typeCostUnit: productsRepo.CostUnit | null = null;
+      let typeCostUnit: CostUnit | null = null;
       let updatedSupplierId: string | null = null;
 
       if (needsCurrentProduct) {
@@ -654,48 +653,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const isRename = newName !== current.name;
-      let expectedCostUnit: productsRepo.CostUnit;
-      if (isRename) {
-        const [costUnit, nameTaken, linkedCheck] = await Promise.all([
-          productsRepo.getCostUnitForType(current.type),
-          productsRepo.existsInternalCategoryByNameType(newName, current.type, idResult.value),
-          productsRepo.checkProductsLinkedToTransactions(current.name, current.type, undefined),
-        ]);
-        if (nameTaken) {
-          return badRequest(reply, 'Category with this name already exists for this type');
-        }
-        if (linkedCheck.linked) {
-          return reply.code(409).send({
-            error: 'Cannot rename category',
-            message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
-            linkedCount: linkedCheck.count,
-          });
-        }
-        expectedCostUnit = costUnit;
-      } else {
-        expectedCostUnit = await productsRepo.getCostUnitForType(current.type);
+      const [expectedCostUnit, nameTaken, linkedCheck] = await Promise.all([
+        productsRepo.getCostUnitForType(current.type),
+        isRename
+          ? productsRepo.existsInternalCategoryByNameType(newName, current.type, idResult.value)
+          : Promise.resolve(false),
+        isRename
+          ? productsRepo.checkProductsLinkedToTransactions(current.name, current.type, undefined)
+          : Promise.resolve({ linked: false, count: 0 }),
+      ]);
+      if (nameTaken) {
+        return badRequest(reply, 'Category with this name already exists for this type');
+      }
+      if (linkedCheck.linked) {
+        return reply.code(409).send({
+          error: 'Cannot rename category',
+          message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
+          linkedCount: linkedCheck.count,
+        });
       }
 
-      const updated = await withTransaction(async (tx) => {
+      const result = await withDbTransaction(async (tx) => {
         const row = await productsRepo.updateInternalCategoryFields(
           idResult.value,
           newName,
           expectedCostUnit,
           tx,
         );
-        if (isRename) {
-          await productsRepo.propagateCategoryNameToProducts(
-            current.name,
-            newName,
-            current.type,
-            expectedCostUnit,
-            tx,
-          );
-        }
-        return row;
+        if (!row) return null;
+        const renamedCount = isRename
+          ? await productsRepo.propagateCategoryNameToProducts(
+              current.name,
+              newName,
+              current.type,
+              expectedCostUnit,
+              tx,
+            )
+          : null;
+        return { row, renamedCount };
       });
 
-      if (!updated) {
+      if (!result) {
         return reply.code(404).send({ error: 'Category not found' });
       }
 
@@ -710,10 +708,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      const productCount = await productsRepo.countProductsForCategory(newName, current.type);
+      // On rename, the propagation rowcount is exactly the new productCount (the unique-name
+      // check guarantees no pre-existing rows under newName). Otherwise we have to query.
+      const productCount =
+        result.renamedCount ?? (await productsRepo.countProductsForCategory(newName, current.type));
 
       return {
-        ...updated,
+        ...result.row,
         productCount,
         hasLinkedProducts: false, // Rename only succeeds if no products were linked
       };
@@ -977,7 +978,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const result = await withTransaction(async (tx) => {
+      const result = await withDbTransaction(async (tx) => {
         const sub = await productsRepo.updateInternalSubcategoryName(
           categoryId,
           oldNameResult.value,
@@ -1256,7 +1257,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const updated = await withTransaction(async (tx) => {
+      const updated = await withDbTransaction(async (tx) => {
         if (newName !== current.name) {
           await productsRepo.propagateProductTypeName(current.name, newName, tx);
         }
