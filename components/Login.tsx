@@ -85,7 +85,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 setUsername(e.target.value);
                 if (fieldErrors.username) setFieldErrors({ ...fieldErrors, username: '' });
               }}
-              className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-slate-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+              className={`w-full px-3 py-2 text-sm bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-slate-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               placeholder={t('auth:login.username')}
               disabled={isLoading}
             />
@@ -106,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                   setPassword(e.target.value);
                   if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: '' });
                 }}
-                className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all pr-10 font-semibold text-slate-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-3 py-2 text-sm bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all pr-9 font-semibold text-slate-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 placeholder={t('auth:login.password')}
                 disabled={isLoading}
               />
@@ -133,7 +133,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md shadow-slate-200 flex items-center justify-center gap-2 active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 text-sm bg-praetor text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md shadow-slate-200 flex items-center justify-center gap-2 active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>
