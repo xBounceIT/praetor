@@ -216,8 +216,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     {
       header: t('internalEmployees.actions'),
       id: 'actions',
+      align: 'right' as const,
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           {canManageEmployeeAssignments &&
             !row.hasTopManagerRole &&
             row.role !== TOP_MANAGER_ROLE_ID && (
