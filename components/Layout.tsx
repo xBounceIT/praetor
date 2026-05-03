@@ -568,11 +568,11 @@ const Layout: React.FC<LayoutProps> = ({
           className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}
         >
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
-              <i className="fa-solid fa-clock text-praetor text-lg"></i>
+            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
+              <i className="fa-solid fa-clock text-praetor text-base"></i>
             </div>
             {!isCollapsed && (
-              <h1 className="text-2xl font-black italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
+              <h1 className="text-xl font-black italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
                 PRAETOR
               </h1>
             )}
@@ -582,7 +582,7 @@ const Layout: React.FC<LayoutProps> = ({
             onClick={toggleMobileMenu}
             className="md:hidden p-2 text-white/70 hover:text-white"
           >
-            <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
+            <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-lg`}></i>
           </button>
 
           <button
@@ -627,12 +627,12 @@ const Layout: React.FC<LayoutProps> = ({
                     <div
                       className={`flex items-center justify-center transition-colors ${activeModule.id === module.id ? 'text-praetor' : ''}`}
                     >
-                      <i className={`fa-solid ${module.icon} text-lg w-6 text-center`}></i>
+                      <i className={`fa-solid ${module.icon} text-base w-5 text-center`}></i>
                     </div>
 
                     {!isCollapsed && (
                       <>
-                        <span className="font-bold text-sm tracking-wide flex-1 text-left uppercase">
+                        <span className="font-bold text-xs tracking-wide flex-1 text-left uppercase">
                           {module.name}
                         </span>
                         <i
@@ -665,7 +665,7 @@ const Layout: React.FC<LayoutProps> = ({
         <div
           className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}
         >
-          <div className="text-sm text-white/40 font-medium whitespace-nowrap">
+          <div className="text-xs text-white/40 font-medium whitespace-nowrap">
             Praetor v{import.meta.env.VITE_APP_VERSION}
           </div>
         </div>
@@ -877,21 +877,21 @@ const NavItem: React.FC<NavItemProps> = ({
         >
           {iconElement ? (
             <span
-              className={`w-5 text-center text-lg flex items-center justify-center ${colorClass}`}
+              className={`w-4 text-center text-base flex items-center justify-center ${colorClass}`}
             >
               {iconElement}
             </span>
           ) : entityIcon ? (
             <span className={`flex items-center gap-1 ${colorClass}`}>
               <i className={`fa-solid ${entityIcon} text-xs`}></i>
-              <i className={`fa-solid ${icon} text-base`}></i>
+              <i className={`fa-solid ${icon} text-sm`}></i>
             </span>
           ) : (
-            <i className={`fa-solid ${icon} w-5 text-center text-lg ${colorClass}`}></i>
+            <i className={`fa-solid ${icon} w-4 text-center text-base ${colorClass}`}></i>
           )}
           {!isCollapsed && (
             <>
-              <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+              <span className="font-semibold text-xs whitespace-nowrap overflow-hidden">
                 {label}
               </span>
               {suffix}

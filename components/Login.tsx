@@ -48,9 +48,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
 
   return (
     <div className="min-h-screen bg-praetor flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-56 mx-auto object-contain" />
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-md">
+        <div className="text-center mb-6">
+          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-32 mx-auto object-contain" />
           <p className="text-slate-500 text-sm">{t('auth:login.title')}</p>
         </div>
 
@@ -148,7 +148,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center">
           <p className="text-xs text-slate-400">
             <strong>{t('auth:login.defaultCredentials')}:</strong> &quot;admin&quot; /
             &quot;password&quot;
