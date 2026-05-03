@@ -2,10 +2,8 @@ import { sql } from 'drizzle-orm';
 import { check, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 import type { UnitType } from '../../utils/unit-type.ts';
 import { customerOffers } from './customerOffers.ts';
+import { products } from './products.ts';
 
-// Final shape after the ALTER TABLEs in schema.sql added unit_type, the supplier_quote_*
-// columns, and the chk_customer_offer_items_unit_type CHECK constraint.
-// `product_id` runtime FK to `products(id)` (un-modeled — products is in Tier 5).
 export const customerOfferItems = pgTable(
   'customer_offer_items',
   {
@@ -13,7 +11,9 @@ export const customerOfferItems = pgTable(
     offerId: varchar('offer_id', { length: 100 })
       .notNull()
       .references(() => customerOffers.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    productId: varchar('product_id', { length: 50 }),
+    productId: varchar('product_id', { length: 50 }).references(() => products.id, {
+      onDelete: 'set null',
+    }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),

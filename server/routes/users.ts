@@ -5,13 +5,20 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
+import {
+  applyProjectCascadeToClients,
+  clearProjectCascadeAssignments,
+  MANUAL_ASSIGNMENT_SOURCE,
+  syncTopManagerAssignmentsForUser,
+  userHasTopManagerRole,
+} from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import { getAuditCounts, logAudit } from '../utils/audit.ts';
+import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
@@ -22,11 +29,6 @@ import {
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import {
-  MANUAL_ASSIGNMENT_SOURCE,
-  syncTopManagerAssignmentsForUser,
-  userHasTopManagerRole,
-} from '../utils/top-manager-assignments.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -543,8 +545,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const updatedRow = await withDbTransaction(async (tx) => {
           const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
           if (row && roleValue !== null) {
-            await usersRepo.clearUserRoles(idResult.value, tx);
-            await usersRepo.addUserRole(idResult.value, roleValue, tx);
+            await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
           }
           return row;
         });
@@ -557,18 +558,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const changedFields = [
-        name !== undefined ? 'name' : null,
-        email !== undefined ? 'email' : null,
-        isDisabled !== undefined ? 'isDisabled' : null,
-        costPerHour !== undefined && hasPermission(request, 'hr.costs.update')
-          ? 'costPerHour'
-          : null,
-        role !== undefined ? 'role' : null,
-      ].filter((field): field is string => field !== null);
+      const changedFields = getAuditChangedFields({
+        name,
+        email,
+        isDisabled,
+        costPerHour: hasPermission(request, 'hr.costs.update') ? costPerHour : undefined,
+        role,
+      });
 
       let action = 'user.updated';
-      if (changedFields.length === 1) {
+      if (changedFields?.length === 1) {
         if (changedFields[0] === 'isDisabled') {
           action = isDisabled ? 'user.disabled' : 'user.enabled';
         } else if (changedFields[0] === 'role') {
@@ -601,7 +600,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: fullUser.name || currentName,
           secondaryLabel: fullUser.username || currentUsername,
-          changedFields: changedFields.length > 0 ? changedFields : undefined,
+          changedFields,
           fromValue: role !== undefined ? currentRole : undefined,
           toValue: role !== undefined ? fullUser.role : undefined,
         },
@@ -794,12 +793,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const clientIdsResult = optionalArrayOfStrings(clientIds, 'clientIds');
       if (!clientIdsResult.ok) return badRequest(reply, clientIdsResult.message);
+      const resolvedClientIds = clientIdsResult.value;
 
       const projectIdsResult = optionalArrayOfStrings(projectIds, 'projectIds');
       if (!projectIdsResult.ok) return badRequest(reply, projectIdsResult.message);
+      const resolvedProjectIds = projectIdsResult.value;
 
       const taskIdsResult = optionalArrayOfStrings(taskIds, 'taskIds');
       if (!taskIdsResult.ok) return badRequest(reply, taskIdsResult.message);
+      const resolvedTaskIds = taskIdsResult.value;
 
       const [targetUser, isTopManager] = await Promise.all([
         usersRepo.findCoreById(idResult.value),
@@ -812,10 +814,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           error: 'Top Manager assignments are managed automatically and cannot be edited manually',
         });
       }
-
-      const resolvedClientIds = (clientIdsResult as { ok: true; value: string[] | null }).value;
-      const resolvedProjectIds = (projectIdsResult as { ok: true; value: string[] | null }).value;
-      const resolvedTaskIds = (taskIdsResult as { ok: true; value: string[] | null }).value;
 
       await withDbTransaction(async (tx) => {
         if (clientIds) {
@@ -846,10 +844,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         if (projectIds || clientIds) {
-          await usersRepo.clearProjectCascadeAssignments(idResult.value, tx);
+          await clearProjectCascadeAssignments(idResult.value, tx);
         }
 
-        await usersRepo.applyProjectCascadeToClients(idResult.value, tx);
+        await applyProjectCascadeToClients(idResult.value, tx);
       });
 
       await logAudit({

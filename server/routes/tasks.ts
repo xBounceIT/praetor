@@ -4,25 +4,25 @@ import { authenticateToken, requireAnyPermission, requirePermission } from '../m
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
 import {
-  messageResponseSchema,
-  standardErrorResponses,
-  standardRateLimitedErrorResponses,
-} from '../schemas/common.ts';
-import { deriveToggleAction, logAudit } from '../utils/audit.ts';
-import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { todayLocalDateOnly } from '../utils/date.ts';
-import { ForeignKeyError } from '../utils/http-errors.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import {
   assignClientToTopManagers,
   assignClientToUser,
   assignProjectToTopManagers,
   assignProjectToUser,
   assignTaskToTopManagers,
   assignTaskToUser,
-} from '../utils/top-manager-assignments.ts';
+} from '../repositories/userAssignmentsRepo.ts';
+import {
+  messageResponseSchema,
+  standardErrorResponses,
+  standardRateLimitedErrorResponses,
+} from '../schemas/common.ts';
+import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
+import { ForeignKeyError } from '../utils/http-errors.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
+import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalDateString,
@@ -217,12 +217,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const clientId = await projectsRepo.findClientId(projectIdResult.value);
 
-        if (clientId) await assignClientToUser(request.user.id, clientId);
-        await assignProjectToUser(request.user.id, projectIdResult.value);
-        await assignTaskToUser(request.user.id, id);
-        if (clientId) await assignClientToTopManagers(clientId);
-        await assignProjectToTopManagers(projectIdResult.value);
-        await assignTaskToTopManagers(id);
+        await Promise.all(
+          [
+            clientId ? assignClientToUser(request.user.id, clientId) : null,
+            assignProjectToUser(request.user.id, projectIdResult.value),
+            assignTaskToUser(request.user.id, id),
+            clientId ? assignClientToTopManagers(clientId) : null,
+            assignProjectToTopManagers(projectIdResult.value),
+            assignTaskToTopManagers(id),
+          ].filter((p): p is Promise<void> => p !== null),
+        );
         await logAudit({
           request,
           action: 'task.created',
@@ -438,19 +442,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
-      const changedFields = [
-        name !== undefined ? 'name' : null,
-        description !== undefined ? 'description' : null,
-        isRecurring !== undefined ? 'isRecurring' : null,
-        recurrencePattern !== undefined ? 'recurrencePattern' : null,
-        recurrenceStart !== undefined ? 'recurrenceStart' : null,
-        recurrenceEnd !== undefined ? 'recurrenceEnd' : null,
-        recurrenceDuration !== undefined ? 'recurrenceDuration' : null,
-        isDisabled !== undefined ? 'isDisabled' : null,
-      ].filter((field): field is string => field !== null);
-
       const action = deriveToggleAction(
-        changedFields,
+        getAuditChangedFields({
+          name,
+          description,
+          isRecurring,
+          recurrencePattern,
+          recurrenceStart,
+          recurrenceEnd,
+          recurrenceDuration,
+          isDisabled,
+        }),
         'isDisabled',
         'task.updated',
         'task.disabled',

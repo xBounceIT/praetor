@@ -176,8 +176,9 @@ export const update = async (
 
   if (patch.previousValue !== patch.value) {
     const fieldName = VALUE_FIELD_BY_CATEGORY[category];
-    // Cross-table cascade into `clients` (un-modeled until PR 6). `sql.identifier` pulls
-    // the column from the internal allowlist — no caller input ever reaches the SQL identifier.
+    // Cross-table cascade into `clients`. `sql.identifier` pulls the column from the
+    // internal `VALUE_FIELD_BY_CATEGORY` allowlist — no caller input reaches the SQL
+    // identifier.
     await executeRows(
       exec,
       sql`UPDATE clients SET ${sql.identifier(fieldName)} = ${patch.value}

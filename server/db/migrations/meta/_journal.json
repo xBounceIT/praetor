@@ -127,6 +127,13 @@
       "when": 1777820744011,
       "tag": "0017_claim_report_chat_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1777832429529,
+      "tag": "0018_model_remaining_constraints_and_fks",
+      "breakpoints": true
     }
   ]
 }

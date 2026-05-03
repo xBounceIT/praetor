@@ -3,12 +3,8 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { parseDbNumber, toDbText } from '../utils/parse.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
 
-// Aggregation rows project COALESCE'd numerics, so 0 is the right fallback for missing rows.
-// `parseDbNumber(v, 0)` is the Phase 3 convention; the previous `toNumber` alias has been
-// dropped to keep this file aligned with the rest of the converted repos.
-// `toDbText` (trim + fallback to '') is preserved because reportsHoursRepo reads from
-// un-modeled tables (`projects`/`clients`/`users`) where nullability isn't asserted via
-// Drizzle types and the trim-and-default contract is still useful.
+// Raw SQL via `executeRows` bypasses Drizzle's typed null-handling — `toDbText` (trim + ''
+// fallback) is applied manually so stray whitespace doesn't render awkward cells in the UI.
 
 type ProjectRow = {
   id: string;

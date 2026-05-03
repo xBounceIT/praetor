@@ -1,5 +1,10 @@
 import bcrypt from 'bcryptjs';
-import pool from './db/index.ts';
+import pool from '../db/index.ts';
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('Refusing to run fix-password.ts against a production database.');
+  process.exit(1);
+}
 
 async function fixPassword() {
   try {

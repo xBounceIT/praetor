@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import pg from 'pg';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
@@ -15,6 +14,9 @@ const envInt = (key: string, fallback: number) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+// The pg pool that backs `db/drizzle.ts`'s `db` instance. Exported for the few non-Drizzle
+// call sites that still need raw pg access (seed scripts, the report dataset adapter in
+// `routes/reports.ts`). Application repository code goes through Drizzle.
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),
@@ -30,8 +32,11 @@ pool.on('error', (err) => {
   logger.error({ err: serializeError(err) }, 'Unexpected error on idle database client');
 });
 
+// Used only by the demo-seed bootstrap scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`),
+// which intentionally bypass Drizzle for predictable raw-SQL inserts.
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 
+// Helper for the demo seed's bulk inserts.
 export const buildBulkInsertPlaceholders = (
   rowCount: number,
   fieldsPerRow: number,
@@ -45,39 +50,6 @@ export const buildBulkInsertPlaceholders = (
     rows[i] = `(${slots.join(', ')})`;
   }
   return rows.join(', ');
-};
-
-export type QueryExecutor = {
-  query: <T extends QueryResultRow = QueryResultRow>(
-    text: string,
-    params?: unknown[],
-  ) => Promise<QueryResult<T>>;
-};
-
-export const withTransaction = async <T>(callback: (client: PoolClient) => Promise<T>) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackErr) {
-      logger.error(
-        {
-          err: serializeError(rollbackErr),
-          originalErr: serializeError(err),
-        },
-        'Failed to rollback database transaction',
-      );
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
 };
 
 export default pool;

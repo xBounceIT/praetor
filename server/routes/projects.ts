@@ -3,6 +3,12 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import {
+  assignClientToTopManagers,
+  assignClientToUser,
+  assignProjectToTopManagers,
+  assignProjectToUser,
+} from '../repositories/userAssignmentsRepo.ts';
+import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
@@ -13,12 +19,6 @@ import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import {
-  assignClientToTopManagers,
-  assignClientToUser,
-  assignProjectToTopManagers,
-  assignProjectToUser,
-} from '../utils/top-manager-assignments.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -162,10 +162,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           orderId: orderId || null,
         });
 
-        await assignClientToUser(request.user.id, clientIdResult.value);
-        await assignProjectToUser(request.user.id, id);
-        await assignClientToTopManagers(clientIdResult.value);
-        await assignProjectToTopManagers(id);
+        await Promise.all([
+          assignClientToUser(request.user.id, clientIdResult.value),
+          assignProjectToUser(request.user.id, id),
+          assignClientToTopManagers(clientIdResult.value),
+          assignProjectToTopManagers(id),
+        ]);
         await logAudit({
           request,
           action: 'project.created',

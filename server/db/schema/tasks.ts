@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   numeric,
   pgTable,
@@ -9,14 +10,15 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { projects } from './projects.ts';
+import { users } from './users.ts';
 
-// Project work items. `project_id` has a runtime FK to `projects(id)` (not modeled in TS yet)
-// — same carve-out as `notifications.user_id`. CHECK constraint on `recurrence_pattern` is
-// managed via the historical `add_*` migrations and stays at the DB level.
 export const tasks = pgTable('tasks', {
   id: varchar('id', { length: 50 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  projectId: varchar('project_id', { length: 50 }).notNull(),
+  projectId: varchar('project_id', { length: 50 })
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
   description: text('description'),
   isRecurring: boolean('is_recurring').default(false),
   recurrencePattern: varchar('recurrence_pattern', { length: 50 }),
@@ -30,17 +32,28 @@ export const tasks = pgTable('tasks', {
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
-// Many-to-many users ↔ tasks. `user_id` has a runtime FK to `users(id)` (not modeled in TS yet).
-// CHECK constraint on `assignment_source` is enforced at the DB level.
+// Many-to-many users ↔ tasks with assignment provenance. Mirrors `userClients` and
+// `userProjects`.
 export const userTasks = pgTable(
   'user_tasks',
   {
-    userId: varchar('user_id', { length: 50 }).notNull(),
+    userId: varchar('user_id', { length: 50 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     taskId: varchar('task_id', { length: 50 })
       .notNull()
       .references(() => tasks.id, { onDelete: 'cascade' }),
-    assignmentSource: varchar('assignment_source', { length: 20 }).notNull().default('manual'),
+    assignmentSource: varchar('assignment_source', { length: 20 })
+      .$type<'manual' | 'top_manager_auto' | 'project_cascade'>()
+      .notNull()
+      .default('manual'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.taskId] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.taskId] }),
+    check(
+      'user_tasks_assignment_source_check',
+      sql`${table.assignmentSource} IN ('manual', 'top_manager_auto', 'project_cascade')`,
+    ),
+  ],
 );

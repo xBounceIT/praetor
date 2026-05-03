@@ -1,21 +1,58 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
+import { clients } from './clients.ts';
+import { users } from './users.ts';
 
-// FK references on `clientId` (→ clients, modeled in PR 6) and `orderId` (→ sales, already
-// modeled) are intentionally omitted: per the Phase 3 migration plan, FKs to tables not yet
-// modeled (or modeled in the same tier) stay declared only in `schema.sql`. The retroactive
-// `.references(...)` backfill is a deferred follow-up.
 export const projects = pgTable(
   'projects',
   {
     id: varchar('id', { length: 50 }).primaryKey(),
     name: varchar('name', { length: 255 }).notNull(),
-    clientId: varchar('client_id', { length: 50 }).notNull(),
+    clientId: varchar('client_id', { length: 50 })
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
     color: varchar('color', { length: 20 }).notNull().default('#3b82f6'),
     description: text('description'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    // `order_id` is a soft pointer to a sale; FK is intentionally omitted because sales rows
+    // can be deleted while preserving the project record.
     orderId: varchar('order_id', { length: 100 }),
   },
   (table) => [index('idx_projects_client_id').on(table.clientId)],
+);
+
+// Many-to-many users ↔ projects with assignment provenance. Mirrors `userClients` and
+// `userTasks` — `assignment_source` distinguishes manual rows from auto-managed rows.
+export const userProjects = pgTable(
+  'user_projects',
+  {
+    userId: varchar('user_id', { length: 50 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: varchar('project_id', { length: 50 })
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    assignmentSource: varchar('assignment_source', { length: 20 })
+      .$type<'manual' | 'top_manager_auto' | 'project_cascade'>()
+      .notNull()
+      .default('manual'),
+    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.projectId] }),
+    check(
+      'user_projects_assignment_source_check',
+      sql`${table.assignmentSource} IN ('manual', 'top_manager_auto', 'project_cascade')`,
+    ),
+  ],
 );

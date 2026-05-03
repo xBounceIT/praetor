@@ -9,6 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { products } from './products.ts';
 import { suppliers } from './suppliers.ts';
 
 // The route layer normalizes legacy status values ('received' → 'sent', 'approved' → 'accepted',
@@ -39,8 +40,8 @@ export const supplierQuotes = pgTable(
   ],
 );
 
-// `product_id` runtime FK to `products(id) ON DELETE RESTRICT` (un-modeled — products is in
-// Tier 5).
+// `product_id` is nullable: supplier quotes can carry free-form items not pinned to a catalog
+// product.
 export const supplierQuoteItems = pgTable(
   'supplier_quote_items',
   {
@@ -48,7 +49,9 @@ export const supplierQuoteItems = pgTable(
     quoteId: varchar('quote_id', { length: 100 })
       .notNull()
       .references(() => supplierQuotes.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    productId: varchar('product_id', { length: 50 }),
+    productId: varchar('product_id', { length: 50 }).references(() => products.id, {
+      onDelete: 'restrict',
+    }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),

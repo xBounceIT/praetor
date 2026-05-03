@@ -4,6 +4,10 @@ import { authenticateToken, requireAnyPermission, requirePermission } from '../m
 import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import {
+  assignClientToTopManagers,
+  assignClientToUser,
+} from '../repositories/userAssignmentsRepo.ts';
+import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
@@ -14,7 +18,6 @@ import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import { assignClientToTopManagers, assignClientToUser } from '../utils/top-manager-assignments.ts';
 import {
   badRequest,
   optionalEmail,

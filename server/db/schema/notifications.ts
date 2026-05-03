@@ -1,11 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { users } from './users.ts';
 
 export const notifications = pgTable(
   'notifications',
   {
     id: varchar('id', { length: 50 }).primaryKey(),
-    userId: varchar('user_id', { length: 50 }).notNull(),
+    userId: varchar('user_id', { length: 50 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     type: varchar('type', { length: 50 }).notNull(),
     title: varchar('title', { length: 255 }).notNull(),
     message: text('message'),

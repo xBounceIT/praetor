@@ -7,7 +7,7 @@ import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
-} from '../utils/top-manager-assignments.ts';
+} from './userAssignmentsRepo.ts';
 
 export type Project = {
   id: string;
@@ -39,7 +39,6 @@ export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
 };
 
 export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Project[]> => {
-  // user_projects is un-modeled (Tier 5+); raw SQL with named-key rows.
   type Row = {
     id: string;
     name: string;

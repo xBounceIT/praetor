@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import pool from './db/index.ts';
+import pool from '../db/index.ts';
 
 async function checkAuth() {
   try {
