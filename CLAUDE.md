@@ -39,7 +39,7 @@ bun run start        # Run compiled server
 - Server returns new token in `x-auth-token` header on each request
 
 ### Database
-- PostgreSQL accessed via Drizzle ORM (`server/db/schema/`); migration is incremental, so some repositories still use the raw `pg` driver with parameterized SQL
+- PostgreSQL accessed via Drizzle ORM (`server/db/schema/`); every repository goes through Drizzle (`db/drizzle.ts` exports the `db` instance, the `DbExecutor` type, and the `withDbTransaction` / `executeRows` helpers).
 - Snake_case in DB → camelCase in API responses
 
 ### Database migrations
@@ -62,9 +62,9 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - Pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
 
 ### Repositories (data access)
-SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers. Migration is incremental — `notificationsRepo.ts` is the reference implementation; new SQL should follow this pattern, and existing inline SQL should move when its route file is touched.
+SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers.
 
-- Each function takes an optional `QueryExecutor` parameter (default `pool`) so it works both standalone and inside `withTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/index.ts`.
+- Each function takes an optional `DbExecutor` parameter (default `db`) so it works both standalone and inside `withDbTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/drizzle.ts`.
 - Row types and any `mapXxxRow` helpers live in the repo file alongside the SQL they belong to.
 - Routes import the repo as a namespace: `import * as notificationsRepo from '../repositories/notificationsRepo.ts'`.
 - Repos return domain shapes (camelCase, parsed numbers, mapped enums); they do not touch `request`, `reply`, validation, or HTTP status codes.

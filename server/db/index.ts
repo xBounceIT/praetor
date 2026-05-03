@@ -14,9 +14,12 @@ const envInt = (key: string, fallback: number) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-// The pg pool that backs `db/drizzle.ts`'s `db` instance. Exported for the few non-Drizzle
-// call sites that still need raw pg access (seed scripts, the report dataset adapter in
-// `routes/reports.ts`). Application repository code goes through Drizzle.
+// The pg pool that backs `db/drizzle.ts`'s `db` instance. Exported so that:
+//   - the demo-seed scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`) and the legacy
+//     `db/add_*.ts` artifacts can issue raw parameterized queries via `query` below;
+//   - `routes/reports.ts` can build a separate `drizzle(pool, …)` instance with a query-
+//     count `logger`, so per-request dataset budgets stay enforced.
+// Application repository code goes through the shared `db` from `db/drizzle.ts`.
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),

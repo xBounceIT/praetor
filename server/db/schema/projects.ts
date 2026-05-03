@@ -24,8 +24,10 @@ export const projects = pgTable(
     description: text('description'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    // `order_id` is a soft pointer to a sale; FK is intentionally omitted because sales rows
-    // can be deleted while preserving the project record.
+    // `order_id` → `sales.id` FK lives only in `schema.sql` (`ON DELETE SET NULL`, auto-named
+    // `projects_order_id_fkey`); intentionally not modeled here so the projects schema doesn't
+    // import from sales. `projectsRepo` still keys off the constraint name when handling FK
+    // violation errors.
     orderId: varchar('order_id', { length: 100 }),
   },
   (table) => [index('idx_projects_client_id').on(table.clientId)],
