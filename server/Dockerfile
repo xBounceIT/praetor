@@ -1,11 +1,11 @@
 # STAGE 1: Install dependencies
-FROM oven/bun:1.3.12 AS install
+FROM oven/bun:1.3.13 AS install
 WORKDIR /temp
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # STAGE 2: Production
-FROM oven/bun:1.3.12-slim AS release
+FROM oven/bun:1.3.13-slim AS release
 WORKDIR /app
 
 COPY --from=install /temp/node_modules node_modules
