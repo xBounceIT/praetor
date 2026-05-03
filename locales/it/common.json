@@ -248,7 +248,8 @@
     "decreaseFont": "Riduci dimensione testo",
     "columnSettings": "Impostazioni colonne",
     "columns": "Colonne",
-    "resetColumns": "Ripristina colonne"
+    "resetColumns": "Ripristina colonne",
+    "empty": "N/A"
   },
   "select": {
     "placeholder": "Seleziona...",
