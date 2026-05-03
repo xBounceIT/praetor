@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import * as settingsRepo from '../../repositories/settingsRepo.ts';
-import { optionalEnum } from '../../utils/validation.ts';
+import { optionalEnum, parseOptionalStringFields } from '../../utils/validation.ts';
 
 describe('optionalEnum', () => {
   test('returns null value for undefined', () => {
@@ -44,6 +44,53 @@ describe('optionalEnum', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.message).toContain('must be a string');
+    }
+  });
+});
+
+describe('parseOptionalStringFields', () => {
+  test('returns empty values when no listed fields are present on body', () => {
+    const result = parseOptionalStringFields({}, ['phone', 'address'] as const);
+    expect(result).toEqual({ ok: true, values: {} });
+  });
+
+  test('omits absent fields and validates only the present ones', () => {
+    const result = parseOptionalStringFields({ phone: '  555  ' }, ['phone', 'address'] as const);
+    expect(result).toEqual({ ok: true, values: { phone: '555' } });
+  });
+
+  test('preserves explicit null and empty-string as null in values', () => {
+    const result = parseOptionalStringFields({ phone: null, address: '' }, [
+      'phone',
+      'address',
+    ] as const);
+    expect(result).toEqual({ ok: true, values: { phone: null, address: null } });
+  });
+
+  test('uses Object.hasOwn so prototype-inherited fields are ignored', () => {
+    const proto = { phone: '555' };
+    const body = Object.create(proto) as Record<string, unknown>;
+    const result = parseOptionalStringFields(body, ['phone'] as const);
+    expect(result).toEqual({ ok: true, values: {} });
+  });
+
+  test('returns ok:false with the failing field name and message', () => {
+    const result = parseOptionalStringFields({ phone: 42 }, ['phone', 'address'] as const);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.field).toBe('phone');
+      expect(result.message).toContain('phone');
+    }
+  });
+
+  test('short-circuits on first failure and does not validate later fields', () => {
+    const result = parseOptionalStringFields({ phone: 42, address: 99 }, [
+      'phone',
+      'address',
+    ] as const);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.field).toBe('phone');
     }
   });
 });

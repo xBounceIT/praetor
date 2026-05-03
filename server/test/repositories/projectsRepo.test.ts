@@ -3,15 +3,16 @@ import { DatabaseError } from 'pg';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as projectsRepo from '../../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
+import { ForeignKeyError } from '../../utils/http-errors.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
+// Local destructure: the namespace import satisfies CLAUDE.md, and shorter names keep the
+// per-row assertion bodies readable.
 const {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
 } = userAssignmentsRepo;
-
-import { ForeignKeyError } from '../../utils/http-errors.ts';
-import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
