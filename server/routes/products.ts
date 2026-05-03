@@ -986,14 +986,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           tx,
         );
         if (!sub) return null;
-        const updatedCount = await productsRepo.propagateSubcategoryNameToProducts(
+        await productsRepo.propagateSubcategoryNameToProducts(
           oldNameResult.value,
           newNameResult.value,
           typeResult.value,
           categoryResult.value,
           tx,
         );
-        return { subId: sub.id, productCount: updatedCount };
+        return { subId: sub.id };
       });
 
       if (!result) {
@@ -1011,9 +1011,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
+      // Count after the transaction: `products.subcategory` is free-form (no FK to
+      // internal_product_subcategories), so the propagation rowcount alone can under-report
+      // when pre-existing rows already used `newName`.
+      const productCount = await productsRepo.countProductsForSubcategory(
+        newNameResult.value,
+        typeResult.value,
+        categoryResult.value,
+      );
+
       return {
         name: newNameResult.value,
-        productCount: result.productCount,
+        productCount,
         hasLinkedProducts: false, // Rename only succeeds if no products were linked to transactions
       };
     },

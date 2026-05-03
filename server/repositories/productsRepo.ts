@@ -807,6 +807,26 @@ export const deleteInternalSubcategoryByCategoryAndName = async (
   return rows[0] ?? null;
 };
 
+export const countProductsForSubcategory = async (
+  name: string,
+  type: string,
+  category: string,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const [row] = await exec
+    .select({ value: count() })
+    .from(products)
+    .where(
+      and(
+        eq(products.type, type),
+        eq(products.category, category),
+        isNull(products.supplierId),
+        eq(products.subcategory, name),
+      ),
+    );
+  return row?.value ?? 0;
+};
+
 // ===========================================================================
 // Cross-domain link checks
 // ===========================================================================

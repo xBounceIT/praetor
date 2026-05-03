@@ -692,6 +692,28 @@ describe('propagateSubcategoryNameToProducts / clearProductsSubcategoryByName / 
   });
 });
 
+describe('countProductsForSubcategory', () => {
+  test('parses count and filters by type/category/subcategory with supplier_id IS NULL', async () => {
+    exec.enqueue({ rows: [['3']] });
+    expect(await productsRepo.countProductsForSubcategory('sub-a', 'good', 'cat-a', testDb)).toBe(
+      3,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"supplier_id" is null');
+    expect(sql).toContain('"subcategory"');
+    expect(exec.calls[0].params).toContain('good');
+    expect(exec.calls[0].params).toContain('cat-a');
+    expect(exec.calls[0].params).toContain('sub-a');
+  });
+
+  test('returns 0 when no row', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await productsRepo.countProductsForSubcategory('sub-a', 'good', 'cat-a', testDb)).toBe(
+      0,
+    );
+  });
+});
+
 // ===========================================================================
 // Cross-domain link checks
 // ===========================================================================
