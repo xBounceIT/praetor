@@ -26,9 +26,3 @@ export const getUniqueViolation = (err: unknown): DatabaseError | null => findBy
 
 export const getForeignKeyViolation = (err: unknown): DatabaseError | null =>
   findByCode(err, '23503');
-
-export const isUniqueViolation = (err: unknown): err is DatabaseError =>
-  getUniqueViolation(err) !== null;
-
-export const isForeignKeyViolation = (err: unknown): err is DatabaseError =>
-  getForeignKeyViolation(err) !== null;

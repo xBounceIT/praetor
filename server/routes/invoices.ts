@@ -4,7 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { getUniqueViolation, isForeignKeyViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -609,7 +609,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(204).send();
       } catch (err) {
-        if (isForeignKeyViolation(err)) {
+        if (getForeignKeyViolation(err)) {
           return reply.code(409).send({
             error: 'Cannot delete invoice because it is referenced by other records',
           });

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { DatabaseError } from 'pg';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as projectsRepo from '../../repositories/projectsRepo.ts';
+import { ForeignKeyError } from '../../utils/http-errors.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
@@ -145,6 +147,54 @@ describe('create', () => {
     );
     expect(exec.calls[0].params).toContain('so-7');
     expect(created.orderId).toBe('so-7');
+  });
+
+  // Drizzle wraps driver errors in DrizzleQueryError with the original DatabaseError on .cause.
+  // The repo must unwrap to read .constraint, otherwise it can't distinguish order-FK from
+  // client-FK violations.
+  const newProjectInput: projectsRepo.NewProject = {
+    id: 'p-1',
+    name: 'Alpha',
+    clientId: 'c-1',
+    color: '#3b82f6',
+    description: 'desc',
+    isDisabled: false,
+    orderId: 'so-bad',
+  };
+
+  const fkDatabaseError = (constraint: string): DatabaseError => {
+    const err = new DatabaseError('foreign key violation', 0, 'error');
+    err.code = '23503';
+    err.constraint = constraint;
+    return err;
+  };
+
+  test('FK violation on projects_order_id_fkey throws ForeignKeyError("Linked order")', async () => {
+    exec.enqueue(() => {
+      throw fkDatabaseError('projects_order_id_fkey');
+    });
+    let thrown: unknown;
+    try {
+      await projectsRepo.create(newProjectInput, testDb);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(ForeignKeyError);
+    expect((thrown as ForeignKeyError).target).toBe('Linked order');
+  });
+
+  test('FK violation on client constraint throws ForeignKeyError("Client")', async () => {
+    exec.enqueue(() => {
+      throw fkDatabaseError('projects_client_id_fkey');
+    });
+    let thrown: unknown;
+    try {
+      await projectsRepo.create(newProjectInput, testDb);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(ForeignKeyError);
+    expect((thrown as ForeignKeyError).target).toBe('Client');
   });
 });
 

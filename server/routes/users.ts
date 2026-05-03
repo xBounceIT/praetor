@@ -13,7 +13,7 @@ import {
 } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
@@ -366,7 +366,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isAdminOnly: roleValue === ADMIN_ROLE_ID,
         });
       } catch (err) {
-        if (isUniqueViolation(err)) {
+        if (getUniqueViolation(err)) {
           return badRequest(reply, 'Username already exists');
         }
         throw err;
