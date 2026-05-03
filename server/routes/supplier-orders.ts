@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withTransaction } from '../db/index.ts';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId, generateSupplierOrderId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -297,7 +297,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: supplierOrdersRepo.SupplierOrderItem[];
       };
       try {
-        result = await withTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx) => {
           const order = await supplierOrdersRepo.create(
             {
               id: orderId,
@@ -315,17 +315,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx);
+          const createdItems = await supplierOrdersRepo.insertItems(order.id, normalizedItems, tx);
           return { order, items: createdItems };
         });
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          if (error.constraint === 'supplier_sales_pkey' || error.detail?.includes('(id)')) {
+        const dup = getUniqueViolation(error);
+        if (dup) {
+          if (dup.constraint === 'supplier_sales_pkey' || dup.detail?.includes('(id)')) {
             return reply.code(409).send({ error: 'Order ID already exists' });
           }
           if (
-            error.constraint === 'idx_supplier_sales_linked_quote_id_unique' ||
-            error.detail?.includes('(linked_quote_id)')
+            dup.constraint === 'idx_supplier_sales_linked_quote_id_unique' ||
+            dup.detail?.includes('(linked_quote_id)')
           ) {
             return reply
               .code(409)
@@ -490,7 +491,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let updated: supplierOrdersRepo.SupplierOrder | null;
       let resultItems: supplierOrdersRepo.SupplierOrderItem[];
       try {
-        const txResult = await withTransaction(async (tx) => {
+        const txResult = await withDbTransaction(async (tx) => {
           const order = await supplierOrdersRepo.update(idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
           const finalItems = normalizedItems
@@ -501,10 +502,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updated = txResult.order;
         resultItems = txResult.items;
       } catch (error) {
-        if (
-          isUniqueViolation(error) &&
-          (error.constraint === 'supplier_sales_pkey' || error.detail?.includes('(id)'))
-        ) {
+        const dup = getUniqueViolation(error);
+        if (dup && (dup.constraint === 'supplier_sales_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Order ID already exists' });
         }
         throw error;

@@ -10,7 +10,7 @@ import {
 } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -506,14 +506,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(client);
       } catch (err) {
-        if (isUniqueViolation(err)) {
-          if (err.constraint === 'idx_clients_fiscal_code_unique') {
+        const dup = getUniqueViolation(err);
+        if (dup) {
+          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
             return badRequest(reply, 'Fiscal code already exists');
           }
-          if (err.constraint === 'idx_clients_client_code_unique') {
+          if (dup.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (err.detail?.includes('client_code')) {
+          if (dup.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'Fiscal code already exists');
@@ -804,14 +805,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return client;
       } catch (err) {
-        if (isUniqueViolation(err)) {
-          if (err.constraint === 'idx_clients_fiscal_code_unique') {
+        const dup = getUniqueViolation(err);
+        if (dup) {
+          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
             return badRequest(reply, 'Fiscal code already exists');
           }
-          if (err.constraint === 'idx_clients_client_code_unique') {
+          if (dup.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (err.detail?.includes('client_code')) {
+          if (dup.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'Fiscal code already exists');

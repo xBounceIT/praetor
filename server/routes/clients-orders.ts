@@ -5,7 +5,7 @@ import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isUniqueViolation } from '../utils/db-errors.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import {
   generateClientOrderId,
   generateItemId,
@@ -457,13 +457,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdOrder = result.order;
         insertedItems = result.items;
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
+        const dup = getUniqueViolation(error);
+        if (dup) {
+          if (dup.constraint === 'sales_pkey' || dup.detail?.includes('(id)')) {
             return reply.code(409).send({ error: 'Order ID already exists' });
           }
           if (
-            error.constraint === 'idx_sales_linked_offer_id_unique' ||
-            error.detail?.includes('(linked_offer_id)')
+            dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)')
           ) {
             return reply.code(409).send({ error: 'A sale order already exists for this offer' });
           }
@@ -849,13 +850,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { order, items: nextItems };
         });
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          if (error.constraint === 'sales_pkey' || error.detail?.includes('(id)')) {
+        const dup = getUniqueViolation(error);
+        if (dup) {
+          if (dup.constraint === 'sales_pkey' || dup.detail?.includes('(id)')) {
             return reply.code(409).send({ error: 'Order ID already exists' });
           }
           if (
-            error.constraint === 'idx_sales_linked_offer_id_unique' ||
-            error.detail?.includes('(linked_offer_id)')
+            dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)')
           ) {
             return reply.code(409).send({ error: 'A sale order already exists for this offer' });
           }

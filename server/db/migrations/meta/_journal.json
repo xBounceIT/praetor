@@ -92,6 +92,20 @@
       "when": 1777761992642,
       "tag": "0012_schema_parity_catchup",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777763538953,
+      "tag": "0013_claim_supplier_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777763578089,
+      "tag": "0014_claim_supplier_quotes",
+      "breakpoints": true
     }
   ]
 }
