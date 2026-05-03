@@ -26,8 +26,6 @@ export const projects = pgTable(
 
 export const userProjects = defineUserAssignmentTable({
   tableName: 'user_projects',
-  fkColumnName: 'project_id',
   fkColumnKey: 'projectId',
   fkTarget: () => projects.id,
-  checkName: 'user_projects_assignment_source_check',
 });

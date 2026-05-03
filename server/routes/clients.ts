@@ -28,6 +28,25 @@ const PROFILE_OPTION_CATEGORIES = clientProfileOptionsRepo.PROFILE_OPTION_CATEGO
 type ProfileOptionCategory = clientProfileOptionsRepo.ProfileOptionCategory;
 const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
 
+const PATCH_OPTIONAL_STRING_FIELDS = [
+  'phone',
+  'contactName',
+  'address',
+  'addressCountry',
+  'addressState',
+  'addressCap',
+  'addressProvince',
+  'addressCivicNumber',
+  'addressLine',
+  'description',
+  'atecoCode',
+  'website',
+  'sector',
+  'numberOfEmployees',
+  'revenue',
+  'officeCountRange',
+] as const;
+
 type ClientContactInput = {
   fullName: unknown;
   role?: unknown;
@@ -627,24 +646,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(body.email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      const optionalFields = parseOptionalStringFields(body, [
-        'phone',
-        'contactName',
-        'address',
-        'addressCountry',
-        'addressState',
-        'addressCap',
-        'addressProvince',
-        'addressCivicNumber',
-        'addressLine',
-        'description',
-        'atecoCode',
-        'website',
-        'sector',
-        'numberOfEmployees',
-        'revenue',
-        'officeCountRange',
-      ] as const);
+      const optionalFields = parseOptionalStringFields(body, PATCH_OPTIONAL_STRING_FIELDS);
       if (!optionalFields.ok) return badRequest(reply, optionalFields.message);
       const opt = optionalFields.values;
 

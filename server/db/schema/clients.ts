@@ -62,8 +62,6 @@ export const clients = pgTable(
 
 export const userClients = defineUserAssignmentTable({
   tableName: 'user_clients',
-  fkColumnName: 'client_id',
   fkColumnKey: 'clientId',
   fkTarget: () => clients.id,
-  checkName: 'user_clients_assignment_source_check',
 });
