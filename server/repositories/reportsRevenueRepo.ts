@@ -1,5 +1,6 @@
-import pool, { type QueryExecutor } from '../db/index.ts';
-import { toDbNumber as toNumber, toDbText as toText } from '../utils/parse.ts';
+import { sql } from 'drizzle-orm';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { toDbNumber, toDbText } from '../utils/parse.ts';
 
 export type RevenueDateRangeOptions = {
   fromDate: string;
@@ -24,20 +25,21 @@ export type QuotesSection = {
 
 export const getQuotesSection = async (
   opts: RevenueDateRangeOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<QuotesSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
   const [totals, byStatus, byMonth, topQuotes, topClients] = await Promise.all([
-    exec.query<{ count: string; total_net: string; avg_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ count: string; total_net: string; avg_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             q.id,
             SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
               * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
             FROM quotes q
             JOIN quote_items qi ON qi.quote_id = q.id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
         SELECT
@@ -45,10 +47,10 @@ export const getQuotesSection = async (
           COALESCE(SUM(net_value), 0) as total_net,
           COALESCE(AVG(net_value), 0) as avg_net
           FROM per_quote`,
-      [fromDate, toDate],
     ),
-    exec.query<{ status: string; count: string; total_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ status: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             q.id,
             q.status,
@@ -57,17 +59,17 @@ export const getQuotesSection = async (
             (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
             FROM quotes q
             JOIN quote_items qi ON qi.quote_id = q.id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
         SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
           FROM per_quote
          GROUP BY status
          ORDER BY count DESC`,
-      [fromDate, toDate],
     ),
-    exec.query<{ label: string; count: string; total_net: string }>(
-      `WITH per_quote AS (
+    executeRows<{ label: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             q.id,
             q.created_at,
@@ -75,7 +77,7 @@ export const getQuotesSection = async (
               * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
             FROM quotes q
             JOIN quote_items qi ON qi.quote_id = q.id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
         SELECT
@@ -85,16 +87,16 @@ export const getQuotesSection = async (
           FROM per_quote
          GROUP BY DATE_TRUNC('month', created_at)
          ORDER BY label ASC`,
-      [fromDate, toDate],
     ),
-    exec.query<{
+    executeRows<{
       id: string;
       client_name: string;
       status: string;
       net_value: string;
       created_at: string;
     }>(
-      `WITH per_quote AS (
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             q.id,
             q.client_name,
@@ -104,7 +106,7 @@ export const getQuotesSection = async (
               * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
             FROM quotes q
             JOIN quote_items qi ON qi.quote_id = q.id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
         SELECT
@@ -115,18 +117,18 @@ export const getQuotesSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_quote
          ORDER BY net_value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
-    exec.query<{ label: string; quote_count: string; value: string }>(
-      `WITH per_quote AS (
+    executeRows<{ label: string; quote_count: string; value: string }>(
+      exec,
+      sql`WITH per_quote AS (
           SELECT
             q.id,
             q.client_name,
             (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
             FROM quotes q
             JOIN quote_items qi ON qi.quote_id = q.id
-           WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
         SELECT
@@ -136,39 +138,41 @@ export const getQuotesSection = async (
           FROM per_quote
          GROUP BY client_name
          ORDER BY value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
   ]);
 
   return {
     totals: {
-      count: toNumber(totals.rows[0]?.count),
-      totalNet: toNumber(totals.rows[0]?.total_net),
-      avgNet: toNumber(totals.rows[0]?.avg_net),
+      count: toDbNumber(totals[0]?.count),
+      totalNet: toDbNumber(totals[0]?.total_net),
+      avgNet: toDbNumber(totals[0]?.avg_net),
     },
-    byMonth: byMonth.rows.map((r) => ({
-      label: toText(r.label),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byMonth: byMonth.map((r) => ({
+      label: toDbText(r.label),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    byStatus: byStatus.rows.map((r) => ({
-      status: toText(r.status),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byStatus: byStatus.map((r) => ({
+      status: toDbText(r.status),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    topQuotesByNet: topQuotes.rows.map((r) => ({
-      id: toText(r.id),
-      quoteCode: toText(r.id),
-      clientName: toText(r.client_name),
-      status: toText(r.status),
-      netValue: toNumber(r.net_value),
-      createdAt: toNumber(r.created_at),
-    })),
-    topClientsByNet: topClients.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
-      quoteCount: toNumber(r.quote_count),
+    topQuotesByNet: topQuotes.map((r) => {
+      const id = toDbText(r.id);
+      return {
+        id,
+        quoteCode: id,
+        clientName: toDbText(r.client_name),
+        status: toDbText(r.status),
+        netValue: toDbNumber(r.net_value),
+        createdAt: toDbNumber(r.created_at),
+      };
+    }),
+    topClientsByNet: topClients.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
+      quoteCount: toDbNumber(r.quote_count),
     })),
   };
 };
@@ -189,20 +193,21 @@ export type OrdersSection = {
 
 export const getOrdersSection = async (
   opts: RevenueDateRangeOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<OrdersSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
   const [totals, byStatus, byMonth, topOrders, topClients] = await Promise.all([
-    exec.query<{ count: string; total_net: string; avg_net: string }>(
-      `WITH per_order AS (
+    executeRows<{ count: string; total_net: string; avg_net: string }>(
+      exec,
+      sql`WITH per_order AS (
           SELECT
             s.id,
             SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
               * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY s.id
          )
         SELECT
@@ -210,10 +215,10 @@ export const getOrdersSection = async (
           COALESCE(SUM(net_value), 0) as total_net,
           COALESCE(AVG(net_value), 0) as avg_net
           FROM per_order`,
-      [fromDate, toDate],
     ),
-    exec.query<{ status: string; count: string; total_net: string }>(
-      `WITH per_order AS (
+    executeRows<{ status: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_order AS (
           SELECT
             s.id,
             s.status,
@@ -222,17 +227,17 @@ export const getOrdersSection = async (
             (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY s.id
          )
         SELECT status, COUNT(*) as count, COALESCE(SUM(net_value), 0) as total_net
           FROM per_order
          GROUP BY status
          ORDER BY count DESC`,
-      [fromDate, toDate],
     ),
-    exec.query<{ label: string; count: string; total_net: string }>(
-      `WITH per_order AS (
+    executeRows<{ label: string; count: string; total_net: string }>(
+      exec,
+      sql`WITH per_order AS (
           SELECT
             s.id,
             s.created_at,
@@ -240,7 +245,7 @@ export const getOrdersSection = async (
               * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY s.id
          )
         SELECT
@@ -250,16 +255,16 @@ export const getOrdersSection = async (
           FROM per_order
          GROUP BY DATE_TRUNC('month', created_at)
          ORDER BY label ASC`,
-      [fromDate, toDate],
     ),
-    exec.query<{
+    executeRows<{
       id: string;
       client_name: string;
       status: string;
       net_value: string;
       created_at: string;
     }>(
-      `WITH per_order AS (
+      exec,
+      sql`WITH per_order AS (
           SELECT
             s.id,
             s.client_name,
@@ -269,7 +274,7 @@ export const getOrdersSection = async (
               * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY s.id
          )
         SELECT
@@ -280,18 +285,18 @@ export const getOrdersSection = async (
           EXTRACT(EPOCH FROM created_at) * 1000 as created_at
           FROM per_order
          ORDER BY net_value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
-    exec.query<{ label: string; order_count: string; value: string }>(
-      `WITH per_order AS (
+    executeRows<{ label: string; order_count: string; value: string }>(
+      exec,
+      sql`WITH per_order AS (
           SELECT
             s.id,
             s.client_name,
             (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
-           WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
            GROUP BY s.id
          )
         SELECT
@@ -301,38 +306,37 @@ export const getOrdersSection = async (
           FROM per_order
          GROUP BY client_name
          ORDER BY value DESC
-         LIMIT $3`,
-      [fromDate, toDate, topLimit],
+         LIMIT ${topLimit}`,
     ),
   ]);
 
   return {
     totals: {
-      count: toNumber(totals.rows[0]?.count),
-      totalNet: toNumber(totals.rows[0]?.total_net),
-      avgNet: toNumber(totals.rows[0]?.avg_net),
+      count: toDbNumber(totals[0]?.count),
+      totalNet: toDbNumber(totals[0]?.total_net),
+      avgNet: toDbNumber(totals[0]?.avg_net),
     },
-    byMonth: byMonth.rows.map((r) => ({
-      label: toText(r.label),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byMonth: byMonth.map((r) => ({
+      label: toDbText(r.label),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    byStatus: byStatus.rows.map((r) => ({
-      status: toText(r.status),
-      count: toNumber(r.count),
-      totalNet: toNumber(r.total_net),
+    byStatus: byStatus.map((r) => ({
+      status: toDbText(r.status),
+      count: toDbNumber(r.count),
+      totalNet: toDbNumber(r.total_net),
     })),
-    topOrdersByNet: topOrders.rows.map((r) => ({
-      id: toText(r.id),
-      clientName: toText(r.client_name),
-      status: toText(r.status),
-      netValue: toNumber(r.net_value),
-      createdAt: toNumber(r.created_at),
+    topOrdersByNet: topOrders.map((r) => ({
+      id: toDbText(r.id),
+      clientName: toDbText(r.client_name),
+      status: toDbText(r.status),
+      netValue: toDbNumber(r.net_value),
+      createdAt: toDbNumber(r.created_at),
     })),
-    topClientsByNet: topClients.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
-      orderCount: toNumber(r.order_count),
+    topClientsByNet: topClients.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
+      orderCount: toDbNumber(r.order_count),
     })),
   };
 };
@@ -355,61 +359,62 @@ export type InvoicesSection = {
 
 export const getInvoicesSection = async (
   opts: RevenueDateRangeOptions,
-  exec: QueryExecutor = pool,
+  exec: DbExecutor = db,
 ): Promise<InvoicesSection> => {
   const { fromDate, toDate, topLimit } = opts;
 
   const [totals, byStatus, byMonth, aging, topInvoices, topClients] = await Promise.all([
-    exec.query<{
+    executeRows<{
       count: string;
       total_sum: string;
       outstanding_sum: string;
       paid_sum: string;
     }>(
-      `SELECT
+      exec,
+      sql`SELECT
           COUNT(*) as count,
           COALESCE(SUM(total), 0) as total_sum,
           COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum,
           COALESCE(SUM(amount_paid), 0) as paid_sum
          FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2`,
-      [fromDate, toDate],
+        WHERE issue_date >= ${fromDate} AND issue_date <= ${toDate}`,
     ),
-    exec.query<{
+    executeRows<{
       status: string;
       count: string;
       total_sum: string;
       outstanding_sum: string;
     }>(
-      `SELECT status,
+      exec,
+      sql`SELECT status,
               COUNT(*) as count,
               COALESCE(SUM(total), 0) as total_sum,
               COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
          FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2
+        WHERE issue_date >= ${fromDate} AND issue_date <= ${toDate}
         GROUP BY status
         ORDER BY count DESC`,
-      [fromDate, toDate],
     ),
-    exec.query<{
+    executeRows<{
       label: string;
       count: string;
       total_sum: string;
       outstanding_sum: string;
     }>(
-      `SELECT
+      exec,
+      sql`SELECT
           TO_CHAR(DATE_TRUNC('month', issue_date), 'YYYY-MM') as label,
           COUNT(*) as count,
           COALESCE(SUM(total), 0) as total_sum,
           COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
          FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2
+        WHERE issue_date >= ${fromDate} AND issue_date <= ${toDate}
         GROUP BY DATE_TRUNC('month', issue_date)
         ORDER BY label ASC`,
-      [fromDate, toDate],
     ),
-    exec.query<{ bucket: string; count: string; outstanding_sum: string }>(
-      `SELECT
+    executeRows<{ bucket: string; count: string; outstanding_sum: string }>(
+      exec,
+      sql`SELECT
           CASE
             WHEN CURRENT_DATE - due_date <= 30 THEN '0-30'
             WHEN CURRENT_DATE - due_date <= 60 THEN '31-60'
@@ -419,82 +424,84 @@ export const getInvoicesSection = async (
           COUNT(*) as count,
           COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
          FROM invoices
-        WHERE issue_date >= $1
-          AND issue_date <= $2
+        WHERE issue_date >= ${fromDate}
+          AND issue_date <= ${toDate}
           AND GREATEST(total - amount_paid, 0) > 0
         GROUP BY bucket
         ORDER BY bucket ASC`,
-      [fromDate, toDate],
     ),
-    exec.query<{
+    executeRows<{
       id: string;
       client_name: string;
       status: string;
       due_date: string;
       outstanding: string;
     }>(
-      `SELECT
+      exec,
+      sql`SELECT
           id,
           client_name,
           status,
           due_date,
           GREATEST(total - amount_paid, 0) as outstanding
          FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2
+        WHERE issue_date >= ${fromDate} AND issue_date <= ${toDate}
         ORDER BY outstanding DESC
-        LIMIT $3`,
-      [fromDate, toDate, topLimit],
+        LIMIT ${topLimit}`,
     ),
-    exec.query<{ label: string; invoice_count: string; value: string }>(
-      `SELECT
+    executeRows<{ label: string; invoice_count: string; value: string }>(
+      exec,
+      sql`SELECT
           client_name as label,
           COUNT(*) as invoice_count,
           COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as value
          FROM invoices
-        WHERE issue_date >= $1 AND issue_date <= $2
+        WHERE issue_date >= ${fromDate} AND issue_date <= ${toDate}
         GROUP BY client_name
         ORDER BY value DESC
-        LIMIT $3`,
-      [fromDate, toDate, topLimit],
+        LIMIT ${topLimit}`,
     ),
   ]);
 
   return {
     totals: {
-      count: toNumber(totals.rows[0]?.count),
-      total: toNumber(totals.rows[0]?.total_sum),
-      outstanding: toNumber(totals.rows[0]?.outstanding_sum),
-      paidAmount: toNumber(totals.rows[0]?.paid_sum),
+      count: toDbNumber(totals[0]?.count),
+      total: toDbNumber(totals[0]?.total_sum),
+      outstanding: toDbNumber(totals[0]?.outstanding_sum),
+      paidAmount: toDbNumber(totals[0]?.paid_sum),
     },
-    byMonth: byMonth.rows.map((r) => ({
-      label: toText(r.label),
-      count: toNumber(r.count),
-      total: toNumber(r.total_sum),
-      outstanding: toNumber(r.outstanding_sum),
+    byMonth: byMonth.map((r) => ({
+      label: toDbText(r.label),
+      count: toDbNumber(r.count),
+      total: toDbNumber(r.total_sum),
+      outstanding: toDbNumber(r.outstanding_sum),
     })),
-    aging: aging.rows.map((r) => ({
-      bucket: toText(r.bucket),
-      count: toNumber(r.count),
-      outstanding: toNumber(r.outstanding_sum),
+    aging: aging.map((r) => ({
+      bucket: toDbText(r.bucket),
+      count: toDbNumber(r.count),
+      outstanding: toDbNumber(r.outstanding_sum),
     })),
-    byStatus: byStatus.rows.map((r) => ({
-      status: toText(r.status),
-      count: toNumber(r.count),
-      total: toNumber(r.total_sum),
-      outstanding: toNumber(r.outstanding_sum),
+    byStatus: byStatus.map((r) => ({
+      status: toDbText(r.status),
+      count: toDbNumber(r.count),
+      total: toDbNumber(r.total_sum),
+      outstanding: toDbNumber(r.outstanding_sum),
     })),
-    topInvoicesByOutstanding: topInvoices.rows.map((r) => ({
-      id: toText(r.id),
-      invoiceNumber: toText(r.id),
-      clientName: toText(r.client_name),
-      status: toText(r.status),
-      dueDate: toText(r.due_date),
-      outstanding: toNumber(r.outstanding),
-    })),
-    topClientsByOutstanding: topClients.rows.map((r) => ({
-      label: toText(r.label),
-      value: toNumber(r.value),
-      invoiceCount: toNumber(r.invoice_count),
+    topInvoicesByOutstanding: topInvoices.map((r) => {
+      const id = toDbText(r.id);
+      return {
+        id,
+        invoiceNumber: id,
+        clientName: toDbText(r.client_name),
+        status: toDbText(r.status),
+        dueDate: toDbText(r.due_date),
+        outstanding: toDbNumber(r.outstanding),
+      };
+    }),
+    topClientsByOutstanding: topClients.map((r) => ({
+      label: toDbText(r.label),
+      value: toDbNumber(r.value),
+      invoiceCount: toDbNumber(r.invoice_count),
     })),
   };
 };

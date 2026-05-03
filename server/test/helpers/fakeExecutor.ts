@@ -16,6 +16,7 @@ type ResponseFactory = (sql: string, params: unknown[]) => FakeResponse;
 export type FakeExecutor = QueryExecutor & {
   readonly calls: readonly FakeCall[];
   enqueue: (response: FakeResponse | ResponseFactory) => void;
+  enqueueEmptyN: (n: number) => void;
 };
 
 export const makeFakeExecutor = (): FakeExecutor => {
@@ -26,6 +27,9 @@ export const makeFakeExecutor = (): FakeExecutor => {
     calls,
     enqueue(response) {
       queue.push(response);
+    },
+    enqueueEmptyN(n) {
+      for (let i = 0; i < n; i++) queue.push({ rows: [] });
     },
     async query<T extends QueryResultRow = QueryResultRow>(
       text: string,
