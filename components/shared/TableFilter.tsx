@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Checkbox from './Checkbox';
 import Tooltip from './Tooltip';
@@ -26,10 +26,13 @@ const TableFilter: React.FC<TableFilterProps> = ({
   const { t } = useTranslation('common');
   const [searchTerm, setSearchTerm] = useState('');
 
+  const displayLabel = useCallback((opt: string) => (opt === '' ? t('table.empty') : opt), [t]);
+
   const filteredOptions = useMemo(() => {
     if (!searchTerm) return options;
-    return options.filter((opt) => String(opt).toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [options, searchTerm]);
+    const needle = searchTerm.toLowerCase();
+    return options.filter((opt) => displayLabel(opt).toLowerCase().includes(needle));
+  }, [options, searchTerm, displayLabel]);
 
   const handleCheckboxChange = (value: string) => {
     const newSelected = selectedValues.includes(value)
@@ -132,9 +135,11 @@ const TableFilter: React.FC<TableFilterProps> = ({
                 checked={selectedValues.includes(opt)}
                 onChange={() => handleCheckboxChange(opt)}
               />
-              <Tooltip label={opt}>
+              <Tooltip label={displayLabel(opt)}>
                 {() => (
-                  <span className="text-[11px] text-slate-600 truncate select-none">{opt}</span>
+                  <span className="text-[11px] text-slate-600 truncate select-none">
+                    {displayLabel(opt)}
+                  </span>
                 )}
               </Tooltip>
             </label>

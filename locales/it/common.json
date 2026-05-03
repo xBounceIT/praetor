@@ -264,7 +264,8 @@
     "renameView": "Rinomina / modifica",
     "reorderViewHandle": "Trascina per riordinare",
     "selectAllCols": "Seleziona tutti",
-    "deselectAllCols": "Deseleziona tutti"
+    "deselectAllCols": "Deseleziona tutti",
+    "empty": "N/A"
   },
   "select": {
     "placeholder": "Seleziona...",

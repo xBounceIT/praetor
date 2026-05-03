@@ -398,6 +398,18 @@ const StandardTable = <T extends object>({
     return null;
   }, []);
 
+  // Normalize empty raw values to a single sentinel so the filter list shows
+  // one "N/A" entry instead of "", "null", "undefined" duplicates. Columns
+  // with their own `filterFormat` returning a placeholder (e.g. '-') are
+  // unaffected because their raw value isn't null/empty.
+  const formatForFilter = useCallback(
+    (rawVal: T[keyof T] | string | number | boolean | null | undefined, col: Column<T>): string => {
+      if (rawVal === null || rawVal === undefined || rawVal === '') return '';
+      return col.filterFormat ? col.filterFormat(rawVal) : String(rawVal);
+    },
+    [],
+  );
+
   // Derived Data
   const processedData = useMemo(() => {
     if (!data || !columns) return [];
@@ -411,7 +423,7 @@ const StandardTable = <T extends object>({
         if (col) {
           result = result.filter((row) => {
             const rawVal = getValue(row, col);
-            const val = col.filterFormat ? col.filterFormat(rawVal) : String(rawVal);
+            const val = formatForFilter(rawVal, col);
             return selectedValues.includes(val);
           });
         }
@@ -440,7 +452,7 @@ const StandardTable = <T extends object>({
     }
 
     return result;
-  }, [data, columns, filterState, sortState, getValue, getColId]);
+  }, [data, columns, filterState, sortState, getValue, getColId, formatForFilter]);
 
   // Pagination
   const totalItems = data ? processedData.length : externalTotalCount || 0;
@@ -458,7 +470,7 @@ const StandardTable = <T extends object>({
     const values = new Set<string>();
     data.forEach((row) => {
       const val = getValue(row, col);
-      values.add(col.filterFormat ? col.filterFormat(val) : String(val));
+      values.add(formatForFilter(val, col));
     });
     return Array.from(values).sort();
   };
@@ -1076,7 +1088,7 @@ const StandardTable = <T extends object>({
             {(paginatedData.length > 0 ||
               Object.keys(filterState).length > 0 ||
               sortState !== null) && (
-              <thead className="bg-slate-50 border-b border-slate-100">
+              <thead className="bg-slate-50">
                 <tr>
                   {visibleColumns.map((col, colIdx) => {
                     const colId = getColId(col);
@@ -1102,7 +1114,7 @@ const StandardTable = <T extends object>({
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
@@ -1174,58 +1186,61 @@ const StandardTable = <T extends object>({
                 </tr>
               </thead>
             )}
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {paginatedData.length > 0 ? (
-                paginatedData.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                    className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
-                  >
-                    {visibleColumns.map((col, colIdx) => {
-                      const colId = getColId(col);
-                      const val = getValue(row, col);
-                      const isFirstColumn = colIdx === 0;
-                      const isLastColumn = colIdx === visibleColumns.length - 1;
-                      // Force alignment: first column left, last column right, otherwise use col.align
-                      const effectiveAlign = isFirstColumn
-                        ? 'left'
-                        : isLastColumn
-                          ? 'right'
-                          : col.align;
-                      const colWidth = columnWidths[colId];
-                      return (
-                        <td
-                          key={colId}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            col.onCellDoubleClick?.(row);
-                          }}
-                          style={
-                            colWidth
-                              ? { width: colWidth, minWidth: colWidth }
-                              : col.sticky === 'right'
-                                ? { minWidth: '40px' }
-                                : undefined
-                          }
-                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto text-right' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
-                        >
-                          {col.sticky === 'right' ? (
-                            <div className="flex justify-end items-center w-full h-full">
-                              {col.cell
-                                ? col.cell({ getValue: () => val, row, value: val })
-                                : (val as ReactNode)}
-                            </div>
-                          ) : col.cell ? (
-                            col.cell({ getValue: () => val, row, value: val })
-                          ) : (
-                            (val as ReactNode)
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
+                paginatedData.map((row, idx) => {
+                  const isLastRow = idx === paginatedData.length - 1;
+                  return (
+                    <tr
+                      key={idx}
+                      onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
+                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
+                    >
+                      {visibleColumns.map((col, colIdx) => {
+                        const colId = getColId(col);
+                        const val = getValue(row, col);
+                        const isFirstColumn = colIdx === 0;
+                        const isLastColumn = colIdx === visibleColumns.length - 1;
+                        // Force alignment: first column left, last column right, otherwise use col.align
+                        const effectiveAlign = isFirstColumn
+                          ? 'left'
+                          : isLastColumn
+                            ? 'right'
+                            : col.align;
+                        const colWidth = columnWidths[colId];
+                        return (
+                          <td
+                            key={colId}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              col.onCellDoubleClick?.(row);
+                            }}
+                            style={
+                              colWidth
+                                ? { width: colWidth, minWidth: colWidth }
+                                : col.sticky === 'right'
+                                  ? { minWidth: '40px' }
+                                  : undefined
+                            }
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto text-right' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${!isLastRow ? 'border-b border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                          >
+                            {col.sticky === 'right' ? (
+                              <div className="flex justify-end items-center w-full h-full">
+                                {col.cell
+                                  ? col.cell({ getValue: () => val, row, value: val })
+                                  : (val as ReactNode)}
+                              </div>
+                            ) : col.cell ? (
+                              col.cell({ getValue: () => val, row, value: val })
+                            ) : (
+                              (val as ReactNode)
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td
