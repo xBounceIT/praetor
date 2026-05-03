@@ -9,7 +9,7 @@ if (process.env.NODE_ENV === 'production') {
 async function fixPassword() {
   try {
     console.log('Generating new hash for "password"...');
-    const newHash = await bcrypt.hash('password', 10);
+    const newHash = await bcrypt.hash('password', 12);
     console.log('New Hash:', newHash);
 
     console.log('Updating admin user...');

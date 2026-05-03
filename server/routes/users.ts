@@ -542,19 +542,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (hasFieldUpdates) {
+        // Sync runs inside the transaction so the role replacement and the resulting
+        // top-manager auto-assignments commit (or roll back) together.
         const updatedRow = await withDbTransaction(async (tx) => {
           const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
           if (row && roleValue !== null) {
             await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
+            await syncTopManagerAssignmentsForUser(idResult.value, tx);
           }
           return row;
         });
 
         if (!updatedRow) {
           return reply.code(404).send({ error: 'User not found' });
-        }
-        if (roleValue !== null) {
-          await syncTopManagerAssignmentsForUser(idResult.value);
         }
       }
 
@@ -699,9 +699,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       await withDbTransaction(async (tx) => {
         await usersRepo.replaceUserRoles(idResult.value, roleIdsResult.value, tx);
         await usersRepo.setPrimaryRole(idResult.value, primaryRoleIdResult.value, tx);
+        // Sync runs inside the transaction so the role updates and the resulting
+        // top-manager auto-assignments commit (or roll back) together.
+        await syncTopManagerAssignmentsForUser(idResult.value, tx);
       });
-
-      await syncTopManagerAssignmentsForUser(idResult.value);
       await logAudit({
         request,
         action: 'user.roles_updated',

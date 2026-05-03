@@ -1,6 +1,11 @@
 import bcrypt from 'bcryptjs';
 import pool from '../db/index.ts';
 
+if (process.env.NODE_ENV === 'production') {
+  console.error('Refusing to run debug-auth.ts against a production database.');
+  process.exit(1);
+}
+
 async function checkAuth() {
   try {
     console.log('Connecting to database...');
@@ -11,7 +16,12 @@ async function checkAuth() {
     } else {
       console.log('User "admin" FOUND.');
       const user = result.rows[0];
-      console.log('Hash in DB:', user.password_hash);
+      // Don't echo the bcrypt hash to stdout — it's offline-attackable. A presence + length
+      // check is enough to confirm the column is populated.
+      const hashPresent = typeof user.password_hash === 'string' && user.password_hash.length > 0;
+      console.log(
+        `Password hash present: ${hashPresent} (length: ${user.password_hash?.length ?? 0})`,
+      );
 
       const isMatch = await bcrypt.compare('password', user.password_hash);
       console.log(`Password "password" match: ${isMatch}`);
