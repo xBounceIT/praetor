@@ -42,6 +42,12 @@ const getStorageKey = (t: string, suffix: StorageSuffix) =>
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
+const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
+const VIEW_ERROR_DURATION_MS = 3000;
+const COPIED_FEEDBACK_DURATION_MS = 1500;
+
+const noop = () => {};
+
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 const ViewActionButton = ({
@@ -99,7 +105,6 @@ export type StandardTableProps<T extends object = object> = {
   footerClassName?: string;
   children?: ReactNode;
   emptyState?: ReactNode;
-  // Data-driven props
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
@@ -137,7 +142,6 @@ const StandardTable = <T extends object>({
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
 
-  // Internal State for Data Mode
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
 
@@ -147,7 +151,6 @@ const StandardTable = <T extends object>({
   const [gearOpen, setGearOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
 
-  // Lazy initialization for rowsPerPage
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
     const key = getStorageKey(title, STORAGE_SUFFIX.rows);
@@ -161,7 +164,6 @@ const StandardTable = <T extends object>({
     return defaultRowsPerPage;
   });
 
-  // Lazy initialization for fontSize
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     if (typeof window === 'undefined') return 'sm';
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
@@ -172,7 +174,6 @@ const StandardTable = <T extends object>({
   // Session-only: column visibility resets on page reload
   const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
 
-  // Lazy initialization for columnWidths
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     if (typeof window === 'undefined') return {};
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
@@ -206,34 +207,27 @@ const StandardTable = <T extends object>({
 
   const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
 
-  const persistCustomViews = useCallback(
-    (views: CustomView[]) => {
-      if (typeof window === 'undefined') return;
-      try {
-        localStorage.setItem(
-          getStorageKey(title, STORAGE_SUFFIX.customViews),
-          JSON.stringify(views),
-        );
-      } catch {}
-    },
-    [title],
-  );
-
-  // Wraps `setCustomViews` so callers don't have to repeat the persist call,
-  // and lets the helpers' same-ref no-op short-circuit propagate cleanly.
   const updateCustomViews = useCallback(
     (updater: (prev: CustomView[]) => CustomView[]) => {
       setCustomViews((prev) => {
         const next = updater(prev);
-        if (next !== prev) persistCustomViews(next);
+        if (next !== prev && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              getStorageKey(title, STORAGE_SUFFIX.customViews),
+              JSON.stringify(next),
+            );
+          } catch {}
+        }
         return next;
       });
     },
-    [persistCustomViews],
+    [title],
   );
 
-  const persistActiveViewId = useCallback(
+  const updateActiveViewId = useCallback(
     (id: string | null) => {
+      setActiveViewId(id);
       if (typeof window === 'undefined') return;
       const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
       try {
@@ -244,19 +238,6 @@ const StandardTable = <T extends object>({
     [title],
   );
 
-  const updateActiveViewId = useCallback(
-    (id: string | null) => {
-      setActiveViewId(id);
-      persistActiveViewId(id);
-    },
-    [persistActiveViewId],
-  );
-
-  // Sync table filterState with prop changes. After the boot apply-view effect
-  // has run, prop-driven resets are dirty changes — clear the active marker so
-  // the UI doesn't claim a view is applied when its filter snapshot diverges.
-  // Bail on referentially-new but structurally-equal props so parents passing
-  // an inline `{}` literal don't trigger churn every render.
   useEffect(() => {
     const next = initialFilterState ?? {};
     let changed = false;
@@ -285,10 +266,18 @@ const StandardTable = <T extends object>({
     [columns, hiddenColIds, getColId],
   );
 
-  // Columns listed in gear popup (excludes statically hidden filter-only columns)
+  // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
 
-  const activeView = activeViewId ? (customViews.find((v) => v.id === activeViewId) ?? null) : null;
+  const modalColumns = useMemo(
+    () => gearColumns.map((col) => ({ id: getColId(col), header: col.header })),
+    [gearColumns, getColId],
+  );
+
+  const activeView = useMemo(
+    () => (activeViewId ? (customViews.find((v) => v.id === activeViewId) ?? null) : null),
+    [activeViewId, customViews],
+  );
 
   const applyViewState = useCallback(
     (view: CustomView) => {
@@ -313,7 +302,6 @@ const StandardTable = <T extends object>({
       return;
     }
     applyViewState(view);
-    // Preserve deep-link / initial paging — don't reset currentPage
   }, [gearColumns, activeViewId, customViews, applyViewState, updateActiveViewId]);
 
   useEffect(() => {
@@ -329,11 +317,11 @@ const StandardTable = <T extends object>({
     [],
   );
 
-  const showViewError = useCallback((msg: string) => {
+  const showViewError = (msg: string) => {
     setViewError(msg);
     if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
-    viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), 3000);
-  }, []);
+    viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), VIEW_ERROR_DURATION_MS);
+  };
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
@@ -359,9 +347,11 @@ const StandardTable = <T extends object>({
     };
   }, [activeFilterCol]);
 
-  // Close gear popup when clicking outside
+  // Close gear popup when clicking outside. Suspended while the create/rename
+  // modal is open: the modal portals to document.body (outside gearPopupRef),
+  // so a Save click would otherwise close the gear popup as a side effect.
   useEffect(() => {
-    if (!gearOpen) return;
+    if (!gearOpen || modalState !== null) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (
         gearButtonRef.current &&
@@ -374,16 +364,18 @@ const StandardTable = <T extends object>({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [gearOpen]);
+  }, [gearOpen, modalState]);
 
-  // Column resize mouse events
   useEffect(() => {
     if (!resizingColId) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartXRef.current;
       const newWidth = Math.max(40, resizeStartWidthRef.current + delta);
-      setColumnWidths((prev) => ({ ...prev, [resizingColId]: newWidth }));
+      setColumnWidths((prev) => {
+        if (prev[resizingColId] === newWidth) return prev;
+        return { ...prev, [resizingColId]: newWidth };
+      });
     };
 
     const handleMouseUp = () => {
@@ -406,17 +398,14 @@ const StandardTable = <T extends object>({
     };
   }, [resizingColId, title]);
 
-  // Helper to resolve value
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
     if (col.accessorKey) return row[col.accessorKey];
     return null;
   }, []);
 
-  // Normalize empty raw values to a single sentinel so the filter list shows
-  // one "N/A" entry instead of "", "null", "undefined" duplicates. Columns
-  // with their own `filterFormat` returning a placeholder (e.g. '-') are
-  // unaffected because their raw value isn't null/empty.
+  // Empty raw values collapse to a single sentinel so the filter list shows
+  // one "N/A" entry instead of "", "null", "undefined" duplicates.
   const formatForFilter = useCallback(
     (rawVal: T[keyof T] | string | number | boolean | null | undefined, col: Column<T>): string => {
       if (rawVal === null || rawVal === undefined || rawVal === '') return '';
@@ -425,35 +414,35 @@ const StandardTable = <T extends object>({
     [],
   );
 
-  // Derived Data
+  const colsById = useMemo(() => {
+    const m = new Map<string, Column<T>>();
+    for (const col of columns ?? []) {
+      m.set(getColId(col), col);
+    }
+    return m;
+  }, [columns, getColId]);
+
   const processedData = useMemo(() => {
     if (!data || !columns) return [];
     let result = [...data];
 
-    // 1. Filtering
     Object.keys(filterState).forEach((filterColId) => {
       const selectedValues = filterState[filterColId];
-      if (selectedValues && selectedValues.length > 0) {
-        const col = columns.find((c) => getColId(c) === filterColId);
-        if (col) {
-          result = result.filter((row) => {
-            const rawVal = getValue(row, col);
-            const val = formatForFilter(rawVal, col);
-            return selectedValues.includes(val);
-          });
-        }
-      }
+      if (!selectedValues || selectedValues.length === 0) return;
+      const col = colsById.get(filterColId);
+      if (!col) return;
+      result = result.filter((row) => {
+        const val = formatForFilter(getValue(row, col), col);
+        return selectedValues.includes(val);
+      });
     });
 
-    // 2. Sorting
     if (sortState) {
-      const col = columns.find((c) => getColId(c) === sortState.colId);
+      const col = colsById.get(sortState.colId);
       if (col) {
         result.sort((a, b) => {
           const valA = getValue(a, col);
           const valB = getValue(b, col);
-
-          // Simple comparison handling numbers and strings
           if (typeof valA === 'number' && typeof valB === 'number') {
             return sortState.px === 'asc' ? valA - valB : valB - valA;
           }
@@ -467,30 +456,31 @@ const StandardTable = <T extends object>({
     }
 
     return result;
-  }, [data, columns, filterState, sortState, getValue, getColId, formatForFilter]);
+  }, [data, columns, filterState, sortState, getValue, colsById, formatForFilter]);
 
-  // Pagination
   const totalItems = data ? processedData.length : externalTotalCount || 0;
   const totalPages = Math.ceil(totalItems / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
 
-  // Filter Options Generator
-  const getFilterOptions = (colId: string) => {
-    if (!data || !columns) return [];
-    const col = columns.find((c) => getColId(c) === colId);
-    if (!col) return [];
+  // Pre-computed once per data/columns change so each filter popup open is O(1)
+  // instead of re-scanning the full dataset on every header re-render.
+  const filterOptionsByCol = useMemo(() => {
+    const m = new Map<string, string[]>();
+    if (!data || !columns) return m;
+    for (const col of columns) {
+      if (col.disableFiltering) continue;
+      const values = new Set<string>();
+      for (const row of data) {
+        values.add(formatForFilter(getValue(row, col), col));
+      }
+      m.set(getColId(col), Array.from(values).sort());
+    }
+    return m;
+  }, [data, columns, getValue, formatForFilter, getColId]);
 
-    // Get all unique values from the FULL dataset
-    const values = new Set<string>();
-    data.forEach((row) => {
-      const val = getValue(row, col);
-      values.add(formatForFilter(val, col));
-    });
-    return Array.from(values).sort();
-  };
+  const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
-  // Handlers
   const handleSort = (colId: string, dir: 'asc' | 'desc' | null) => {
     if (!dir) setSortState(null);
     else setSortState({ colId, px: dir });
@@ -508,19 +498,12 @@ const StandardTable = <T extends object>({
     updateActiveViewId(null);
   };
 
-  const handleIncreaseFontSize = () => {
+  const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
-      const next = idx < FONT_SIZES.length - 1 ? FONT_SIZES[idx + 1] : prev;
-      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
-      return next;
-    });
-  };
-
-  const handleDecreaseFontSize = () => {
-    setFontSize((prev) => {
-      const idx = FONT_SIZES.indexOf(prev);
-      const next = idx > 0 ? FONT_SIZES[idx - 1] : prev;
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= FONT_SIZES.length) return prev;
+      const next = FONT_SIZES[targetIdx];
       localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
       return next;
     });
@@ -568,7 +551,6 @@ const StandardTable = <T extends object>({
           v.id === editingId ? { ...v, name, hiddenColIds: hidden, sortState, filterState } : v,
         ),
       );
-      // If the edited view is currently active, mirror its new column visibility on the table.
       if (activeViewId === editingId) {
         setHiddenColIds(new Set(hidden));
       }
@@ -592,8 +574,6 @@ const StandardTable = <T extends object>({
     if (activeViewId === id) updateActiveViewId(null);
   };
 
-  // Keyboard-accessible single-step reorder: ArrowUp/ArrowDown on the grip
-  // swaps the view with its neighbor. Mouse drag still uses `reorderViews`.
   const moveViewByDelta = (id: string, delta: number) => {
     updateCustomViews((prev) =>
       moveByDelta(
@@ -628,7 +608,7 @@ const StandardTable = <T extends object>({
     }
     setCopiedViewId(view.id);
     if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
-    copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), 1500);
+    copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), COPIED_FEEDBACK_DURATION_MS);
   };
 
   const importView = async () => {
@@ -673,7 +653,10 @@ const StandardTable = <T extends object>({
 
   const handleViewsMouseLeave = () => {
     if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
-    viewsHoverTimeoutRef.current = setTimeout(() => setViewsSubmenuOpen(false), 200);
+    viewsHoverTimeoutRef.current = setTimeout(
+      () => setViewsSubmenuOpen(false),
+      VIEWS_HOVER_CLOSE_DELAY_MS,
+    );
   };
 
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
@@ -685,7 +668,6 @@ const StandardTable = <T extends object>({
     setResizingColId(colId);
   };
 
-  // Internal Footer Render
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3">
@@ -731,7 +713,6 @@ const StandardTable = <T extends object>({
           <i className="fa-solid fa-chevron-left text-xs"></i>
         </button>
         <div className="flex items-center gap-1">
-          {/* Simple pagination logic: show all pages logic might be too big, limiting to 5 mostly used in InternalListingView */}
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter(
               (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
@@ -771,7 +752,6 @@ const StandardTable = <T extends object>({
     </>
   );
 
-  // Render
   return (
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
@@ -797,7 +777,7 @@ const StandardTable = <T extends object>({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDecreaseFontSize();
+                        stepFontSize(-1);
                       }}
                       disabled={fontSize === 'xs'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
@@ -812,7 +792,7 @@ const StandardTable = <T extends object>({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleIncreaseFontSize();
+                        stepFontSize(1);
                       }}
                       disabled={fontSize === 'base'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
@@ -877,7 +857,7 @@ const StandardTable = <T extends object>({
                                 size="sm"
                                 checked={isVisible}
                                 disabled={isLastVisible}
-                                onChange={() => toggleColumnVisibility(colId)}
+                                onChange={noop}
                               />
                               <span className="text-[11px] text-slate-600 select-none">
                                 {col.header}
@@ -1158,11 +1138,9 @@ const StandardTable = <T extends object>({
                         }
                         className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
-                        {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
                           <span>{col.header}</span>
 
-                          {/* Filter button - inline with header text */}
                           {!col.disableFiltering && (
                             <button
                               type="button"
@@ -1191,13 +1169,11 @@ const StandardTable = <T extends object>({
                           )}
                         </span>
 
-                        {/* Column resize handle */}
                         <div
                           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 opacity-0 group-hover:opacity-100 hover:bg-praetor/30 ${resizingColId === colId ? 'opacity-100 bg-praetor/50' : ''}`}
                           onMouseDown={(e) => handleResizeStart(e, colId)}
                         />
 
-                        {/* Portal for filter popup - outside the wrapper */}
                         {activeFilterCol === colId &&
                           filterPos &&
                           createPortal(
@@ -1312,10 +1288,17 @@ const StandardTable = <T extends object>({
 
       {data && columns && (
         <CustomViewModal
+          key={
+            modalState?.kind === 'edit'
+              ? `edit-${modalState.view.id}`
+              : modalState?.kind === 'create'
+                ? 'create'
+                : 'closed'
+          }
           isOpen={modalState !== null}
           onClose={() => setModalState(null)}
           onSave={saveView}
-          columns={gearColumns.map((col) => ({ id: getColId(col), header: col.header }))}
+          columns={modalColumns}
           initialHiddenColIds={hiddenColIds}
           editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
         />

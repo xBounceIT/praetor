@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Checkbox from './Checkbox';
 import type { CustomView } from './customViewHelpers';
@@ -19,6 +19,13 @@ export interface CustomViewModalProps {
   editingView?: CustomView;
 }
 
+const noop = () => {};
+
+// Initial state is computed once when the modal mounts. The parent passes a
+// `key` that changes on each open, so a fresh mount initializes name and
+// hiddenColIds from `editingView` / `initialHiddenColIds` exactly once. This
+// avoids resetting the user's in-progress edits when the parent re-renders
+// (which produces fresh `columns` / `initialHiddenColIds` references).
 const CustomViewModal: React.FC<CustomViewModalProps> = ({
   isOpen,
   onClose,
@@ -28,22 +35,16 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   editingView,
 }) => {
   const { t } = useTranslation('common');
-  const [name, setName] = useState('');
-  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!isOpen) return;
+  const [name, setName] = useState(() => editingView?.name ?? '');
+  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(() => {
     if (editingView) {
       // Drop hidden IDs that no longer match a current column; otherwise stale
       // IDs inflate hiddenColIds.size and can wrongly disable Save.
       const validIds = new Set(columns.map((c) => c.id));
-      setName(editingView.name);
-      setHiddenColIds(new Set(editingView.hiddenColIds.filter((id) => validIds.has(id))));
-    } else {
-      setName('');
-      setHiddenColIds(new Set(initialHiddenColIds));
+      return new Set(editingView.hiddenColIds.filter((id) => validIds.has(id)));
     }
-  }, [isOpen, editingView, initialHiddenColIds, columns]);
+    return new Set(initialHiddenColIds);
+  });
 
   const visibleCount = columns.length - hiddenColIds.size;
   const trimmedName = name.trim();
@@ -124,13 +125,16 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
             <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-1.5 space-y-0.5">
               {columns.map((col) => {
                 const isVisible = !hiddenColIds.has(col.id);
+                // Parent onClick handles both mouse and keyboard (space) since
+                // both fire a click event that bubbles from the input. Passing
+                // a noop to Checkbox prevents the double-toggle.
                 return (
                   <div
                     key={col.id}
                     className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer"
                     onClick={() => toggleCol(col.id)}
                   >
-                    <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
+                    <Checkbox size="sm" checked={isVisible} onChange={noop} />
                     <span className="text-xs text-slate-600 select-none">{col.header}</span>
                   </div>
                 );
