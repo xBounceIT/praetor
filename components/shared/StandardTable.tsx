@@ -1,16 +1,71 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
+import CustomViewModal from './CustomViewModal';
+import {
+  type CustomView,
+  computeViewApplication,
+  type FilterState,
+  filterStatesEqual,
+  generateViewId,
+  IMPORT_PAYLOAD_MAX_BYTES,
+  isValidImportedView,
+  moveByDelta,
+  parseFilterState,
+  parseSortState,
+  parseStoredViews,
+  reorderDropAbove,
+  type SortState,
+} from './customViewHelpers';
+import Modal from './Modal';
 import TableFilter from './TableFilter';
 import Tooltip from './Tooltip';
 
-const getStorageKey = (t: string, suffix: string) =>
+const STORAGE_SUFFIX = {
+  rows: 'rows',
+  fontSize: 'fontsize',
+  colWidths: 'colwidths',
+  customViews: 'customviews',
+  activeView: 'activeview',
+} as const;
+type StorageSuffix = (typeof STORAGE_SUFFIX)[keyof typeof STORAGE_SUFFIX];
+
+const getStorageKey = (t: string, suffix: StorageSuffix) =>
   `praetor_table_${suffix}_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
 
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
+
+const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
+const VIEW_ERROR_DURATION_MS = 3000;
+const COPIED_FEEDBACK_DURATION_MS = 1500;
+
+type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
+
+const ViewActionButton = ({
+  icon,
+  title,
+  onClick,
+  className = 'hover:bg-slate-200 text-slate-500',
+}: {
+  icon: string;
+  title: string;
+  onClick: (e: React.MouseEvent) => void;
+  className?: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    aria-label={title}
+    className={`w-5 h-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
+  >
+    <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
+  </button>
+);
 
 export type Column<T> = {
   header: string;
@@ -45,7 +100,6 @@ export type StandardTableProps<T extends object = object> = {
   footerClassName?: string;
   children?: ReactNode;
   emptyState?: ReactNode;
-  // Data-driven props
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
@@ -83,15 +137,10 @@ const StandardTable = <T extends object>({
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
 
-  // Internal State for Data Mode
-  const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
-  const [filterState, setFilterState] = useState<Record<string, string[]>>(
-    initialFilterState ?? {},
-  );
-
-  useEffect(() => {
-    setFilterState(initialFilterState ?? {});
-  }, [initialFilterState]);
+  const [sortState, setSortState] = useState<SortState>(null);
+  const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
+  const filterStateRef = useRef(filterState);
+  filterStateRef.current = filterState;
 
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
@@ -99,10 +148,9 @@ const StandardTable = <T extends object>({
   const [gearOpen, setGearOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
 
-  // Lazy initialization for rowsPerPage
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
-    const key = getStorageKey(title, 'rows');
+    const key = getStorageKey(title, STORAGE_SUFFIX.rows);
     const saved = localStorage.getItem(key);
     if (saved) {
       const val = Number(saved);
@@ -113,10 +161,9 @@ const StandardTable = <T extends object>({
     return defaultRowsPerPage;
   });
 
-  // Lazy initialization for fontSize
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     if (typeof window === 'undefined') return 'sm';
-    const saved = localStorage.getItem(getStorageKey(title, 'fontsize'));
+    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
     if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
     return 'sm';
   });
@@ -124,10 +171,9 @@ const StandardTable = <T extends object>({
   // Session-only: column visibility resets on page reload
   const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
 
-  // Lazy initialization for columnWidths
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     if (typeof window === 'undefined') return {};
-    const saved = localStorage.getItem(getStorageKey(title, 'colwidths'));
+    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -137,7 +183,69 @@ const StandardTable = <T extends object>({
     return {};
   });
 
-  const storageKey = useMemo(() => getStorageKey(title, 'rows'), [title]);
+  const [customViews, setCustomViews] = useState<CustomView[]>(() => {
+    if (typeof window === 'undefined') return [];
+    return parseStoredViews(localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)));
+  });
+  const [activeViewId, setActiveViewId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+  });
+  const [viewsSubmenuOpen, setViewsSubmenuOpen] = useState(false);
+  const [modalState, setModalState] = useState<ViewModalState>(null);
+  const [draggingViewId, setDraggingViewId] = useState<string | null>(null);
+  const [dragOverViewId, setDragOverViewId] = useState<string | null>(null);
+  const [copiedViewId, setCopiedViewId] = useState<string | null>(null);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const viewsHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewsAppliedOnceRef = useRef(false);
+
+  const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
+
+  const updateCustomViews = useCallback(
+    (updater: (prev: CustomView[]) => CustomView[]) => {
+      setCustomViews((prev) => {
+        const next = updater(prev);
+        if (next !== prev && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              getStorageKey(title, STORAGE_SUFFIX.customViews),
+              JSON.stringify(next),
+            );
+          } catch {}
+        }
+        return next;
+      });
+    },
+    [title],
+  );
+
+  const updateActiveViewId = useCallback(
+    (id: string | null) => {
+      setActiveViewId(id);
+      if (typeof window === 'undefined') return;
+      const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+      try {
+        if (id) localStorage.setItem(key, id);
+        else localStorage.removeItem(key);
+      } catch {}
+    },
+    [title],
+  );
+
+  useEffect(() => {
+    const next = initialFilterState ?? {};
+    if (filterStatesEqual(filterStateRef.current, next)) return;
+    setFilterState(next);
+    if (viewsAppliedOnceRef.current) {
+      updateActiveViewId(null);
+    }
+  }, [initialFilterState, updateActiveViewId]);
 
   const getColId = useCallback(
     (col: Column<T>) =>
@@ -154,8 +262,62 @@ const StandardTable = <T extends object>({
     [columns, hiddenColIds, getColId],
   );
 
-  // Columns listed in gear popup (excludes statically hidden filter-only columns)
+  // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
+
+  const modalColumns = useMemo(
+    () => gearColumns.map((col) => ({ id: getColId(col), header: col.header })),
+    [gearColumns, getColId],
+  );
+
+  const activeView = useMemo(
+    () => (activeViewId ? (customViews.find((v) => v.id === activeViewId) ?? null) : null),
+    [activeViewId, customViews],
+  );
+
+  const applyViewState = useCallback(
+    (view: CustomView) => {
+      const gearIds = new Set(gearColumns.map((c) => getColId(c)));
+      const allIds = new Set((columns ?? []).map((c) => getColId(c)));
+      const result = computeViewApplication(view, gearIds, allIds);
+      setHiddenColIds(result.hiddenColIds);
+      setSortState(result.sortState);
+      setFilterState(result.filterState);
+    },
+    [columns, gearColumns, getColId],
+  );
+
+  useEffect(() => {
+    if (viewsAppliedOnceRef.current) return;
+    if (!gearColumns.length) return;
+    viewsAppliedOnceRef.current = true;
+    if (!activeViewId) return;
+    const view = customViews.find((v) => v.id === activeViewId);
+    if (!view) {
+      updateActiveViewId(null);
+      return;
+    }
+    applyViewState(view);
+  }, [gearColumns, activeViewId, customViews, applyViewState, updateActiveViewId]);
+
+  useEffect(() => {
+    if (!gearOpen) setViewsSubmenuOpen(false);
+  }, [gearOpen]);
+
+  useEffect(
+    () => () => {
+      if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
+    },
+    [],
+  );
+
+  const showViewError = (msg: string) => {
+    setViewError(msg);
+    if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
+    viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), VIEW_ERROR_DURATION_MS);
+  };
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
@@ -181,9 +343,11 @@ const StandardTable = <T extends object>({
     };
   }, [activeFilterCol]);
 
-  // Close gear popup when clicking outside
+  // Close gear popup when clicking outside. Suspended while the create/rename
+  // modal is open: the modal portals to document.body (outside gearPopupRef),
+  // so a Save click would otherwise close the gear popup as a side effect.
   useEffect(() => {
-    if (!gearOpen) return;
+    if (!gearOpen || modalState !== null) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (
         gearButtonRef.current &&
@@ -196,23 +360,25 @@ const StandardTable = <T extends object>({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [gearOpen]);
+  }, [gearOpen, modalState]);
 
-  // Column resize mouse events
   useEffect(() => {
     if (!resizingColId) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartXRef.current;
       const newWidth = Math.max(40, resizeStartWidthRef.current + delta);
-      setColumnWidths((prev) => ({ ...prev, [resizingColId]: newWidth }));
+      setColumnWidths((prev) => {
+        if (prev[resizingColId] === newWidth) return prev;
+        return { ...prev, [resizingColId]: newWidth };
+      });
     };
 
     const handleMouseUp = () => {
       setResizingColId(null);
       document.body.style.cursor = '';
       setColumnWidths((prev) => {
-        localStorage.setItem(getStorageKey(title, 'colwidths'), JSON.stringify(prev));
+        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(prev));
         return prev;
       });
     };
@@ -228,17 +394,14 @@ const StandardTable = <T extends object>({
     };
   }, [resizingColId, title]);
 
-  // Helper to resolve value
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
     if (col.accessorKey) return row[col.accessorKey];
     return null;
   }, []);
 
-  // Normalize empty raw values to a single sentinel so the filter list shows
-  // one "N/A" entry instead of "", "null", "undefined" duplicates. Columns
-  // with their own `filterFormat` returning a placeholder (e.g. '-') are
-  // unaffected because their raw value isn't null/empty.
+  // Empty raw values collapse to a single sentinel so the filter list shows
+  // one "N/A" entry instead of "", "null", "undefined" duplicates.
   const formatForFilter = useCallback(
     (rawVal: T[keyof T] | string | number | boolean | null | undefined, col: Column<T>): string => {
       if (rawVal === null || rawVal === undefined || rawVal === '') return '';
@@ -247,35 +410,35 @@ const StandardTable = <T extends object>({
     [],
   );
 
-  // Derived Data
+  const colsById = useMemo(() => {
+    const m = new Map<string, Column<T>>();
+    for (const col of columns ?? []) {
+      m.set(getColId(col), col);
+    }
+    return m;
+  }, [columns, getColId]);
+
   const processedData = useMemo(() => {
     if (!data || !columns) return [];
     let result = [...data];
 
-    // 1. Filtering
     Object.keys(filterState).forEach((filterColId) => {
       const selectedValues = filterState[filterColId];
-      if (selectedValues && selectedValues.length > 0) {
-        const col = columns.find((c) => getColId(c) === filterColId);
-        if (col) {
-          result = result.filter((row) => {
-            const rawVal = getValue(row, col);
-            const val = formatForFilter(rawVal, col);
-            return selectedValues.includes(val);
-          });
-        }
-      }
+      if (!selectedValues || selectedValues.length === 0) return;
+      const col = colsById.get(filterColId);
+      if (!col) return;
+      result = result.filter((row) => {
+        const val = formatForFilter(getValue(row, col), col);
+        return selectedValues.includes(val);
+      });
     });
 
-    // 2. Sorting
     if (sortState) {
-      const col = columns.find((c) => getColId(c) === sortState.colId);
+      const col = colsById.get(sortState.colId);
       if (col) {
         result.sort((a, b) => {
           const valA = getValue(a, col);
           const valB = getValue(b, col);
-
-          // Simple comparison handling numbers and strings
           if (typeof valA === 'number' && typeof valB === 'number') {
             return sortState.px === 'asc' ? valA - valB : valB - valA;
           }
@@ -289,33 +452,35 @@ const StandardTable = <T extends object>({
     }
 
     return result;
-  }, [data, columns, filterState, sortState, getValue, getColId, formatForFilter]);
+  }, [data, columns, filterState, sortState, getValue, colsById, formatForFilter]);
 
-  // Pagination
   const totalItems = data ? processedData.length : externalTotalCount || 0;
   const totalPages = Math.ceil(totalItems / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
 
-  // Filter Options Generator
-  const getFilterOptions = (colId: string) => {
-    if (!data || !columns) return [];
-    const col = columns.find((c) => getColId(c) === colId);
-    if (!col) return [];
+  // Pre-computed once per data/columns change so each filter popup open is O(1)
+  // instead of re-scanning the full dataset on every header re-render.
+  const filterOptionsByCol = useMemo(() => {
+    const m = new Map<string, string[]>();
+    if (!data || !columns) return m;
+    for (const col of columns) {
+      if (col.disableFiltering) continue;
+      const values = new Set<string>();
+      for (const row of data) {
+        values.add(formatForFilter(getValue(row, col), col));
+      }
+      m.set(getColId(col), Array.from(values).sort());
+    }
+    return m;
+  }, [data, columns, getValue, formatForFilter, getColId]);
 
-    // Get all unique values from the FULL dataset
-    const values = new Set<string>();
-    data.forEach((row) => {
-      const val = getValue(row, col);
-      values.add(formatForFilter(val, col));
-    });
-    return Array.from(values).sort();
-  };
+  const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
-  // Handlers
   const handleSort = (colId: string, dir: 'asc' | 'desc' | null) => {
     if (!dir) setSortState(null);
     else setSortState({ colId, px: dir });
+    updateActiveViewId(null);
   };
 
   const handleFilter = (colId: string, selected: string[]) => {
@@ -326,22 +491,16 @@ const StandardTable = <T extends object>({
       return next;
     });
     setCurrentPage(1); // Reset to page 1 on filter
+    updateActiveViewId(null);
   };
 
-  const handleIncreaseFontSize = () => {
+  const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
-      const next = idx < FONT_SIZES.length - 1 ? FONT_SIZES[idx + 1] : prev;
-      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
-      return next;
-    });
-  };
-
-  const handleDecreaseFontSize = () => {
-    setFontSize((prev) => {
-      const idx = FONT_SIZES.indexOf(prev);
-      const next = idx > 0 ? FONT_SIZES[idx - 1] : prev;
-      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= FONT_SIZES.length) return prev;
+      const next = FONT_SIZES[targetIdx];
+      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
       return next;
     });
   };
@@ -363,10 +522,162 @@ const StandardTable = <T extends object>({
       }
       return next;
     });
+    updateActiveViewId(null);
   };
 
   const resetColumnVisibility = () => {
     setHiddenColIds(new Set<string>());
+    updateActiveViewId(null);
+  };
+
+  const applyView = (view: CustomView) => {
+    setViewsSubmenuOpen(false);
+    setGearOpen(false);
+    if (view.id === activeViewId) return;
+    applyViewState(view);
+    updateActiveViewId(view.id);
+    setCurrentPage(1);
+  };
+
+  const saveView = ({ name, hiddenColIds: hidden }: { name: string; hiddenColIds: string[] }) => {
+    if (modalState?.kind === 'edit') {
+      const editingId = modalState.view.id;
+      updateCustomViews((prev) =>
+        prev.map((v) =>
+          v.id === editingId ? { ...v, name, hiddenColIds: hidden, sortState, filterState } : v,
+        ),
+      );
+      if (activeViewId === editingId) {
+        setHiddenColIds(new Set(hidden));
+      }
+    } else {
+      const newView: CustomView = {
+        id: generateViewId(),
+        name,
+        hiddenColIds: hidden,
+        sortState,
+        filterState,
+      };
+      updateCustomViews((prev) => [...prev, newView]);
+      updateActiveViewId(newView.id);
+      setHiddenColIds(new Set(hidden));
+    }
+    setModalState(null);
+  };
+
+  const deleteView = (id: string) => {
+    updateCustomViews((prev) => prev.filter((v) => v.id !== id));
+    if (activeViewId === id) updateActiveViewId(null);
+  };
+
+  const moveViewByDelta = (id: string, delta: number) => {
+    updateCustomViews((prev) =>
+      moveByDelta(
+        prev,
+        prev.findIndex((v) => v.id === id),
+        delta,
+      ),
+    );
+  };
+
+  const reorderViews = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    updateCustomViews((prev) => {
+      const fromIdx = prev.findIndex((v) => v.id === fromId);
+      const toIdx = prev.findIndex((v) => v.id === toId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      return reorderDropAbove(prev, fromIdx, toIdx);
+    });
+  };
+
+  const exportView = async (view: CustomView) => {
+    const payload = {
+      name: view.name,
+      hiddenColIds: view.hiddenColIds,
+      sortState: view.sortState,
+      filterState: view.filterState,
+    };
+    const ok = await writeTextToClipboard(JSON.stringify(payload));
+    if (!ok) {
+      showViewError(t('table.viewCopyFailed'));
+      return;
+    }
+    setCopiedViewId(view.id);
+    if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), COPIED_FEEDBACK_DURATION_MS);
+  };
+
+  // Returns null on success, an i18n key on failure so callers can decide
+  // whether to show the message inline (paste modal) or in the submenu.
+  const importViewFromText = (text: string): string | null => {
+    if (text.length > IMPORT_PAYLOAD_MAX_BYTES) return 'table.viewImportTooLarge';
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return 'table.viewImportFailed';
+    }
+    if (!isValidImportedView(parsed)) return 'table.viewImportFailed';
+    const newView: CustomView = {
+      id: generateViewId(),
+      name: parsed.name,
+      hiddenColIds: parsed.hiddenColIds,
+      sortState: parseSortState(parsed.sortState),
+      filterState: parseFilterState(parsed.filterState),
+    };
+    updateCustomViews((prev) => [...prev, newView]);
+    return null;
+  };
+
+  const importView = async () => {
+    const result = await readTextFromClipboard();
+    if (!result.ok) {
+      // Permission denied is recoverable by manual paste; unavailable
+      // (non-secure context, no API) is also handled by the paste modal.
+      setPasteText('');
+      setPasteError(null);
+      setPasteModalOpen(true);
+      setViewsSubmenuOpen(false);
+      return;
+    }
+    const errKey = importViewFromText(result.text);
+    if (errKey) showViewError(t(errKey));
+    else setViewError(null);
+  };
+
+  const submitPasteImport = () => {
+    const trimmed = pasteText.trim();
+    if (!trimmed) {
+      setPasteError(t('table.viewImportFailed'));
+      return;
+    }
+    const errKey = importViewFromText(trimmed);
+    if (errKey) {
+      setPasteError(t(errKey));
+      return;
+    }
+    setPasteModalOpen(false);
+    setPasteText('');
+    setPasteError(null);
+  };
+
+  const closePasteModal = () => {
+    setPasteModalOpen(false);
+    setPasteText('');
+    setPasteError(null);
+  };
+
+  const handleViewsMouseEnter = () => {
+    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
+    setViewsSubmenuOpen(true);
+  };
+
+  const handleViewsMouseLeave = () => {
+    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
+    viewsHoverTimeoutRef.current = setTimeout(
+      () => setViewsSubmenuOpen(false),
+      VIEWS_HOVER_CLOSE_DELAY_MS,
+    );
   };
 
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
@@ -378,7 +689,6 @@ const StandardTable = <T extends object>({
     setResizingColId(colId);
   };
 
-  // Internal Footer Render
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3">
@@ -424,7 +734,6 @@ const StandardTable = <T extends object>({
           <i className="fa-solid fa-chevron-left text-xs"></i>
         </button>
         <div className="flex items-center gap-1">
-          {/* Simple pagination logic: show all pages logic might be too big, limiting to 5 mostly used in InternalListingView */}
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter(
               (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
@@ -464,7 +773,6 @@ const StandardTable = <T extends object>({
     </>
   );
 
-  // Render
   return (
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
@@ -490,7 +798,7 @@ const StandardTable = <T extends object>({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDecreaseFontSize();
+                        stepFontSize(-1);
                       }}
                       disabled={fontSize === 'xs'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
@@ -505,7 +813,7 @@ const StandardTable = <T extends object>({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleIncreaseFontSize();
+                        stepFontSize(1);
                       }}
                       disabled={fontSize === 'base'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
@@ -535,9 +843,14 @@ const StandardTable = <T extends object>({
                       ref={gearPopupRef}
                       className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
                     >
-                      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                          {t('table.columns')}
+                      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
+                        <span
+                          className="text-[10px] font-black text-slate-400 uppercase tracking-wider truncate"
+                          title={activeView ? activeView.name : undefined}
+                        >
+                          {activeView
+                            ? `${t('table.columns')} · ${activeView.name}`
+                            : t('table.columns')}
                         </span>
                         <button
                           type="button"
@@ -545,7 +858,7 @@ const StandardTable = <T extends object>({
                             e.stopPropagation();
                             setGearOpen(false);
                           }}
-                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                          className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
                         >
                           <i className="fa-solid fa-xmark text-xs"></i>
                         </button>
@@ -555,11 +868,21 @@ const StandardTable = <T extends object>({
                           const colId = getColId(col);
                           const isVisible = !hiddenColIds.has(colId);
                           const isLastVisible = visibleColumns.length === 1 && isVisible;
+                          // Checkbox onChange owns the toggle; the row's
+                          // onClick handles clicks on the text label only.
+                          // Clicks inside the inner <label> bubble twice (the
+                          // visible click + a UA-synthesised click on the
+                          // hidden input), so we ignore those here to avoid a
+                          // double-toggle that cancels itself.
                           return (
                             <div
                               key={colId}
                               className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
-                              onClick={() => !isLastVisible && toggleColumnVisibility(colId)}
+                              onClick={(e) => {
+                                if (isLastVisible) return;
+                                if ((e.target as HTMLElement).closest('label')) return;
+                                toggleColumnVisibility(colId);
+                              }}
                             >
                               <Checkbox
                                 size="sm"
@@ -586,6 +909,218 @@ const StandardTable = <T extends object>({
                           <i className="fa-solid fa-rotate-left text-[10px]"></i>
                           <span>{t('table.resetColumns')}</span>
                         </button>
+                      </div>
+                      <div
+                        className="relative border-t border-slate-100 p-2"
+                        onMouseEnter={handleViewsMouseEnter}
+                        onMouseLeave={handleViewsMouseLeave}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewsSubmenuOpen(true);
+                          }}
+                          onFocus={() => setViewsSubmenuOpen(true)}
+                          className={`w-full px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-between ${
+                            viewsSubmenuOpen
+                              ? 'bg-slate-100 text-praetor'
+                              : 'text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <i className="fa-solid fa-layer-group text-[10px]"></i>
+                            {t('table.customViews')}
+                            {customViews.length > 0 && (
+                              <span className="text-[9px] font-bold text-slate-400">
+                                ({customViews.length})
+                              </span>
+                            )}
+                          </span>
+                          <i className="fa-solid fa-chevron-right text-[9px]"></i>
+                        </button>
+                        {viewsSubmenuOpen && (
+                          <div
+                            className="absolute right-full top-0 mr-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+                            onMouseEnter={handleViewsMouseEnter}
+                            onMouseLeave={handleViewsMouseLeave}
+                          >
+                            <div className="px-3 py-2 border-b border-slate-100">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('table.customViews')}
+                              </span>
+                            </div>
+                            {customViews.length > 0 && (
+                              <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
+                                {customViews.map((view) => {
+                                  const isActive = view.id === activeViewId;
+                                  const isCopied = copiedViewId === view.id;
+                                  const isDragOver =
+                                    dragOverViewId === view.id && draggingViewId !== view.id;
+                                  return (
+                                    <div
+                                      key={view.id}
+                                      draggable
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.dataTransfer.effectAllowed = 'move';
+                                        // Firefox aborts the drag unless setData is called.
+                                        e.dataTransfer.setData('text/plain', view.name);
+                                        setDraggingViewId(view.id);
+                                      }}
+                                      onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.dataTransfer.dropEffect = 'move';
+                                        if (
+                                          draggingViewId &&
+                                          draggingViewId !== view.id &&
+                                          dragOverViewId !== view.id
+                                        ) {
+                                          setDragOverViewId(view.id);
+                                        }
+                                      }}
+                                      onDragLeave={(e) => {
+                                        e.stopPropagation();
+                                        if (dragOverViewId === view.id) setDragOverViewId(null);
+                                      }}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (draggingViewId) {
+                                          reorderViews(draggingViewId, view.id);
+                                        }
+                                        setDraggingViewId(null);
+                                        setDragOverViewId(null);
+                                      }}
+                                      onDragEnd={() => {
+                                        setDraggingViewId(null);
+                                        setDragOverViewId(null);
+                                      }}
+                                      className={`group flex items-center gap-1 px-1.5 py-1 rounded transition-colors border-t-2 ${
+                                        isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
+                                      } ${isDragOver ? 'border-praetor' : 'border-transparent'} ${
+                                        draggingViewId === view.id ? 'opacity-40' : ''
+                                      }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        title={t('table.reorderViewHandle')}
+                                        aria-label={t('table.reorderViewHandle')}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            moveViewByDelta(view.id, -1);
+                                          } else if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            moveViewByDelta(view.id, 1);
+                                          }
+                                        }}
+                                        className="text-slate-300 group-hover:text-slate-400 hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
+                                      >
+                                        <i
+                                          className="fa-solid fa-grip-vertical text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          applyView(view);
+                                        }}
+                                        className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
+                                        title={view.name}
+                                      >
+                                        {isActive && (
+                                          <i className="fa-solid fa-check text-[10px] text-praetor flex-shrink-0"></i>
+                                        )}
+                                        <span
+                                          className={`text-[11px] truncate ${
+                                            isActive
+                                              ? 'text-praetor font-bold'
+                                              : 'text-slate-600 font-semibold'
+                                          }`}
+                                        >
+                                          {view.name}
+                                        </span>
+                                      </button>
+                                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
+                                        <ViewActionButton
+                                          icon="fa-pen"
+                                          title={t('table.renameView')}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setModalState({ kind: 'edit', view });
+                                            setViewsSubmenuOpen(false);
+                                          }}
+                                        />
+                                        <ViewActionButton
+                                          icon={isCopied ? 'fa-check' : 'fa-copy'}
+                                          title={
+                                            isCopied ? t('table.viewCopied') : t('table.exportView')
+                                          }
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void exportView(view);
+                                          }}
+                                          className={`hover:bg-slate-200 ${isCopied ? 'text-praetor' : 'text-slate-500'}`}
+                                        />
+                                        <ViewActionButton
+                                          icon="fa-trash"
+                                          title={t('table.deleteView')}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteView(view.id);
+                                          }}
+                                          className="hover:bg-red-100 hover:text-red-600 text-slate-500"
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div className="p-2 border-t border-slate-100 space-y-1">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModalState({ kind: 'create' });
+                                    setViewsSubmenuOpen(false);
+                                  }}
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  <i className="fa-solid fa-plus text-[10px]"></i>
+                                  <span>{t('buttons.add')}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void importView();
+                                  }}
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                  <i className="fa-solid fa-file-import text-[10px]"></i>
+                                  <span>{t('buttons.import')}</span>
+                                </button>
+                              </div>
+                              {viewError && (
+                                <div
+                                  role="alert"
+                                  className="text-[10px] text-red-500 text-center px-1 pt-1"
+                                >
+                                  {viewError}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -634,11 +1169,9 @@ const StandardTable = <T extends object>({
                         }
                         className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
-                        {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
                           <span>{col.header}</span>
 
-                          {/* Filter button - inline with header text */}
                           {!col.disableFiltering && (
                             <button
                               type="button"
@@ -667,13 +1200,11 @@ const StandardTable = <T extends object>({
                           )}
                         </span>
 
-                        {/* Column resize handle */}
                         <div
                           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 opacity-0 group-hover:opacity-100 hover:bg-praetor/30 ${resizingColId === colId ? 'opacity-100 bg-praetor/50' : ''}`}
                           onMouseDown={(e) => handleResizeStart(e, colId)}
                         />
 
-                        {/* Portal for filter popup - outside the wrapper */}
                         {activeFilterCol === colId &&
                           filterPos &&
                           createPortal(
@@ -784,6 +1315,80 @@ const StandardTable = <T extends object>({
         >
           {data && columns ? renderInternalFooter() : externalFooter}
         </div>
+      )}
+
+      {data && columns && (
+        <CustomViewModal
+          key={
+            modalState?.kind === 'edit'
+              ? `edit-${modalState.view.id}`
+              : modalState?.kind === 'create'
+                ? 'create'
+                : 'closed'
+          }
+          isOpen={modalState !== null}
+          onClose={() => setModalState(null)}
+          onSave={saveView}
+          columns={modalColumns}
+          initialHiddenColIds={hiddenColIds}
+          editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
+        />
+      )}
+
+      {data && columns && pasteModalOpen && (
+        <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-file-import text-praetor"></i>
+                {t('table.pasteViewTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={closePasteModal}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-xs text-slate-500">{t('table.pasteViewDescription')}</p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => {
+                  setPasteText(e.target.value);
+                  if (pasteError) setPasteError(null);
+                }}
+                placeholder={t('table.pasteViewPlaceholder')}
+                rows={6}
+                autoFocus
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
+              />
+              {pasteError && (
+                <div role="alert" className="text-[11px] text-red-500">
+                  {pasteError}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closePasteModal}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                {t('table.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={submitPasteImport}
+                disabled={pasteText.trim().length === 0}
+                className="px-4 py-2 text-xs font-bold text-white bg-praetor hover:bg-praetor/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                {t('table.importView')}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

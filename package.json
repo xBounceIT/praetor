@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
-    "test": "bun test server/test",
+    "test": "bun test server/test test",
     "lint": "bun run i18n:check && bun run typecheck && biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -37,8 +37,7 @@
     "recharts": "^3.8.1",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "swagger-ui-react": "^5.32.5",
-    "uuid": "^14.0.0"
+    "swagger-ui-react": "^5.32.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
