@@ -249,6 +249,8 @@
     "columnSettings": "Impostazioni colonne",
     "columns": "Colonne",
     "resetColumns": "Ripristina colonne",
+    "export": "Esporta",
+    "exportToCsv": "Esporta in CSV",
     "customViews": "Viste personalizzate",
     "addCustomView": "Aggiungi vista",
     "editView": "Modifica vista",
