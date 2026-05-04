@@ -2,6 +2,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
+import { downloadCsv } from '../../utils/csv';
+import { getLocalDateString } from '../../utils/date';
 import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
 import CustomViewModal from './CustomViewModal';
@@ -33,8 +35,9 @@ const STORAGE_SUFFIX = {
 } as const;
 type StorageSuffix = (typeof STORAGE_SUFFIX)[keyof typeof STORAGE_SUFFIX];
 
-const getStorageKey = (t: string, suffix: StorageSuffix) =>
-  `praetor_table_${suffix}_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suffix}_${slugify(t)}`;
 
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
@@ -505,6 +508,18 @@ const StandardTable = <T extends object>({
     });
   };
 
+  // Exports the currently visible columns and the post-filter/sort rows so the
+  // CSV mirrors what the user sees (active view, manual filters, hidden cols).
+  const handleExportToCsv = () => {
+    const rows = [
+      visibleColumns.map((c) => c.header),
+      ...processedData.map((row) =>
+        visibleColumns.map((col) => formatForFilter(getValue(row, col), col)),
+      ),
+    ];
+    downloadCsv(rows, `${slugify(title)}_${getLocalDateString()}.csv`);
+  };
+
   const toggleColumnVisibility = (colId: string) => {
     setHiddenColIds((prev) => {
       const next = new Set(prev);
@@ -689,6 +704,38 @@ const StandardTable = <T extends object>({
     setResizingColId(colId);
   };
 
+  const renderToolbarButton = ({
+    tooltipKey,
+    iconClass,
+    onClick,
+    disabled = false,
+  }: {
+    tooltipKey: string;
+    iconClass: string;
+    onClick: () => void;
+    disabled?: boolean;
+  }) => {
+    const label = t(tooltipKey);
+    return (
+      <Tooltip label={label} position="bottom">
+        {() => (
+          <button
+            type="button"
+            aria-label={label}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            disabled={disabled}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+          >
+            <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
+          </button>
+        )}
+      </Tooltip>
+    );
+  };
+
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3">
@@ -792,36 +839,24 @@ const StandardTable = <T extends object>({
           <div className="flex items-center gap-3">
             {data != null && columns != null && (
               <div className="flex items-center gap-1">
-                <Tooltip label={t('table.decreaseFont')} position="bottom">
-                  {() => (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        stepFontSize(-1);
-                      }}
-                      disabled={fontSize === 'xs'}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
-                    >
-                      <i className="fa-solid fa-minus text-[10px]"></i>
-                    </button>
-                  )}
-                </Tooltip>
-                <Tooltip label={t('table.increaseFont')} position="bottom">
-                  {() => (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        stepFontSize(1);
-                      }}
-                      disabled={fontSize === 'base'}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
-                    >
-                      <i className="fa-solid fa-plus text-[10px]"></i>
-                    </button>
-                  )}
-                </Tooltip>
+                {renderToolbarButton({
+                  tooltipKey: 'table.exportToCsv',
+                  iconClass: 'fa-file-csv',
+                  onClick: handleExportToCsv,
+                  disabled: processedData.length === 0,
+                })}
+                {renderToolbarButton({
+                  tooltipKey: 'table.decreaseFont',
+                  iconClass: 'fa-minus',
+                  onClick: () => stepFontSize(-1),
+                  disabled: fontSize === 'xs',
+                })}
+                {renderToolbarButton({
+                  tooltipKey: 'table.increaseFont',
+                  iconClass: 'fa-plus',
+                  onClick: () => stepFontSize(1),
+                  disabled: fontSize === 'base',
+                })}
                 <div className="relative">
                   <Tooltip label={t('table.columnSettings')} position="bottom" disabled={gearOpen}>
                     {() => (

@@ -249,6 +249,7 @@
     "columnSettings": "Column settings",
     "columns": "Columns",
     "resetColumns": "Reset columns",
+    "exportToCsv": "Export to CSV",
     "customViews": "Custom views",
     "addCustomView": "Add custom view",
     "editView": "Edit view",
