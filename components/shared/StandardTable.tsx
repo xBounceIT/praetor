@@ -106,9 +106,10 @@ const ViewActionButton = ({
     type="button"
     onClick={onClick}
     title={title}
+    aria-label={title}
     className={`w-5 h-5 flex items-center justify-center rounded ${className}`}
   >
-    <i className={`fa-solid ${icon} text-[9px]`}></i>
+    <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
   </button>
 );
 
@@ -187,10 +188,6 @@ const StandardTable = <T extends object>({
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
 
-  useEffect(() => {
-    setFilterState(initialFilterState ?? {});
-  }, [initialFilterState]);
-
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -266,10 +263,10 @@ const StandardTable = <T extends object>({
   const [draggingViewId, setDraggingViewId] = useState<string | null>(null);
   const [dragOverViewId, setDragOverViewId] = useState<string | null>(null);
   const [copiedViewId, setCopiedViewId] = useState<string | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [viewError, setViewError] = useState<string | null>(null);
   const viewsHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const importErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
 
   const storageKey = useMemo(() => getStorageKey(title, 'rows'), [title]);
@@ -304,6 +301,16 @@ const StandardTable = <T extends object>({
     [persistActiveViewId],
   );
 
+  // Sync table filterState with prop changes. After the boot apply-view effect
+  // has run, prop-driven resets are dirty changes — clear the active marker so
+  // the UI doesn't claim a view is applied when its filter snapshot diverges.
+  useEffect(() => {
+    setFilterState(initialFilterState ?? {});
+    if (viewsAppliedOnceRef.current) {
+      updateActiveViewId(null);
+    }
+  }, [initialFilterState, updateActiveViewId]);
+
   const getColId = useCallback(
     (col: Column<T>) =>
       col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header,
@@ -326,16 +333,20 @@ const StandardTable = <T extends object>({
 
   const applyViewState = useCallback(
     (view: CustomView) => {
-      const validIds = new Set(gearColumns.map((c) => getColId(c)));
-      setHiddenColIds(new Set(view.hiddenColIds.filter((id) => validIds.has(id))));
-      setSortState(view.sortState && validIds.has(view.sortState.colId) ? view.sortState : null);
+      // Hidden-column toggles only apply to gear-visible columns. Sort and
+      // filter state can target any column (including statically-hidden
+      // filter-only ones), so validate them against the full column set.
+      const gearIds = new Set(gearColumns.map((c) => getColId(c)));
+      const allIds = new Set((columns ?? []).map((c) => getColId(c)));
+      setHiddenColIds(new Set(view.hiddenColIds.filter((id) => gearIds.has(id))));
+      setSortState(view.sortState && allIds.has(view.sortState.colId) ? view.sortState : null);
       const nextFilterState: Record<string, string[]> = {};
       Object.entries(view.filterState ?? {}).forEach(([k, v]) => {
-        if (validIds.has(k)) nextFilterState[k] = v;
+        if (allIds.has(k)) nextFilterState[k] = v;
       });
       setFilterState(nextFilterState);
     },
-    [gearColumns, getColId],
+    [columns, gearColumns, getColId],
   );
 
   useEffect(() => {
@@ -361,10 +372,16 @@ const StandardTable = <T extends object>({
     () => () => {
       if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
       if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
-      if (importErrorTimeoutRef.current) clearTimeout(importErrorTimeoutRef.current);
+      if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
     },
     [],
   );
+
+  const showViewError = useCallback((msg: string) => {
+    setViewError(msg);
+    if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
+    viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), 3000);
+  }, []);
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
@@ -632,6 +649,21 @@ const StandardTable = <T extends object>({
     if (activeViewId === id) updateActiveViewId(null);
   };
 
+  // Keyboard-accessible single-step reorder: ArrowUp/ArrowDown on the grip
+  // swaps the view with its neighbor. Mouse drag still uses `reorderViews`.
+  const moveViewByDelta = (id: string, delta: number) => {
+    setCustomViews((prev) => {
+      const idx = prev.findIndex((v) => v.id === id);
+      const target = idx + delta;
+      if (idx === -1 || target < 0 || target >= prev.length) return prev;
+      const arr = [...prev];
+      const [moved] = arr.splice(idx, 1);
+      arr.splice(target, 0, moved);
+      persistCustomViews(arr);
+      return arr;
+    });
+  };
+
   const reorderViews = (fromId: string, toId: string) => {
     if (fromId === toId) return;
     setCustomViews((prev) => {
@@ -656,7 +688,10 @@ const StandardTable = <T extends object>({
       sortState: view.sortState,
       filterState: view.filterState,
     };
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      showViewError(t('table.viewActionUnavailable'));
+      return;
+    }
     navigator.clipboard
       .writeText(JSON.stringify(payload))
       .then(() => {
@@ -664,38 +699,53 @@ const StandardTable = <T extends object>({
         if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
         copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), 1500);
       })
-      .catch(() => {});
+      .catch(() => {
+        showViewError(t('table.viewCopyFailed'));
+      });
   };
 
   const importView = async () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) return;
-    try {
-      const text = await navigator.clipboard.readText();
-      // Cap on imported payload size: keeps a malicious/accidental huge clipboard
-      // payload from being JSON-parsed and persisted to localStorage.
-      if (text.length > 100_000) throw new Error('too-large');
-      const parsed = JSON.parse(text) as unknown;
-      if (!isValidImportedView(parsed)) {
-        throw new Error('invalid');
-      }
-      const newView: CustomView = {
-        id: generateViewId(),
-        name: parsed.name,
-        hiddenColIds: parsed.hiddenColIds,
-        sortState: parseSortState(parsed.sortState),
-        filterState: parseFilterState(parsed.filterState),
-      };
-      setCustomViews((prev) => {
-        const next = [...prev, newView];
-        persistCustomViews(next);
-        return next;
-      });
-      setImportError(null);
-    } catch {
-      setImportError(t('table.viewImportFailed'));
-      if (importErrorTimeoutRef.current) clearTimeout(importErrorTimeoutRef.current);
-      importErrorTimeoutRef.current = setTimeout(() => setImportError(null), 3000);
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
+      showViewError(t('table.viewActionUnavailable'));
+      return;
     }
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      showViewError(t('table.viewClipboardDenied'));
+      return;
+    }
+    // Cap on imported payload size: keeps a malicious/accidental huge clipboard
+    // payload from being JSON-parsed and persisted to localStorage.
+    if (text.length > 100_000) {
+      showViewError(t('table.viewImportTooLarge'));
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      showViewError(t('table.viewImportFailed'));
+      return;
+    }
+    if (!isValidImportedView(parsed)) {
+      showViewError(t('table.viewImportFailed'));
+      return;
+    }
+    const newView: CustomView = {
+      id: generateViewId(),
+      name: parsed.name,
+      hiddenColIds: parsed.hiddenColIds,
+      sortState: parseSortState(parsed.sortState),
+      filterState: parseFilterState(parsed.filterState),
+    };
+    setCustomViews((prev) => {
+      const next = [...prev, newView];
+      persistCustomViews(next);
+      return next;
+    });
+    setViewError(null);
   };
 
   const handleViewsMouseEnter = () => {
@@ -1024,12 +1074,29 @@ const StandardTable = <T extends object>({
                                         draggingViewId === view.id ? 'opacity-40' : ''
                                       }`}
                                     >
-                                      <span
-                                        className="text-slate-300 group-hover:text-slate-400 cursor-move flex-shrink-0"
+                                      <button
+                                        type="button"
                                         title={t('table.reorderViewHandle')}
+                                        aria-label={t('table.reorderViewHandle')}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            moveViewByDelta(view.id, -1);
+                                          } else if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            moveViewByDelta(view.id, 1);
+                                          }
+                                        }}
+                                        className="text-slate-300 group-hover:text-slate-400 hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
                                       >
-                                        <i className="fa-solid fa-grip-vertical text-[10px]"></i>
-                                      </span>
+                                        <i
+                                          className="fa-solid fa-grip-vertical text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -1115,9 +1182,12 @@ const StandardTable = <T extends object>({
                                     <span>{t('table.importView')}</span>
                                   </button>
                                 )}
-                              {importError && (
-                                <div className="text-[10px] text-red-500 text-center px-1 pt-1">
-                                  {importError}
+                              {viewError && (
+                                <div
+                                  role="alert"
+                                  className="text-[10px] text-red-500 text-center px-1 pt-1"
+                                >
+                                  {viewError}
                                 </div>
                               )}
                             </div>

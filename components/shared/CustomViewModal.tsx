@@ -34,13 +34,16 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     if (editingView) {
+      // Drop hidden IDs that no longer match a current column; otherwise stale
+      // IDs inflate hiddenColIds.size and can wrongly disable Save.
+      const validIds = new Set(columns.map((c) => c.id));
       setName(editingView.name);
-      setHiddenColIds(new Set(editingView.hiddenColIds));
+      setHiddenColIds(new Set(editingView.hiddenColIds.filter((id) => validIds.has(id))));
     } else {
       setName('');
       setHiddenColIds(new Set(initialHiddenColIds));
     }
-  }, [isOpen, editingView, initialHiddenColIds]);
+  }, [isOpen, editingView, initialHiddenColIds, columns]);
 
   const visibleCount = columns.length - hiddenColIds.size;
   const trimmedName = name.trim();
