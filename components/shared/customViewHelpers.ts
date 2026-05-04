@@ -82,11 +82,15 @@ export const filterStatesEqual = (a: FilterState, b: FilterState): boolean => {
   return true;
 };
 
+// Empty arrays are dropped to match the in-memory shape: `handleFilter`
+// deletes the key when no values are selected, so persisted/imported views
+// shouldn't reintroduce `{ col: [] }` entries that would later make
+// `filterStatesEqual` falsely report dirty state on parent re-renders.
 export const parseFilterState = (raw: unknown): FilterState => {
   if (!raw || typeof raw !== 'object') return {};
   const result: FilterState = {};
   Object.entries(raw as Record<string, unknown>).forEach(([k, v]) => {
-    if (Array.isArray(v) && v.every((item) => typeof item === 'string')) {
+    if (Array.isArray(v) && v.length > 0 && v.every((item) => typeof item === 'string')) {
       result[k] = v;
     }
   });

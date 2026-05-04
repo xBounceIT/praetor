@@ -129,7 +129,7 @@ describe('parseFilterState', () => {
     expect(parseFilterState(7)).toEqual({});
   });
 
-  test('keeps only entries whose values are arrays of strings', () => {
+  test('keeps only entries whose values are non-empty arrays of strings', () => {
     const result = parseFilterState({
       good: ['a', 'b'],
       mixed: ['a', 1],
@@ -137,7 +137,10 @@ describe('parseFilterState', () => {
       empty: [],
       objectVal: { a: 1 },
     });
-    expect(result).toEqual({ good: ['a', 'b'], empty: [] });
+    // Empty arrays are dropped to match the in-memory shape (handleFilter
+    // deletes the key when the selection is empty), which keeps
+    // `filterStatesEqual` consistent across reload/import.
+    expect(result).toEqual({ good: ['a', 'b'] });
   });
 });
 

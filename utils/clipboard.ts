@@ -15,17 +15,17 @@ export const writeTextToClipboard = async (text: string): Promise<boolean> => {
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
-    document.execCommand('copy');
+    const ok = document.execCommand('copy');
     document.body.removeChild(textarea);
-    return true;
+    return ok;
   } catch {
     return false;
   }
 };
 
-// Read text from the system clipboard. Returns `null` when the API is
-// unavailable, `false` when the user denies permission, and the text on
-// success. Caller distinguishes the two failure modes for messaging.
+// Read text from the system clipboard. Returns a discriminated union so
+// callers can distinguish API-unavailability (no secure context, no
+// `readText`) from user-denied permission and surface the right message.
 export type ClipboardReadResult =
   | { ok: true; text: string }
   | { ok: false; reason: 'unavailable' | 'denied' };
