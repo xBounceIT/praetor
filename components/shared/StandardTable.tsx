@@ -26,11 +26,46 @@ export type CustomView = {
 
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
+// `crypto.randomUUID()` is gated to secure contexts (HTTPS / localhost), so it
+// throws on plain-HTTP LAN IPs. Fall back to `getRandomValues` (available in
+// non-secure contexts) and finally to `Math.random()`. Used only as a local
+// table-state key, no security guarantees needed beyond uniqueness.
+const generateViewId = (): string => {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') {
+      try {
+        return crypto.randomUUID();
+      } catch {}
+    }
+    if (typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+  }
+  return `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 const isValidImportedView = (
   v: unknown,
 ): v is { name: string; hiddenColIds: string[]; sortState?: unknown; filterState?: unknown } => {
   if (!v || typeof v !== 'object') return false;
   const obj = v as Record<string, unknown>;
+  if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
+  if (!Array.isArray(obj.hiddenColIds)) return false;
+  if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
+  return true;
+};
+
+const isValidStoredView = (
+  v: unknown,
+): v is { id: string; name: string; hiddenColIds: string[] } => {
+  if (!v || typeof v !== 'object') return false;
+  const obj = v as Record<string, unknown>;
+  if (typeof obj.id !== 'string' || obj.id === '') return false;
   if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
   if (!Array.isArray(obj.hiddenColIds)) return false;
   if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
@@ -206,7 +241,18 @@ const StandardTable = <T extends object>({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed as CustomView[];
+        if (Array.isArray(parsed)) {
+          return parsed.filter(isValidStoredView).map((v) => {
+            const raw = v as Record<string, unknown>;
+            return {
+              id: v.id,
+              name: v.name,
+              hiddenColIds: v.hiddenColIds,
+              sortState: parseSortState(raw.sortState),
+              filterState: parseFilterState(raw.filterState),
+            };
+          });
+        }
       } catch {}
     }
     return [];
@@ -554,9 +600,13 @@ const StandardTable = <T extends object>({
         persistCustomViews(next);
         return next;
       });
+      // If the edited view is currently active, mirror its new column visibility on the table.
+      if (activeViewId === editingId) {
+        setHiddenColIds(new Set(hidden));
+      }
     } else {
       const newView: CustomView = {
-        id: crypto.randomUUID(),
+        id: generateViewId(),
         name,
         hiddenColIds: hidden,
         sortState,
@@ -590,7 +640,10 @@ const StandardTable = <T extends object>({
       if (fromIdx === -1 || toIdx === -1) return prev;
       const next = [...prev];
       const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
+      // Drop above the target (matches the border-t indicator). After removal,
+      // a forward move's target index has shifted down by one, so subtract.
+      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+      next.splice(insertIdx, 0, moved);
       persistCustomViews(next);
       return next;
     });
@@ -626,7 +679,7 @@ const StandardTable = <T extends object>({
         throw new Error('invalid');
       }
       const newView: CustomView = {
-        id: crypto.randomUUID(),
+        id: generateViewId(),
         name: parsed.name,
         hiddenColIds: parsed.hiddenColIds,
         sortState: parseSortState(parsed.sortState),
@@ -932,6 +985,8 @@ const StandardTable = <T extends object>({
                                       onDragStart={(e) => {
                                         e.stopPropagation();
                                         e.dataTransfer.effectAllowed = 'move';
+                                        // Firefox aborts the drag unless setData is called.
+                                        e.dataTransfer.setData('text/plain', view.name);
                                         setDraggingViewId(view.id);
                                       }}
                                       onDragOver={(e) => {
