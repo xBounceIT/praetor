@@ -27,5 +27,3 @@ export const signOverMaxSessionToken = (userId: string): string =>
 
 export const decodeForAssertion = (token: string): jwt.JwtPayload =>
   jwt.verify(token, TEST_JWT_SECRET) as jwt.JwtPayload;
-
-export const TEST_SECRET_FOR_DEBUG = TEST_JWT_SECRET;

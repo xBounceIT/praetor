@@ -7,7 +7,6 @@ import * as realCrypto from '../../utils/crypto.ts';
 // Snapshot real exports BEFORE registering mocks (mock.module inside beforeAll is not hoisted).
 const emailRepoSnapshot = { ...realEmailRepo };
 const cryptoSnapshot = { ...realCrypto };
-const nodemailerSnapshot = nodemailerReal;
 
 const encryptMock = mock((plaintext: string) => `enc(${plaintext})`);
 const decryptMock = mock((ciphertext: string) =>
@@ -21,10 +20,7 @@ const transporterStub = {
   verify: mock(),
   sendMail: mock(),
 };
-const createTransportMock = mock((opts: unknown) => {
-  (createTransportMock as unknown as { lastOptions: unknown }).lastOptions = opts;
-  return transporterStub;
-});
+const createTransportMock = mock((_opts: unknown) => transporterStub);
 
 const DEFAULT_REPO_CONFIG = realEmailRepo.DEFAULT_CONFIG;
 
@@ -47,7 +43,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  mock.module('nodemailer', () => ({ default: nodemailerSnapshot }));
+  mock.module('nodemailer', () => ({ default: nodemailerReal }));
   mock.module('../../utils/crypto.ts', () => cryptoSnapshot);
   mock.module('../../repositories/emailRepo.ts', () => emailRepoSnapshot);
 });
@@ -75,7 +71,6 @@ beforeEach(() => {
   emailRepoGetMock.mockReset();
   emailRepoUpdateMock.mockReset();
   createTransportMock.mockClear();
-  (createTransportMock as unknown as { lastOptions?: unknown }).lastOptions = undefined;
   transporterStub.verify.mockReset();
   transporterStub.sendMail.mockReset();
 
@@ -152,7 +147,7 @@ describe('ensureReady (via testConnection)', () => {
 
 describe('createTransporter (observed via createTransport spy)', () => {
   const lastOpts = () =>
-    (createTransportMock as unknown as { lastOptions?: Record<string, unknown> }).lastOptions ?? {};
+    (createTransportMock.mock.calls.at(-1)?.[0] ?? {}) as Record<string, unknown>;
 
   test('smtpEncryption: ssl → secure:true, no ignoreTLS', async () => {
     emailRepoGetMock.mockResolvedValue(buildEnabledConfig({ smtpEncryption: 'ssl' }));
