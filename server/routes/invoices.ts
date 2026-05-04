@@ -5,6 +5,7 @@ import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import { computeInvoiceTotals } from '../utils/invoice-math.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -146,10 +147,10 @@ type NormalizedInvoiceItemInput = {
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
 
-const validateAndNormalizeItems = async (
+const validateAndNormalizeItems = (
   items: unknown[],
   reply: FastifyReply,
-): Promise<NormalizedInvoiceItemInput[] | null> => {
+): NormalizedInvoiceItemInput[] | null => {
   const normalizedItems: NormalizedInvoiceItemInput[] = [];
 
   for (let i = 0; i < items.length; i++) {
@@ -274,8 +275,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         issueDate,
         dueDate,
         status,
-        subtotal,
-        total,
         amountPaid,
         notes,
         items,
@@ -287,8 +286,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
-        subtotal: unknown;
-        total: unknown;
         amountPaid: unknown;
         notes: unknown;
         items: unknown;
@@ -313,17 +310,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
-      const normalizedItems = await validateAndNormalizeItems(items, reply);
+      const normalizedItems = validateAndNormalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
-      if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-
-      const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
-      if (!totalResult.ok) return badRequest(reply, totalResult.message);
+      const { subtotal: computedSubtotal, total: computedTotal } =
+        computeInvoiceTotals(normalizedItems);
 
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
+      const amountPaidValue = amountPaidResult.value || 0;
+      if (amountPaidValue > computedTotal) {
+        return badRequest(reply, 'amountPaid cannot exceed total');
+      }
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
@@ -342,9 +340,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
               status: (status as string) || 'draft',
-              subtotal: subtotalResult.value || 0,
-              total: totalResult.value || 0,
-              amountPaid: amountPaidResult.value || 0,
+              subtotal: computedSubtotal,
+              total: computedTotal,
+              amountPaid: amountPaidValue,
               notes: (notes as string | null | undefined) ?? null,
             },
             tx,
@@ -406,8 +404,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         issueDate,
         dueDate,
         status,
-        subtotal,
-        total,
         amountPaid,
         notes,
         items,
@@ -418,8 +414,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
-        subtotal: unknown;
-        total: unknown;
         amountPaid: unknown;
         notes: unknown;
         items: unknown;
@@ -488,28 +482,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      if (subtotal !== undefined) {
-        const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
-        if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-        if (subtotalResult.value !== null && subtotalResult.value !== undefined) {
-          patch.subtotal = subtotalResult.value;
-        }
-      }
-
-      if (total !== undefined) {
-        const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
-        if (!totalResult.ok) return badRequest(reply, totalResult.message);
-        if (totalResult.value !== null && totalResult.value !== undefined) {
-          patch.total = totalResult.value;
-        }
-      }
-
+      let amountPaidValue: number | undefined;
       if (amountPaid !== undefined) {
         const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-        if (amountPaidResult.value !== null && amountPaidResult.value !== undefined) {
-          patch.amountPaid = amountPaidResult.value;
-        }
+        amountPaidValue = amountPaidResult.value ?? undefined;
       }
 
       if (status !== undefined) patch.status = status as string;
@@ -520,8 +497,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItemsForUpdate = await validateAndNormalizeItems(items, reply);
+        normalizedItemsForUpdate = validateAndNormalizeItems(items, reply);
         if (!normalizedItemsForUpdate) return;
+        const computed = computeInvoiceTotals(normalizedItemsForUpdate);
+        patch.subtotal = computed.subtotal;
+        patch.total = computed.total;
+      }
+
+      if (amountPaidValue !== undefined) {
+        const totalForCheck = patch.total ?? (await invoicesRepo.findTotal(idResult.value));
+        if (totalForCheck === null) {
+          return reply.code(404).send({ error: 'Invoice not found' });
+        }
+        if (amountPaidValue > totalForCheck) {
+          return badRequest(reply, 'amountPaid cannot exceed total');
+        }
+        patch.amountPaid = amountPaidValue;
       }
 
       let result: {
