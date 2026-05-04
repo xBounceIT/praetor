@@ -200,6 +200,13 @@ const validateAndNormalizeItems = (
       badRequest(reply, discountResult.message);
       return null;
     }
+    // Without an upper bound a compromised client can send discount > 100, which makes
+    // (1 - discount/100) negative and produces negative line totals — corrupting SUM(total)
+    // in the revenue reports.
+    if (discountResult.value !== null && discountResult.value > 100) {
+      badRequest(reply, `items[${i}].discount must be at most 100`);
+      return null;
+    }
 
     normalizedItems.push({
       productId: productIdResult.value || null,

@@ -401,6 +401,60 @@ describe('POST /api/invoices', () => {
     expect(JSON.parse(res.body).error).toMatch(/quantity must be greater than zero/);
   });
 
+  test('400 discount > 100 rejected (would otherwise produce a negative line total)', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            description: 'X',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 100,
+            discount: 150,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/discount must be at most 100/);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201 discount = 100 is the upper boundary (yields total 0)', async () => {
+    generateNextIdMock.mockResolvedValue('inv-1');
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, subtotal: 0, total: 0 });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            description: 'X',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 100,
+            discount: 100,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 0, total: 0 }),
+      undefined,
+    );
+  });
+
   test('409 unique violation surfaces as Invoice ID already exists', async () => {
     generateNextIdMock.mockResolvedValue('inv-1');
     withDbTransactionMock.mockImplementation(async () => {
@@ -541,6 +595,42 @@ describe('PUT /api/invoices/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+  });
+
+  test('200 amountPaid <= persisted total: looks up findTotal and patches amountPaid', async () => {
+    findTotalMock.mockResolvedValue(100);
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, amountPaid: 50 });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { amountPaid: 50 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findTotalMock).toHaveBeenCalledWith('inv-1');
+    const patch = updateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.amountPaid).toBe(50);
+  });
+
+  test('200 status-only update skips findTotal entirely', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findTotalMock).not.toHaveBeenCalled();
+    const patch = updateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('amountPaid');
+    expect(patch).not.toHaveProperty('total');
   });
 
   test('400 dueDate < issueDate using stored findDates for missing side', async () => {
