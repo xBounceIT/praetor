@@ -45,14 +45,24 @@ describe('getUniqueViolation', () => {
     expect(getUniqueViolation(err)).toBeNull();
   });
 
-  test('bounds depth at 8 — deeper chains return null', () => {
-    let current: Error & { cause?: unknown } = new Error('leaf');
-    for (let i = 0; i < 9; i++) {
+  const wrap = (leaf: unknown, levels: number): unknown => {
+    let current: unknown = leaf;
+    for (let i = 0; i < levels; i++) {
       const wrapper = new Error(`level-${i}`) as Error & { cause?: unknown };
       wrapper.cause = current;
       current = wrapper;
     }
-    expect(getUniqueViolation(current)).toBeNull();
+    return current;
+  };
+
+  test('finds a DatabaseError at the maximum supported depth (7 wrappers)', () => {
+    const leaf = makeDbError('23505');
+    expect(getUniqueViolation(wrap(leaf, 7))).toBe(leaf);
+  });
+
+  test('returns null when the DatabaseError is beyond the depth bound (8 wrappers)', () => {
+    const leaf = makeDbError('23505');
+    expect(getUniqueViolation(wrap(leaf, 8))).toBeNull();
   });
 });
 
