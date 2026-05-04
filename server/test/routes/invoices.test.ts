@@ -34,6 +34,7 @@ const replaceItemsMock = mock();
 const findItemsForInvoiceMock = mock();
 const findDatesMock = mock();
 const findTotalMock = mock();
+const findAmountPaidMock = mock();
 const findIdConflictMock = mock();
 const deleteByIdMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -67,6 +68,7 @@ beforeAll(async () => {
     findItemsForInvoice: findItemsForInvoiceMock,
     findDates: findDatesMock,
     findTotal: findTotalMock,
+    findAmountPaid: findAmountPaidMock,
     findIdConflict: findIdConflictMock,
     deleteById: deleteByIdMock,
   }));
@@ -148,6 +150,7 @@ const allMocks = [
   findItemsForInvoiceMock,
   findDatesMock,
   findTotalMock,
+  findAmountPaidMock,
   findIdConflictMock,
   deleteByIdMock,
   logAuditMock,
@@ -507,6 +510,7 @@ describe('PUT /api/invoices/:id', () => {
   });
 
   test('200 with items replaces via replaceItems and recomputes totals', async () => {
+    findAmountPaidMock.mockResolvedValue(0);
     updateMock.mockResolvedValue(SAMPLE_INVOICE);
     replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
@@ -531,6 +535,60 @@ describe('PUT /api/invoices/:id', () => {
       expect.objectContaining({ subtotal: 100, total: 100 }),
       undefined,
     );
+  });
+
+  test('400 items replace lowers total below persisted amountPaid (no amountPaid in patch)', async () => {
+    // Persisted invoice was paid 100. New items only sum to 50 — that would leave
+    // amountPaid (100) > new total (50). Must reject.
+    findAmountPaidMock.mockResolvedValue(100);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(findAmountPaidMock).toHaveBeenCalledWith('inv-1');
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('404 items replace targeting missing invoice (findAmountPaid null)', async () => {
+    findAmountPaidMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/missing',
+      headers: authHeader(),
+      payload: {
+        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+  });
+
+  test('200 items replace, persisted amountPaid still fits under new total', async () => {
+    findAmountPaidMock.mockResolvedValue(40);
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findAmountPaidMock).toHaveBeenCalledWith('inv-1');
   });
 
   test('200 partial update without items leaves totals untouched in patch', async () => {

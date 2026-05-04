@@ -142,6 +142,41 @@ describe('findDates', () => {
   });
 });
 
+describe('findTotal', () => {
+  test('returns parsed numeric when row exists', async () => {
+    exec.enqueue({ rows: [['250.50']] });
+    const result = await invoicesRepo.findTotal('INV-1', testDb);
+    expect(result).toBe(250.5);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "total" from "invoices"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns 0 when total column is null (defensive default)', async () => {
+    exec.enqueue({ rows: [[null]] });
+    expect(await invoicesRepo.findTotal('INV-1', testDb)).toBe(0);
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findTotal('INV-X', testDb)).toBeNull();
+  });
+});
+
+describe('findAmountPaid', () => {
+  test('returns parsed numeric when row exists', async () => {
+    exec.enqueue({ rows: [['100.00']] });
+    const result = await invoicesRepo.findAmountPaid('INV-1', testDb);
+    expect(result).toBe(100);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "amount_paid" from "invoices"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findAmountPaid('INV-X', testDb)).toBeNull();
+  });
+});
+
 describe('findIdConflict', () => {
   test('excludes self with both id-equality and id-inequality predicates', async () => {
     exec.enqueue({ rows: [] });

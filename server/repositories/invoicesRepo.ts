@@ -124,6 +124,18 @@ export const findTotal = async (
   return parseDbNumber(rows[0].total, 0);
 };
 
+export const findAmountPaid = async (
+  invoiceId: string,
+  exec: DbExecutor = db,
+): Promise<number | null> => {
+  const rows = await exec
+    .select({ amountPaid: invoices.amountPaid })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  if (!rows[0]) return null;
+  return parseDbNumber(rows[0].amountPaid, 0);
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,

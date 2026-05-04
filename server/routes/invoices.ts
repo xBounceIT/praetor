@@ -100,6 +100,7 @@ const invoiceItemBodySchema = {
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
 
+// subtotal/total are server-computed from items; clients cannot set them.
 const invoiceCreateBodySchema = {
   type: 'object',
   properties: {
@@ -110,8 +111,6 @@ const invoiceCreateBodySchema = {
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
-    subtotal: { type: 'number' },
-    total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: 'string' },
     items: { type: 'array', items: invoiceItemBodySchema },
@@ -128,8 +127,6 @@ const invoiceUpdateBodySchema = {
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
-    subtotal: { type: 'number' },
-    total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: 'string' },
     items: { type: 'array', items: invoiceItemBodySchema },
@@ -146,6 +143,10 @@ type NormalizedInvoiceItemInput = {
 };
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
+
+// Match the NUMERIC(_, 2) precision used for invoice_items columns so the totals computed
+// here align with what would be re-derived from the persisted rows.
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 const validateAndNormalizeItems = (
   items: unknown[],
@@ -212,9 +213,9 @@ const validateAndNormalizeItems = (
       productId: productIdResult.value || null,
       description: descriptionResult.value,
       unitOfMeasure: unitOfMeasureResult.value as 'unit' | 'hours',
-      quantity: quantityResult.value,
-      unitPrice: unitPriceResult.value,
-      discount: discountResult.value || 0,
+      quantity: round2(quantityResult.value),
+      unitPrice: round2(unitPriceResult.value),
+      discount: round2(discountResult.value || 0),
     });
   }
 
@@ -520,6 +521,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, 'amountPaid cannot exceed total');
         }
         patch.amountPaid = amountPaidValue;
+      } else if (patch.total !== undefined) {
+        // Items replaced (so total may be lower) but amountPaid not in this patch — verify the
+        // persisted amountPaid still fits under the new total. Without this, paying-down to a
+        // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
+        const persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);
+        if (persistedAmountPaid === null) {
+          return reply.code(404).send({ error: 'Invoice not found' });
+        }
+        if (persistedAmountPaid > patch.total) {
+          return badRequest(reply, 'amountPaid cannot exceed total');
+        }
       }
 
       let result: {
