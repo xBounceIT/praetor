@@ -49,7 +49,13 @@ export const isValidImportedView = (
 
 export const isValidStoredView = (
   v: unknown,
-): v is { id: string; name: string; hiddenColIds: string[] } => {
+): v is {
+  id: string;
+  name: string;
+  hiddenColIds: string[];
+  sortState?: unknown;
+  filterState?: unknown;
+} => {
   if (!v || typeof v !== 'object') return false;
   const obj = v as Record<string, unknown>;
   if (typeof obj.id !== 'string' || obj.id === '') return false;
@@ -106,16 +112,13 @@ export const parseStoredViews = (raw: string | null): CustomView[] => {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.filter(isValidStoredView).map((v) => {
-    const obj = v as Record<string, unknown>;
-    return {
-      id: v.id,
-      name: v.name,
-      hiddenColIds: v.hiddenColIds,
-      sortState: parseSortState(obj.sortState),
-      filterState: parseFilterState(obj.filterState),
-    };
-  });
+  return parsed.filter(isValidStoredView).map((v) => ({
+    id: v.id,
+    name: v.name,
+    hiddenColIds: v.hiddenColIds,
+    sortState: parseSortState(v.sortState),
+    filterState: parseFilterState(v.filterState),
+  }));
 };
 
 // `gearColIds` gates hidden-column toggles (only gear-visible columns can be

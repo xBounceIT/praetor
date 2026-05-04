@@ -257,8 +257,6 @@
     "viewCopied": "Copiato!",
     "viewImportFailed": "Dati della vista non validi",
     "viewImportTooLarge": "Contenuto della vista troppo grande",
-    "viewActionUnavailable": "Appunti non disponibili in questo browser",
-    "viewClipboardDenied": "Permesso di lettura degli appunti negato",
     "viewCopyFailed": "Impossibile copiare la vista negli appunti",
     "pasteViewTitle": "Incolla vista",
     "pasteViewDescription": "Incolla qui sotto il JSON della vista copiata da un'altra tabella.",

@@ -257,8 +257,6 @@
     "viewCopied": "Copied!",
     "viewImportFailed": "Invalid view data",
     "viewImportTooLarge": "View payload is too large",
-    "viewActionUnavailable": "Clipboard not available in this browser",
-    "viewClipboardDenied": "Clipboard read permission denied",
     "viewCopyFailed": "Could not copy view to clipboard",
     "pasteViewTitle": "Paste view",
     "pasteViewDescription": "Paste the view JSON copied from another table below.",

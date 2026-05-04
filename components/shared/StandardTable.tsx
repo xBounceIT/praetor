@@ -61,7 +61,7 @@ const ViewActionButton = ({
     onClick={onClick}
     title={title}
     aria-label={title}
-    className={`w-5 h-5 flex items-center justify-center rounded ${className}`}
+    className={`w-5 h-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
   >
     <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
   </button>
@@ -139,6 +139,8 @@ const StandardTable = <T extends object>({
 
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
+  const filterStateRef = useRef(filterState);
+  filterStateRef.current = filterState;
 
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
@@ -238,13 +240,9 @@ const StandardTable = <T extends object>({
 
   useEffect(() => {
     const next = initialFilterState ?? {};
-    let changed = false;
-    setFilterState((prev) => {
-      if (filterStatesEqual(prev, next)) return prev;
-      changed = true;
-      return next;
-    });
-    if (changed && viewsAppliedOnceRef.current) {
+    if (filterStatesEqual(filterStateRef.current, next)) return;
+    setFilterState(next);
+    if (viewsAppliedOnceRef.current) {
       updateActiveViewId(null);
     }
   }, [initialFilterState, updateActiveViewId]);
@@ -1050,7 +1048,7 @@ const StandardTable = <T extends object>({
                                           {view.name}
                                         </span>
                                       </button>
-                                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
                                         <ViewActionButton
                                           icon="fa-pen"
                                           title={t('table.renameView')}

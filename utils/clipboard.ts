@@ -41,6 +41,3 @@ export const readTextFromClipboard = async (): Promise<ClipboardReadResult> => {
     return { ok: false, reason: 'denied' };
   }
 };
-
-export const isClipboardReadSupported = (): boolean =>
-  typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
