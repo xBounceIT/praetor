@@ -19,8 +19,6 @@ export interface CustomViewModalProps {
   editingView?: CustomView;
 }
 
-const noop = () => {};
-
 // Initial state is computed once when the modal mounts. The parent passes a
 // `key` that changes on each open, so a fresh mount initializes name and
 // hiddenColIds from `editingView` / `initialHiddenColIds` exactly once. This
@@ -125,16 +123,21 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
             <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-1.5 space-y-0.5">
               {columns.map((col) => {
                 const isVisible = !hiddenColIds.has(col.id);
-                // Parent onClick handles both mouse and keyboard (space) since
-                // both fire a click event that bubbles from the input. Passing
-                // a noop to Checkbox prevents the double-toggle.
+                // Checkbox onChange owns the toggle; the row's onClick handles
+                // clicks on the text label only. Clicks inside the inner
+                // <label> bubble twice (the visible click + a UA-synthesised
+                // click on the hidden input), so we ignore those here to
+                // avoid a double-toggle that cancels itself.
                 return (
                   <div
                     key={col.id}
                     className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer"
-                    onClick={() => toggleCol(col.id)}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('label')) return;
+                      toggleCol(col.id);
+                    }}
                   >
-                    <Checkbox size="sm" checked={isVisible} onChange={noop} />
+                    <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
                     <span className="text-xs text-slate-600 select-none">{col.header}</span>
                   </div>
                 );

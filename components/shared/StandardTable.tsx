@@ -46,8 +46,6 @@ const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
 
-const noop = () => {};
-
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 const ViewActionButton = ({
@@ -847,17 +845,27 @@ const StandardTable = <T extends object>({
                           const colId = getColId(col);
                           const isVisible = !hiddenColIds.has(colId);
                           const isLastVisible = visibleColumns.length === 1 && isVisible;
+                          // Checkbox onChange owns the toggle; the row's
+                          // onClick handles clicks on the text label only.
+                          // Clicks inside the inner <label> bubble twice (the
+                          // visible click + a UA-synthesised click on the
+                          // hidden input), so we ignore those here to avoid a
+                          // double-toggle that cancels itself.
                           return (
                             <div
                               key={colId}
                               className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
-                              onClick={() => !isLastVisible && toggleColumnVisibility(colId)}
+                              onClick={(e) => {
+                                if (isLastVisible) return;
+                                if ((e.target as HTMLElement).closest('label')) return;
+                                toggleColumnVisibility(colId);
+                              }}
                             >
                               <Checkbox
                                 size="sm"
                                 checked={isVisible}
                                 disabled={isLastVisible}
-                                onChange={noop}
+                                onChange={() => toggleColumnVisibility(colId)}
                               />
                               <span className="text-[11px] text-slate-600 select-none">
                                 {col.header}
