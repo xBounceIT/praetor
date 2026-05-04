@@ -1087,29 +1087,31 @@ const StandardTable = <T extends object>({
                               </div>
                             )}
                             <div className="p-2 border-t border-slate-100 space-y-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setModalState({ kind: 'create' });
-                                  setViewsSubmenuOpen(false);
-                                }}
-                                className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
-                              >
-                                <i className="fa-solid fa-plus text-[10px]"></i>
-                                <span>{t('table.addCustomView')}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void importView();
-                                }}
-                                className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                              >
-                                <i className="fa-solid fa-file-import text-[10px]"></i>
-                                <span>{t('table.importView')}</span>
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModalState({ kind: 'create' });
+                                    setViewsSubmenuOpen(false);
+                                  }}
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  <i className="fa-solid fa-plus text-[10px]"></i>
+                                  <span>{t('buttons.add')}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void importView();
+                                  }}
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                  <i className="fa-solid fa-file-import text-[10px]"></i>
+                                  <span>{t('buttons.import')}</span>
+                                </button>
+                              </div>
                               {viewError && (
                                 <div
                                   role="alert"
