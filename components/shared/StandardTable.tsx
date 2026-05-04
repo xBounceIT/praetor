@@ -510,11 +510,16 @@ const StandardTable = <T extends object>({
 
   // Exports the currently visible columns and the post-filter/sort rows so the
   // CSV mirrors what the user sees (active view, manual filters, hidden cols).
+  // Skips columns without an accessor (Actions, etc.) — they render UI from
+  // `cell` and have no scalar value to serialize.
   const handleExportToCsv = () => {
+    const exportColumns = visibleColumns.filter(
+      (c) => c.accessorKey != null || c.accessorFn != null,
+    );
     const rows = [
-      visibleColumns.map((c) => c.header),
+      exportColumns.map((c) => c.header),
       ...processedData.map((row) =>
-        visibleColumns.map((col) => formatForFilter(getValue(row, col), col)),
+        exportColumns.map((col) => formatForFilter(getValue(row, col), col)),
       ),
     ];
     downloadCsv(rows, `${slugify(title)}_${getLocalDateString()}.csv`);
