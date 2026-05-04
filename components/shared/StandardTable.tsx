@@ -1,11 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  isClipboardReadSupported,
-  readTextFromClipboard,
-  writeTextToClipboard,
-} from '../../utils/clipboard';
+import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
 import CustomViewModal from './CustomViewModal';
@@ -24,6 +20,7 @@ import {
   reorderDropAbove,
   type SortState,
 } from './customViewHelpers';
+import Modal from './Modal';
 import TableFilter from './TableFilter';
 import Tooltip from './Tooltip';
 
@@ -198,6 +195,9 @@ const StandardTable = <T extends object>({
   const [dragOverViewId, setDragOverViewId] = useState<string | null>(null);
   const [copiedViewId, setCopiedViewId] = useState<string | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const viewsHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -609,30 +609,17 @@ const StandardTable = <T extends object>({
     copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), COPIED_FEEDBACK_DURATION_MS);
   };
 
-  const importView = async () => {
-    const result = await readTextFromClipboard();
-    if (!result.ok) {
-      showViewError(
-        t(result.reason === 'denied' ? 'table.viewClipboardDenied' : 'table.viewActionUnavailable'),
-      );
-      return;
-    }
-    const text = result.text;
-    if (text.length > IMPORT_PAYLOAD_MAX_BYTES) {
-      showViewError(t('table.viewImportTooLarge'));
-      return;
-    }
+  // Returns null on success, an i18n key on failure so callers can decide
+  // whether to show the message inline (paste modal) or in the submenu.
+  const importViewFromText = (text: string): string | null => {
+    if (text.length > IMPORT_PAYLOAD_MAX_BYTES) return 'table.viewImportTooLarge';
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
-      showViewError(t('table.viewImportFailed'));
-      return;
+      return 'table.viewImportFailed';
     }
-    if (!isValidImportedView(parsed)) {
-      showViewError(t('table.viewImportFailed'));
-      return;
-    }
+    if (!isValidImportedView(parsed)) return 'table.viewImportFailed';
     const newView: CustomView = {
       id: generateViewId(),
       name: parsed.name,
@@ -641,7 +628,45 @@ const StandardTable = <T extends object>({
       filterState: parseFilterState(parsed.filterState),
     };
     updateCustomViews((prev) => [...prev, newView]);
-    setViewError(null);
+    return null;
+  };
+
+  const importView = async () => {
+    const result = await readTextFromClipboard();
+    if (!result.ok) {
+      // Permission denied is recoverable by manual paste; unavailable
+      // (non-secure context, no API) is also handled by the paste modal.
+      setPasteText('');
+      setPasteError(null);
+      setPasteModalOpen(true);
+      setViewsSubmenuOpen(false);
+      return;
+    }
+    const errKey = importViewFromText(result.text);
+    if (errKey) showViewError(t(errKey));
+    else setViewError(null);
+  };
+
+  const submitPasteImport = () => {
+    const trimmed = pasteText.trim();
+    if (!trimmed) {
+      setPasteError(t('table.viewImportFailed'));
+      return;
+    }
+    const errKey = importViewFromText(trimmed);
+    if (errKey) {
+      setPasteError(t(errKey));
+      return;
+    }
+    setPasteModalOpen(false);
+    setPasteText('');
+    setPasteError(null);
+  };
+
+  const closePasteModal = () => {
+    setPasteModalOpen(false);
+    setPasteText('');
+    setPasteError(null);
   };
 
   const handleViewsMouseEnter = () => {
@@ -1074,19 +1099,17 @@ const StandardTable = <T extends object>({
                                 <i className="fa-solid fa-plus text-[10px]"></i>
                                 <span>{t('table.addCustomView')}</span>
                               </button>
-                              {isClipboardReadSupported() && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void importView();
-                                  }}
-                                  className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                                >
-                                  <i className="fa-solid fa-file-import text-[10px]"></i>
-                                  <span>{t('table.importView')}</span>
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void importView();
+                                }}
+                                className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                              >
+                                <i className="fa-solid fa-file-import text-[10px]"></i>
+                                <span>{t('table.importView')}</span>
+                              </button>
                               {viewError && (
                                 <div
                                   role="alert"
@@ -1310,6 +1333,62 @@ const StandardTable = <T extends object>({
           initialHiddenColIds={hiddenColIds}
           editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
         />
+      )}
+
+      {data && columns && pasteModalOpen && (
+        <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-file-import text-praetor"></i>
+                {t('table.pasteViewTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={closePasteModal}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-xs text-slate-500">{t('table.pasteViewDescription')}</p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => {
+                  setPasteText(e.target.value);
+                  if (pasteError) setPasteError(null);
+                }}
+                placeholder={t('table.pasteViewPlaceholder')}
+                rows={6}
+                autoFocus
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
+              />
+              {pasteError && (
+                <div role="alert" className="text-[11px] text-red-500">
+                  {pasteError}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closePasteModal}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                {t('table.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={submitPasteImport}
+                disabled={pasteText.trim().length === 0}
+                className="px-4 py-2 text-xs font-bold text-white bg-praetor hover:bg-praetor/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                {t('table.importView')}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
