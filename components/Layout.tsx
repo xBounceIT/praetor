@@ -561,8 +561,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">
       <nav
         className={`bg-praetor text-white/90 flex flex-col border border-white/10 rounded-3xl shadow-sm shrink-0 transition-all duration-300 ease-in-out relative z-30 m-2
-          ${isCollapsed ? 'md:w-[calc(theme(width.20)-1rem)] md:w-20' : 'md:w-64'}
-          w-full`}
+          ${isCollapsed ? 'md:w-20' : 'md:w-64'}`}
       >
         <div
           className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}
