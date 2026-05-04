@@ -4,6 +4,20 @@ import { useTranslation } from 'react-i18next';
 import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
 import CustomViewModal from './CustomViewModal';
+import {
+  type CustomView,
+  computeViewApplication,
+  type FilterState,
+  generateViewId,
+  IMPORT_PAYLOAD_MAX_BYTES,
+  isValidImportedView,
+  moveByDelta,
+  parseFilterState,
+  parseSortState,
+  parseStoredViews,
+  reorderDropAbove,
+  type SortState,
+} from './customViewHelpers';
 import TableFilter from './TableFilter';
 import Tooltip from './Tooltip';
 
@@ -13,83 +27,7 @@ const getStorageKey = (t: string, suffix: string) =>
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
-export type SortState = { colId: string; px: 'asc' | 'desc' } | null;
-export type FilterState = Record<string, string[]>;
-
-export type CustomView = {
-  id: string;
-  name: string;
-  hiddenColIds: string[];
-  sortState: SortState;
-  filterState: FilterState;
-};
-
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
-
-// `crypto.randomUUID()` is gated to secure contexts (HTTPS / localhost), so it
-// throws on plain-HTTP LAN IPs. Fall back to `getRandomValues` (available in
-// non-secure contexts) and finally to `Math.random()`. Used only as a local
-// table-state key, no security guarantees needed beyond uniqueness.
-const generateViewId = (): string => {
-  if (typeof crypto !== 'undefined') {
-    if (typeof crypto.randomUUID === 'function') {
-      try {
-        return crypto.randomUUID();
-      } catch {}
-    }
-    if (typeof crypto.getRandomValues === 'function') {
-      const bytes = new Uint8Array(16);
-      crypto.getRandomValues(bytes);
-      bytes[6] = (bytes[6] & 0x0f) | 0x40;
-      bytes[8] = (bytes[8] & 0x3f) | 0x80;
-      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    }
-  }
-  return `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
-const isValidImportedView = (
-  v: unknown,
-): v is { name: string; hiddenColIds: string[]; sortState?: unknown; filterState?: unknown } => {
-  if (!v || typeof v !== 'object') return false;
-  const obj = v as Record<string, unknown>;
-  if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
-  if (!Array.isArray(obj.hiddenColIds)) return false;
-  if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
-  return true;
-};
-
-const isValidStoredView = (
-  v: unknown,
-): v is { id: string; name: string; hiddenColIds: string[] } => {
-  if (!v || typeof v !== 'object') return false;
-  const obj = v as Record<string, unknown>;
-  if (typeof obj.id !== 'string' || obj.id === '') return false;
-  if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
-  if (!Array.isArray(obj.hiddenColIds)) return false;
-  if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
-  return true;
-};
-
-const parseSortState = (raw: unknown): SortState => {
-  if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.colId !== 'string') return null;
-  if (o.px !== 'asc' && o.px !== 'desc') return null;
-  return { colId: o.colId, px: o.px };
-};
-
-const parseFilterState = (raw: unknown): FilterState => {
-  if (!raw || typeof raw !== 'object') return {};
-  const result: FilterState = {};
-  Object.entries(raw as Record<string, unknown>).forEach(([k, v]) => {
-    if (Array.isArray(v) && v.every((item) => typeof item === 'string')) {
-      result[k] = v;
-    }
-  });
-  return result;
-};
 
 const ViewActionButton = ({
   icon,
@@ -234,25 +172,7 @@ const StandardTable = <T extends object>({
 
   const [customViews, setCustomViews] = useState<CustomView[]>(() => {
     if (typeof window === 'undefined') return [];
-    const saved = localStorage.getItem(getStorageKey(title, 'customviews'));
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(isValidStoredView).map((v) => {
-            const raw = v as Record<string, unknown>;
-            return {
-              id: v.id,
-              name: v.name,
-              hiddenColIds: v.hiddenColIds,
-              sortState: parseSortState(raw.sortState),
-              filterState: parseFilterState(raw.filterState),
-            };
-          });
-        }
-      } catch {}
-    }
-    return [];
+    return parseStoredViews(localStorage.getItem(getStorageKey(title, 'customviews')));
   });
   const [activeViewId, setActiveViewId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -333,18 +253,12 @@ const StandardTable = <T extends object>({
 
   const applyViewState = useCallback(
     (view: CustomView) => {
-      // Hidden-column toggles only apply to gear-visible columns. Sort and
-      // filter state can target any column (including statically-hidden
-      // filter-only ones), so validate them against the full column set.
       const gearIds = new Set(gearColumns.map((c) => getColId(c)));
       const allIds = new Set((columns ?? []).map((c) => getColId(c)));
-      setHiddenColIds(new Set(view.hiddenColIds.filter((id) => gearIds.has(id))));
-      setSortState(view.sortState && allIds.has(view.sortState.colId) ? view.sortState : null);
-      const nextFilterState: Record<string, string[]> = {};
-      Object.entries(view.filterState ?? {}).forEach(([k, v]) => {
-        if (allIds.has(k)) nextFilterState[k] = v;
-      });
-      setFilterState(nextFilterState);
+      const result = computeViewApplication(view, gearIds, allIds);
+      setHiddenColIds(result.hiddenColIds);
+      setSortState(result.sortState);
+      setFilterState(result.filterState);
     },
     [columns, gearColumns, getColId],
   );
@@ -654,13 +568,10 @@ const StandardTable = <T extends object>({
   const moveViewByDelta = (id: string, delta: number) => {
     setCustomViews((prev) => {
       const idx = prev.findIndex((v) => v.id === id);
-      const target = idx + delta;
-      if (idx === -1 || target < 0 || target >= prev.length) return prev;
-      const arr = [...prev];
-      const [moved] = arr.splice(idx, 1);
-      arr.splice(target, 0, moved);
-      persistCustomViews(arr);
-      return arr;
+      const next = moveByDelta(prev, idx, delta);
+      if (next === prev) return prev;
+      persistCustomViews(next);
+      return next;
     });
   };
 
@@ -670,12 +581,7 @@ const StandardTable = <T extends object>({
       const fromIdx = prev.findIndex((v) => v.id === fromId);
       const toIdx = prev.findIndex((v) => v.id === toId);
       if (fromIdx === -1 || toIdx === -1) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(fromIdx, 1);
-      // Drop above the target (matches the border-t indicator). After removal,
-      // a forward move's target index has shifted down by one, so subtract.
-      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      next.splice(insertIdx, 0, moved);
+      const next = reorderDropAbove(prev, fromIdx, toIdx);
       persistCustomViews(next);
       return next;
     });
@@ -716,9 +622,7 @@ const StandardTable = <T extends object>({
       showViewError(t('table.viewClipboardDenied'));
       return;
     }
-    // Cap on imported payload size: keeps a malicious/accidental huge clipboard
-    // payload from being JSON-parsed and persisted to localStorage.
-    if (text.length > 100_000) {
+    if (text.length > IMPORT_PAYLOAD_MAX_BYTES) {
       showViewError(t('table.viewImportTooLarge'));
       return;
     }

@@ -2,8 +2,8 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Checkbox from './Checkbox';
+import type { CustomView } from './customViewHelpers';
 import Modal from './Modal';
-import type { CustomView } from './StandardTable';
 
 export interface CustomViewModalColumn {
   id: string;
