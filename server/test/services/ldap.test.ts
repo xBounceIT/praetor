@@ -347,7 +347,7 @@ describe('findUserDn (direct, with config preloaded)', () => {
     return createClientMock({ url: ENABLED_LDAP_CONFIG.serverUrl, tlsOptions: {} });
   };
 
-  test('resolves to entry.objectName from first searchEntry event', async () => {
+  test('resolves to the last searchEntry.objectName when multiple entries fire (foundDn reassignment)', async () => {
     const client = buildClient({
       entries: [
         { objectName: 'uid=alice,dc=test,dc=com' },
@@ -356,7 +356,16 @@ describe('findUserDn (direct, with config preloaded)', () => {
       status: 0,
     });
     const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBe('uid=bob,dc=test,dc=com'); // last searchEntry wins (foundDn reassignment)
+    expect(dn).toBe('uid=bob,dc=test,dc=com');
+  });
+
+  test('resolves to entry.objectName when a single searchEntry fires', async () => {
+    const client = buildClient({
+      entries: [{ objectName: 'uid=alice,dc=test,dc=com' }],
+      status: 0,
+    });
+    const dn = await ldapService.findUserDn(client as never, 'alice');
+    expect(dn).toBe('uid=alice,dc=test,dc=com');
   });
 
   test('resolves null when no searchEntry fires before end (status 0)', async () => {

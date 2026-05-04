@@ -225,18 +225,29 @@ describe('authenticateToken', () => {
   test('userHasRole and getRolePermissions are invoked concurrently (no serial await)', async () => {
     let resolveRole!: () => void;
     let resolvePerms!: () => void;
+    let signalRoleCalled!: () => void;
+    let signalPermsCalled!: () => void;
+
     const rolePromise = new Promise<void>((resolve) => {
       resolveRole = resolve;
     });
     const permsPromise = new Promise<void>((resolve) => {
       resolvePerms = resolve;
     });
+    const roleCalledPromise = new Promise<void>((resolve) => {
+      signalRoleCalled = resolve;
+    });
+    const permsCalledPromise = new Promise<void>((resolve) => {
+      signalPermsCalled = resolve;
+    });
 
     userHasRoleMock.mockImplementation(async () => {
+      signalRoleCalled();
       await rolePromise;
       return true;
     });
     getRolePermissionsMock.mockImplementation(async () => {
+      signalPermsCalled();
       await permsPromise;
       return HAPPY_PERMISSIONS;
     });
@@ -245,8 +256,10 @@ describe('authenticateToken', () => {
     const reply = buildFakeReply();
     const inflight = authenticateToken(request as never, reply as never);
 
-    // Yield enough microtasks for the middleware to fire both calls before either resolves.
-    await new Promise((r) => setTimeout(r, 10));
+    // Deterministic sync point: both mocks signal as soon as their bodies start. If either
+    // were awaiting the other, this Promise.all would hang past the test timeout instead
+    // of relying on a fixed sleep that's flaky under CI load.
+    await Promise.all([roleCalledPromise, permsCalledPromise]);
     expect(userHasRoleMock).toHaveBeenCalledTimes(1);
     expect(getRolePermissionsMock).toHaveBeenCalledTimes(1);
 
