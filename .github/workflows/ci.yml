@@ -74,8 +74,8 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: server
 
-      - name: Run repository tests
-        run: bun test server/test
+      - name: Run tests
+        run: bun run test
 
   build:
     name: Frontend Build

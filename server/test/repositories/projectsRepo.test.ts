@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { DatabaseError } from 'pg';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as projectsRepo from '../../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import { ForeignKeyError } from '../../utils/http-errors.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 // Local destructure: the namespace import satisfies CLAUDE.md, and shorter names keep the
@@ -166,16 +166,9 @@ describe('create', () => {
     orderId: 'so-bad',
   };
 
-  const fkDatabaseError = (constraint: string): DatabaseError => {
-    const err = new DatabaseError('foreign key violation', 0, 'error');
-    err.code = '23503';
-    err.constraint = constraint;
-    return err;
-  };
-
   test('FK violation on projects_order_id_fkey throws ForeignKeyError("Linked order")', async () => {
     exec.enqueue(() => {
-      throw fkDatabaseError('projects_order_id_fkey');
+      throw makeDbError('23503', 'projects_order_id_fkey');
     });
     let thrown: unknown;
     try {
@@ -189,7 +182,7 @@ describe('create', () => {
 
   test('FK violation on client constraint throws ForeignKeyError("Client")', async () => {
     exec.enqueue(() => {
-      throw fkDatabaseError('projects_client_id_fkey');
+      throw makeDbError('23503', 'projects_client_id_fkey');
     });
     let thrown: unknown;
     try {

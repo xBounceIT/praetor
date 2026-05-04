@@ -9,7 +9,7 @@ const FORMULA_PREFIXES = /^[\t\r]|^\s*[=+\-@]/;
 // point so the source stays free of invisible characters.
 const UTF8_BOM = String.fromCharCode(0xfeff);
 
-const escapeCsvCell = (val: string) => {
+export const escapeCsvCell = (val: string) => {
   const safe = FORMULA_PREFIXES.test(val) ? `'${val}` : val;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
