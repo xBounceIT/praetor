@@ -2,6 +2,16 @@ import { describe, expect, test } from 'bun:test';
 import { getForeignKeyViolation, getUniqueViolation } from '../../utils/db-errors.ts';
 import { makeDbError } from '../helpers/dbErrors.ts';
 
+const wrap = (leaf: unknown, levels: number): unknown => {
+  let current: unknown = leaf;
+  for (let i = 0; i < levels; i++) {
+    const wrapper = new Error(`level-${i}`) as Error & { cause?: unknown };
+    wrapper.cause = current;
+    current = wrapper;
+  }
+  return current;
+};
+
 describe('getUniqueViolation', () => {
   test('returns the DatabaseError when SQLSTATE is 23505', () => {
     const err = makeDbError('23505');
@@ -45,22 +55,12 @@ describe('getUniqueViolation', () => {
     expect(getUniqueViolation(err)).toBeNull();
   });
 
-  const wrap = (leaf: unknown, levels: number): unknown => {
-    let current: unknown = leaf;
-    for (let i = 0; i < levels; i++) {
-      const wrapper = new Error(`level-${i}`) as Error & { cause?: unknown };
-      wrapper.cause = current;
-      current = wrapper;
-    }
-    return current;
-  };
-
-  test('finds a DatabaseError at the maximum supported depth (7 wrappers)', () => {
+  test('finds the DatabaseError at depth 7 (max)', () => {
     const leaf = makeDbError('23505');
     expect(getUniqueViolation(wrap(leaf, 7))).toBe(leaf);
   });
 
-  test('returns null when the DatabaseError is beyond the depth bound (8 wrappers)', () => {
+  test('returns null at depth 8 (beyond bound)', () => {
     const leaf = makeDbError('23505');
     expect(getUniqueViolation(wrap(leaf, 8))).toBeNull();
   });
