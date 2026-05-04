@@ -28,18 +28,16 @@ bun run start        # Run compiled server
 ## Architecture
 
 ### State Management
-- No Redux/MobX - uses React hooks with centralized state in `App.tsx`
-- `App.tsx` (~83KB) manages all application state and passes via props
-- Components receive data through props, not global stores
+- No Redux/MobX. `App.tsx` is the central state hub: it owns shared state and passes it down via props.
+- Components receive data through props, not global stores.
 
 ### API Layer
-- `/services/api.ts` - Custom fetch wrapper with token management
-- RESTful endpoints at `/api/*`
-- Sliding window JWT auth (30min idle timeout, 8hr max session)
-- Server returns new token in `x-auth-token` header on each request
+- Client-side API helpers live under `services/api/` (custom fetch wrapper with token management)
+- RESTful endpoints under `/api/*`
+- Sliding-window JWT auth: server rotates the token in the `x-auth-token` response header on each request. Idle and max-session limits are configured in `server/middleware/auth.ts`.
 
 ### Database
-- PostgreSQL accessed via Drizzle ORM (`server/db/schema/`); every repository goes through Drizzle (`db/drizzle.ts` exports the `db` instance, the `DbExecutor` type, and the `withDbTransaction` / `executeRows` helpers).
+- PostgreSQL via Drizzle ORM (`server/db/schema/`). All repositories go through the Drizzle helpers exported from `server/db/drizzle.ts` (db instance, executor type, transaction wrapper).
 - Snake_case in DB → camelCase in API responses
 
 ### Database migrations
@@ -47,39 +45,37 @@ bun run start        # Run compiled server
 - The legacy `server/db/add_*.ts` scripts and `server/db/schema.sql` are frozen historical artifacts — see `server/db/README.md` for the full workflow.
 
 ### Authentication
-- JWT (HS256) with optional LDAP/AD fallback
+- JWT-based, with optional LDAP/AD fallback
 - Roles: admin (full access), manager (CRM/reports), user (personal tracking)
 
 ### Internationalization
-- i18next with English (en) and Italian (it)
+- i18next; translation files under `locales/`
 
 ## Key Patterns
 
 ### Route Organization
-Backend routes in `/server/routes/` with prefix-based registration:
-- `auth.ts` → `/api/auth`
-- `clients.ts` → `/api/clients`
-- Pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
+Backend routes live in `server/routes/` and are registered with URL prefixes in `server/app.ts` — see that file for the current map.
+
+Handler pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
 
 ### Repositories (data access)
 SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers.
 
 - Each function takes an optional `DbExecutor` parameter (default `db`) so it works both standalone and inside `withDbTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/drizzle.ts`.
 - Row types and any `mapXxxRow` helpers live in the repo file alongside the SQL they belong to.
-- Routes import the repo as a namespace: `import * as notificationsRepo from '../repositories/notificationsRepo.ts'`.
+- Routes import the repo as a namespace: `import * as <domain>Repo from '../repositories/<domain>Repo.ts'`.
 - Repos return domain shapes (camelCase, parsed numbers, mapped enums); they do not touch `request`, `reply`, validation, or HTTP status codes.
 
 ### Component Naming
-- Views: PascalCase `*View.tsx` (e.g., `ClientsView.tsx`, `SalesView.tsx`)
-- Utilities: camelCase (e.g., `geminiService.ts`)
-- Routes: kebab-case (e.g., `general-settings.ts`)
+- Views: PascalCase `*View.tsx`
+- Utilities: camelCase
+- Route files: kebab-case
 
 ## Important Notes
 
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
-- **CDN dependencies**: React, Recharts
-- **Test accounts**: admin/password, manager/password, user/password
-- **Tests**: `bun test server/test` covers the repository layer (fakes; no DB required). Other layers still rely on manual testing.
+- **CDN-pinned deps**: see the importmap in `index.html`
+- **Tests**: `bun run test` (Bun test runner; suites under `server/test/`). Other layers still rely on manual testing.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
-- **Remote Testing**: App runs on remote Docker containers - do not run commands locally for testing
+- **Remote Testing**: App runs on remote Docker containers — do not run commands locally for testing
 - **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
