@@ -1,7 +1,12 @@
 // Prefix values that spreadsheet apps would interpret as formulas (CSV injection).
-// Allows leading whitespace (incl. tab/CR) before the formula char, since
-// Excel/Sheets ignore it before parsing.
-const FORMULA_PREFIXES = /^\s*[=+\-@]/;
+// OWASP-recommended trigger set: =, +, -, @, plus the control chars \t and \r —
+// some spreadsheet parsers strip leading whitespace before the formula char,
+// so we also catch those whitespace-prefixed cases.
+const FORMULA_PREFIXES = /^[\t\r]|^\s*[=+\-@]/;
+
+// UTF-8 BOM (U+FEFF), prepended so Excel auto-detects the encoding —
+// otherwise non-ASCII characters render as mojibake. Built from the code
+// point so the source stays free of invisible characters.
 const UTF8_BOM = String.fromCharCode(0xfeff);
 
 const escapeCsvCell = (val: string) => {

@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
@@ -714,27 +714,39 @@ const StandardTable = <T extends object>({
     iconClass,
     onClick,
     disabled = false,
+    active = false,
+    buttonRef,
+    tooltipDisabled = false,
+    text,
   }: {
     tooltipKey: string;
     iconClass: string;
     onClick: () => void;
     disabled?: boolean;
+    active?: boolean;
+    buttonRef?: Ref<HTMLButtonElement>;
+    tooltipDisabled?: boolean;
+    text?: string;
   }) => {
     const label = t(tooltipKey);
     return (
-      <Tooltip label={label} position="bottom">
+      <Tooltip label={label} position="bottom" disabled={tooltipDisabled}>
         {() => (
           <button
             type="button"
+            ref={buttonRef}
             aria-label={label}
             onClick={(e) => {
               e.stopPropagation();
               onClick();
             }}
             disabled={disabled}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              active ? 'bg-slate-100 text-praetor' : 'bg-white text-slate-500 hover:bg-slate-100'
+            }`}
           >
             <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
+            {text && <span className="text-[10px] font-bold">{text}</span>}
           </button>
         )}
       </Tooltip>
@@ -846,9 +858,10 @@ const StandardTable = <T extends object>({
               <div className="flex items-center gap-1">
                 {renderToolbarButton({
                   tooltipKey: 'table.exportToCsv',
-                  iconClass: 'fa-file-csv',
+                  iconClass: 'fa-file-export',
                   onClick: handleExportToCsv,
                   disabled: processedData.length === 0,
+                  text: t('table.export'),
                 })}
                 {renderToolbarButton({
                   tooltipKey: 'table.decreaseFont',
@@ -863,21 +876,14 @@ const StandardTable = <T extends object>({
                   disabled: fontSize === 'base',
                 })}
                 <div className="relative">
-                  <Tooltip label={t('table.columnSettings')} position="bottom" disabled={gearOpen}>
-                    {() => (
-                      <button
-                        type="button"
-                        ref={gearButtonRef}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setGearOpen((prev) => !prev);
-                        }}
-                        className={`w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white transition-colors ${gearOpen ? 'text-praetor bg-slate-100' : 'text-slate-500 hover:bg-slate-100'}`}
-                      >
-                        <i className="fa-solid fa-gear text-[10px]"></i>
-                      </button>
-                    )}
-                  </Tooltip>
+                  {renderToolbarButton({
+                    tooltipKey: 'table.columnSettings',
+                    iconClass: 'fa-gear',
+                    onClick: () => setGearOpen((prev) => !prev),
+                    active: gearOpen,
+                    buttonRef: gearButtonRef,
+                    tooltipDisabled: gearOpen,
+                  })}
                   {gearOpen && (
                     <div
                       ref={gearPopupRef}
