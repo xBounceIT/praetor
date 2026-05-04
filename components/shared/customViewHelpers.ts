@@ -67,6 +67,21 @@ export const parseSortState = (raw: unknown): SortState => {
   return { colId: o.colId, px: o.px };
 };
 
+export const filterStatesEqual = (a: FilterState, b: FilterState): boolean => {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    const va = a[k];
+    const vb = b[k];
+    if (!vb || va.length !== vb.length) return false;
+    for (let i = 0; i < va.length; i++) {
+      if (va[i] !== vb[i]) return false;
+    }
+  }
+  return true;
+};
+
 export const parseFilterState = (raw: unknown): FilterState => {
   if (!raw || typeof raw !== 'object') return {};
   const result: FilterState = {};
@@ -78,9 +93,6 @@ export const parseFilterState = (raw: unknown): FilterState => {
   return result;
 };
 
-// Parse a stored localStorage payload into well-formed CustomView[]. Drops
-// entries that don't match `isValidStoredView` and normalizes nested
-// sortState/filterState through their parsers.
 export const parseStoredViews = (raw: string | null): CustomView[] => {
   if (!raw) return [];
   let parsed: unknown;
@@ -102,10 +114,9 @@ export const parseStoredViews = (raw: string | null): CustomView[] => {
   });
 };
 
-// Pure version of the apply-view logic used by StandardTable. `gearColIds`
-// gates hidden-column toggles (since you can only hide gear-visible columns);
-// `allColIds` gates sort/filter (which can target statically-hidden filter-only
-// columns too).
+// `gearColIds` gates hidden-column toggles (only gear-visible columns can be
+// hidden); `allColIds` gates sort/filter, which can target statically-hidden
+// filter-only columns too.
 export const computeViewApplication = (
   view: CustomView,
   gearColIds: ReadonlySet<string>,

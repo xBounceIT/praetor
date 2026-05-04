@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   type CustomView,
   computeViewApplication,
+  filterStatesEqual,
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
@@ -308,5 +309,37 @@ describe('moveByDelta', () => {
 describe('IMPORT_PAYLOAD_MAX_BYTES', () => {
   test('is set to a sane upper bound (100 KB)', () => {
     expect(IMPORT_PAYLOAD_MAX_BYTES).toBe(100_000);
+  });
+});
+
+describe('filterStatesEqual', () => {
+  test('treats two empty objects as equal', () => {
+    expect(filterStatesEqual({}, {})).toBe(true);
+  });
+
+  test('returns false on different key counts', () => {
+    expect(filterStatesEqual({ a: ['1'] }, {})).toBe(false);
+    expect(filterStatesEqual({}, { a: ['1'] })).toBe(false);
+    expect(filterStatesEqual({ a: ['1'] }, { a: ['1'], b: ['2'] })).toBe(false);
+  });
+
+  test('returns true when same keys with structurally equal arrays', () => {
+    expect(filterStatesEqual({ a: ['1', '2'] }, { a: ['1', '2'] })).toBe(true);
+  });
+
+  test('returns false when value arrays differ in length', () => {
+    expect(filterStatesEqual({ a: ['1'] }, { a: ['1', '2'] })).toBe(false);
+  });
+
+  test('returns false on differing values', () => {
+    expect(filterStatesEqual({ a: ['1'] }, { a: ['2'] })).toBe(false);
+  });
+
+  test('returns false when key is missing', () => {
+    expect(filterStatesEqual({ a: ['1'] }, { b: ['1'] })).toBe(false);
+  });
+
+  test('order matters within a value array', () => {
+    expect(filterStatesEqual({ a: ['1', '2'] }, { a: ['2', '1'] })).toBe(false);
   });
 });

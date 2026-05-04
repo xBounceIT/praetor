@@ -1,6 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import {
+  isClipboardReadSupported,
+  readTextFromClipboard,
+  writeTextToClipboard,
+} from '../../utils/clipboard';
 import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
 import CustomViewModal from './CustomViewModal';
@@ -8,6 +13,7 @@ import {
   type CustomView,
   computeViewApplication,
   type FilterState,
+  filterStatesEqual,
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
@@ -21,7 +27,16 @@ import {
 import TableFilter from './TableFilter';
 import Tooltip from './Tooltip';
 
-const getStorageKey = (t: string, suffix: string) =>
+const STORAGE_SUFFIX = {
+  rows: 'rows',
+  fontSize: 'fontsize',
+  colWidths: 'colwidths',
+  customViews: 'customviews',
+  activeView: 'activeview',
+} as const;
+type StorageSuffix = (typeof STORAGE_SUFFIX)[keyof typeof STORAGE_SUFFIX];
+
+const getStorageKey = (t: string, suffix: StorageSuffix) =>
   `praetor_table_${suffix}_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
 
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
@@ -135,7 +150,7 @@ const StandardTable = <T extends object>({
   // Lazy initialization for rowsPerPage
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
-    const key = getStorageKey(title, 'rows');
+    const key = getStorageKey(title, STORAGE_SUFFIX.rows);
     const saved = localStorage.getItem(key);
     if (saved) {
       const val = Number(saved);
@@ -149,7 +164,7 @@ const StandardTable = <T extends object>({
   // Lazy initialization for fontSize
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     if (typeof window === 'undefined') return 'sm';
-    const saved = localStorage.getItem(getStorageKey(title, 'fontsize'));
+    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
     if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
     return 'sm';
   });
@@ -160,7 +175,7 @@ const StandardTable = <T extends object>({
   // Lazy initialization for columnWidths
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     if (typeof window === 'undefined') return {};
-    const saved = localStorage.getItem(getStorageKey(title, 'colwidths'));
+    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -172,11 +187,11 @@ const StandardTable = <T extends object>({
 
   const [customViews, setCustomViews] = useState<CustomView[]>(() => {
     if (typeof window === 'undefined') return [];
-    return parseStoredViews(localStorage.getItem(getStorageKey(title, 'customviews')));
+    return parseStoredViews(localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)));
   });
   const [activeViewId, setActiveViewId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(getStorageKey(title, 'activeview'));
+    return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
   });
   const [viewsSubmenuOpen, setViewsSubmenuOpen] = useState(false);
   const [modalState, setModalState] = useState<ViewModalState>(null);
@@ -189,22 +204,38 @@ const StandardTable = <T extends object>({
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
 
-  const storageKey = useMemo(() => getStorageKey(title, 'rows'), [title]);
+  const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
 
   const persistCustomViews = useCallback(
     (views: CustomView[]) => {
       if (typeof window === 'undefined') return;
       try {
-        localStorage.setItem(getStorageKey(title, 'customviews'), JSON.stringify(views));
+        localStorage.setItem(
+          getStorageKey(title, STORAGE_SUFFIX.customViews),
+          JSON.stringify(views),
+        );
       } catch {}
     },
     [title],
   );
 
+  // Wraps `setCustomViews` so callers don't have to repeat the persist call,
+  // and lets the helpers' same-ref no-op short-circuit propagate cleanly.
+  const updateCustomViews = useCallback(
+    (updater: (prev: CustomView[]) => CustomView[]) => {
+      setCustomViews((prev) => {
+        const next = updater(prev);
+        if (next !== prev) persistCustomViews(next);
+        return next;
+      });
+    },
+    [persistCustomViews],
+  );
+
   const persistActiveViewId = useCallback(
     (id: string | null) => {
       if (typeof window === 'undefined') return;
-      const key = getStorageKey(title, 'activeview');
+      const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
       try {
         if (id) localStorage.setItem(key, id);
         else localStorage.removeItem(key);
@@ -224,9 +255,17 @@ const StandardTable = <T extends object>({
   // Sync table filterState with prop changes. After the boot apply-view effect
   // has run, prop-driven resets are dirty changes — clear the active marker so
   // the UI doesn't claim a view is applied when its filter snapshot diverges.
+  // Bail on referentially-new but structurally-equal props so parents passing
+  // an inline `{}` literal don't trigger churn every render.
   useEffect(() => {
-    setFilterState(initialFilterState ?? {});
-    if (viewsAppliedOnceRef.current) {
+    const next = initialFilterState ?? {};
+    let changed = false;
+    setFilterState((prev) => {
+      if (filterStatesEqual(prev, next)) return prev;
+      changed = true;
+      return next;
+    });
+    if (changed && viewsAppliedOnceRef.current) {
       updateActiveViewId(null);
     }
   }, [initialFilterState, updateActiveViewId]);
@@ -277,7 +316,6 @@ const StandardTable = <T extends object>({
     // Preserve deep-link / initial paging — don't reset currentPage
   }, [gearColumns, activeViewId, customViews, applyViewState, updateActiveViewId]);
 
-  // Close submenu whenever the gear popup closes, so re-opening starts collapsed
   useEffect(() => {
     if (!gearOpen) setViewsSubmenuOpen(false);
   }, [gearOpen]);
@@ -352,7 +390,7 @@ const StandardTable = <T extends object>({
       setResizingColId(null);
       document.body.style.cursor = '';
       setColumnWidths((prev) => {
-        localStorage.setItem(getStorageKey(title, 'colwidths'), JSON.stringify(prev));
+        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(prev));
         return prev;
       });
     };
@@ -474,7 +512,7 @@ const StandardTable = <T extends object>({
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
       const next = idx < FONT_SIZES.length - 1 ? FONT_SIZES[idx + 1] : prev;
-      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
+      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
       return next;
     });
   };
@@ -483,7 +521,7 @@ const StandardTable = <T extends object>({
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
       const next = idx > 0 ? FONT_SIZES[idx - 1] : prev;
-      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
+      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
       return next;
     });
   };
@@ -514,23 +552,22 @@ const StandardTable = <T extends object>({
   };
 
   const applyView = (view: CustomView) => {
+    setViewsSubmenuOpen(false);
+    setGearOpen(false);
+    if (view.id === activeViewId) return;
     applyViewState(view);
     updateActiveViewId(view.id);
     setCurrentPage(1);
-    setViewsSubmenuOpen(false);
-    setGearOpen(false);
   };
 
   const saveView = ({ name, hiddenColIds: hidden }: { name: string; hiddenColIds: string[] }) => {
     if (modalState?.kind === 'edit') {
       const editingId = modalState.view.id;
-      setCustomViews((prev) => {
-        const next = prev.map((v) =>
+      updateCustomViews((prev) =>
+        prev.map((v) =>
           v.id === editingId ? { ...v, name, hiddenColIds: hidden, sortState, filterState } : v,
-        );
-        persistCustomViews(next);
-        return next;
-      });
+        ),
+      );
       // If the edited view is currently active, mirror its new column visibility on the table.
       if (activeViewId === editingId) {
         setHiddenColIds(new Set(hidden));
@@ -543,11 +580,7 @@ const StandardTable = <T extends object>({
         sortState,
         filterState,
       };
-      setCustomViews((prev) => {
-        const next = [...prev, newView];
-        persistCustomViews(next);
-        return next;
-      });
+      updateCustomViews((prev) => [...prev, newView]);
       updateActiveViewId(newView.id);
       setHiddenColIds(new Set(hidden));
     }
@@ -555,73 +588,58 @@ const StandardTable = <T extends object>({
   };
 
   const deleteView = (id: string) => {
-    setCustomViews((prev) => {
-      const next = prev.filter((v) => v.id !== id);
-      persistCustomViews(next);
-      return next;
-    });
+    updateCustomViews((prev) => prev.filter((v) => v.id !== id));
     if (activeViewId === id) updateActiveViewId(null);
   };
 
   // Keyboard-accessible single-step reorder: ArrowUp/ArrowDown on the grip
   // swaps the view with its neighbor. Mouse drag still uses `reorderViews`.
   const moveViewByDelta = (id: string, delta: number) => {
-    setCustomViews((prev) => {
-      const idx = prev.findIndex((v) => v.id === id);
-      const next = moveByDelta(prev, idx, delta);
-      if (next === prev) return prev;
-      persistCustomViews(next);
-      return next;
-    });
+    updateCustomViews((prev) =>
+      moveByDelta(
+        prev,
+        prev.findIndex((v) => v.id === id),
+        delta,
+      ),
+    );
   };
 
   const reorderViews = (fromId: string, toId: string) => {
     if (fromId === toId) return;
-    setCustomViews((prev) => {
+    updateCustomViews((prev) => {
       const fromIdx = prev.findIndex((v) => v.id === fromId);
       const toIdx = prev.findIndex((v) => v.id === toId);
       if (fromIdx === -1 || toIdx === -1) return prev;
-      const next = reorderDropAbove(prev, fromIdx, toIdx);
-      persistCustomViews(next);
-      return next;
+      return reorderDropAbove(prev, fromIdx, toIdx);
     });
   };
 
-  const exportView = (view: CustomView) => {
+  const exportView = async (view: CustomView) => {
     const payload = {
       name: view.name,
       hiddenColIds: view.hiddenColIds,
       sortState: view.sortState,
       filterState: view.filterState,
     };
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-      showViewError(t('table.viewActionUnavailable'));
+    const ok = await writeTextToClipboard(JSON.stringify(payload));
+    if (!ok) {
+      showViewError(t('table.viewCopyFailed'));
       return;
     }
-    navigator.clipboard
-      .writeText(JSON.stringify(payload))
-      .then(() => {
-        setCopiedViewId(view.id);
-        if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
-        copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), 1500);
-      })
-      .catch(() => {
-        showViewError(t('table.viewCopyFailed'));
-      });
+    setCopiedViewId(view.id);
+    if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    copiedTimeoutRef.current = setTimeout(() => setCopiedViewId(null), 1500);
   };
 
   const importView = async () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
-      showViewError(t('table.viewActionUnavailable'));
+    const result = await readTextFromClipboard();
+    if (!result.ok) {
+      showViewError(
+        t(result.reason === 'denied' ? 'table.viewClipboardDenied' : 'table.viewActionUnavailable'),
+      );
       return;
     }
-    let text: string;
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      showViewError(t('table.viewClipboardDenied'));
-      return;
-    }
+    const text = result.text;
     if (text.length > IMPORT_PAYLOAD_MAX_BYTES) {
       showViewError(t('table.viewImportTooLarge'));
       return;
@@ -644,11 +662,7 @@ const StandardTable = <T extends object>({
       sortState: parseSortState(parsed.sortState),
       filterState: parseFilterState(parsed.filterState),
     };
-    setCustomViews((prev) => {
-      const next = [...prev, newView];
-      persistCustomViews(next);
-      return next;
-    });
+    updateCustomViews((prev) => [...prev, newView]);
     setViewError(null);
   };
 
@@ -1040,7 +1054,7 @@ const StandardTable = <T extends object>({
                                           }
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            exportView(view);
+                                            void exportView(view);
                                           }}
                                           className={`hover:bg-slate-200 ${isCopied ? 'text-praetor' : 'text-slate-500'}`}
                                         />
@@ -1072,20 +1086,19 @@ const StandardTable = <T extends object>({
                                 <i className="fa-solid fa-plus text-[10px]"></i>
                                 <span>{t('table.addCustomView')}</span>
                               </button>
-                              {typeof navigator !== 'undefined' &&
-                                !!navigator.clipboard?.readText && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void importView();
-                                    }}
-                                    className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                                  >
-                                    <i className="fa-solid fa-file-import text-[10px]"></i>
-                                    <span>{t('table.importView')}</span>
-                                  </button>
-                                )}
+                              {isClipboardReadSupported() && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void importView();
+                                  }}
+                                  className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                  <i className="fa-solid fa-file-import text-[10px]"></i>
+                                  <span>{t('table.importView')}</span>
+                                </button>
+                              )}
                               {viewError && (
                                 <div
                                   role="alert"

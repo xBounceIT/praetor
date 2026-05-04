@@ -6,6 +6,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
+import { writeTextToClipboard } from '../../utils/clipboard';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -43,27 +44,6 @@ const safeHref = (href: string | undefined) => {
     return null;
   } catch {
     return null;
-  }
-};
-
-const copyTextToClipboard = async (text: string) => {
-  try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return true;
-  } catch {
-    return false;
   }
 };
 
@@ -1062,7 +1042,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   };
 
   const handleCopy = useCallback(async (messageId: string, text: string) => {
-    const didCopy = await copyTextToClipboard(text);
+    const didCopy = await writeTextToClipboard(text);
     if (!didCopy) return;
     setCopiedMessageId(messageId);
     setTimeout(
@@ -1081,7 +1061,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     const markdown = tableElementToMarkdown(tableElement);
     if (!markdown) return;
 
-    const didCopy = await copyTextToClipboard(markdown);
+    const didCopy = await writeTextToClipboard(markdown);
     if (!didCopy) return;
 
     setCopiedTableId(tableId);
