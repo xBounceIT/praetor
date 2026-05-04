@@ -10,6 +10,7 @@
     "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
     "test": "bun test server/test test",
+    "test:coverage": "bun test server/test test --coverage",
     "lint": "bun run i18n:check && bun run typecheck && biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
