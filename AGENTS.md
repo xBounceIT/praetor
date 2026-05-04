@@ -2,26 +2,23 @@
 
 ## Project Structure & Module Organization
 
-- Frontend (Vite + React/TS) lives at repo root.
-- Entry points: `index.html`, `index.tsx`, `App.tsx`.
-- UI modules: `components/` (feature folders like `components/HR/`, shared primitives in `components/shared/`).
-- Client-side helpers: `services/` (API + Gemini integration), `utils/`, shared types in `types.ts` and `constants.tsx`.
-- Static assets: `public/`, translations in `locales/`.
-- Backend API (Fastify + TS) is in `server/`.
-- API entry/build: `server/index.ts`, app wiring in `server/app.ts`, routes in `server/routes/`, Drizzle schema in `server/db/schema/` and migrations in `server/db/migrations/`.
-- Generated docs are committed under `docs/` (`docs/frontend/`, `docs/api/openapi.json`).
+- Frontend (Vite + React/TS) lives at the repo root: app entry in `index.tsx` / `App.tsx`, UI in `components/` (feature folders + a `shared/` primitives folder), client helpers in `services/` and `utils/`, static assets in `public/`, translations in `locales/`.
+- Backend (Fastify + TS) lives under `server/`: app wiring in `server/app.ts`, HTTP routes in `server/routes/`, data access in `server/repositories/`, schema and migrations under `server/db/`.
+- Generated docs are committed under `docs/` (frontend TypeDoc + API OpenAPI).
 
 ## Build, Test, and Development Commands
 
 - `bun install` (and `cd server && bun install`): install deps.
-- `bun run dev`: run frontend dev server (defaults to `http://localhost:3000`).
+- `bun run dev`: run the frontend dev server.
 - `bun run build`: production frontend build to `dist/`.
 - `bun run preview`: serve the production build.
-- `cd server && bun run dev`: run API with watch.
-- `cd server && bun run build`: typecheck/compile API (`tsc`).
-- `cd server && bun run start`: run the built API (defaults to `http://localhost:3001`).
-- `bun run docs`: generate TypeDoc + OpenAPI into `docs/`.
-- `docker compose up -d --build`: run full stack (Postgres/API/Caddy).
+- `bun run test`: run the Bun test suites.
+- `bun run lint`: i18n-key check + typecheck + Biome (in that order). `bun run lint:fix` and `bun run format` apply Biome auto-fixes / formatting.
+- `cd server && bun run dev`: run the API with watch.
+- `cd server && bun run build`: typecheck/compile the API (`tsc`).
+- `cd server && bun run start`: run the built API.
+- `bun run docs`: regenerate TypeDoc + OpenAPI under `docs/`.
+- `docker compose up -d --build`: bring up the full stack (see `docker-compose.yml` for the current service set).
 
 ## Coding Style & Naming Conventions
 
@@ -32,15 +29,15 @@
 
 ## Testing Guidelines
 
-- No dedicated unit/integration test runner is configured currently.
-- Treat `bun run build`, `cd server && bun run build`, and `bun run lint` as the minimum CI-quality gate.
-- For changes touching UI flows, do a manual smoke test against `server/index.ts` and key routes under `server/routes/`.
-- If you introduce tests, prefer `*.test.ts` / `*.test.tsx` (co-located or under `__tests__/`).
+- Bun test runner. Backend repository-layer suites live under `server/test/` (fakes; no DB). Run via `bun run test` from the repo root.
+- Other layers (UI flows, end-to-end route behavior) still rely on manual testing.
+- Treat `bun run lint` (which also runs typecheck and the i18n key check) and `bun run build` as the minimum CI-quality gate.
+- New backend tests should live under `server/test/`, mirroring the source layout.
 
 ## Commit & Pull Request Guidelines
 
 - Prefer Conventional Commits as seen in history: `feat:`, `fix(scope):`, `refactor:`, `docs:`, `perf:`.
-- Husky pre-commit runs build, server build, docs generation, lint-staged, and lint. Expect `docs/` and `bun.lock` to update and be staged.
+- Husky runs `lint-staged` plus a typecheck on pre-commit. Expect Biome auto-fixes to be staged. Generated `docs/` and `bun.lock` may also need to be staged when a PR touches APIs or dependencies.
 - PRs should include: what/why, screenshots for UI changes, and notes for any DB/schema/migration changes in `server/db/`.
 
 ## Security & Configuration Tips
