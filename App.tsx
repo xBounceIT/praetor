@@ -20,7 +20,6 @@ import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import NotFound from './components/NotFound';
-import type { DraftTaskInput } from './components/projects/ProjectsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
@@ -38,14 +37,23 @@ import DailyView from './components/timesheet/DailyView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
 import WorkUnitsView from './components/WorkUnitsView';
-import { COLORS } from './constants';
-import i18n from './i18n';
-import api, { getAuthToken, type Settings, setAuthToken } from './services/api';
+import { makeClientHandlers } from './hooks/handlers/clientHandlers';
+import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
+import { makeInvoiceHandlers } from './hooks/handlers/invoiceHandlers';
+import { makeProductHandlers } from './hooks/handlers/productHandlers';
+import { makeProjectHandlers } from './hooks/handlers/projectHandlers';
+import { makeQuoteHandlers } from './hooks/handlers/quoteHandlers';
+import { makeSupplierHandlers } from './hooks/handlers/supplierHandlers';
+import { makeSupplierInvoiceHandlers } from './hooks/handlers/supplierInvoiceHandlers';
+import { makeSupplierQuoteHandlers } from './hooks/handlers/supplierQuoteHandlers';
+import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
+import { makeUserHandlers } from './hooks/handlers/userHandlers';
+import { useAuth } from './hooks/useAuth';
+import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
+import api, { type Settings } from './services/api';
 import type {
   Client,
   ClientOffer,
-  ClientProfileOption,
-  ClientProfileOptionCategory,
   ClientsOrder,
   EmailConfig,
   GeneralSettings as IGeneralSettings,
@@ -68,17 +76,16 @@ import type {
   WorkUnit,
 } from './types';
 import {
-  addDaysToDateOnly,
   dateOnlyStringToLocalDate,
   formatDateOnlyForLocale,
   getLocalDateString,
 } from './utils/date';
+import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
   buildPermission,
   hasAnyPermission,
   hasPermission,
-  TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
@@ -94,13 +101,6 @@ const getCurrencySymbol = (currency: string) => {
     default:
       return currency;
   }
-};
-
-type ModuleLoadErrors = Partial<Record<string, string[]>>;
-
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof Error && error.message) return error.message;
-  return 'Unknown error';
 };
 
 const getModuleFromView = (view: View | '404'): string | null => {
@@ -552,9 +552,6 @@ const App: React.FC = () => {
     applyTheme(getTheme());
   }, []);
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [logoutReason, setLogoutReason] = useState<'inactivity' | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -596,13 +593,14 @@ const App: React.FC = () => {
     openrouterModelId: '',
     defaultLocation: 'remote' as TimeEntryLocation,
   });
-  const [userSettings, setUserSettings] = useState<Settings>({
-    fullName: '',
-    email: '',
-    language: 'auto',
-  });
-  const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
-  const [moduleLoadErrors, setModuleLoadErrors] = useState<ModuleLoadErrors>({});
+  const {
+    loadedModules,
+    moduleLoadErrors,
+    loadDatasets,
+    markModuleLoaded,
+    recordFailures,
+    reset: resetModuleLoader,
+  } = useModuleLoader();
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
   const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
@@ -725,6 +723,172 @@ const App: React.FC = () => {
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
+
+  const clearAuthScopedAppState = useCallback(() => {
+    resetModuleLoader();
+    setHasLoadedGeneralSettings(false);
+    setHasLoadedLdapConfig(false);
+    setHasLoadedEmailConfig(false);
+    setHasLoadedRoles(false);
+    setRoles([]);
+    setUsers([]);
+    setClients([]);
+    setProjects([]);
+    setProjectTasks([]);
+    setProducts([]);
+    setQuotes([]);
+    setClientOffers([]);
+    setClientsOrders([]);
+    setInvoices([]);
+    setSuppliers([]);
+    setSupplierQuotes([]);
+    setSupplierOrders([]);
+    setSupplierInvoices([]);
+    setEntries([]);
+    entriesStreamTokenRef.current++;
+    setWorkUnits([]);
+  }, [resetModuleLoader]);
+
+  const {
+    currentUser,
+    isLoading,
+    logoutReason,
+    clearLogoutReason,
+    userSettings,
+    setUserSettings,
+    login,
+    logout,
+    switchRole,
+  } = useAuth({
+    onLogin: (user) => {
+      clearAuthScopedAppState();
+      setViewingUserId(user.id);
+      const defaultView = getDefaultViewForPermissions(user.permissions || []);
+      const activePermission =
+        activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
+      const canAccessActive = activePermission
+        ? hasPermission(user.permissions || [], activePermission)
+        : false;
+      if (activeView === '404' || !canAccessActive) {
+        setActiveView(defaultView);
+      }
+    },
+    onLogout: () => {
+      clearAuthScopedAppState();
+      setViewingUserId('');
+    },
+  });
+
+  const handleLogin = login;
+  const handleLogout = logout;
+  const handleSwitchRole = useCallback(
+    async (roleId: string) => {
+      try {
+        await switchRole(roleId);
+      } catch (err) {
+        console.error('Failed to switch role:', err);
+        alert('Failed to switch role: ' + (err as Error).message);
+      }
+    },
+    [switchRole],
+  );
+
+  const supplierQuoteHandlers = useMemo(
+    () =>
+      makeSupplierQuoteHandlers({
+        supplierQuoteFilterId,
+        setSupplierQuotes,
+        setSupplierOrders,
+        setSupplierInvoices,
+        setSupplierQuoteFilterId,
+        setActiveView,
+      }),
+    [supplierQuoteFilterId],
+  );
+
+  const quoteHandlers = useMemo(
+    () =>
+      makeQuoteHandlers({
+        quotes,
+        clientQuoteFilterId,
+        clientOfferFilterId,
+        setQuotes,
+        setClientOffers,
+        setClientsOrders,
+        setInvoices,
+        setClientQuoteFilterId,
+        setClientOfferFilterId,
+        setActiveView,
+        refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
+      }),
+    [
+      quotes,
+      clientQuoteFilterId,
+      clientOfferFilterId,
+      supplierQuoteHandlers.refreshSupplierQuoteFlow,
+    ],
+  );
+
+  const clientHandlers = useMemo(
+    () =>
+      makeClientHandlers({
+        projects,
+        setClients,
+        setProjects,
+        setProjectTasks,
+      }),
+    [projects],
+  );
+
+  const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), []);
+
+  const projectHandlers = useMemo(
+    () =>
+      makeProjectHandlers({
+        projects,
+        clientsOrders,
+        setProjects,
+        setProjectTasks,
+        setEntries,
+      }),
+    [projects, clientsOrders],
+  );
+
+  const entryHandlers = useMemo(
+    () =>
+      makeEntryHandlers({
+        currentUser,
+        viewingUserId,
+        setEntries,
+      }),
+    [currentUser, viewingUserId],
+  );
+
+  const invoiceHandlers = useMemo(() => makeInvoiceHandlers({ setInvoices }), []);
+
+  const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), []);
+
+  const supplierInvoiceHandlers = useMemo(
+    () =>
+      makeSupplierInvoiceHandlers({
+        setSupplierInvoices,
+        setActiveView,
+      }),
+    [],
+  );
+
+  const userHandlers = useMemo(
+    () =>
+      makeUserHandlers({
+        currentUser,
+        viewingUserId,
+        setUsers,
+        setRoles,
+        setWorkUnits,
+        setViewingUserId,
+      }),
+    [currentUser, viewingUserId],
+  );
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -860,45 +1024,6 @@ const App: React.FC = () => {
     }
   }, [activeView]);
 
-  // Check for existing token on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = getAuthToken();
-      if (token) {
-        try {
-          const user = await api.auth.me();
-          setCurrentUser(user);
-          setViewingUserId(user.id);
-
-          // Load user's settings and language preference
-          try {
-            const settings = await api.settings.get();
-            setUserSettings(settings);
-            if (settings.language) {
-              if (settings.language === 'auto') {
-                // Clear stored language, let i18n detect from browser
-                localStorage.removeItem('i18nextLng');
-                const browserLang = navigator.language.split('-')[0];
-                const detectedLang = ['en', 'it'].includes(browserLang) ? browserLang : 'en';
-                i18n.changeLanguage(detectedLang);
-              } else {
-                localStorage.setItem('i18nextLng', settings.language);
-                i18n.changeLanguage(settings.language);
-              }
-            }
-          } catch {
-            // Settings might not exist yet, that's okay
-          }
-        } catch {
-          // Token invalid, clear it
-          setAuthToken(null);
-        }
-      }
-      setIsLoading(false);
-    };
-    checkAuth();
-  }, []);
-
   useEffect(() => {
     if (!currentUser) return;
     if (!isRouteAccessible) return;
@@ -943,38 +1068,6 @@ const App: React.FC = () => {
       const rolesData = await api.roles.list();
       setRoles(rolesData);
       setHasLoadedRoles(true);
-    };
-
-    const loadDatasets = async (
-      moduleName: string,
-      requests: Array<{
-        dataset: string;
-        enabled: boolean;
-        load: () => Promise<unknown>;
-        apply: (data: unknown) => void;
-      }>,
-    ) => {
-      const activeRequests = requests.filter((request) => request.enabled);
-      if (activeRequests.length === 0) return [] as string[];
-
-      const results = await Promise.allSettled(activeRequests.map((request) => request.load()));
-      const failures: string[] = [];
-
-      results.forEach((result, index) => {
-        const request = activeRequests[index];
-        if (result.status === 'fulfilled') {
-          request.apply(result.value);
-          return;
-        }
-
-        failures.push(request.dataset);
-        console.error(
-          `Failed to load ${moduleName} dataset "${request.dataset}": ${getErrorMessage(result.reason)}`,
-          result.reason,
-        );
-      });
-
-      return failures;
     };
 
     const loadOptionalDataset = async (
@@ -1189,37 +1282,16 @@ const App: React.FC = () => {
                 dataset: 'entries',
                 enabled: true,
                 load: () => api.entries.listPage({ limit: 500 }),
-                apply: (data) => {
-                  const page = data as { entries: TimeEntry[]; nextCursor: string | null };
+                apply: (page) => {
                   const token = ++entriesStreamTokenRef.current;
                   setEntries(page.entries);
                   if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                 },
               },
-              {
-                dataset: 'clients',
-                enabled: canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'projects',
-                enabled: canListProjects,
-                load: () => api.projects.list(),
-                apply: (data) => setProjects(data as Project[]),
-              },
-              {
-                dataset: 'tasks',
-                enabled: canListTasks,
-                load: () => api.tasks.list(),
-                apply: (data) => setProjectTasks(data as ProjectTask[]),
-              },
-              {
-                dataset: 'users',
-                enabled: canListUsers,
-                load: () => api.users.list(),
-                apply: (data) => setUsers(data as User[]),
-              },
+              listRequest('clients', canListClients, () => api.clients.list(), setClients),
+              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
+              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+              listRequest('users', canListUsers, () => api.users.list(), setUsers),
             ]);
             await loadOptionalDataset(
               module,
@@ -1232,36 +1304,26 @@ const App: React.FC = () => {
           case 'hr': {
             if (!canViewHr) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'users',
-                enabled: canListUsers,
-                load: () => api.users.list(),
-                apply: (data) => setUsers(data as User[]),
-              },
-              {
-                dataset: 'work units',
-                enabled: canListWorkUnits,
-                load: () => api.workUnits.list(),
-                apply: (data) => setWorkUnits(data as WorkUnit[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canManageEmployeeAssignments && canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'projects',
-                enabled: canManageEmployeeAssignments && canListProjects,
-                load: () => api.projects.list(),
-                apply: (data) => setProjects(data as Project[]),
-              },
-              {
-                dataset: 'tasks',
-                enabled: canManageEmployeeAssignments && canListTasks,
-                load: () => api.tasks.list(),
-                apply: (data) => setProjectTasks(data as ProjectTask[]),
-              },
+              listRequest('users', canListUsers, () => api.users.list(), setUsers),
+              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
+              listRequest(
+                'clients',
+                canManageEmployeeAssignments && canListClients,
+                () => api.clients.list(),
+                setClients,
+              ),
+              listRequest(
+                'projects',
+                canManageEmployeeAssignments && canListProjects,
+                () => api.projects.list(),
+                setProjects,
+              ),
+              listRequest(
+                'tasks',
+                canManageEmployeeAssignments && canListTasks,
+                () => api.tasks.list(),
+                setProjectTasks,
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1277,12 +1339,12 @@ const App: React.FC = () => {
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'users',
-                enabled: shouldLoadUsers && canListUsers,
-                load: () => api.users.list(),
-                apply: (data) => setUsers(data as User[]),
-              },
+              listRequest(
+                'users',
+                shouldLoadUsers && canListUsers,
+                () => api.users.list(),
+                setUsers,
+              ),
             ]);
 
             await loadOptionalDataset(
@@ -1305,18 +1367,18 @@ const App: React.FC = () => {
           case 'crm': {
             if (!canViewCrm) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'clients',
-                enabled: canViewCrmClients && canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'suppliers',
-                enabled: canViewCrmSuppliers && canListSuppliers,
-                load: () => api.suppliers.list(),
-                apply: (data) => setSuppliers(data as Supplier[]),
-              },
+              listRequest(
+                'clients',
+                canViewCrmClients && canListClients,
+                () => api.clients.list(),
+                setClients,
+              ),
+              listRequest(
+                'suppliers',
+                canViewCrmSuppliers && canListSuppliers,
+                () => api.suppliers.list(),
+                setSuppliers,
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1329,42 +1391,22 @@ const App: React.FC = () => {
           case 'sales': {
             if (!canViewSales) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'quotes',
-                enabled: canListQuotes,
-                load: () => api.quotes.list(),
-                apply: (data) => setQuotes(data as Quote[]),
-              },
-              {
-                dataset: 'client offers',
-                enabled: canListClientOffers,
-                load: () => api.clientOffers.list(),
-                apply: (data) => setClientOffers(data as ClientOffer[]),
-              },
-              {
-                dataset: 'supplier quotes',
-                enabled: canListSupplierQuotes,
-                load: () => api.supplierQuotes.list(),
-                apply: (data) => setSupplierQuotes(data as SupplierQuote[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'suppliers',
-                enabled: canListSuppliers,
-                load: () => api.suppliers.list(),
-                apply: (data) => setSuppliers(data as Supplier[]),
-              },
-              {
-                dataset: 'products',
-                enabled: canListProducts,
-                load: () => api.products.list(),
-                apply: (data) => setProducts(data as Product[]),
-              },
+              listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
+              listRequest(
+                'client offers',
+                canListClientOffers,
+                () => api.clientOffers.list(),
+                setClientOffers,
+              ),
+              listRequest(
+                'supplier quotes',
+                canListSupplierQuotes,
+                () => api.supplierQuotes.list(),
+                setSupplierQuotes,
+              ),
+              listRequest('clients', canListClients, () => api.clients.list(), setClients),
+              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
+              listRequest('products', canListProducts, () => api.products.list(), setProducts),
             ]);
             await loadOptionalDataset(
               module,
@@ -1377,48 +1419,28 @@ const App: React.FC = () => {
           case 'accounting': {
             if (!canViewAccounting) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'client orders',
-                enabled: canListOrders,
-                load: () => api.clientsOrders.list(),
-                apply: (data) => setClientsOrders(data as ClientsOrder[]),
-              },
-              {
-                dataset: 'invoices',
-                enabled: canListInvoices,
-                load: () => api.invoices.list(),
-                apply: (data) => setInvoices(data as Invoice[]),
-              },
-              {
-                dataset: 'supplier orders',
-                enabled: canListSupplierOrders,
-                load: () => api.supplierOrders.list(),
-                apply: (data) => setSupplierOrders(data as SupplierSaleOrder[]),
-              },
-              {
-                dataset: 'supplier invoices',
-                enabled: canListSupplierInvoices,
-                load: () => api.supplierInvoices.list(),
-                apply: (data) => setSupplierInvoices(data as SupplierInvoice[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'suppliers',
-                enabled: canListSuppliers,
-                load: () => api.suppliers.list(),
-                apply: (data) => setSuppliers(data as Supplier[]),
-              },
-              {
-                dataset: 'products',
-                enabled: canListProducts,
-                load: () => api.products.list(),
-                apply: (data) => setProducts(data as Product[]),
-              },
+              listRequest(
+                'client orders',
+                canListOrders,
+                () => api.clientsOrders.list(),
+                setClientsOrders,
+              ),
+              listRequest('invoices', canListInvoices, () => api.invoices.list(), setInvoices),
+              listRequest(
+                'supplier orders',
+                canListSupplierOrders,
+                () => api.supplierOrders.list(),
+                setSupplierOrders,
+              ),
+              listRequest(
+                'supplier invoices',
+                canListSupplierInvoices,
+                () => api.supplierInvoices.list(),
+                setSupplierInvoices,
+              ),
+              listRequest('clients', canListClients, () => api.clients.list(), setClients),
+              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
+              listRequest('products', canListProducts, () => api.products.list(), setProducts),
             ]);
             await loadOptionalDataset(
               module,
@@ -1431,12 +1453,12 @@ const App: React.FC = () => {
           case 'catalog': {
             if (!canViewCatalog) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'products',
-                enabled: canListProducts && canViewCatalogInternal,
-                load: () => api.products.list(),
-                apply: (data) => setProducts(data as Product[]),
-              },
+              listRequest(
+                'products',
+                canListProducts && canViewCatalogInternal,
+                () => api.products.list(),
+                setProducts,
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1449,66 +1471,31 @@ const App: React.FC = () => {
           case 'projects': {
             if (!canViewProjects) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'projects',
-                enabled: canListProjects,
-                load: () => api.projects.list(),
-                apply: (data) => setProjects(data as Project[]),
-              },
-              {
-                dataset: 'tasks',
-                enabled: canListTasks,
-                load: () => api.tasks.list(),
-                apply: (data) => setProjectTasks(data as ProjectTask[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'users',
-                enabled: canListUsers,
-                load: () => api.users.list(),
-                apply: (data) => setUsers(data as User[]),
-              },
-              {
-                dataset: 'work units',
-                enabled: canListWorkUnits,
-                load: () => api.workUnits.list(),
-                apply: (data) => setWorkUnits(data as WorkUnit[]),
-              },
-              {
-                dataset: 'client orders',
-                enabled: canListOrders,
-                load: () => api.clientsOrders.list(),
-                apply: (data) => setClientsOrders(data as ClientsOrder[]),
-              },
+              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
+              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+              listRequest('clients', canListClients, () => api.clients.list(), setClients),
+              listRequest('users', canListUsers, () => api.users.list(), setUsers),
+              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
+              listRequest(
+                'client orders',
+                canListOrders,
+                () => api.clientsOrders.list(),
+                setClientsOrders,
+              ),
             ]);
             break;
           }
           case 'suppliers': {
             if (!canViewSuppliersModule) return;
             failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'suppliers',
-                enabled: canListSuppliers,
-                load: () => api.suppliers.list(),
-                apply: (data) => setSuppliers(data as Supplier[]),
-              },
-              {
-                dataset: 'supplier quotes',
-                enabled: canListSupplierQuotes,
-                load: () => api.supplierQuotes.list(),
-                apply: (data) => setSupplierQuotes(data as SupplierQuote[]),
-              },
-              {
-                dataset: 'products',
-                enabled: canListProducts,
-                load: () => api.products.list(),
-                apply: (data) => setProducts(data as Product[]),
-              },
+              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
+              listRequest(
+                'supplier quotes',
+                canListSupplierQuotes,
+                () => api.supplierQuotes.list(),
+                setSupplierQuotes,
+              ),
+              listRequest('products', canListProducts, () => api.products.list(), setProducts),
             ]);
             await loadOptionalDataset(
               module,
@@ -1535,22 +1522,8 @@ const App: React.FC = () => {
         failedDatasets.push('module data');
       } finally {
         const uniqueFailures = Array.from(new Set(failedDatasets));
-
-        setModuleLoadErrors((prev) => {
-          const next = { ...prev };
-          if (uniqueFailures.length > 0) {
-            next[module] = uniqueFailures;
-          } else {
-            delete next[module];
-          }
-          return next;
-        });
-
-        setLoadedModules((prev) => {
-          const next = new Set(prev);
-          next.add(module);
-          return next;
-        });
+        recordFailures(module, uniqueFailures);
+        markModuleLoaded(module);
       }
     };
 
@@ -1824,941 +1797,87 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [generateRecurringEntries, currentUser]);
 
-  // ... (handlers)
-
-  const handleAddEntry = async (
-    newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>,
-  ) => {
-    if (!currentUser) return;
-    try {
-      const targetUserId = viewingUserId || currentUser.id;
-      const entry = await api.entries.create({
-        ...newEntry,
-        userId: targetUserId,
-        hourlyCost: currentUser?.costPerHour || 0,
-      } as TimeEntry);
-      setEntries([entry, ...entries]);
-    } catch (err) {
-      console.error('Failed to add entry:', err);
-      alert('Failed to add time entry');
-    }
-  };
-
-  const handleAddBulkEntries = async (
-    newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[],
-  ) => {
-    if (!currentUser) return;
-    try {
-      const targetUserId = viewingUserId || currentUser.id;
-      const createdEntries = await Promise.all(
-        newEntries.map((entry) =>
-          api.entries.create({
-            ...entry,
-            userId: targetUserId,
-            hourlyCost: currentUser?.costPerHour || 0,
-          } as TimeEntry),
-        ),
-      );
-      setEntries((prev) => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
-    } catch (err) {
-      console.error('Failed to add bulk entries:', err);
-      alert('Failed to add some time entries');
-    }
-  };
-
-  const handleDeleteEntry = async (id: string) => {
-    try {
-      await api.entries.delete(id);
-      setEntries(entries.filter((e) => e.id !== id));
-    } catch (err) {
-      console.error('Failed to delete entry:', err);
-    }
-  };
-
-  const handleUpdateEntry = async (id: string, updates: Partial<TimeEntry>) => {
-    try {
-      const updated = await api.entries.update(id, updates);
-      setEntries(entries.map((e) => (e.id === id ? updated : e)));
-    } catch (err) {
-      console.error('Failed to update entry:', err);
-    }
-  };
-
-  const handleUpdateTask = async (id: string, updates: Partial<ProjectTask>) => {
-    try {
-      const updated = await api.tasks.update(id, updates);
-      setProjectTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    } catch (err) {
-      console.error('Failed to update task:', err);
-    }
-  };
-
-  const handleMakeRecurring = async (
-    taskId: string,
-    pattern: 'daily' | 'weekly' | 'monthly' | string,
-    startDate?: string,
-    endDate?: string,
-    duration?: number,
-  ) => {
-    try {
-      const updated = await api.tasks.update(taskId, {
-        isRecurring: true,
-        recurrencePattern: pattern,
-        recurrenceStart: startDate || getLocalDateString(),
-
-        recurrenceEnd: endDate,
-        recurrenceDuration: duration,
-      });
-      setProjectTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-      setTimeout(generateRecurringEntries, 100);
-    } catch (err) {
-      console.error('Failed to make task recurring:', err);
-    }
-  };
-
-  const handleRecurringAction = async (
-    taskId: string,
-    action: 'stop' | 'delete_future' | 'delete_all',
-  ) => {
-    const task = projectTasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    try {
-      await api.tasks.update(taskId, {
-        isRecurring: false,
-        recurrencePattern: undefined,
-        recurrenceStart: undefined,
-        recurrenceEnd: undefined,
-      });
-      setProjectTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                isRecurring: false,
-                recurrencePattern: undefined,
-                recurrenceStart: undefined,
-                recurrenceEnd: undefined,
-              }
-            : t,
-        ),
-      );
-
-      if (action === 'stop') {
-        await api.entries.bulkDelete(task.projectId, task.name, { placeholderOnly: true });
-        setEntries((prev) =>
-          prev.filter(
-            (e) => !(e.isPlaceholder && e.projectId === task.projectId && e.task === task.name),
-          ),
-        );
-      } else if (action === 'delete_future') {
-        await api.entries.bulkDelete(task.projectId, task.name, { futureOnly: true });
-        const today = getLocalDateString();
-
-        setEntries((prev) =>
-          prev.filter(
-            (e) => !(e.projectId === task.projectId && e.task === task.name && e.date >= today),
-          ),
-        );
-      } else if (action === 'delete_all') {
-        await api.entries.bulkDelete(task.projectId, task.name);
-        setEntries((prev) =>
-          prev.filter((e) => !(e.projectId === task.projectId && e.task === task.name)),
-        );
-      }
-    } catch (err) {
-      console.error('Failed to handle recurring action:', err);
-    }
-  };
-
-  const addClient = async (clientData: Partial<Client>) => {
-    try {
-      const client = await api.clients.create(clientData);
-      setClients([...clients, client]);
-    } catch (err) {
-      console.error('Failed to add client:', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateClient = async (id: string, updates: Partial<Client>) => {
-    try {
-      const updated = await api.clients.update(id, updates);
-      setClients(clients.map((c) => (c.id === id ? updated : c)));
-    } catch (err) {
-      console.error('Failed to update client:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteClient = async (id: string) => {
-    try {
-      await api.clients.delete(id);
-      setClients(clients.filter((c) => c.id !== id));
-      setProjects(projects.filter((p) => p.clientId !== id));
-      // Tasks are also deleted by cascade in DB, so filter them too
-      const projectIdsForClient = projects.filter((p) => p.clientId === id).map((p) => p.id);
-      setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));
-    } catch (err) {
-      console.error('Failed to delete client:', err);
-      alert('Failed to delete client');
-    }
-  };
-
-  const handleCreateClientProfileOption = async (
-    category: ClientProfileOptionCategory,
-    value: string,
-    sortOrder?: number,
-  ): Promise<ClientProfileOption> => {
-    try {
-      return await api.clients.createProfileOption(category, value, sortOrder);
-    } catch (err) {
-      console.error('Failed to create client profile option:', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateClientProfileOption = async (
-    category: ClientProfileOptionCategory,
-    id: string,
-    updates: { value: string; sortOrder?: number },
-  ): Promise<ClientProfileOption> => {
-    try {
-      const updated = await api.clients.updateProfileOption(category, id, updates);
-      const refreshedClients = await api.clients.list();
-      setClients(refreshedClients);
-      return updated;
-    } catch (err) {
-      console.error('Failed to update client profile option:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteClientProfileOption = async (
-    category: ClientProfileOptionCategory,
-    id: string,
-  ): Promise<void> => {
-    try {
-      await api.clients.deleteProfileOption(category, id);
-    } catch (err) {
-      console.error('Failed to delete client profile option:', err);
-      throw err;
-    }
-  };
-
-  const addProduct = async (productData: Partial<Product>) => {
-    try {
-      const product = await api.products.create(productData);
-      setProducts([...products, product]);
-    } catch (err) {
-      console.error('Failed to add product:', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateProduct = async (id: string, updates: Partial<Product>) => {
-    try {
-      const updated = await api.products.update(id, updates);
-      setProducts(products.map((p) => (p.id === id ? updated : p)));
-    } catch (err) {
-      console.error('Failed to update product:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteProduct = async (id: string) => {
-    try {
-      await api.products.delete(id);
-      setProducts(products.filter((p) => p.id !== id));
-    } catch (err) {
-      console.error('Failed to delete product:', err);
-    }
-  };
-
-  // Internal Product Category Management Handlers (mutations only)
-  const handleCreateInternalCategory = async (categoryData: { name: string; type: string }) => {
-    try {
-      await api.products.createInternalCategory(categoryData);
-    } catch (err) {
-      console.error('Failed to create internal category:', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateInternalCategory = async (id: string, updates: Partial<{ name: string }>) => {
-    try {
-      await api.products.updateInternalCategory(id, updates);
-      // Refresh products to pick up category renames in existing rows.
-      const updatedProducts = await api.products.list();
-      setProducts(updatedProducts);
-    } catch (err) {
-      console.error('Failed to update internal category:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteInternalCategory = async (id: string) => {
-    try {
-      await api.products.deleteInternalCategory(id);
-      // Refresh products to clear category/subcategory values
-      const updatedProducts = await api.products.list();
-      setProducts(updatedProducts);
-    } catch (err) {
-      console.error('Failed to delete internal category:', err);
-      throw err;
-    }
-  };
-
-  // Internal Product Subcategory Management Handlers (mutations only)
-  const handleCreateInternalSubcategory = async (subcategoryData: {
-    name: string;
-    type: string;
-    category: string;
-  }) => {
-    try {
-      await api.products.createInternalSubcategory(subcategoryData);
-    } catch (err) {
-      console.error('Failed to create internal subcategory:', err);
-      throw err;
-    }
-  };
-
-  const handleRenameInternalSubcategory = async (
-    oldName: string,
-    newName: string,
-    type: string,
-    category: string,
-  ) => {
-    try {
-      await api.products.renameInternalSubcategory(oldName, newName, type, category);
-      // Refresh products to get updated subcategory values
-      const updatedProducts = await api.products.list();
-      setProducts(updatedProducts);
-    } catch (err) {
-      console.error('Failed to rename internal subcategory:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteInternalSubcategory = async (name: string, type: string, category: string) => {
-    try {
-      await api.products.deleteInternalSubcategory(name, type, category);
-      // Refresh products to clear subcategory values
-      const updatedProducts = await api.products.list();
-      setProducts(updatedProducts);
-    } catch (err) {
-      console.error('Failed to delete internal subcategory:', err);
-      throw err;
-    }
-  };
-
-  // Product Type Management Handlers (mutations only)
-  const handleCreateProductType = async (typeData: {
-    name: string;
-    costUnit: 'unit' | 'hours';
-  }) => {
-    try {
-      await api.products.createProductType(typeData);
-    } catch (err) {
-      console.error('Failed to create product type:', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateProductType = async (
-    id: string,
-    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
-  ) => {
-    try {
-      await api.products.updateProductType(id, updates);
-      // Refresh products to pick up type renames and cost_unit changes
-      const updatedProducts = await api.products.list();
-      setProducts(updatedProducts);
-    } catch (err) {
-      console.error('Failed to update product type:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteProductType = async (id: string) => {
-    try {
-      await api.products.deleteProductType(id);
-    } catch (err) {
-      console.error('Failed to delete product type:', err);
-      throw err;
-    }
-  };
-
-  const refreshClientQuoteFlow = async () => {
-    const [quotesData, offersData, ordersData] = await Promise.all([
-      api.quotes.list(),
-      api.clientOffers.list(),
-      api.clientsOrders.list(),
-    ]);
-    setQuotes(quotesData);
-    setClientOffers(offersData);
-    setClientsOrders(ordersData);
-  };
-
-  const refreshClientOrderFlow = async () => {
-    const [ordersData, invoicesData] = await Promise.all([
-      api.clientsOrders.list(),
-      api.invoices.list(),
-    ]);
-    setClientsOrders(ordersData);
-    setInvoices(invoicesData);
-  };
-
-  const refreshSupplierQuoteFlow = async () => {
-    const [quotesData, ordersData] = await Promise.all([
-      api.supplierQuotes.list(),
-      api.supplierOrders.list(),
-    ]);
-    setSupplierQuotes(quotesData);
-    setSupplierOrders(ordersData);
-  };
-
-  const refreshSupplierOrderFlow = async () => {
-    const [ordersData, invoicesData] = await Promise.all([
-      api.supplierOrders.list(),
-      api.supplierInvoices.list(),
-    ]);
-    setSupplierOrders(ordersData);
-    setSupplierInvoices(invoicesData);
-  };
-
-  const addQuote = async (quoteData: Partial<Quote>) => {
-    try {
-      const quote = await api.quotes.create(quoteData);
-      setQuotes((prev) => [quote, ...prev]);
-    } catch (err) {
-      console.error('Failed to add quote:', err);
-    }
-  };
-
-  const handleUpdateQuote = async (id: string, updates: Partial<Quote>) => {
-    try {
-      const currentQuote = quotes.find((quote) => quote.id === id);
-      const isRestore = Boolean(
-        updates.status === 'draft' &&
-          updates.isExpired === false &&
-          currentQuote &&
-          (currentQuote.status !== 'draft' || currentQuote.isExpired),
-      );
-      if (isRestore) {
-        // Sales functionality removed - linked sales cleanup handled by backend
-      }
-
-      const updatesWithRestore = isRestore
-        ? { ...updates, expirationDate: getLocalDateString() }
-        : updates;
-
-      const updated = await api.quotes.update(id, updatesWithRestore);
-      if (clientQuoteFilterId === id) {
-        setClientQuoteFilterId(updated.id);
-      }
-      await refreshClientQuoteFlow();
-    } catch (err) {
-      console.error('Failed to update quote:', err);
-    }
-  };
-
-  const handleDeleteQuote = async (id: string) => {
-    try {
-      await api.quotes.delete(id);
-      setQuotes(quotes.filter((q) => q.id !== id));
-    } catch (err) {
-      console.error('Failed to delete quote:', err);
-    }
-  };
-
-  const handleUpdateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
-    try {
-      const updated = await api.clientOffers.update(id, updates);
-      if (clientOfferFilterId === id) {
-        setClientOfferFilterId(updated.id);
-      }
-      await refreshClientQuoteFlow();
-    } catch (err) {
-      console.error('Failed to update client offer:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteClientOffer = async (id: string) => {
-    try {
-      await api.clientOffers.delete(id);
-      setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
-      setQuotes((prev) =>
-        prev.map((quote) =>
-          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to delete client offer:', err);
-      throw err;
-    }
-  };
-
-  const handleCreateClientOfferFromQuote = async (quote: Quote) => {
-    try {
-      const offer = await api.clientOffers.create({
-        id: `${quote.id}-OF`,
-        linkedQuoteId: quote.id,
-        clientId: quote.clientId,
-        clientName: quote.clientName,
-        paymentTerms: quote.paymentTerms,
-        discount: quote.discount,
-        status: 'draft',
-        expirationDate: quote.expirationDate,
-        notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
-          offerId: '',
-        })),
-      });
-      setClientOffers((prev) => [offer, ...prev]);
-      setQuotes((prev) =>
-        prev.map((entry) =>
-          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
-        ),
-      );
-      setActiveView('sales/client-offers');
-    } catch (err) {
-      console.error('Failed to create offer from quote:', err);
-      alert((err as Error).message || 'Failed to create offer from quote');
-    }
-  };
-
-  const handleUpdateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
-    try {
-      await api.clientsOrders.update(id, updates);
-      await refreshClientOrderFlow();
-    } catch (err) {
-      console.error('Failed to update order:', err);
-    }
-  };
-
-  const handleDeleteClientsOrder = async (id: string) => {
-    try {
-      await api.clientsOrders.delete(id);
-      setClientsOrders(clientsOrders.filter((o) => o.id !== id));
-    } catch (err) {
-      console.error('Failed to delete order:', err);
-    }
-  };
-
-  const handleCreateClientsOrderFromOffer = async (offer: ClientOffer) => {
-    try {
-      const orderData: Partial<ClientsOrder> = {
-        clientId: offer.clientId,
-        clientName: offer.clientName,
-        status: 'draft',
-        linkedQuoteId: offer.linkedQuoteId,
-        linkedOfferId: offer.id,
-        paymentTerms: offer.paymentTerms,
-        items: offer.items.map((item) => ({
-          ...item,
-          id: 'temp-' + Math.random().toString(36).substring(2, 11),
-          orderId: '',
-        })),
-        discount: offer.discount,
-        notes: offer.notes,
-      };
-
-      const order = await api.clientsOrders.create(orderData);
-      setClientsOrders((prev) => [...prev, order]);
-      setActiveView('accounting/clients-orders');
-      try {
-        await refreshSupplierQuoteFlow();
-      } catch (refreshErr) {
-        console.error('Failed to refresh supplier data:', refreshErr);
-      }
-    } catch (err) {
-      console.error('Failed to create order from offer:', err);
-      alert((err as Error).message || 'Failed to create order from offer');
-    }
-  };
-
-  // Finances Handlers
-  const addInvoice = async (invoiceData: Partial<Invoice>) => {
-    try {
-      const invoice = await api.invoices.create(invoiceData);
-      setInvoices([...invoices, invoice]);
-    } catch (err) {
-      console.error('Failed to add invoice:', err);
-    }
-  };
-
-  const handleUpdateInvoice = async (id: string, updates: Partial<Invoice>) => {
-    try {
-      await api.invoices.update(id, updates);
-      setInvoices(await api.invoices.list());
-    } catch (err) {
-      console.error('Failed to update invoice:', err);
-    }
-  };
-
-  const handleDeleteInvoice = async (id: string) => {
-    try {
-      await api.invoices.delete(id);
-      setInvoices(invoices.filter((i) => i.id !== id));
-    } catch (err) {
-      console.error('Failed to delete invoice:', err);
-    }
-  };
-
-  const addSupplier = async (supplierData: Partial<Supplier>) => {
-    try {
-      const supplier = await api.suppliers.create(supplierData);
-      setSuppliers([...suppliers, supplier]);
-    } catch (err) {
-      console.error('Failed to add supplier:', err);
-    }
-  };
-
-  const handleUpdateSupplier = async (id: string, updates: Partial<Supplier>) => {
-    try {
-      const updated = await api.suppliers.update(id, updates);
-      setSuppliers(suppliers.map((s) => (s.id === id ? updated : s)));
-    } catch (err) {
-      console.error('Failed to update supplier:', err);
-    }
-  };
-
-  const handleDeleteSupplier = async (id: string) => {
-    try {
-      await api.suppliers.delete(id);
-      setSuppliers(suppliers.filter((s) => s.id !== id));
-    } catch (err) {
-      console.error('Failed to delete supplier:', err);
-    }
-  };
-
-  const addSupplierQuote = async (quoteData: Partial<SupplierQuote>) => {
-    try {
-      const quote = await api.supplierQuotes.create(quoteData);
-      setSupplierQuotes([...supplierQuotes, quote]);
-    } catch (err) {
-      console.error('Failed to add supplier quote:', err);
-    }
-  };
-
-  const handleUpdateSupplierQuote = async (id: string, updates: Partial<SupplierQuote>) => {
-    try {
-      const updated = await api.supplierQuotes.update(id, updates);
-      if (supplierQuoteFilterId === id) {
-        setSupplierQuoteFilterId(updated.id);
-      }
-      await refreshSupplierQuoteFlow();
-    } catch (err) {
-      console.error('Failed to update supplier quote:', err);
-    }
-  };
-
-  const handleDeleteSupplierQuote = async (id: string) => {
-    try {
-      await api.supplierQuotes.delete(id);
-      setSupplierQuotes(supplierQuotes.filter((q) => q.id !== id));
-    } catch (err) {
-      console.error('Failed to delete supplier quote:', err);
-    }
-  };
-
-  const handleUpdateSupplierOrder = async (id: string, updates: Partial<SupplierSaleOrder>) => {
-    try {
-      await api.supplierOrders.update(id, updates);
-      await refreshSupplierOrderFlow();
-    } catch (err) {
-      console.error('Failed to update supplier order:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteSupplierOrder = async (id: string) => {
-    try {
-      await api.supplierOrders.delete(id);
-      setSupplierOrders((prev) => prev.filter((order) => order.id !== id));
-    } catch (err) {
-      console.error('Failed to delete supplier order:', err);
-      throw err;
-    }
-  };
-
-  const handleCreateSupplierOrderFromQuote = async (quote: SupplierQuote) => {
-    try {
-      await api.supplierOrders.create({
-        linkedQuoteId: quote.id,
-        supplierId: quote.supplierId,
-        supplierName: quote.supplierName,
-        paymentTerms: quote.paymentTerms,
-        status: 'draft',
-        notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
-          orderId: '',
-          productId: item.productId ?? '',
-        })),
-      });
-      setSupplierQuoteFilterId(quote.id);
-      setActiveView('accounting/supplier-orders');
-      try {
-        await refreshSupplierQuoteFlow();
-      } catch (refreshErr) {
-        console.error('Failed to refresh supplier data:', refreshErr);
-      }
-    } catch (err) {
-      console.error('Failed to create supplier order from quote:', err);
-      alert((err as Error).message || 'Failed to create supplier order from quote');
-    }
-  };
-
-  const handleUpdateSupplierInvoice = async (id: string, updates: Partial<SupplierInvoice>) => {
-    try {
-      await api.supplierInvoices.update(id, updates);
-      setSupplierInvoices(await api.supplierInvoices.list());
-    } catch (err) {
-      console.error('Failed to update supplier invoice:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteSupplierInvoice = async (id: string) => {
-    try {
-      await api.supplierInvoices.delete(id);
-      setSupplierInvoices((prev) => prev.filter((invoice) => invoice.id !== id));
-    } catch (err) {
-      console.error('Failed to delete supplier invoice:', err);
-      throw err;
-    }
-  };
-
-  const handleCreateSupplierInvoiceFromOrder = async (order: SupplierSaleOrder) => {
-    try {
-      const paymentDays = Number.parseInt(order.paymentTerms?.replace(/\D/g, '') || '30', 10) || 30;
-      const issueDate = getLocalDateString();
-      const dueDate = addDaysToDateOnly(issueDate, paymentDays);
-      const items = order.items.map((item) => ({
-        id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
-        invoiceId: '',
-        productId: item.productId,
-        description: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discount: item.discount || 0,
-      }));
-      const totals = items.reduce(
-        (acc, item) => {
-          const lineSubtotal = item.quantity * item.unitPrice;
-          const lineDiscount = (lineSubtotal * item.discount) / 100;
-          const lineNet = lineSubtotal - lineDiscount;
-          acc.subtotal += lineNet;
-          return acc;
-        },
-        { subtotal: 0 },
-      );
-      const invoice = await api.supplierInvoices.create({
-        linkedSaleId: order.id,
-        supplierId: order.supplierId,
-        supplierName: order.supplierName,
-        issueDate,
-        dueDate,
-        status: 'draft',
-        subtotal: totals.subtotal,
-        total: totals.subtotal,
-        amountPaid: 0,
-        notes: order.notes,
-        items,
-      });
-      setSupplierInvoices((prev) => [invoice, ...prev]);
-      setActiveView('accounting/supplier-invoices');
-    } catch (err) {
-      console.error('Failed to create supplier invoice from order:', err);
-      alert((err as Error).message || 'Failed to create supplier invoice from order');
-    }
-  };
-
-  // Employee handlers for HR module
-  const addInternalEmployee = async (
-    name: string,
-    costPerHour?: number,
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const employee = await api.employees.create({
-        name,
-        employeeType: 'internal',
-        costPerHour,
-      });
-      setUsers([...users, employee]);
-      return { success: true };
-    } catch (err) {
-      console.error('Failed to add internal employee:', err);
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Failed to create employee',
-      };
-    }
-  };
-
-  const addExternalEmployee = async (
-    name: string,
-    costPerHour?: number,
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const employee = await api.employees.create({
-        name,
-        employeeType: 'external',
-        costPerHour,
-      });
-      setUsers([...users, employee]);
-      return { success: true };
-    } catch (err) {
-      console.error('Failed to add external employee:', err);
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Failed to create employee',
-      };
-    }
-  };
-
-  const handleUpdateEmployee = async (id: string, updates: Partial<User>) => {
-    try {
-      const updated = await api.employees.update(id, updates);
-      setUsers(users.map((u) => (u.id === id ? updated : u)));
-    } catch (err) {
-      console.error('Failed to update employee:', err);
-    }
-  };
-
-  const handleDeleteEmployee = async (id: string) => {
-    try {
-      await api.employees.delete(id);
-      setUsers(users.filter((u) => u.id !== id));
-    } catch (err) {
-      console.error('Failed to delete employee:', err);
-    }
-  };
-
-  const addProject = async (
-    name: string,
-    orderId: string,
-    description?: string,
-    draftTasks?: DraftTaskInput[],
-  ) => {
-    try {
-      const order = clientsOrders.find((o) => o.id === orderId);
-      if (!order) throw new Error('Order not found');
-      const clientId = order.clientId;
-
-      const usedColors = projects.map((p) => p.color);
-      const availableColors = COLORS.filter((c) => !usedColors.includes(c));
-      const color =
-        availableColors.length > 0
-          ? availableColors[Math.floor(Math.random() * availableColors.length)]
-          : COLORS[Math.floor(Math.random() * COLORS.length)];
-
-      const project = await api.projects.create({ name, clientId, description, color, orderId });
-      setProjects((prev) => [...prev, project]);
-
-      if (draftTasks && draftTasks.length > 0) {
-        const createdTasks = await Promise.all(
-          draftTasks.map((t) =>
-            api.tasks.create(
-              t.name,
-              project.id,
-              undefined,
-              false,
-              undefined,
-              t.expectedEffort,
-              t.revenue,
-              t.notes,
-            ),
-          ),
-        );
-        setProjectTasks((prev) => [...prev, ...createdTasks]);
-      }
-    } catch (err) {
-      console.error('Failed to add project:', err);
-    }
-  };
-
-  const addProjectTask = async (
-    name: string,
-    projectId: string,
-    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
-    description?: string,
-  ) => {
-    try {
-      const task = await api.tasks.create(
-        name,
-        projectId,
-        description,
-        recurringConfig?.isRecurring,
-        recurringConfig?.pattern,
-      );
-      setProjectTasks((prev) => [...prev, task]);
-    } catch (err) {
-      console.error('Failed to add task:', err);
-    }
-  };
-
-  const handleUpdateProject = async (id: string, updates: Partial<Project>) => {
-    try {
-      const updated = await api.projects.update(id, updates);
-      setProjects(projects.map((p) => (p.id === id ? updated : p)));
-    } catch (err) {
-      console.error('Failed to update project:', err);
-      alert('Failed to update project');
-    }
-  };
-
-  const handleDeleteProject = async (id: string) => {
-    try {
-      await api.projects.delete(id);
-      setProjects(projects.filter((p) => p.id !== id));
-      setProjectTasks((prev) => prev.filter((t) => t.projectId !== id));
-      setEntries(entries.filter((e) => e.projectId !== id));
-    } catch (err) {
-      console.error('Failed to delete project:', err);
-      alert('Failed to delete project');
-    }
-  };
-
-  const handleUpdateUser = async (id: string, updates: Partial<User>) => {
-    try {
-      const updated = await api.users.update(id, updates);
-      setUsers(users.map((u) => (u.id === id ? updated : u)));
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      alert('Failed to update user: ' + (err as Error).message);
-    }
-  };
-
-  const handleUpdateUserRoles = async (id: string, roleIds: string[], primaryRoleId: string) => {
-    try {
-      const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
-      const hasTopManagerRole = roleIds.includes(TOP_MANAGER_ROLE_ID);
-      const isAdminOnly = roleIds.length === 1 && roleIds.includes('admin');
-      setUsers((currentUsers) =>
-        currentUsers.map((u) =>
-          u.id === id
-            ? {
-                ...u,
-                role: updated.primaryRoleId,
-                hasTopManagerRole,
-                isAdminOnly,
-              }
-            : u,
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to update user roles:', err);
-      alert('Failed to update user roles: ' + (err as Error).message);
-      throw err;
-    }
-  };
+  const taskHandlers = useMemo(
+    () =>
+      makeTaskHandlers({
+        projectTasks,
+        setProjectTasks,
+        setEntries,
+        generateRecurringEntries,
+      }),
+    [projectTasks, generateRecurringEntries],
+  );
+
+  const handleAddEntry = entryHandlers.add;
+  const handleAddBulkEntries = entryHandlers.addBulk;
+  const handleDeleteEntry = entryHandlers.delete;
+  const handleUpdateEntry = entryHandlers.update;
+
+  const handleUpdateTask = taskHandlers.update;
+  const handleMakeRecurring = taskHandlers.makeRecurring;
+  const handleRecurringAction = taskHandlers.recurringAction;
+
+  const addClient = clientHandlers.add;
+  const handleUpdateClient = clientHandlers.update;
+  const handleDeleteClient = clientHandlers.delete;
+  const handleCreateClientProfileOption = clientHandlers.createProfileOption;
+  const handleUpdateClientProfileOption = clientHandlers.updateProfileOption;
+  const handleDeleteClientProfileOption = clientHandlers.deleteProfileOption;
+
+  const addProduct = productHandlers.add;
+  const handleUpdateProduct = productHandlers.update;
+  const handleDeleteProduct = productHandlers.delete;
+  const handleCreateInternalCategory = productHandlers.createInternalCategory;
+  const handleUpdateInternalCategory = productHandlers.updateInternalCategory;
+  const handleDeleteInternalCategory = productHandlers.deleteInternalCategory;
+  const handleCreateInternalSubcategory = productHandlers.createInternalSubcategory;
+  const handleRenameInternalSubcategory = productHandlers.renameInternalSubcategory;
+  const handleDeleteInternalSubcategory = productHandlers.deleteInternalSubcategory;
+  const handleCreateProductType = productHandlers.createProductType;
+  const handleUpdateProductType = productHandlers.updateProductType;
+  const handleDeleteProductType = productHandlers.deleteProductType;
+
+  const addQuote = quoteHandlers.addQuote;
+  const handleUpdateQuote = quoteHandlers.updateQuote;
+  const handleDeleteQuote = quoteHandlers.deleteQuote;
+  const handleUpdateClientOffer = quoteHandlers.updateClientOffer;
+  const handleDeleteClientOffer = quoteHandlers.deleteClientOffer;
+  const handleCreateClientOfferFromQuote = quoteHandlers.createClientOfferFromQuote;
+  const handleUpdateClientsOrder = quoteHandlers.updateClientsOrder;
+  const handleDeleteClientsOrder = quoteHandlers.deleteClientsOrder;
+  const handleCreateClientsOrderFromOffer = quoteHandlers.createClientsOrderFromOffer;
+
+  const addInvoice = invoiceHandlers.add;
+  const handleUpdateInvoice = invoiceHandlers.update;
+  const handleDeleteInvoice = invoiceHandlers.delete;
+
+  const addSupplier = supplierHandlers.add;
+  const handleUpdateSupplier = supplierHandlers.update;
+  const handleDeleteSupplier = supplierHandlers.delete;
+
+  const addSupplierQuote = supplierQuoteHandlers.addSupplierQuote;
+  const handleUpdateSupplierQuote = supplierQuoteHandlers.updateSupplierQuote;
+  const handleDeleteSupplierQuote = supplierQuoteHandlers.deleteSupplierQuote;
+  const handleUpdateSupplierOrder = supplierQuoteHandlers.updateSupplierOrder;
+  const handleDeleteSupplierOrder = supplierQuoteHandlers.deleteSupplierOrder;
+  const handleCreateSupplierOrderFromQuote = supplierQuoteHandlers.createSupplierOrderFromQuote;
+
+  const handleUpdateSupplierInvoice = supplierInvoiceHandlers.update;
+  const handleDeleteSupplierInvoice = supplierInvoiceHandlers.delete;
+  const handleCreateSupplierInvoiceFromOrder = supplierInvoiceHandlers.createFromOrder;
+
+  const addInternalEmployee = userHandlers.addInternalEmployee;
+  const addExternalEmployee = userHandlers.addExternalEmployee;
+  const handleUpdateEmployee = userHandlers.updateEmployee;
+  const handleDeleteEmployee = userHandlers.deleteEmployee;
+
+  const addProject = projectHandlers.add;
+  const addProjectTask = projectHandlers.addTask;
+  const handleUpdateProject = projectHandlers.update;
+  const handleDeleteProject = projectHandlers.delete;
+
+  const handleUpdateUser = userHandlers.updateUser;
+  const handleUpdateUserRoles = userHandlers.updateUserRoles;
 
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
@@ -2809,115 +1928,6 @@ const App: React.FC = () => {
     return allowedView || 'timesheets/tracker';
   };
 
-  const handleLogin = async (user: User, token?: string) => {
-    if (token) {
-      setAuthToken(token);
-    }
-    setLoadedModules(new Set());
-    setModuleLoadErrors({});
-    setHasLoadedGeneralSettings(false);
-    setHasLoadedLdapConfig(false);
-    setHasLoadedEmailConfig(false);
-    setHasLoadedRoles(false);
-    setRoles([]);
-    setCurrentUser(user);
-    setViewingUserId(user.id);
-
-    // Load user's settings
-    try {
-      const settings = await api.settings.get();
-      setUserSettings(settings);
-      if (settings.language) {
-        if (settings.language === 'auto') {
-          localStorage.removeItem('i18nextLng');
-          const browserLang = navigator.language.split('-')[0];
-          const detectedLang = ['en', 'it'].includes(browserLang) ? browserLang : 'en';
-          i18n.changeLanguage(detectedLang);
-        } else {
-          localStorage.setItem('i18nextLng', settings.language);
-          i18n.changeLanguage(settings.language);
-        }
-      }
-    } catch {
-      // Settings might not exist yet, that's okay
-    }
-
-    const defaultView = getDefaultViewForPermissions(user.permissions || []);
-    const activePermission =
-      activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
-    const canAccessActive = activePermission
-      ? hasPermission(user.permissions || [], activePermission)
-      : false;
-    if (activeView === '404' || !canAccessActive) {
-      setActiveView(defaultView);
-    }
-  };
-
-  const handleLogout = (reason?: 'inactivity') => {
-    setAuthToken(null);
-    setCurrentUser(null);
-    setViewingUserId('');
-    setLoadedModules(new Set());
-    setModuleLoadErrors({});
-    setHasLoadedGeneralSettings(false);
-    setHasLoadedLdapConfig(false);
-    setHasLoadedEmailConfig(false);
-    setHasLoadedRoles(false);
-    setRoles([]);
-    setUsers([]);
-    setClients([]);
-    setProjects([]);
-    setProjectTasks([]);
-    setProducts([]);
-    setQuotes([]);
-    setClientOffers([]);
-    setClientsOrders([]);
-    setInvoices([]);
-    setSuppliers([]);
-    setSupplierQuotes([]);
-    setSupplierOrders([]);
-    setSupplierInvoices([]);
-    setEntries([]);
-    entriesStreamTokenRef.current++;
-    setWorkUnits([]);
-    setLogoutReason(reason || null);
-  };
-
-  const handleSwitchRole = async (roleId: string) => {
-    try {
-      // Clear potentially-privileged data to avoid stale UI after dropping permissions.
-      setLoadedModules(new Set());
-      setModuleLoadErrors({});
-      setHasLoadedGeneralSettings(false);
-      setHasLoadedLdapConfig(false);
-      setHasLoadedEmailConfig(false);
-      setHasLoadedRoles(false);
-      setRoles([]);
-      setUsers([]);
-      setClients([]);
-      setProjects([]);
-      setProjectTasks([]);
-      setProducts([]);
-      setQuotes([]);
-      setClientOffers([]);
-      setClientsOrders([]);
-      setInvoices([]);
-      setSuppliers([]);
-      setSupplierQuotes([]);
-      setSupplierOrders([]);
-      setSupplierInvoices([]);
-      setEntries([]);
-      entriesStreamTokenRef.current++;
-      setWorkUnits([]);
-
-      const response = await api.auth.switchRole(roleId);
-      await handleLogin(response.user, response.token);
-    } catch (err) {
-      console.error('Failed to switch role:', err);
-      alert('Failed to switch role: ' + (err as Error).message);
-    }
-  };
-
   const handleSaveLdapConfig = async (config: LdapConfig) => {
     try {
       const updated = await api.ldap.updateConfig(config);
@@ -2953,113 +1963,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddUser = async (
-    name: string,
-    username: string,
-    password: string,
-    role: string,
-    email?: string,
-  ) => {
-    try {
-      const user = await api.users.create(name, username, password, role, email);
-      setUsers([...users, user]);
-      return { success: true };
-    } catch (err) {
-      console.error('Failed to add user:', err);
-      return { success: false, error: (err as Error).message };
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    try {
-      if (viewingUserId === id) {
-        setViewingUserId(currentUser?.id || '');
-      }
-      await api.users.delete(id);
-      setUsers(users.filter((u) => u.id !== id));
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-    }
-  };
-
-  const addWorkUnit = async (data: Partial<WorkUnit>) => {
-    try {
-      const unit = await api.workUnits.create(data);
-      setWorkUnits([...workUnits, unit]);
-    } catch (err) {
-      console.error('Failed to add work unit:', err);
-      throw err;
-    }
-  };
-
-  const updateWorkUnit = async (id: string, updates: Partial<WorkUnit>) => {
-    try {
-      const updated = await api.workUnits.update(id, updates);
-      setWorkUnits(workUnits.map((w) => (w.id === id ? updated : w)));
-    } catch (err) {
-      console.error('Failed to update work unit:', err);
-      throw err;
-    }
-  };
-
-  const deleteWorkUnit = async (id: string) => {
-    try {
-      await api.workUnits.delete(id);
-      setWorkUnits(workUnits.filter((w) => w.id !== id));
-    } catch (err) {
-      console.error('Failed to delete work unit:', err);
-      throw err;
-    }
-  };
-
-  const fetchWorkUnits = async () => {
-    try {
-      const wu = await api.workUnits.list();
-      setWorkUnits(wu);
-    } catch (err) {
-      console.error('Failed to refresh work units', err);
-    }
-  };
-
-  const handleCreateRole = async (name: string, permissions: string[]) => {
-    try {
-      const role = await api.roles.create(name, permissions);
-      setRoles([...roles, role]);
-    } catch (err) {
-      console.error('Failed to create role', err);
-      throw err;
-    }
-  };
-
-  const handleRenameRole = async (id: string, name: string) => {
-    try {
-      const updated = await api.roles.rename(id, name);
-      setRoles(roles.map((role) => (role.id === id ? updated : role)));
-    } catch (err) {
-      console.error('Failed to rename role', err);
-      throw err;
-    }
-  };
-
-  const handleUpdateRolePermissions = async (id: string, permissions: string[]) => {
-    try {
-      const updated = await api.roles.updatePermissions(id, permissions);
-      setRoles(roles.map((role) => (role.id === id ? updated : role)));
-    } catch (err) {
-      console.error('Failed to update role permissions', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteRole = async (id: string) => {
-    try {
-      await api.roles.delete(id);
-      setRoles(roles.filter((role) => role.id !== id));
-    } catch (err) {
-      console.error('Failed to delete role', err);
-      throw err;
-    }
-  };
+  const handleAddUser = userHandlers.addUser;
+  const handleDeleteUser = userHandlers.deleteUser;
+  const addWorkUnit = userHandlers.addWorkUnit;
+  const updateWorkUnit = userHandlers.updateWorkUnit;
+  const deleteWorkUnit = userHandlers.deleteWorkUnit;
+  const fetchWorkUnits = userHandlers.fetchWorkUnits;
+  const handleCreateRole = userHandlers.createRole;
+  const handleRenameRole = userHandlers.renameRole;
+  const handleUpdateRolePermissions = userHandlers.updateRolePermissions;
+  const handleDeleteRole = userHandlers.deleteRole;
 
   const activeModule = activeView === '404' ? null : getModuleFromView(activeView);
   const activeModuleLoadFailures = activeModule ? (moduleLoadErrors[activeModule] ?? []) : [];
@@ -3103,7 +2016,7 @@ const App: React.FC = () => {
         users={users}
         onLogin={handleLogin}
         logoutReason={logoutReason}
-        onClearLogoutReason={() => setLogoutReason(null)}
+        onClearLogoutReason={clearLogoutReason}
       />
     );
 

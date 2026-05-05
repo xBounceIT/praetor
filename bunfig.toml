@@ -1,0 +1,5 @@
+[test]
+# Frontend tests need happy-dom registered before @testing-library/* loads.
+# Server tests must NOT inherit this — see server/bunfig.toml, which clears
+# the preload when running with cwd=server (used by `bun run test:server`).
+preload = ["./test/happydom.ts", "./test/setup.ts"]
