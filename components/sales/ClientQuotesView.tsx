@@ -191,7 +191,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     editingQuote &&
       (editingQuote.linkedOfferId ||
         editingQuote.status === 'accepted' ||
-        editingQuote.status === 'denied'),
+        editingQuote.status === 'denied' ||
+        // Backend stores 'confirmed' for finalized quotes (PUT and restore both 409 it).
+        // The Quote type doesn't include this status today, but rows from the API can
+        // have it — cast to compare without widening the union project-wide.
+        (editingQuote.status as string) === 'confirmed'),
   );
   const isReadOnly = baseReadOnly || previewVersion !== null;
 

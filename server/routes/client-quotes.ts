@@ -1036,10 +1036,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Version not found' });
       }
 
-      // Drop draft sales mirroring the PUT-restore branch — historical line items may not
-      // line up with the current draft sale's row references.
-      await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value);
-
       const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => ({
           ...rest,
@@ -1051,6 +1047,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const restored = await withDbTransaction(async (tx) => {
+        // Drop draft sales inside the tx — historical line items may not line up with the
+        // current draft sale's row references, but if the snapshot/update later fails the
+        // rollback must take the deletes with it (otherwise users lose draft orders for
+        // an unchanged quote).
+        await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx);
         // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
         await snapshotPreState(idResult.value, 'restore', request, tx);
 

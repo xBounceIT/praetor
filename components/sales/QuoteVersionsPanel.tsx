@@ -52,6 +52,7 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
       if (row.id === selectedVersionId) return;
       try {
         const version = await clientQuotesApi.getVersion(quoteId, row.id);
+        setError(null);
         onPreview(version);
       } catch {
         setError(t('clientQuotes.versionHistory.loadFailed'));
@@ -65,11 +66,16 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
     setRestoreInFlight(true);
     try {
       const updated = await clientQuotesApi.restoreVersion(quoteId, selectedVersionId);
+      setError(null);
       onRestored(updated);
       setConfirmOpen(false);
       await reload();
-    } catch {
-      setError(t('clientQuotes.versionHistory.loadFailed'));
+    } catch (e) {
+      // Restore failures (409 linked-offer / 409 confirmed / 409 non-draft sale / 404)
+      // carry actionable server messages — surface them instead of a generic load error.
+      setError(
+        e instanceof Error && e.message ? e.message : t('clientQuotes.versionHistory.loadFailed'),
+      );
     } finally {
       setRestoreInFlight(false);
     }
