@@ -94,24 +94,17 @@ describe('<StandardTable />', () => {
       <StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />,
     );
 
-    // Find the rows-per-page select control — it's a CustomSelect with options 5/10/20/50
-    // Trigger button shows current value as text. Initial = 10.
+    // The rows-per-page CustomSelect's trigger shows the current value (default 10).
     const triggers = screen.getAllByRole('button').filter((b) => b.textContent === '10');
-    if (triggers.length === 0) {
-      // No matching button — skip test
-      unmount();
-      return;
-    }
+    expect(triggers.length).toBeGreaterThan(0);
     fireEvent.click(triggers[0]);
-    // Click "20" option
-    const option20 = screen.queryByText('20');
-    if (option20) {
-      fireEvent.click(option20);
-    }
+
+    // Pick "20" from the dropdown — fail loudly if the option isn't rendered.
+    fireEvent.click(screen.getByText('20'));
     unmount();
-    // localStorage should have new rows value
-    const key = 'praetor_table_rows_people';
-    expect(localStorage.getItem(key)).not.toBeNull();
+
+    // localStorage should hold the newly-selected value, not just any value.
+    expect(localStorage.getItem('praetor_table_rows_people')).toBe('20');
   });
 
   test('CSV export click invokes downloadCsv with rows and filename', () => {

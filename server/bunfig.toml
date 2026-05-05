@@ -1,0 +1,4 @@
+# Server tests run with cwd=server (via `bun run test:server`). This file
+# exists so Bun's bunfig.toml lookup stops here instead of inheriting the
+# project-root preload, which registers happy-dom for the frontend suite.
+[test]

@@ -63,9 +63,12 @@ export function useAuth(opts: UseAuthOptions = {}) {
   const login = useCallback(
     async (user: User, token?: string) => {
       if (token) setAuthToken(token);
+      // Run the consumer's reset BEFORE flipping currentUser so any effects keyed on
+      // currentUser see the cleaned auth-scoped state in the same render batch — otherwise
+      // a login or role-switch can briefly resurface the previous session's data.
+      onLoginRef.current?.(user);
       setCurrentUser(user);
       await loadUserSettings();
-      onLoginRef.current?.(user);
     },
     [loadUserSettings],
   );

@@ -75,7 +75,7 @@ describe('<Calendar />', () => {
 
   test('range mode: two clicks emit (start, end)', () => {
     const onRangeSelect = mock((_s: string, _e: string | null) => {});
-    render(
+    const { rerender } = render(
       <Calendar
         selectionMode="range"
         startDate=""
@@ -85,10 +85,31 @@ describe('<Calendar />', () => {
         allowWeekendSelection
       />,
     );
-    // viewDate defaults to current month — pick days 1 and 5
+    // First click starts the range with end=null.
     fireEvent.click(screen.getByText('1'));
     expect(onRangeSelect).toHaveBeenCalledTimes(1);
+    const firstStart = onRangeSelect.mock.calls[0][0] as string;
+    expect(firstStart).toMatch(/^\d{4}-\d{2}-01$/);
     expect(onRangeSelect.mock.calls[0][1]).toBeNull();
+
+    // The parent would typically push the new range back into props. Simulate that
+    // so the second click hits the "complete the range" branch instead of starting
+    // a new one.
+    rerender(
+      <Calendar
+        selectionMode="range"
+        startDate={firstStart}
+        endDate=""
+        onRangeSelect={onRangeSelect}
+        startOfWeek="Monday"
+        allowWeekendSelection
+      />,
+    );
+    fireEvent.click(screen.getByText('5'));
+    expect(onRangeSelect).toHaveBeenCalledTimes(2);
+    const [secondStart, secondEnd] = onRangeSelect.mock.calls[1];
+    expect(secondStart).toBe(firstStart);
+    expect(secondEnd).toMatch(/^\d{4}-\d{2}-05$/);
   });
 
   test('Today button selects today in single mode', () => {
