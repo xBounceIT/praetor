@@ -2122,6 +2122,9 @@ const App: React.FC = () => {
                   supplierQuotes={supplierQuotes}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
+                  onQuoteRestored={(restored) => {
+                    setQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
+                  }}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
                   offers={clientOffers}

@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -420,6 +421,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     return isPastLocalDate(expirationDate);
   };
 
+  const snapshotPreState = async (
+    quoteId: string,
+    reason: quoteVersionsRepo.QuoteVersionReason,
+    request: FastifyRequest,
+    tx: DbExecutor,
+  ) => {
+    const pre = await clientQuotesRepo.findFullForSnapshot(quoteId, tx);
+    if (!pre) return;
+    await quoteVersionsRepo.insert(
+      {
+        quoteId,
+        snapshot: quoteVersionsRepo.buildSnapshot(pre.quote, pre.items),
+        reason,
+        createdByUserId: request.user?.id ?? null,
+      },
+      tx,
+    );
+  };
+
   // GET / - List all quotes with their items
   fastify.get(
     '/',
@@ -797,6 +817,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          // ID-only renames cascade through the FK and don't alter snapshot content, so we
+          // skip them to keep the history clean.
+          if (!isIdOnlyUpdate) {
+            await snapshotPreState(idResult.value, 'update', request, tx);
+          }
           const quote = await clientQuotesRepo.update(
             idResult.value,
             {
@@ -860,6 +885,214 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           typeof isExpiredOverride === 'boolean'
             ? isExpiredOverride
             : isQuoteExpired(updatedQuote.status, updatedQuote.expirationDate),
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------
+  // Version history
+  // ---------------------------------------------------------------------------------------
+
+  const versionParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      versionId: { type: 'string' },
+    },
+    required: ['id', 'versionId'],
+  } as const;
+
+  const quoteVersionRowSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      quoteId: { type: 'string' },
+      reason: { type: 'string', enum: ['update', 'restore'] },
+      createdByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'quoteId', 'reason', 'createdAt'],
+  } as const;
+
+  const quoteVersionSchema = {
+    type: 'object',
+    properties: { ...quoteVersionRowSchema.properties, snapshot: {} },
+    required: [...quoteVersionRowSchema.required, 'snapshot'],
+  } as const;
+
+  // GET /:id/versions - List versions for a quote
+  fastify.get(
+    '/:id/versions',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.client_quotes.view'),
+      ],
+      schema: {
+        tags: ['client-quotes'],
+        summary: 'List versions for a client quote',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: quoteVersionRowSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const [exists, versions] = await Promise.all([
+        clientQuotesRepo.existsById(idResult.value),
+        quoteVersionsRepo.listForQuote(idResult.value),
+      ]);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Quote not found' });
+      }
+      return versions;
+    },
+  );
+
+  // GET /:id/versions/:versionId - Get a single version with its snapshot
+  fastify.get(
+    '/:id/versions/:versionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.client_quotes.view'),
+      ],
+      schema: {
+        tags: ['client-quotes'],
+        summary: 'Get a single client quote version',
+        params: versionParamSchema,
+        response: {
+          200: quoteVersionSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const version = await quoteVersionsRepo.findById(idResult.value, versionIdResult.value);
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      return version;
+    },
+  );
+
+  // POST /:id/versions/:versionId/restore - Atomic restore (snapshots current first)
+  fastify.post(
+    '/:id/versions/:versionId/restore',
+    {
+      onRequest: [requirePermission('sales.client_quotes.update')],
+      schema: {
+        tags: ['client-quotes'],
+        summary: 'Restore a client quote to a prior version',
+        params: versionParamSchema,
+        response: {
+          200: quoteSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      // Independent reads — fan out, then run the gating ladder against resolved values.
+      // Same read-only rules as PUT.
+      const [linkedOfferId, current, nonDraftLinkedSale, version] = await Promise.all([
+        clientQuotesRepo.findLinkedOfferId(idResult.value),
+        clientQuotesRepo.findCurrentForUpdate(idResult.value),
+        clientQuotesRepo.findNonDraftLinkedSale(idResult.value),
+        quoteVersionsRepo.findById(idResult.value, versionIdResult.value),
+      ]);
+
+      if (linkedOfferId) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+      }
+      if (!current) {
+        return reply.code(404).send({ error: 'Quote not found' });
+      }
+      if (current.status === 'confirmed') {
+        return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
+      }
+      if (nonDraftLinkedSale) {
+        return reply.code(409).send({
+          error: 'Restore is only possible when linked sale orders are in draft status',
+        });
+      }
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+
+      // Drop draft sales mirroring the PUT-restore branch — historical line items may not
+      // line up with the current draft sale's row references.
+      await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value);
+
+      const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
+        ({ quoteId: _q, ...rest }) => ({
+          ...rest,
+          id: generateQuoteItemId(),
+          // `productId: ''` slips through the snapshot when sourced from a supplier quote;
+          // the `quote_items` row needs NULL there.
+          productId: rest.productId || null,
+        }),
+      );
+
+      const restored = await withDbTransaction(async (tx) => {
+        // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
+        await snapshotPreState(idResult.value, 'restore', request, tx);
+
+        const quote = await clientQuotesRepo.update(
+          idResult.value,
+          {
+            clientId: version.snapshot.quote.clientId,
+            clientName: version.snapshot.quote.clientName,
+            paymentTerms: version.snapshot.quote.paymentTerms,
+            discount: version.snapshot.quote.discount,
+            discountType: version.snapshot.quote.discountType,
+            status: version.snapshot.quote.status,
+            expirationDate: version.snapshot.quote.expirationDate,
+            notes: version.snapshot.quote.notes,
+          },
+          tx,
+        );
+        if (!quote) return { quote: null, items: [] };
+        const items = await clientQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
+        return { quote, items };
+      });
+
+      if (!restored.quote) {
+        return reply.code(404).send({ error: 'Quote not found' });
+      }
+
+      await logAudit({
+        request,
+        action: 'client_quote.restored',
+        entityType: 'client_quote',
+        entityId: restored.quote.id,
+        details: {
+          targetLabel: restored.quote.id,
+          secondaryLabel: restored.quote.clientName,
+          toValue: versionIdResult.value,
+        },
+      });
+
+      return {
+        ...restored.quote,
+        items: restored.items,
+        isExpired: isQuoteExpired(restored.quote.status, restored.quote.expirationDate),
       };
     },
   );

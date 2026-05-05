@@ -1,12 +1,14 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type {
   Client,
   ClientOffer,
   Product,
   Quote,
   QuoteItem,
+  QuoteVersion,
   SupplierQuote,
   SupplierUnitType,
 } from '../../types';
@@ -14,6 +16,7 @@ import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
   formatInsertDate,
+  formatInsertDateTime,
   getLocalDateString,
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
@@ -38,6 +41,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import QuoteVersionsPanel from './QuoteVersionsPanel';
 
 export interface ClientQuotesViewProps {
   quotes: Quote[];
@@ -46,6 +50,7 @@ export interface ClientQuotesViewProps {
   supplierQuotes: SupplierQuote[];
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
+  onQuoteRestored?: (quote: Quote) => void;
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
   onViewOffer?: (offerId: string) => void;
@@ -70,6 +75,19 @@ const getDefaultFormData = (): Partial<Quote> => ({
   notes: '',
 });
 
+const quoteToFormData = (quote: Quote): Partial<Quote> => ({
+  id: quote.id,
+  clientId: quote.clientId,
+  clientName: quote.clientName,
+  items: quote.items,
+  paymentTerms: quote.paymentTerms,
+  discount: quote.discount,
+  discountType: quote.discountType || 'percentage',
+  status: quote.status,
+  expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
+  notes: quote.notes || '',
+});
+
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
@@ -77,6 +95,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   supplierQuotes,
   onAddQuote,
   onUpdateQuote,
+  onQuoteRestored,
   onDeleteQuote,
   onCreateOffer,
   onViewOffer,
@@ -88,7 +107,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = [],
 }) => {
-  const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
+  const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
 
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
 
@@ -167,12 +186,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   );
 
   const [formData, setFormData] = useState<Partial<Quote>>(getDefaultFormData());
-  const isReadOnly = Boolean(
+  const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
+  const baseReadOnly = Boolean(
     editingQuote &&
       (editingQuote.linkedOfferId ||
         editingQuote.status === 'accepted' ||
         editingQuote.status === 'denied'),
   );
+  const isReadOnly = baseReadOnly || previewVersion !== null;
 
   const readOnlyReason = editingQuote?.linkedOfferId
     ? t('sales:clientQuotes.readOnlyBecauseOffer', {
@@ -202,33 +223,55 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     };
   }, [formData.items, formData.discount, formData.discountType]);
 
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+    setPreviewVersion(null);
+  }, []);
+
   const openAddModal = () => {
     setEditingQuote(null);
     setPendingClientChange(null);
     setFormData(getDefaultFormData());
     setErrors({});
+    setPreviewVersion(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = useCallback((quote: Quote) => {
     setEditingQuote(quote);
     setPendingClientChange(null);
-    const formattedDate = quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '';
-    setFormData({
-      id: quote.id,
-      clientId: quote.clientId,
-      clientName: quote.clientName,
-      items: quote.items,
-      paymentTerms: quote.paymentTerms,
-      discount: quote.discount,
-      discountType: quote.discountType || 'percentage',
-      status: quote.status,
-      expirationDate: formattedDate,
-      notes: quote.notes || '',
-    });
+    setFormData(quoteToFormData(quote));
     setErrors({});
+    setPreviewVersion(null);
     setIsModalOpen(true);
   }, []);
+
+  const handleVersionPreview = useCallback((version: QuoteVersion) => {
+    setPreviewVersion(version);
+    setFormData(
+      quoteToFormData({
+        ...version.snapshot.quote,
+        items: version.snapshot.items.map(normalizeQuoteItem),
+        status: version.snapshot.quote.status as Quote['status'],
+      }),
+    );
+    setErrors({});
+  }, []);
+
+  const handleClearPreview = useCallback(() => {
+    if (editingQuote) setFormData(quoteToFormData(editingQuote));
+    setPreviewVersion(null);
+  }, [editingQuote]);
+
+  const handleVersionRestored = useCallback(
+    (updated: Quote) => {
+      setEditingQuote(updated);
+      setFormData(quoteToFormData(updated));
+      setPreviewVersion(null);
+      onQuoteRestored?.(updated);
+    },
+    [onQuoteRestored],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -321,7 +364,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     } else {
       await onAddQuote(payload);
     }
-    setIsModalOpen(false);
+    closeModal();
   };
 
   const confirmDelete = useCallback((quote: Quote) => {
@@ -1150,7 +1193,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
+        {editingQuote?.id && (
+          <QuoteVersionsPanel
+            quoteId={editingQuote.id}
+            selectedVersionId={previewVersion?.id ?? null}
+            onPreview={handleVersionPreview}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        )}
         <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
@@ -1164,7 +1217,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   : t('sales:clientQuotes.createNewQuote')}
             </h3>
             <button
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeModal}
               className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
@@ -1172,7 +1225,27 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
-            {isReadOnly && (
+            {previewVersion && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 bg-amber-50">
+                <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
+                  <i className="fa-solid fa-clock-rotate-left"></i>
+                  {t('sales:clientQuotes.versionHistory.previewBanner', {
+                    date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                    defaultValue: 'Previewing version from {{date}}',
+                  })}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearPreview}
+                  className="text-xs font-bold text-amber-800 hover:underline whitespace-nowrap"
+                >
+                  {t('sales:clientQuotes.versionHistory.backToCurrent', {
+                    defaultValue: 'Back to current',
+                  })}
+                </button>
+              </div>
+            )}
+            {baseReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
                   {editingQuote?.linkedOfferId
@@ -1814,24 +1887,26 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel')}
               </button>
-              <button
-                type="submit"
-                disabled={isReadOnly}
-                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isReadOnly
-                  ? t('sales:clientQuotes.statusQuote', {
-                      status: getStatusLabel(editingQuote?.status || ''),
-                    })
-                  : editingQuote
-                    ? t('sales:clientQuotes.updateQuote')
-                    : t('sales:clientQuotes.createQuote')}
-              </button>
+              {!previewVersion && (
+                <button
+                  type="submit"
+                  disabled={isReadOnly}
+                  className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isReadOnly
+                    ? t('sales:clientQuotes.statusQuote', {
+                        status: getStatusLabel(editingQuote?.status || ''),
+                      })
+                    : editingQuote
+                      ? t('sales:clientQuotes.updateQuote')
+                      : t('sales:clientQuotes.createQuote')}
+                </button>
+              )}
             </div>
           </form>
         </div>

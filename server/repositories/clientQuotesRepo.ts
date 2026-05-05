@@ -309,6 +309,20 @@ export const findItemsForQuote = async (
   return rows.map(mapItem);
 };
 
+// Uses BASE projection (linkedOfferId NULL) because snapshots store on-row data only;
+// the offer-link join is reconstructed on read, not frozen into history.
+export const findFullForSnapshot = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ quote: ClientQuote; items: ClientQuoteItem[] } | null> => {
+  const [quoteRows, items] = await Promise.all([
+    exec.select(QUOTE_BASE_PROJECTION).from(quotes).where(eq(quotes.id, id)).limit(1),
+    findItemsForQuote(id, exec),
+  ]);
+  if (quoteRows.length === 0) return null;
+  return { quote: mapQuote(quoteRows[0]), items };
+};
+
 export type NewClientQuote = {
   id: string;
   clientId: string;

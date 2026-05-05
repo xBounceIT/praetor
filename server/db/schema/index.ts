@@ -14,6 +14,7 @@ export * from './products.ts';
 export * from './productTypes.ts';
 export * from './projects.ts';
 export * from './quotes.ts';
+export * from './quoteVersions.ts';
 export * from './reportChatMessages.ts';
 export * from './reportChatSessions.ts';
 export * from './roles.ts';
