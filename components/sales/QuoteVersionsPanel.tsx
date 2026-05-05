@@ -77,7 +77,7 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
 
   return (
     <>
-      <div className="hidden 2xl:flex fixed top-4 right-4 w-72 max-h-[calc(100vh-2rem)] z-[61] flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
+      <div className="hidden 2xl:flex w-72 max-h-[90vh] flex-col flex-shrink-0 rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left text-praetor"></i>
