@@ -10,6 +10,8 @@
     "clientInformation": "Client and document details",
     "productsServices": "Products and services for this quote",
     "items": "Line items for this offer",
+    "supplierInformation": "Supplier and document details",
+    "supplierItems": "Line items for this quote",
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
