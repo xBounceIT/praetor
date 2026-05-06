@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { buildPermission, hasAnyPermission } from '../../utils/permissions';
+import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -27,8 +28,6 @@ export interface DailyViewProps {
   defaultLocation?: TimeEntryLocation;
 }
 
-// Helper to format custom pattern - needs to be inside component to use translations
-
 const DailyView: React.FC<DailyViewProps> = ({
   clients,
   projects,
@@ -42,27 +41,6 @@ const DailyView: React.FC<DailyViewProps> = ({
   defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
-
-  // Helper to format custom pattern
-  const getRecurrenceLabel = (pattern: string) => {
-    if (pattern === 'daily') return t('entry.recurrencePatterns.daily');
-    if (pattern === 'weekly') return t('entry.recurrencePatterns.weekly');
-    if (pattern === 'monthly') return t('entry.recurrencePatterns.monthly');
-
-    if (pattern.startsWith('monthly:')) {
-      const parts = pattern.split(':');
-      if (parts.length === 3) {
-        const type = parts[1]; // first/second/third/fourth/last
-        const day = parseInt(parts[2], 10);
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayName = days[day];
-        const typeKey =
-          `entry.recurrencePatterns.every${type.charAt(0).toUpperCase() + type.slice(1)}` as keyof typeof t;
-        return t(typeKey, { day: dayName });
-      }
-    }
-    return t('entry.recurrencePatterns.custom');
-  };
 
   // Manual fields
   const [date, setDate] = useState(selectedDate || getLocalDateString());
@@ -438,7 +416,7 @@ const DailyView: React.FC<DailyViewProps> = ({
                       {
                         id: 'custom',
                         name: recurrencePattern.startsWith('monthly:')
-                          ? getRecurrenceLabel(recurrencePattern)
+                          ? formatRecurrencePattern(recurrencePattern, t)
                           : t('entry.recurrencePatterns.custom'),
                       },
                     ]}
