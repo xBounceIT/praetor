@@ -50,7 +50,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
           return project ? clientsById.get(project.clientId)?.name || '' : '';
         },
         cell: ({ value }) => (
-          <span className="text-sm font-bold text-slate-800">
+          <span className="font-bold text-slate-800">
             {(value as string) || t('recurring.unknown')}
           </span>
         ),
@@ -62,7 +62,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         cell: ({ row: task }) => {
           const project = projectsById.get(task.projectId);
           return (
-            <span className="text-sm text-slate-600 inline-flex items-center gap-1.5">
+            <span className="text-slate-600 inline-flex items-center gap-1.5">
               <span
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
@@ -76,7 +76,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         header: t('common:labels.task'),
         id: 'task',
         accessorFn: (task) => task.name,
-        cell: ({ value }) => <span className="text-sm text-slate-700">{value as string}</span>,
+        cell: ({ value }) => <span className="text-slate-700">{value as string}</span>,
       },
       {
         header: t('recurring.pattern'),
@@ -90,11 +90,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceStart || '',
         cell: ({ row: task }) =>
           task.recurrenceStart ? (
-            <span className="text-sm text-slate-600">
-              {formatDateOnlyForLocale(task.recurrenceStart)}
-            </span>
+            <span className="text-slate-600">{formatDateOnlyForLocale(task.recurrenceStart)}</span>
           ) : (
-            <span className="text-sm text-slate-400">—</span>
+            <span className="text-slate-400">—</span>
           ),
       },
       {
@@ -103,11 +101,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceEnd || '',
         cell: ({ row: task }) =>
           task.recurrenceEnd ? (
-            <span className="text-sm text-slate-600">
-              {formatDateOnlyForLocale(task.recurrenceEnd)}
-            </span>
+            <span className="text-slate-600">{formatDateOnlyForLocale(task.recurrenceEnd)}</span>
           ) : (
-            <span className="text-sm text-slate-400 italic">{t('recurring.noExpiration')}</span>
+            <span className="text-slate-400 italic">{t('recurring.noExpiration')}</span>
           ),
       },
       {
@@ -117,12 +113,12 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         align: 'right',
         cell: ({ row: task }) =>
           task.recurrenceDuration ? (
-            <span className="text-sm font-bold text-slate-700">
+            <span className="font-bold text-slate-700">
               {task.recurrenceDuration}
               {t('recurring.hoursSuffix')}
             </span>
           ) : (
-            <span className="text-sm text-slate-400">—</span>
+            <span className="text-slate-400">—</span>
           ),
       },
       {
@@ -149,7 +145,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                   }}
                   className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
                 >
-                  <i className="fa-solid fa-pen"></i>
+                  <i className="fa-solid fa-pen text-xs"></i>
                 </button>
               )}
             </Tooltip>
@@ -163,7 +159,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                   }}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                 >
-                  <i className="fa-solid fa-trash-can"></i>
+                  <i className="fa-solid fa-trash-can text-xs"></i>
                 </button>
               )}
             </Tooltip>
