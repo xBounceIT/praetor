@@ -65,6 +65,7 @@ import type {
   ProjectTask,
   Quote,
   Role,
+  SsoProvider,
   Supplier,
   SupplierInvoice,
   SupplierQuote,
@@ -604,6 +605,8 @@ const App: React.FC = () => {
   } = useModuleLoader();
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
+  const [hasLoadedSsoProviders, setHasLoadedSsoProviders] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
   const [emailConfig, setEmailConfig] = useState<EmailConfig>({
     enabled: false,
@@ -729,8 +732,10 @@ const App: React.FC = () => {
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
+    setHasLoadedSsoProviders(false);
     setHasLoadedEmailConfig(false);
     setHasLoadedRoles(false);
+    setSsoProviders([]);
     setRoles([]);
     setUsers([]);
     setClients([]);
@@ -1057,6 +1062,17 @@ const App: React.FC = () => {
       setHasLoadedLdapConfig(true);
     };
 
+    const loadSsoProviders = async () => {
+      if (hasLoadedSsoProviders) return;
+      const providers = await api.sso.listProviders();
+      setSsoProviders(providers);
+      setHasLoadedSsoProviders(true);
+    };
+
+    const loadAuthenticationConfig = async () => {
+      await Promise.all([loadLdapConfig(), loadSsoProviders()]);
+    };
+
     const loadEmailConfig = async () => {
       if (hasLoadedEmailConfig) return;
       const email = await api.email.getConfig();
@@ -1358,7 +1374,12 @@ const App: React.FC = () => {
               await loadOptionalDataset(module, 'roles', loadRoles, failedDatasets);
             }
             if (canViewAuthentication) {
-              await loadOptionalDataset(module, 'authentication', loadLdapConfig, failedDatasets);
+              await loadOptionalDataset(
+                module,
+                'authentication',
+                loadAuthenticationConfig,
+                failedDatasets,
+              );
             }
             if (canViewEmail) {
               await loadOptionalDataset(module, 'email settings', loadEmailConfig, failedDatasets);
@@ -1534,8 +1555,12 @@ const App: React.FC = () => {
     currentUser,
     isRouteAccessible,
     loadedModules,
+    loadDatasets,
+    markModuleLoaded,
+    recordFailures,
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,
+    hasLoadedSsoProviders,
     hasLoadedEmailConfig,
     hasLoadedRoles,
   ]);
@@ -1936,6 +1961,34 @@ const App: React.FC = () => {
       setLdapConfig(updated);
     } catch (err) {
       console.error('Failed to save LDAP config:', err);
+    }
+  };
+
+  const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
+    try {
+      const updated = provider.id
+        ? await api.sso.updateProvider(provider.id, provider)
+        : await api.sso.createProvider(provider);
+      setSsoProviders((current) => {
+        const exists = current.some((item) => item.id === updated.id);
+        return exists
+          ? current.map((item) => (item.id === updated.id ? updated : item))
+          : [...current, updated];
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to save SSO provider:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteSsoProvider = async (id: string) => {
+    try {
+      await api.sso.deleteProvider(id);
+      setSsoProviders((current) => current.filter((provider) => provider.id !== id));
+    } catch (err) {
+      console.error('Failed to delete SSO provider:', err);
+      throw err;
     }
   };
 
@@ -2440,7 +2493,14 @@ const App: React.FC = () => {
               VIEW_PERMISSION_MAP['administration/authentication'],
             ) &&
               activeView === 'administration/authentication' && (
-                <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} roles={roles} />
+                <AuthSettings
+                  config={ldapConfig}
+                  onSave={handleSaveLdapConfig}
+                  roles={roles}
+                  ssoProviders={ssoProviders}
+                  onSaveSsoProvider={handleSaveSsoProvider}
+                  onDeleteSsoProvider={handleDeleteSsoProvider}
+                />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&

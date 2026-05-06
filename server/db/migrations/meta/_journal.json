@@ -183,6 +183,13 @@
       "when": 1778196941020,
       "tag": "0025_add_supplier_quote_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778196941021,
+      "tag": "0026_add_sso_tables",
+      "breakpoints": true
     }
   ]
 }
