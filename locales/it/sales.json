@@ -268,6 +268,18 @@
     "day": "Giorno",
     "days": "Giorni",
     "unit": "Unità",
-    "units": "Unità"
+    "units": "Unità",
+    "versionHistory": {
+      "title": "Cronologia versioni",
+      "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
+      "previewBanner": "Anteprima della versione del {{date}}",
+      "backToCurrent": "Torna alla versione corrente",
+      "restoreButton": "Ripristina questa versione",
+      "restoreConfirmTitle": "Ripristinare questa versione?",
+      "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
+      "reasonUpdate": "Salvataggio",
+      "reasonRestore": "Ripristino",
+      "loadFailed": "Caricamento della cronologia non riuscito."
+    }
   }
 }

@@ -86,6 +86,14 @@ export const findById = async (
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: supplierQuotes.id })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id));
+  return rows.length > 0;
+};
+
 export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
@@ -95,6 +103,20 @@ export const findItemsForQuote = async (
     .from(supplierQuoteItems)
     .where(eq(supplierQuoteItems.quoteId, quoteId));
   return rows.map(mapItem);
+};
+
+// Skips the linked-order subquery used by `listAll` because snapshots store on-row data only;
+// the order-link join is reconstructed on read, not frozen into history.
+export const findFullForSnapshot = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ quote: SupplierQuote; items: SupplierQuoteItem[] } | null> => {
+  const [quoteRows, items] = await Promise.all([
+    exec.select().from(supplierQuotes).where(eq(supplierQuotes.id, id)).limit(1),
+    findItemsForQuote(id, exec),
+  ]);
+  if (quoteRows.length === 0) return null;
+  return { quote: mapQuote(quoteRows[0]), items };
 };
 
 export const findLinkedOrderId = async (
@@ -181,6 +203,36 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${supplierQuotes.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(supplierQuotes.id, id))
+    .returning();
+  return row ? mapQuote(row) : null;
+};
+
+export type SupplierQuoteRestoreFields = {
+  supplierId: string;
+  supplierName: string;
+  paymentTerms: string;
+  status: string;
+  expirationDate: string;
+  notes: string | null;
+};
+
+export const restoreSnapshotQuote = async (
+  id: string,
+  snapshot: SupplierQuoteRestoreFields,
+  exec: DbExecutor = db,
+): Promise<SupplierQuote | null> => {
+  const [row] = await exec
+    .update(supplierQuotes)
+    .set({
+      supplierId: snapshot.supplierId,
+      supplierName: snapshot.supplierName,
+      paymentTerms: snapshot.paymentTerms,
+      status: snapshot.status,
+      expirationDate: snapshot.expirationDate,
+      notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(supplierQuotes.id, id))

@@ -2186,6 +2186,13 @@ const App: React.FC = () => {
                   products={products}
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
+                  onQuoteRestored={(restored) => {
+                    // Patch the restored quote eagerly so the modal reflects it instantly.
+                    // No linked-order refetch needed: restore is rejected when an order exists.
+                    setSupplierQuotes((prev) =>
+                      prev.map((q) => (q.id === restored.id ? restored : q)),
+                    );
+                  }}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOrder={handleCreateSupplierOrderFromQuote}
                   quoteFilterId={supplierQuoteFilterId}
