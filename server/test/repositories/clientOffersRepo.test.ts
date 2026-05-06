@@ -14,6 +14,11 @@ beforeEach(() => {
 // db/schema/customerOfferItems.ts.
 const OFFER_BASE: readonly unknown[] = [
   'co-1',
+  'O-1',
+  'co-1',
+  null,
+  1,
+  true,
   'cq-1',
   'c-1',
   'Acme',
@@ -56,6 +61,9 @@ describe('listAll', () => {
     const result = await clientOffersRepo.listAll(testDb);
     expect(exec.calls[0].sql).toContain('from "customer_offers"');
     expect(exec.calls[0].sql).toContain('order by "customer_offers"."created_at" desc');
+    expect(result[0].offerCode).toBe('O-1');
+    expect(result[0].versionNumber).toBe(1);
+    expect(result[0].isLatest).toBe(true);
     expect(result[0].discount).toBe(5);
     expect(result[0].expirationDate).toBe('2026-06-01');
   });
@@ -88,9 +96,13 @@ describe('existsById / findIdConflict', () => {
 
 describe('findForUpdate', () => {
   test('returns existing offer fields needed for permission checks', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    exec.enqueue({
+      rows: [['co-1', 'O-1', 'co-1', null, 1, true, 'cq-1', 'c-1', 'Acme', 'draft']],
+    });
     const result = await clientOffersRepo.findForUpdate('co-1', testDb);
     expect(result?.linkedQuoteId).toBe('cq-1');
+    expect(result?.offerCode).toBe('O-1');
+    expect(result?.isLatest).toBe(true);
     expect(result?.status).toBe('draft');
   });
 
@@ -104,11 +116,46 @@ describe('findExistingForQuote', () => {
   test('returns offer id when one exists for the quote', async () => {
     exec.enqueue({ rows: [['co-1']] });
     expect(await clientOffersRepo.findExistingForQuote('cq-1', testDb)).toBe('co-1');
+    expect(exec.calls[0].sql).toContain('"is_latest" = $2');
   });
 
   test('returns null when none exists', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientOffersRepo.findExistingForQuote('cq-1', testDb)).toBeNull();
+  });
+});
+
+describe('version helpers', () => {
+  test('findById maps version metadata', async () => {
+    exec.enqueue({ rows: [offerRow({ 1: 'O-2', 2: 'group-1', 3: 'co-1', 4: 2, 5: false })] });
+    const result = await clientOffersRepo.findById('co-2', testDb);
+    expect(result?.offerCode).toBe('O-2');
+    expect(result?.versionGroupId).toBe('group-1');
+    expect(result?.versionParentId).toBe('co-1');
+    expect(result?.versionNumber).toBe(2);
+    expect(result?.isLatest).toBe(false);
+  });
+
+  test('findMaxVersionNumber returns numeric max', async () => {
+    exec.enqueue({ rows: [{ maxVersion: '3' }] });
+    await expect(clientOffersRepo.findMaxVersionNumber('group-1', testDb)).resolves.toBe(3);
+    expect(exec.calls[0].sql).toContain('MAX("version_number")');
+    expect(exec.calls[0].params).toEqual(['group-1']);
+  });
+
+  test('markGroupNotLatest clears latest flag for the group', async () => {
+    exec.enqueue({ rows: [] });
+    await clientOffersRepo.markGroupNotLatest('group-1', testDb);
+    expect(exec.calls[0].sql).toContain('update "customer_offers"');
+    expect(exec.calls[0].sql).toContain('"is_latest" = $1');
+    expect(exec.calls[0].params).toContain('group-1');
+  });
+
+  test('promoteLatestInGroup promotes highest remaining version', async () => {
+    exec.enqueue({ rows: [{ id: 'co-1' }] });
+    await expect(clientOffersRepo.promoteLatestInGroup('group-1', testDb)).resolves.toBe('co-1');
+    expect(exec.calls[0].sql).toContain('latest_candidate');
+    expect(exec.calls[0].sql).toContain('ORDER BY "version_number" DESC');
   });
 });
 
@@ -154,11 +201,12 @@ describe('findLinkedSaleId', () => {
 });
 
 describe('create', () => {
-  test('inserts 10 fields and returns mapped offer', async () => {
+  test('inserts versioned offer fields and returns mapped offer', async () => {
     exec.enqueue({ rows: [offerRow()] });
     const result = await clientOffersRepo.create(
       {
         id: 'co-1',
+        offerCode: 'O-1',
         linkedQuoteId: 'cq-1',
         clientId: 'c-1',
         clientName: 'Acme',
@@ -172,8 +220,9 @@ describe('create', () => {
       testDb,
     );
     expect(exec.calls[0].sql).toContain('insert into "customer_offers"');
-    expect(exec.calls[0].params).toHaveLength(10);
-    expect(exec.calls[0].params[5]).toBe('5'); // discount via numericForDb
+    expect(exec.calls[0].params).toHaveLength(15);
+    expect(exec.calls[0].params[1]).toBe('O-1');
+    expect(exec.calls[0].params[10]).toBe('5'); // discount via numericForDb
     expect(result.id).toBe('co-1');
   });
 });
@@ -327,6 +376,7 @@ describe('deleteById', () => {
 describe('mapOffer (exercised via create return path)', () => {
   const baseInput: clientOffersRepo.NewClientOffer = {
     id: 'co-1',
+    offerCode: 'O-1',
     linkedQuoteId: 'cq-1',
     clientId: 'c-1',
     clientName: 'Acme',
@@ -339,19 +389,19 @@ describe('mapOffer (exercised via create return path)', () => {
   };
 
   test('numeric-string discount is parsed to number', async () => {
-    exec.enqueue({ rows: [offerRow({ 5: '12.5' })] });
+    exec.enqueue({ rows: [offerRow({ 10: '12.5' })] });
     const result = await clientOffersRepo.create(baseInput, testDb);
     expect(result.discount).toBe(12.5);
   });
 
   test('unknown discountType falls back to percentage', async () => {
-    exec.enqueue({ rows: [offerRow({ 6: 'mystery' })] });
+    exec.enqueue({ rows: [offerRow({ 11: 'mystery' })] });
     const result = await clientOffersRepo.create(baseInput, testDb);
     expect(result.discountType).toBe('percentage');
   });
 
   test('null createdAt/updatedAt fall back to 0', async () => {
-    exec.enqueue({ rows: [offerRow({ 10: null, 11: null })] });
+    exec.enqueue({ rows: [offerRow({ 15: null, 16: null })] });
     const result = await clientOffersRepo.create(baseInput, testDb);
     expect(result.createdAt).toBe(0);
     expect(result.updatedAt).toBe(0);

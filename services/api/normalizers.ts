@@ -178,6 +178,11 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
 
 export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
   ...offer,
+  offerCode: offer.offerCode || offer.id,
+  versionGroupId: offer.versionGroupId || offer.id,
+  versionParentId: offer.versionParentId ?? null,
+  versionNumber: Number(offer.versionNumber || 1),
+  isLatest: offer.isLatest ?? true,
   discount: Number(offer.discount || 0),
   items: (offer.items || []).map(normalizeClientOfferItem),
 });

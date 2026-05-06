@@ -69,9 +69,14 @@ describe('listAll', () => {
 
 describe('findOfferDetails', () => {
   test('returns offer with linkedQuoteId and status', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted']] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted', true]] });
     const result = await repo.findOfferDetails('co-1', testDb);
-    expect(result).toEqual({ id: 'co-1', linkedQuoteId: 'cq-1', status: 'accepted' });
+    expect(result).toEqual({
+      id: 'co-1',
+      linkedQuoteId: 'cq-1',
+      status: 'accepted',
+      isLatest: true,
+    });
   });
 
   test('returns null when not found', async () => {

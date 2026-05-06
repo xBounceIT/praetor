@@ -893,7 +893,7 @@ const App: React.FC = () => {
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
     clientOffers.forEach((offer) => {
-      if (offer.linkedQuoteId) {
+      if (offer.linkedQuoteId && offer.isLatest) {
         ids.add(offer.linkedQuoteId);
       }
     });
@@ -903,7 +903,7 @@ const App: React.FC = () => {
   const quoteOfferStatuses = useMemo(() => {
     const map: Record<string, ClientOffer['status']> = {};
     clientOffers.forEach((offer) => {
-      if (offer.linkedQuoteId) {
+      if (offer.linkedQuoteId && offer.isLatest) {
         map[offer.linkedQuoteId] = offer.status;
       }
     });
@@ -1843,6 +1843,7 @@ const App: React.FC = () => {
   const handleUpdateClientOffer = quoteHandlers.updateClientOffer;
   const handleDeleteClientOffer = quoteHandlers.deleteClientOffer;
   const handleCreateClientOfferFromQuote = quoteHandlers.createClientOfferFromQuote;
+  const handleCreateClientOfferVersion = quoteHandlers.createClientOfferVersion;
   const handleUpdateClientsOrder = quoteHandlers.updateClientsOrder;
   const handleDeleteClientsOrder = quoteHandlers.deleteClientsOrder;
   const handleCreateClientsOrderFromOffer = quoteHandlers.createClientsOrderFromOffer;
@@ -2152,6 +2153,7 @@ const App: React.FC = () => {
                   offerIdsWithOrders={offerIdsWithOrders}
                   onUpdateOffer={handleUpdateClientOffer}
                   onDeleteOffer={handleDeleteClientOffer}
+                  onCreateOfferVersion={handleCreateClientOfferVersion}
                   onCreateClientsOrder={handleCreateClientsOrderFromOffer}
                   onViewQuote={(quoteId) => {
                     setClientOfferFilterId(null);

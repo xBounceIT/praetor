@@ -20,6 +20,11 @@ export const clientOffersApi = {
       body: JSON.stringify(updates),
     }).then(normalizeClientOffer),
 
+  createVersion: (id: string): Promise<ClientOffer> =>
+    fetchApi<ClientOffer>(`/sales/client-offers/${id}/versions`, {
+      method: 'POST',
+    }).then(normalizeClientOffer),
+
   delete: (id: string): Promise<void> =>
     fetchApi(`/sales/client-offers/${id}`, { method: 'DELETE' }),
 };

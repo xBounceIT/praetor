@@ -405,6 +405,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!offer) {
           return reply.code(404).send({ error: 'Source offer not found' });
         }
+        if (!offer.isLatest) {
+          return reply
+            .code(409)
+            .send({ error: 'Sale orders can only be created from the latest offer version' });
+        }
         if (offer.status !== 'accepted') {
           return reply
             .code(409)
@@ -790,6 +795,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdValue);
         if (!offer) {
           return reply.code(404).send({ error: 'Source offer not found' });
+        }
+        if (!offer.isLatest) {
+          return reply
+            .code(409)
+            .send({ error: 'Sale orders can only be created from the latest offer version' });
         }
         if (offer.status !== 'accepted') {
           return reply

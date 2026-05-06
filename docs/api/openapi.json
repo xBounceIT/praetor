@@ -4190,6 +4190,15 @@
                       },
                       "isDisabled": {
                         "type": "boolean"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "orderId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
                       }
                     },
                     "required": [
@@ -4337,6 +4346,9 @@
                   },
                   "color": {
                     "type": "string"
+                  },
+                  "orderId": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -4375,6 +4387,15 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "orderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     }
                   },
                   "required": [
@@ -4678,6 +4699,15 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "orderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     }
                   },
                   "required": [
@@ -5123,6 +5153,9 @@
                       },
                       "isDisabled": {
                         "type": "boolean"
+                      },
+                      "createdAt": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -5360,6 +5393,9 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -5370,6 +5406,132 @@
                     "recurrenceDuration",
                     "isDisabled"
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/hours/batch": {
+      "get": {
+        "summary": "Get total logged hours per task for multiple projects",
+        "tags": [
+          "tasks"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "projectIds",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  }
                 }
               }
             }
@@ -5712,6 +5874,9 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -6229,6 +6394,24 @@
             "in": "query",
             "name": "userId",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
           }
         ],
         "responses": {
@@ -6237,73 +6420,94 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "userId": {
-                        "type": "string"
-                      },
-                      "date": {
-                        "type": "string",
-                        "format": "date"
-                      },
-                      "clientId": {
-                        "type": "string"
-                      },
-                      "clientName": {
-                        "type": "string"
-                      },
-                      "projectId": {
-                        "type": "string"
-                      },
-                      "projectName": {
-                        "type": "string"
-                      },
-                      "task": {
-                        "type": "string"
-                      },
-                      "notes": {
-                        "type": [
-                          "null",
-                          "string"
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "clientId": {
+                            "type": "string"
+                          },
+                          "clientName": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "projectName": {
+                            "type": "string"
+                          },
+                          "task": {
+                            "type": "string"
+                          },
+                          "taskId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "notes": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "duration": {
+                            "type": "number"
+                          },
+                          "hourlyCost": {
+                            "type": "number"
+                          },
+                          "isPlaceholder": {
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "date",
+                          "clientId",
+                          "clientName",
+                          "projectId",
+                          "projectName",
+                          "task",
+                          "duration",
+                          "hourlyCost",
+                          "isPlaceholder",
+                          "location",
+                          "createdAt"
                         ]
-                      },
-                      "duration": {
-                        "type": "number"
-                      },
-                      "hourlyCost": {
-                        "type": "number"
-                      },
-                      "isPlaceholder": {
-                        "type": "boolean"
-                      },
-                      "location": {
-                        "type": "string"
-                      },
-                      "createdAt": {
-                        "type": "number"
                       }
                     },
-                    "required": [
-                      "id",
-                      "userId",
-                      "date",
-                      "clientId",
-                      "clientName",
-                      "projectId",
-                      "projectName",
-                      "task",
-                      "duration",
-                      "hourlyCost",
-                      "isPlaceholder",
-                      "location",
-                      "createdAt"
-                    ]
-                  }
+                    "nextCursor": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "nextCursor"
+                  ]
                 }
               }
             }
@@ -6509,6 +6713,12 @@
                     },
                     "task": {
                       "type": "string"
+                    },
+                    "taskId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -6884,6 +7094,12 @@
                     },
                     "task": {
                       "type": "string"
+                    },
+                    "taskId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -12298,6 +12514,24 @@
                       "id": {
                         "type": "string"
                       },
+                      "offerCode": {
+                        "type": "string"
+                      },
+                      "versionGroupId": {
+                        "type": "string"
+                      },
+                      "versionParentId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "versionNumber": {
+                        "type": "number"
+                      },
+                      "isLatest": {
+                        "type": "boolean"
+                      },
                       "linkedQuoteId": {
                         "type": "string"
                       },
@@ -12436,6 +12670,10 @@
                     },
                     "required": [
                       "id",
+                      "offerCode",
+                      "versionGroupId",
+                      "versionNumber",
+                      "isLatest",
                       "linkedQuoteId",
                       "clientId",
                       "clientName",
@@ -12576,6 +12814,9 @@
                   "id": {
                     "type": "string"
                   },
+                  "offerCode": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -12670,7 +12911,7 @@
                   }
                 },
                 "required": [
-                  "id",
+                  "offerCode",
                   "linkedQuoteId",
                   "clientId",
                   "clientName",
@@ -12691,6 +12932,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "versionGroupId": {
+                      "type": "string"
+                    },
+                    "versionParentId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "versionNumber": {
+                      "type": "number"
+                    },
+                    "isLatest": {
+                      "type": "boolean"
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -12830,6 +13089,304 @@
                   },
                   "required": [
                     "id",
+                    "offerCode",
+                    "versionGroupId",
+                    "versionNumber",
+                    "isLatest",
+                    "linkedQuoteId",
+                    "clientId",
+                    "clientName",
+                    "discount",
+                    "discountType",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/client-offers/{id}/versions": {
+      "post": {
+        "summary": "Create a new client offer version",
+        "tags": [
+          "client-offers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "versionGroupId": {
+                      "type": "string"
+                    },
+                    "versionParentId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "versionNumber": {
+                      "type": "number"
+                    },
+                    "isLatest": {
+                      "type": "boolean"
+                    },
+                    "linkedQuoteId": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "offerId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productCost": {
+                            "type": "number"
+                          },
+                          "productMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "offerId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "productCost",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "offerCode",
+                    "versionGroupId",
+                    "versionNumber",
+                    "isLatest",
                     "linkedQuoteId",
                     "clientId",
                     "clientName",
@@ -12950,9 +13507,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string"
-                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -13067,6 +13621,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "versionGroupId": {
+                      "type": "string"
+                    },
+                    "versionParentId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "versionNumber": {
+                      "type": "number"
+                    },
+                    "isLatest": {
+                      "type": "boolean"
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -13206,6 +13778,10 @@
                   },
                   "required": [
                     "id",
+                    "offerCode",
+                    "versionGroupId",
+                    "versionNumber",
+                    "isLatest",
                     "linkedQuoteId",
                     "clientId",
                     "clientName",
@@ -14586,6 +15162,24 @@
                                 "number"
                               ]
                             },
+                            "supplierSaleId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierSaleItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierSaleSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
                             "unitType": {
                               "type": "string",
                               "enum": [
@@ -14813,6 +15407,15 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "supplierSaleId": {
+                          "type": "string"
+                        },
+                        "supplierSaleItemId": {
+                          "type": "string"
+                        },
+                        "supplierSaleSupplierName": {
+                          "type": "string"
+                        },
                         "unitType": {
                           "type": "string",
                           "enum": [
@@ -14829,6 +15432,7 @@
                         }
                       },
                       "required": [
+                        "productId",
                         "productName",
                         "quantity",
                         "unitPrice"
@@ -14981,6 +15585,24 @@
                             "type": [
                               "null",
                               "number"
+                            ]
+                          },
+                          "supplierSaleId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierSaleItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierSaleSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
                             ]
                           },
                           "unitType": {
@@ -15190,6 +15812,15 @@
                         "supplierQuoteUnitPrice": {
                           "type": "number"
                         },
+                        "supplierSaleId": {
+                          "type": "string"
+                        },
+                        "supplierSaleItemId": {
+                          "type": "string"
+                        },
+                        "supplierSaleSupplierName": {
+                          "type": "string"
+                        },
                         "unitType": {
                           "type": "string",
                           "enum": [
@@ -15206,6 +15837,7 @@
                         }
                       },
                       "required": [
+                        "productId",
                         "productName",
                         "quantity",
                         "unitPrice"
@@ -15363,6 +15995,24 @@
                             "type": [
                               "null",
                               "number"
+                            ]
+                          },
+                          "supplierSaleId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierSaleItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierSaleSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
                             ]
                           },
                           "unitType": {
@@ -15896,12 +16546,6 @@
                   "status": {
                     "type": "string"
                   },
-                  "subtotal": {
-                    "type": "number"
-                  },
-                  "total": {
-                    "type": "number"
-                  },
                   "amountPaid": {
                     "type": "number"
                   },
@@ -16203,12 +16847,6 @@
                   },
                   "status": {
                     "type": "string"
-                  },
-                  "subtotal": {
-                    "type": "number"
-                  },
-                  "total": {
-                    "type": "number"
                   },
                   "amountPaid": {
                     "type": "number"
@@ -21687,9 +22325,6 @@
                     "smtpPort": {
                       "type": "number"
                     },
-                    "smtpEncryption": {
-                      "type": "string"
-                    },
                     "smtpRejectUnauthorized": {
                       "type": "boolean"
                     },
@@ -21704,18 +22339,21 @@
                     },
                     "fromName": {
                       "type": "string"
+                    },
+                    "smtpEncryption": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "enabled",
                     "smtpHost",
                     "smtpPort",
-                    "smtpEncryption",
                     "smtpRejectUnauthorized",
                     "smtpUser",
                     "smtpPassword",
                     "fromEmail",
-                    "fromName"
+                    "fromName",
+                    "smtpEncryption"
                   ]
                 }
               }
@@ -21852,9 +22490,6 @@
                   "smtpPort": {
                     "type": "number"
                   },
-                  "smtpEncryption": {
-                    "type": "string"
-                  },
                   "smtpRejectUnauthorized": {
                     "type": "boolean"
                   },
@@ -21869,6 +22504,14 @@
                   },
                   "fromName": {
                     "type": "string"
+                  },
+                  "smtpEncryption": {
+                    "type": "string",
+                    "enum": [
+                      "insecure",
+                      "ssl",
+                      "tls"
+                    ]
                   }
                 }
               }
@@ -21892,9 +22535,6 @@
                     "smtpPort": {
                       "type": "number"
                     },
-                    "smtpEncryption": {
-                      "type": "string"
-                    },
                     "smtpRejectUnauthorized": {
                       "type": "boolean"
                     },
@@ -21909,18 +22549,21 @@
                     },
                     "fromName": {
                       "type": "string"
+                    },
+                    "smtpEncryption": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "enabled",
                     "smtpHost",
                     "smtpPort",
-                    "smtpEncryption",
                     "smtpRejectUnauthorized",
                     "smtpUser",
                     "smtpPassword",
                     "fromEmail",
-                    "fromName"
+                    "fromName",
+                    "smtpEncryption"
                   ]
                 }
               }

@@ -165,6 +165,7 @@ export type OfferLink = {
   id: string;
   linkedQuoteId: string | null;
   status: string;
+  isLatest: boolean;
 };
 
 export const findOfferDetails = async (
@@ -176,6 +177,7 @@ export const findOfferDetails = async (
       id: customerOffers.id,
       linkedQuoteId: customerOffers.linkedQuoteId,
       status: customerOffers.status,
+      isLatest: customerOffers.isLatest,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, offerId));

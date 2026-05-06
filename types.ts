@@ -300,6 +300,11 @@ export interface ClientOfferItem {
 
 export interface ClientOffer {
   id: string;
+  offerCode: string;
+  versionGroupId: string;
+  versionParentId?: string | null;
+  versionNumber: number;
+  isLatest: boolean;
   linkedQuoteId: string;
   clientId: string;
   clientName: string;

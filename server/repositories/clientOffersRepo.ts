@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { sales } from '../db/schema/sales.ts';
@@ -9,6 +9,11 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOffer = {
   id: string;
+  offerCode: string;
+  versionGroupId: string;
+  versionParentId: string | null;
+  versionNumber: number;
+  isLatest: boolean;
   linkedQuoteId: string;
   clientId: string;
   clientName: string;
@@ -42,6 +47,11 @@ export type ClientOfferItem = {
 
 const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
   id: row.id,
+  offerCode: row.offerCode,
+  versionGroupId: row.versionGroupId,
+  versionParentId: row.versionParentId,
+  versionNumber: row.versionNumber,
+  isLatest: row.isLatest,
   linkedQuoteId: row.linkedQuoteId,
   clientId: row.clientId,
   clientName: row.clientName,
@@ -108,6 +118,11 @@ export const findIdConflict = async (
 
 export type ExistingOffer = {
   id: string;
+  offerCode: string;
+  versionGroupId: string;
+  versionParentId: string | null;
+  versionNumber: number;
+  isLatest: boolean;
   linkedQuoteId: string | null;
   clientId: string;
   clientName: string;
@@ -121,6 +136,11 @@ export const findForUpdate = async (
   const rows = await exec
     .select({
       id: customerOffers.id,
+      offerCode: customerOffers.offerCode,
+      versionGroupId: customerOffers.versionGroupId,
+      versionParentId: customerOffers.versionParentId,
+      versionNumber: customerOffers.versionNumber,
+      isLatest: customerOffers.isLatest,
       linkedQuoteId: customerOffers.linkedQuoteId,
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
@@ -129,6 +149,11 @@ export const findForUpdate = async (
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
   return rows[0] ?? null;
+};
+
+export const findById = async (id: string, exec: DbExecutor = db): Promise<ClientOffer | null> => {
+  const rows = await exec.select().from(customerOffers).where(eq(customerOffers.id, id));
+  return rows[0] ? mapOffer(rows[0]) : null;
 };
 
 export const findStatusAndClientName = async (
@@ -149,8 +174,53 @@ export const findExistingForQuote = async (
   const rows = await exec
     .select({ id: customerOffers.id })
     .from(customerOffers)
-    .where(eq(customerOffers.linkedQuoteId, quoteId))
+    .where(and(eq(customerOffers.linkedQuoteId, quoteId), eq(customerOffers.isLatest, true)))
     .limit(1);
+  return rows[0]?.id ?? null;
+};
+
+export const findMaxVersionNumber = async (
+  versionGroupId: string,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const rows = await executeRows<{ maxVersion: string | number | null }>(
+    exec,
+    sql`SELECT COALESCE(MAX("version_number"), 0) AS "maxVersion"
+          FROM "customer_offers"
+         WHERE "version_group_id" = ${versionGroupId}`,
+  );
+  return Number(rows[0]?.maxVersion ?? 0);
+};
+
+export const markGroupNotLatest = async (
+  versionGroupId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(customerOffers)
+    .set({ isLatest: false, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(customerOffers.versionGroupId, versionGroupId));
+};
+
+export const promoteLatestInGroup = async (
+  versionGroupId: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`WITH latest_candidate AS (
+            SELECT "id"
+              FROM "customer_offers"
+             WHERE "version_group_id" = ${versionGroupId}
+             ORDER BY "version_number" DESC
+             LIMIT 1
+          )
+          UPDATE "customer_offers"
+             SET "is_latest" = true,
+                 "updated_at" = CURRENT_TIMESTAMP
+           WHERE "id" IN (SELECT "id" FROM latest_candidate)
+           RETURNING "id"`,
+  );
   return rows[0]?.id ?? null;
 };
 
@@ -179,6 +249,11 @@ export const findItemsForOffer = async (
 
 export type NewClientOffer = {
   id: string;
+  offerCode: string;
+  versionGroupId?: string | null;
+  versionParentId?: string | null;
+  versionNumber?: number;
+  isLatest?: boolean;
   linkedQuoteId: string;
   clientId: string;
   clientName: string;
@@ -198,6 +273,11 @@ export const create = async (
     .insert(customerOffers)
     .values({
       id: input.id,
+      offerCode: input.offerCode,
+      versionGroupId: input.versionGroupId ?? input.id,
+      versionParentId: input.versionParentId ?? null,
+      versionNumber: input.versionNumber ?? 1,
+      isLatest: input.isLatest ?? true,
       linkedQuoteId: input.linkedQuoteId,
       clientId: input.clientId,
       clientName: input.clientName,

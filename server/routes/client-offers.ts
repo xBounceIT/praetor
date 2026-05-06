@@ -6,7 +6,7 @@ import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import { generateItemId } from '../utils/order-ids.ts';
+import { generateItemId, generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
@@ -54,6 +54,11 @@ const offerSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    offerCode: { type: 'string' },
+    versionGroupId: { type: 'string' },
+    versionParentId: { type: ['string', 'null'] },
+    versionNumber: { type: 'number' },
+    isLatest: { type: 'boolean' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -69,6 +74,10 @@ const offerSchema = {
   },
   required: [
     'id',
+    'offerCode',
+    'versionGroupId',
+    'versionNumber',
+    'isLatest',
     'linkedQuoteId',
     'clientId',
     'clientName',
@@ -106,6 +115,7 @@ const offerCreateBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    offerCode: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -117,13 +127,12 @@ const offerCreateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['id', 'linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
+  required: ['offerCode', 'linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
 } as const;
 
 const offerUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -257,6 +266,32 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     unitType: item.unitType,
   }));
 
+const buildItemsForVersionClone = (
+  items: clientOffersRepo.ClientOfferItem[],
+): clientOffersRepo.NewClientOfferItem[] =>
+  items.map((item) => ({
+    id: generateOfferItemId(),
+    productId: item.productId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    unitType: item.unitType,
+  }));
+
+const isOfferVersionUniqueViolation = (dup: ReturnType<typeof getUniqueViolation>) =>
+  dup?.constraint === 'idx_customer_offers_offer_code_version' ||
+  dup?.constraint === 'idx_customer_offers_latest_version_group' ||
+  dup?.detail?.includes('(offer_code, version_number)') ||
+  dup?.detail?.includes('(version_group_id)');
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -313,6 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        offerCode,
         linkedQuoteId,
         clientId,
         clientName,
@@ -324,7 +360,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        id: unknown;
+        id?: unknown;
+        offerCode: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -337,8 +374,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+      const offerCodeResult = requireNonEmptyString(offerCode, 'offerCode');
+      if (!offerCodeResult.ok) return badRequest(reply, offerCodeResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
@@ -370,6 +409,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
 
+      const offerId = nextIdResult.value ?? generatePrefixedId('co');
+
       let result: {
         offer: clientOffersRepo.ClientOffer;
         items: clientOffersRepo.ClientOfferItem[];
@@ -378,7 +419,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         result = await withDbTransaction(async (tx) => {
           const offer = await clientOffersRepo.create(
             {
-              id: nextIdResult.value,
+              id: offerId,
+              offerCode: offerCodeResult.value,
               linkedQuoteId: linkedQuoteIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
@@ -404,6 +446,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Offer ID already exists' });
         }
+        if (isOfferVersionUniqueViolation(dup)) {
+          return reply.code(409).send({ error: 'Offer version already exists' });
+        }
         throw err;
       }
 
@@ -416,11 +461,115 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'client_offer',
         entityId: createdOffer.id,
         details: {
-          targetLabel: createdOffer.id,
+          targetLabel: `${createdOffer.offerCode} v${createdOffer.versionNumber}`,
           secondaryLabel: clientNameResult.value,
         },
       });
       return reply.code(201).send({ ...createdOffer, items: createdItems });
+    },
+  );
+
+  fastify.post(
+    '/:id/versions',
+    {
+      onRequest: [requirePermission('sales.client_offers.create')],
+      schema: {
+        tags: ['client-offers'],
+        summary: 'Create a new client offer version',
+        params: idParamSchema,
+        response: {
+          201: offerSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      let result:
+        | {
+            kind: 'created';
+            source: clientOffersRepo.ClientOffer;
+            offer: clientOffersRepo.ClientOffer;
+            items: clientOffersRepo.ClientOfferItem[];
+          }
+        | { kind: 'not_found' }
+        | { kind: 'not_latest'; source: clientOffersRepo.ClientOffer }
+        | { kind: 'draft'; source: clientOffersRepo.ClientOffer };
+
+      try {
+        result = await withDbTransaction(async (tx) => {
+          const source = await clientOffersRepo.findById(idResult.value, tx);
+          if (!source) return { kind: 'not_found' as const };
+          if (!source.isLatest) return { kind: 'not_latest' as const, source };
+          if (source.status === 'draft') return { kind: 'draft' as const, source };
+
+          const sourceItems = await clientOffersRepo.findItemsForOffer(source.id, tx);
+          const maxVersionNumber = await clientOffersRepo.findMaxVersionNumber(
+            source.versionGroupId,
+            tx,
+          );
+          await clientOffersRepo.markGroupNotLatest(source.versionGroupId, tx);
+
+          const offer = await clientOffersRepo.create(
+            {
+              id: generatePrefixedId('co'),
+              offerCode: source.offerCode,
+              versionGroupId: source.versionGroupId,
+              versionParentId: source.id,
+              versionNumber: maxVersionNumber + 1,
+              isLatest: true,
+              linkedQuoteId: source.linkedQuoteId,
+              clientId: source.clientId,
+              clientName: source.clientName,
+              paymentTerms: source.paymentTerms ?? 'immediate',
+              discount: source.discount,
+              discountType: source.discountType,
+              status: 'draft',
+              expirationDate: source.expirationDate ?? new Date().toISOString().slice(0, 10),
+              notes: source.notes,
+            },
+            tx,
+          );
+          const items = await clientOffersRepo.insertItems(
+            offer.id,
+            buildItemsForVersionClone(sourceItems),
+            tx,
+          );
+          return { kind: 'created' as const, source, offer, items };
+        });
+      } catch (err) {
+        const dup = getUniqueViolation(err);
+        if (isOfferVersionUniqueViolation(dup)) {
+          return reply.code(409).send({ error: 'Offer version already exists' });
+        }
+        throw err;
+      }
+
+      if (result.kind === 'not_found') {
+        return reply.code(404).send({ error: 'Offer not found' });
+      }
+      if (result.kind === 'not_latest') {
+        return reply.code(409).send({ error: 'Only the latest offer version can be versioned' });
+      }
+      if (result.kind === 'draft') {
+        return reply.code(409).send({ error: 'Draft offers cannot create a new version' });
+      }
+
+      await logAudit({
+        request,
+        action: 'client_offer.version_created',
+        entityType: 'client_offer',
+        entityId: result.offer.id,
+        details: {
+          targetLabel: `${result.offer.offerCode} v${result.offer.versionNumber}`,
+          secondaryLabel: `from ${result.source.id}`,
+        },
+      });
+
+      return reply.code(201).send({ ...result.offer, items: result.items });
     },
   );
 
@@ -442,7 +591,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
-        id: nextId,
         clientId,
         clientName,
         items,
@@ -453,7 +601,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        id?: unknown;
         clientId?: unknown;
         clientName?: unknown;
         items?: OfferItemInput[] | unknown;
@@ -472,6 +619,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!existingOffer) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
+      if (!existingOffer.isLatest) {
+        return reply.code(409).send({ error: 'Previous offer versions are read-only' });
+      }
 
       const hasLockedFieldUpdates =
         clientId !== undefined ||
@@ -487,18 +637,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           error: 'Non-draft offers are read-only',
           currentStatus: existingOffer.status,
         });
-      }
-
-      let nextIdValue: string | undefined | null = nextId as string | undefined | null;
-      if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
-        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-        nextIdValue = nextIdResult.value;
-        if (nextIdResult.value) {
-          if (await clientOffersRepo.findIdConflict(nextIdResult.value, idResult.value)) {
-            return reply.code(409).send({ error: 'Offer ID already exists' });
-          }
-        }
       }
 
       let clientIdValue = clientId;
@@ -578,7 +716,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.update(
             idResult.value,
             {
-              id: (nextIdValue as string | null | undefined) ?? null,
+              id: null,
               clientId: (clientIdValue as string | null | undefined) ?? null,
               clientName: (clientNameValue as string | null | undefined) ?? null,
               paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -652,18 +790,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const offer = await clientOffersRepo.findForUpdate(idResult.value);
+      if (!offer) {
+        return reply.code(404).send({ error: 'Offer not found' });
+      }
+      if (!offer.isLatest) {
+        return reply.code(409).send({ error: 'Previous offer versions are read-only' });
+      }
+      if (offer.status !== 'draft') {
+        return reply.code(409).send({ error: 'Only draft offers can be deleted' });
+      }
       if (await clientOffersRepo.findLinkedSaleId(idResult.value)) {
         return reply
           .code(409)
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
-      }
-
-      const offer = await clientOffersRepo.findStatusAndClientName(idResult.value);
-      if (!offer) {
-        return reply.code(404).send({ error: 'Offer not found' });
-      }
-      if (offer.status !== 'draft') {
-        return reply.code(409).send({ error: 'Only draft offers can be deleted' });
       }
 
       await logAudit({
@@ -676,7 +816,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: offer.clientName ?? '',
         },
       });
-      await clientOffersRepo.deleteById(idResult.value);
+      await withDbTransaction(async (tx) => {
+        await clientOffersRepo.deleteById(idResult.value, tx);
+        await clientOffersRepo.promoteLatestInGroup(offer.versionGroupId, tx);
+      });
       return reply.code(204).send();
     },
   );

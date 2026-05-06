@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
+  boolean,
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -17,6 +20,17 @@ export const customerOffers = pgTable(
   'customer_offers',
   {
     id: varchar('id', { length: 100 }).primaryKey(),
+    offerCode: varchar('offer_code', { length: 100 }).notNull(),
+    versionGroupId: varchar('version_group_id', { length: 100 }).notNull(),
+    versionParentId: varchar('version_parent_id', { length: 100 }).references(
+      (): AnyPgColumn => customerOffers.id,
+      {
+        onDelete: 'set null',
+        onUpdate: 'cascade',
+      },
+    ),
+    versionNumber: integer('version_number').notNull().default(1),
+    isLatest: boolean('is_latest').notNull().default(true),
     linkedQuoteId: varchar('linked_quote_id', { length: 100 })
       .notNull()
       .references(() => quotes.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
@@ -37,10 +51,16 @@ export const customerOffers = pgTable(
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    uniqueIndex('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),
+    uniqueIndex('idx_customer_offers_offer_code_version').on(table.offerCode, table.versionNumber),
+    uniqueIndex('idx_customer_offers_latest_version_group')
+      .on(table.versionGroupId)
+      .where(sql`${table.isLatest} = true`),
+    index('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),
+    index('idx_customer_offers_version_group_id').on(table.versionGroupId),
     index('idx_customer_offers_client_id').on(table.clientId),
     index('idx_customer_offers_status').on(table.status),
     index('idx_customer_offers_created_at').on(table.createdAt),
+    check('chk_customer_offers_version_number_positive', sql`${table.versionNumber} > 0`),
     check(
       'customer_offers_status_check',
       sql`${table.status} IN ('draft', 'sent', 'accepted', 'denied')`,

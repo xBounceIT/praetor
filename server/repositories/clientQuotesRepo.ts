@@ -44,7 +44,7 @@ export type ClientQuoteItem = {
 // instead because no offer can exist yet for a freshly-written row.
 const linkedOfferIdSubquery = sql<
   string | null
->`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${quotes.id} LIMIT 1)`;
+>`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${quotes.id} AND co.is_latest = true LIMIT 1)`;
 
 const QUOTE_LIST_PROJECTION = {
   id: quotes.id,
@@ -203,7 +203,7 @@ export const findLinkedOfferId = async (
   const rows = await exec
     .select({ id: customerOffers.id })
     .from(customerOffers)
-    .where(eq(customerOffers.linkedQuoteId, quoteId))
+    .where(and(eq(customerOffers.linkedQuoteId, quoteId), eq(customerOffers.isLatest, true)))
     .limit(1);
   return rows[0]?.id ?? null;
 };

@@ -125,7 +125,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const createClientOfferFromQuote = async (quote: Quote) => {
     try {
       const offer = await api.clientOffers.create({
-        id: `${quote.id}-OF`,
+        offerCode: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
         clientId: quote.clientId,
         clientName: quote.clientName,
@@ -150,6 +150,19 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     } catch (err) {
       console.error('Failed to create offer from quote:', err);
       alert((err as Error).message || 'Failed to create offer from quote');
+    }
+  };
+
+  const createClientOfferVersion = async (id: string) => {
+    try {
+      const offer = await api.clientOffers.createVersion(id);
+      await refreshClientQuoteFlow();
+      setClientOfferFilterId(offer.id);
+      setActiveView('sales/client-offers');
+    } catch (err) {
+      console.error('Failed to create client offer version:', err);
+      alert((err as Error).message || 'Failed to create client offer version');
+      throw err;
     }
   };
 
@@ -212,6 +225,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     updateClientOffer,
     deleteClientOffer,
     createClientOfferFromQuote,
+    createClientOfferVersion,
     updateClientsOrder,
     deleteClientsOrder,
     createClientsOrderFromOffer,

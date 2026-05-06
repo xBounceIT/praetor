@@ -546,6 +546,11 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO customer_offers (
     id,
+    offer_code,
+    version_group_id,
+    version_parent_id,
+    version_number,
+    is_latest,
     linked_quote_id,
     client_id,
     client_name,
@@ -557,12 +562,17 @@ INSERT INTO customer_offers (
     created_at,
     updated_at
 ) VALUES
-    ('dm_co_01', 'dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
-    ('dm_co_02', 'dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
-    ('dm_co_03', 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
-    ('dm_co_04', 'dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    ('dm_co_05', 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
+    ('dm_co_01', 'dm_co_01', 'dm_co_01', NULL, 1, TRUE, 'dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
+    ('dm_co_02', 'dm_co_02', 'dm_co_02', NULL, 1, TRUE, 'dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
+    ('dm_co_03', 'dm_co_03', 'dm_co_03', NULL, 1, TRUE, 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
+    ('dm_co_04', 'dm_co_04', 'dm_co_04', NULL, 1, TRUE, 'dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
+    ('dm_co_05', 'dm_co_05', 'dm_co_05', NULL, 1, TRUE, 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
 ON CONFLICT (id) DO UPDATE SET
+    offer_code = EXCLUDED.offer_code,
+    version_group_id = EXCLUDED.version_group_id,
+    version_parent_id = EXCLUDED.version_parent_id,
+    version_number = EXCLUDED.version_number,
+    is_latest = EXCLUDED.is_latest,
     linked_quote_id = EXCLUDED.linked_quote_id,
     client_id = EXCLUDED.client_id,
     client_name = EXCLUDED.client_name,

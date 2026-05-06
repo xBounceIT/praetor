@@ -46,6 +46,7 @@ export interface ClientOffersViewProps {
   onAddOffer?: (offerData: Partial<ClientOffer>) => void | Promise<void>;
   onUpdateOffer: (id: string, updates: Partial<ClientOffer>) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
+  onCreateOfferVersion?: (id: string) => void | Promise<void>;
   onCreateClientsOrder?: (offer: ClientOffer) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
   currency: string;
@@ -55,6 +56,11 @@ export interface ClientOffersViewProps {
 
 const getDefaultFormData = (): Partial<ClientOffer> => ({
   id: '',
+  offerCode: '',
+  versionGroupId: '',
+  versionParentId: null,
+  versionNumber: 1,
+  isLatest: true,
   linkedQuoteId: '',
   clientId: '',
   clientName: '',
@@ -76,6 +82,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onAddOffer,
   onUpdateOffer,
   onDeleteOffer,
+  onCreateOfferVersion,
   onCreateClientsOrder,
   onViewQuote,
   currency,
@@ -214,12 +221,19 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(getDefaultFormData());
 
-  const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
+  const isReadOnly = Boolean(
+    editingOffer && (!editingOffer.isLatest || editingOffer.status !== 'draft'),
+  );
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
 
-  const readOnlyReason = t('sales:clientOffers.readOnlyStatus', {
-    defaultValue: 'Read-only due to non-draft status',
-  });
+  const readOnlyReason =
+    editingOffer?.isLatest === false
+      ? t('sales:clientOffers.readOnlyVersionHistory', {
+          defaultValue: 'Previous versions are read-only',
+        })
+      : t('sales:clientOffers.readOnlyStatus', {
+          defaultValue: 'Read-only due to non-draft status',
+        });
   const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
     defaultValue: 'Locked due to linked quote',
   });
@@ -241,6 +255,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const matchesSearch =
         searchTerm.trim() === '' ||
         offer.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        offer.offerCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
         offer.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
       return matchesSearch && matchesStatus;
@@ -279,10 +294,36 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const columns: Column<ClientOffer>[] = [
     {
       header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
-      accessorKey: 'id',
+      accessorKey: 'offerCode',
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
-      cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+      cell: ({ row }) => (
+        <div className={row.isLatest ? 'font-bold text-slate-700' : 'font-bold text-slate-400'}>
+          <div className="flex items-center gap-2">
+            <span>{row.offerCode}</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
+                row.isLatest ? 'bg-praetor/10 text-praetor' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
+              {t('sales:clientOffers.versionBadge', {
+                version: row.versionNumber,
+                defaultValue: 'v{{version}}',
+              })}
+            </span>
+          </div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-widest">
+            {row.isLatest
+              ? t('sales:clientOffers.latestVersion', { defaultValue: 'Latest version' })
+              : t('sales:clientOffers.historyVersion', { defaultValue: 'History version' })}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'id',
+      accessorKey: 'id',
+      hidden: true,
     },
     {
       header: t('crm:clients.tableHeaders.insertDate'),
@@ -441,6 +482,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => {
         const hasOrder = offerIdsWithOrders.has(row.id);
+        const canMutateLatest = row.isLatest;
+        const canCreateVersion = Boolean(
+          onCreateOfferVersion && row.isLatest && row.status !== 'draft',
+        );
 
         return (
           <div className="flex justify-end gap-2">
@@ -472,7 +517,24 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 </button>
               )}
             </Tooltip>
-            {row.status === 'draft' && (
+            {canCreateVersion && (
+              <Tooltip
+                label={t('sales:clientOffers.createVersion', { defaultValue: 'New version' })}
+              >
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateOfferVersion?.(row.id);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-code-branch"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {canMutateLatest && row.status === 'draft' && (
               <Tooltip label={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}>
                 {() => (
                   <button
@@ -487,7 +549,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 )}
               </Tooltip>
             )}
-            {row.status === 'sent' && (
+            {canMutateLatest && row.status === 'sent' && (
               <>
                 <Tooltip
                   label={t('sales:clientOffers.markAccepted', {
@@ -523,7 +585,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 </Tooltip>
               </>
             )}
-            {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
+            {row.isLatest && row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
               <Tooltip
                 label={t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
               >
@@ -540,7 +602,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 )}
               </Tooltip>
             )}
-            {row.status === 'draft' && (
+            {row.isLatest && row.status === 'draft' && (
               <Tooltip label={t('common:buttons.delete')}>
                 {() => (
                   <button
@@ -696,8 +758,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     if (!formData.clientId) {
       nextErrors.clientId = t('sales:clientOffers.clientRequired');
     }
-    if (!formData.id?.trim()) {
-      nextErrors.id = t('sales:clientOffers.offerCodeRequired', {
+    if (!formData.offerCode?.trim()) {
+      nextErrors.offerCode = t('sales:clientOffers.offerCodeRequired', {
         defaultValue: 'Offer code is required',
       });
     }
@@ -712,6 +774,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
     const payload: Partial<ClientOffer> = {
       ...formData,
+      id: undefined,
+      offerCode: editingOffer ? undefined : formData.offerCode?.trim(),
       discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
@@ -780,11 +844,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                <span className="text-amber-700 text-xs font-bold">
-                  {t('sales:clientOffers.readOnlyStatus', {
-                    defaultValue: 'Read-only due to non-draft status',
-                  })}
-                </span>
+                <span className="text-amber-700 text-xs font-bold">{readOnlyReason}</span>
               </div>
             )}
 
@@ -827,16 +887,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.id || ''}
-                    disabled={isReadOnly}
+                    value={formData.offerCode || ''}
+                    disabled={Boolean(editingOffer)}
                     onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, id: event.target.value }))
+                      setFormData((prev) => ({ ...prev, offerCode: event.target.value }))
                     }
                     placeholder="O0000"
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${errors.id ? 'border-red-300' : 'border-slate-200'} rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${errors.offerCode ? 'border-red-300' : 'border-slate-200'} rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                   />
-                  {errors.id && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
+                  {errors.offerCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.offerCode}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
@@ -1452,7 +1512,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
-        rowClassName={() => 'cursor-pointer hover:bg-slate-50/50'}
+        rowClassName={(row) =>
+          row.isLatest
+            ? 'cursor-pointer hover:bg-slate-50/50'
+            : 'cursor-pointer bg-slate-50 text-slate-400 hover:bg-slate-100'
+        }
         initialFilterState={tableInitialFilterState}
       />
     </div>

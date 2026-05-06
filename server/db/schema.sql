@@ -949,6 +949,11 @@ END $$;
 -- Customer offers
 CREATE TABLE IF NOT EXISTS customer_offers (
     id VARCHAR(100) PRIMARY KEY,
+    offer_code VARCHAR(100) NOT NULL,
+    version_group_id VARCHAR(100) NOT NULL,
+    version_parent_id VARCHAR(100) REFERENCES customer_offers(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    version_number INTEGER NOT NULL DEFAULT 1 CHECK (version_number > 0),
+    is_latest BOOLEAN NOT NULL DEFAULT TRUE,
     linked_quote_id VARCHAR(100) NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
@@ -961,8 +966,14 @@ CREATE TABLE IF NOT EXISTS customer_offers (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_offer_code_version
+    ON customer_offers(offer_code, version_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_latest_version_group
+    ON customer_offers(version_group_id)
+    WHERE is_latest = TRUE;
+CREATE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id
     ON customer_offers(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_customer_offers_version_group_id ON customer_offers(version_group_id);
 CREATE INDEX IF NOT EXISTS idx_customer_offers_client_id ON customer_offers(client_id);
 CREATE INDEX IF NOT EXISTS idx_customer_offers_status ON customer_offers(status);
 CREATE INDEX IF NOT EXISTS idx_customer_offers_created_at ON customer_offers(created_at);
@@ -2125,6 +2136,49 @@ ALTER TABLE sales           DROP CONSTRAINT IF EXISTS chk_sales_discount_type;
 ALTER TABLE sales           ADD  CONSTRAINT chk_sales_discount_type           CHECK (discount_type IN ('percentage', 'currency'));
 ALTER TABLE supplier_sales  DROP CONSTRAINT IF EXISTS chk_supplier_sales_discount_type;
 ALTER TABLE supplier_sales  ADD  CONSTRAINT chk_supplier_sales_discount_type  CHECK (discount_type IN ('percentage', 'currency'));
+
+-- Client offer versioning
+ALTER TABLE customer_offers ADD COLUMN IF NOT EXISTS offer_code VARCHAR(100);
+ALTER TABLE customer_offers ADD COLUMN IF NOT EXISTS version_group_id VARCHAR(100);
+ALTER TABLE customer_offers ADD COLUMN IF NOT EXISTS version_parent_id VARCHAR(100);
+ALTER TABLE customer_offers ADD COLUMN IF NOT EXISTS version_number INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE customer_offers ADD COLUMN IF NOT EXISTS is_latest BOOLEAN NOT NULL DEFAULT TRUE;
+
+UPDATE customer_offers
+SET offer_code = id
+WHERE offer_code IS NULL;
+
+UPDATE customer_offers
+SET version_group_id = id
+WHERE version_group_id IS NULL;
+
+ALTER TABLE customer_offers ALTER COLUMN offer_code SET NOT NULL;
+ALTER TABLE customer_offers ALTER COLUMN version_group_id SET NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'customer_offers_version_parent_id_customer_offers_id_fk'
+    ) THEN
+        ALTER TABLE customer_offers
+            ADD CONSTRAINT customer_offers_version_parent_id_customer_offers_id_fk
+            FOREIGN KEY (version_parent_id) REFERENCES customer_offers(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
+ALTER TABLE customer_offers DROP CONSTRAINT IF EXISTS chk_customer_offers_version_number_positive;
+ALTER TABLE customer_offers ADD CONSTRAINT chk_customer_offers_version_number_positive CHECK (version_number > 0);
+
+DROP INDEX IF EXISTS idx_customer_offers_linked_quote_id;
+CREATE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id ON customer_offers(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_customer_offers_version_group_id ON customer_offers(version_group_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_offer_code_version
+    ON customer_offers(offer_code, version_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_latest_version_group
+    ON customer_offers(version_group_id)
+    WHERE is_latest = TRUE;
 
 -- Enforce unit_type values at DB level (idempotent)
 ALTER TABLE quote_items          DROP CONSTRAINT IF EXISTS chk_quote_items_unit_type;

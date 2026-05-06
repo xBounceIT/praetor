@@ -134,6 +134,13 @@
       "when": 1777832429529,
       "tag": "0018_model_remaining_constraints_and_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778025600000,
+      "tag": "0019_client_offer_versioning",
+      "breakpoints": true
     }
   ]
 }
