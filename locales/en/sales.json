@@ -10,6 +10,8 @@
     "clientInformation": "Client and document details",
     "productsServices": "Products and services for this quote",
     "items": "Line items for this offer",
+    "supplierInformation": "Supplier and document details",
+    "supplierItems": "Line items for this quote",
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
@@ -280,6 +282,18 @@
     "day": "Day",
     "days": "Days",
     "unit": "Unit",
-    "units": "Units"
+    "units": "Units",
+    "versionHistory": {
+      "title": "Version History",
+      "empty": "No previous versions yet. Saves will appear here.",
+      "previewBanner": "Previewing version from {{date}}",
+      "backToCurrent": "Back to current",
+      "restoreButton": "Restore this version",
+      "restoreConfirmTitle": "Restore this version?",
+      "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
+      "reasonUpdate": "Save",
+      "reasonRestore": "Restored",
+      "loadFailed": "Failed to load version history."
+    }
   }
 }
