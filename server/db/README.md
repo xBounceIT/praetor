@@ -60,6 +60,12 @@ Use the same pattern for indexes (`CREATE INDEX IF NOT EXISTS`) and tables that 
 
 ## Applying migrations
 
+Docker Compose applies pending migrations automatically through the one-shot
+`db-migrations` service. The backend service waits for that service to complete
+successfully before starting.
+
+For a non-Compose local DB, apply migrations manually:
+
 ```bash
 cd server
 bun run db:migrate
@@ -72,7 +78,10 @@ Idempotent: re-running is a no-op if everything's applied. The runner is `script
 Bootstrap order for a fresh local DB:
 
 1. Apply `schema.sql` (`psql -f db/schema.sql` or via the existing Docker bootstrap).
-2. From `server/`, run `bun run db:migrate`. The migrations are written with `IF NOT EXISTS` guards so they're no-ops on a DB that already matches; their rows still land in `__drizzle_migrations` so subsequent migrations apply normally.
+2. If using Docker Compose, the `db-migrations` service runs automatically before the backend
+   starts. Otherwise, from `server/`, run `bun run db:migrate`. The migrations are written
+   with `IF NOT EXISTS` guards so they're no-ops on a DB that already matches; their rows
+   still land in `__drizzle_migrations` so subsequent migrations apply normally.
 
 For a Drizzle-only fresh DB (skipping `schema.sql`): every existing migration uses `CREATE TABLE IF NOT EXISTS` and friends, so applying them in order produces a fully-formed schema. This path isn't the production bootstrap, but it's how `db:check` and CI verify the migrations.
 

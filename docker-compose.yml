@@ -26,6 +26,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    image: praetor-backend
     container_name: praetor-backend
     environment:
       PORT: 3001
@@ -45,9 +46,28 @@ services:
     expose:
       - '3001'
     depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Apply pending Drizzle migrations before the API starts
+  db-migrations:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: praetor-backend
+    container_name: praetor-db-migrations
+    command: ['bun', 'run', 'db:migrate']
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-praetor}
+      DB_USER: ${POSTGRES_USER:-praetor}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+    depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
+    restart: 'no'
 
   # Frontend (Caddy serving static files)
   frontend:
