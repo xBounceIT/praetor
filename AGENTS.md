@@ -1,46 +1,81 @@
-# Repository Guidelines
+# CLAUDE.md
 
-## Project Structure & Module Organization
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Frontend (Vite + React/TS) lives at the repo root: app entry in `index.tsx` / `App.tsx`, UI in `components/` (feature folders + a `shared/` primitives folder), client helpers in `services/` and `utils/`, static assets in `public/`, translations in `locales/`.
-- Backend (Fastify + TS) lives under `server/`: app wiring in `server/app.ts`, HTTP routes in `server/routes/`, data access in `server/repositories/`, schema and migrations under `server/db/`.
-- Generated docs are committed under `docs/` (frontend TypeDoc + API OpenAPI).
+## Project Overview
 
-## Build, Test, and Development Commands
+Praetor is an AI-enhanced ERP application for time tracking, project management, CRM, and financial operations. React 19 + Vite frontend with Fastify + PostgreSQL (Drizzle ORM) backend.
 
-- `bun install` (and `cd server && bun install`): install deps.
-- `bun run dev`: run the frontend dev server.
-- `bun run build`: production frontend build to `dist/`.
-- `bun run preview`: serve the production build.
-- `bun run test`: run the Bun test suites.
-- `bun run lint`: i18n-key check + typecheck + Biome (in that order). `bun run lint:fix` and `bun run format` apply Biome auto-fixes / formatting.
-- `cd server && bun run dev`: run the API with watch.
-- `cd server && bun run build`: typecheck/compile the API (`tsc`).
-- `cd server && bun run start`: run the built API.
-- `bun run docs`: regenerate TypeDoc + OpenAPI under `docs/`.
-- `docker compose up -d --build`: bring up the full stack (see `docker-compose.yml` for the current service set).
+## Development Commands
 
-## Coding Style & Naming Conventions
+### Frontend (root directory)
+```bash
+bun run dev          # Start dev server (port 3000)
+bun run build        # Production build
+bun run lint         # Biome check
+bun run lint:fix     # Auto-fix lint issues
+bun run format       # Biome formatting
+```
 
-- TypeScript throughout; prefer explicit types at module boundaries.
-- Formatting/linting is Biome: 2-space indent, 100 char line width, single quotes, semicolons.
-- Use `bun run lint` and `bun run format` (or `bun run lint:fix`) before pushing.
-- Naming: React components `PascalCase.tsx`, helpers `camelCase`, constants `SCREAMING_SNAKE_CASE`.
+### Backend (server directory)
+```bash
+cd server
+bun run dev          # Dev server with hot reload (port 3001)
+bun run build        # TypeScript compilation
+bun run start        # Run compiled server
+```
 
-## Testing Guidelines
+## Architecture
 
-- Bun test runner. Backend repository-layer suites live under `server/test/` (fakes; no DB). Run via `bun run test` from the repo root.
-- Other layers (UI flows, end-to-end route behavior) still rely on manual testing.
-- Treat `bun run lint` (which also runs typecheck and the i18n key check) and `bun run build` as the minimum CI-quality gate.
-- New backend tests should live under `server/test/`, mirroring the source layout.
+### State Management
+- No Redux/MobX. `App.tsx` is the central state hub: it owns shared state and passes it down via props.
+- Components receive data through props, not global stores.
 
-## Commit & Pull Request Guidelines
+### API Layer
+- Client-side API helpers live under `services/api/` (custom fetch wrapper with token management)
+- RESTful endpoints under `/api/*`
+- Sliding-window JWT auth: server rotates the token in the `x-auth-token` response header on each request. Idle and max-session limits are configured in `server/middleware/auth.ts`.
 
-- Prefer Conventional Commits as seen in history: `feat:`, `fix(scope):`, `refactor:`, `docs:`, `perf:`.
-- Husky runs `lint-staged` plus a typecheck on pre-commit. Expect Biome auto-fixes to be staged. Generated `docs/` and `bun.lock` may also need to be staged when a PR touches APIs or dependencies.
-- PRs should include: what/why, screenshots for UI changes, and notes for any DB/schema/migration changes in `server/db/`.
+### Database
+- PostgreSQL via Drizzle ORM (`server/db/schema/`). All repositories go through the Drizzle helpers exported from `server/db/drizzle.ts` (db instance, executor type, transaction wrapper).
+- Snake_case in DB → camelCase in API responses
 
-## Security & Configuration Tips
+### Database migrations
+- New schema changes go through Drizzle Kit (`bun run db:generate` or `bun run db:generate:custom` from `server/`, then `bun run db:migrate`).
+- The legacy `server/db/add_*.ts` scripts and `server/db/schema.sql` are frozen historical artifacts — see `server/db/README.md` for the full workflow.
 
-- Do not commit secrets. Use `.env.example` and `server/.env.example` as templates.
-- If running frontend + API locally (not via Docker), set `VITE_API_URL=http://localhost:3001/api` and set `FRONTEND_URL` to match your dev server origin.
+### Authentication
+- JWT-based, with optional LDAP/AD fallback
+- Roles: admin (full access), manager (CRM/reports), user (personal tracking)
+
+### Internationalization
+- i18next; translation files under `locales/`
+
+## Key Patterns
+
+### Route Organization
+Backend routes live in `server/routes/` and are registered with URL prefixes in `server/app.ts` — see that file for the current map.
+
+Handler pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
+
+### Repositories (data access)
+SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handlers.
+
+- Each function takes an optional `DbExecutor` parameter (default `db`) so it works both standalone and inside `withDbTransaction(async (tx) => repo.fn(args, tx))`. Type imported from `../db/drizzle.ts`.
+- Row types and any `mapXxxRow` helpers live in the repo file alongside the SQL they belong to.
+- Routes import the repo as a namespace: `import * as <domain>Repo from '../repositories/<domain>Repo.ts'`.
+- Repos return domain shapes (camelCase, parsed numbers, mapped enums); they do not touch `request`, `reply`, validation, or HTTP status codes.
+
+### Component Naming
+- Views: PascalCase `*View.tsx`
+- Utilities: camelCase
+- Route files: kebab-case
+
+## Important Notes
+
+- **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
+- **CDN-pinned deps**: see the importmap in `index.html`
+- **Tests**: `bun run test` (Bun test runner; suites under `server/test/`). Other layers still rely on manual testing.
+- **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
+- **Remote Testing**: App runs on remote Docker containers — do not run commands locally for testing
+- **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
