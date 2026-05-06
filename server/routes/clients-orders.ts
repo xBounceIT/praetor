@@ -416,7 +416,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             .send({ error: 'Sale orders can only be created from accepted offers' });
         }
 
-        if (await clientsOrdersRepo.findExistingForOffer(linkedOfferIdResult.value)) {
+        if (await clientsOrdersRepo.findExistingForOfferVersionGroup(offer.versionGroupId)) {
           return reply.code(409).send({ error: 'A sale order already exists for this offer' });
         }
 
@@ -812,7 +812,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        if (await clientsOrdersRepo.findExistingForOffer(linkedOfferIdValue, idResult.value)) {
+        if (
+          await clientsOrdersRepo.findExistingForOfferVersionGroup(
+            offer.versionGroupId,
+            idResult.value,
+          )
+        ) {
           return reply.code(409).send({ error: 'A sale order already exists for this offer' });
         }
 

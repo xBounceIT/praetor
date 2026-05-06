@@ -30,6 +30,7 @@ const listAllMock = mock();
 const listAllItemsMock = mock();
 const findOfferDetailsMock = mock();
 const findExistingForOfferMock = mock();
+const findExistingForOfferVersionGroupMock = mock();
 const findForUpdateMock = mock();
 const findIdConflictMock = mock();
 const createMock = mock();
@@ -64,6 +65,7 @@ beforeAll(async () => {
     listAllItems: listAllItemsMock,
     findOfferDetails: findOfferDetailsMock,
     findExistingForOffer: findExistingForOfferMock,
+    findExistingForOfferVersionGroup: findExistingForOfferVersionGroupMock,
     findForUpdate: findForUpdateMock,
     findIdConflict: findIdConflictMock,
     create: createMock,
@@ -134,6 +136,7 @@ const allMocks = [
   listAllItemsMock,
   findOfferDetailsMock,
   findExistingForOfferMock,
+  findExistingForOfferVersionGroupMock,
   findForUpdateMock,
   findIdConflictMock,
   createMock,
@@ -154,6 +157,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
   withDbTransactionMock.mockImplementation(async (cb) => cb(tx));
   logAuditMock.mockImplementation(async () => undefined);
+  findExistingForOfferVersionGroupMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
@@ -168,6 +172,7 @@ describe('POST /api/clients-orders', () => {
   test('rejects non-latest source offer versions', async () => {
     findOfferDetailsMock.mockResolvedValue({
       id: 'co-1',
+      versionGroupId: 'group-1',
       linkedQuoteId: 'cq-1',
       status: 'accepted',
       isLatest: false,
@@ -185,7 +190,32 @@ describe('POST /api/clients-orders', () => {
     expect(body).toEqual({
       error: 'Sale orders can only be created from the latest offer version',
     });
-    expect(findExistingForOfferMock).not.toHaveBeenCalled();
+    expect(findExistingForOfferVersionGroupMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects when another order exists for any version in the offer group', async () => {
+    findOfferDetailsMock.mockResolvedValue({
+      id: 'co-2',
+      versionGroupId: 'group-1',
+      linkedQuoteId: 'cq-1',
+      status: 'accepted',
+      isLatest: true,
+    });
+    findExistingForOfferVersionGroupMock.mockResolvedValue('so-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: { ...payloadWithOffer, linkedOfferId: 'co-2' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'A sale order already exists for this offer',
+    });
+    expect(findExistingForOfferVersionGroupMock).toHaveBeenCalledWith('group-1');
     expect(createMock).not.toHaveBeenCalled();
   });
 });
@@ -205,6 +235,7 @@ describe('PUT /api/clients-orders/:id', () => {
     });
     findOfferDetailsMock.mockResolvedValue({
       id: 'co-1',
+      versionGroupId: 'group-1',
       linkedQuoteId: 'cq-1',
       status: 'accepted',
       isLatest: false,
@@ -222,7 +253,43 @@ describe('PUT /api/clients-orders/:id', () => {
     expect(body).toEqual({
       error: 'Sale orders can only be created from the latest offer version',
     });
-    expect(findExistingForOfferMock).not.toHaveBeenCalled();
+    expect(findExistingForOfferVersionGroupMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects relinking when an order exists for another offer version in the group', async () => {
+    findForUpdateMock.mockResolvedValue({
+      id: 'so-2',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c-1',
+      clientName: 'Acme',
+      paymentTerms: 'immediate',
+      discount: 0,
+      status: 'draft',
+      notes: null,
+    });
+    findOfferDetailsMock.mockResolvedValue({
+      id: 'co-2',
+      versionGroupId: 'group-1',
+      linkedQuoteId: 'cq-1',
+      status: 'accepted',
+      isLatest: true,
+    });
+    findExistingForOfferVersionGroupMock.mockResolvedValue('so-1');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/so-2',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'co-2' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'A sale order already exists for this offer',
+    });
+    expect(findExistingForOfferVersionGroupMock).toHaveBeenCalledWith('group-1', 'so-2');
     expect(updateMock).not.toHaveBeenCalled();
   });
 });

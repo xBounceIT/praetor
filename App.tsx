@@ -911,10 +911,25 @@ const App: React.FC = () => {
   }, [clientOffers]);
 
   const offerIdsWithOrders = useMemo(() => {
-    return new Set(
-      clientsOrders.map((order) => order.linkedOfferId).filter((id): id is string => Boolean(id)),
-    );
-  }, [clientsOrders]);
+    const ids = new Set<string>();
+    const linkedQuoteIds = new Set<string>();
+
+    clientsOrders.forEach((order) => {
+      if (!order.linkedOfferId) return;
+      ids.add(order.linkedOfferId);
+      if (order.linkedQuoteId) {
+        linkedQuoteIds.add(order.linkedQuoteId);
+      }
+    });
+
+    clientOffers.forEach((offer) => {
+      if (offer.linkedQuoteId && linkedQuoteIds.has(offer.linkedQuoteId)) {
+        ids.add(offer.id);
+      }
+    });
+
+    return ids;
+  }, [clientOffers, clientsOrders]);
 
   const orderIdsWithInvoices = useMemo(() => {
     const ids = new Set<string>();

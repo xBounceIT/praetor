@@ -44,6 +44,7 @@ const insertItemsMock = mock();
 const findForUpdateMock = mock();
 const updateMock = mock();
 const findLinkedSaleIdMock = mock();
+const findLinkedSaleIdForGroupMock = mock();
 const deleteByIdMock = mock();
 const promoteLatestInGroupMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -80,6 +81,7 @@ beforeAll(async () => {
     findForUpdate: findForUpdateMock,
     update: updateMock,
     findLinkedSaleId: findLinkedSaleIdMock,
+    findLinkedSaleIdForGroup: findLinkedSaleIdForGroupMock,
     deleteById: deleteByIdMock,
     promoteLatestInGroup: promoteLatestInGroupMock,
   }));
@@ -192,6 +194,7 @@ const allMocks = [
   findForUpdateMock,
   updateMock,
   findLinkedSaleIdMock,
+  findLinkedSaleIdForGroupMock,
   deleteByIdMock,
   promoteLatestInGroupMock,
   logAuditMock,
@@ -207,6 +210,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
   withDbTransactionMock.mockImplementation(async (cb) => cb(tx));
   logAuditMock.mockImplementation(async () => undefined);
+  findLinkedSaleIdForGroupMock.mockResolvedValue(null);
   createMock.mockImplementation(async (input: NewClientOffer) =>
     offerFixture({
       ...input,
@@ -298,6 +302,25 @@ describe('POST /api/sales/client-offers/:id/versions', () => {
 
     expect(res.statusCode).toBe(409);
     expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects version creation after any offer version has a sale order', async () => {
+    findByIdMock.mockResolvedValue(offerFixture({ status: 'accepted' }));
+    findLinkedSaleIdForGroupMock.mockResolvedValue('so-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/co-1/versions',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Cannot create a new version once a sale order has been created from this offer',
+    });
+    expect(findLinkedSaleIdForGroupMock).toHaveBeenCalledWith('co-1', tx);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(markGroupNotLatestMock).not.toHaveBeenCalled();
   });
 });
 

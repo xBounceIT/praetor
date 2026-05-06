@@ -69,10 +69,11 @@ describe('listAll', () => {
 
 describe('findOfferDetails', () => {
   test('returns offer with linkedQuoteId and status', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted', true]] });
+    exec.enqueue({ rows: [['co-1', 'group-1', 'cq-1', 'accepted', true]] });
     const result = await repo.findOfferDetails('co-1', testDb);
     expect(result).toEqual({
       id: 'co-1',
+      versionGroupId: 'group-1',
       linkedQuoteId: 'cq-1',
       status: 'accepted',
       isLatest: true,
@@ -82,6 +83,23 @@ describe('findOfferDetails', () => {
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
     expect(await repo.findOfferDetails('missing', testDb)).toBeNull();
+  });
+});
+
+describe('findExistingForOfferVersionGroup', () => {
+  test('queries orders joined to any offer in the version group', async () => {
+    exec.enqueue({ rows: [['so-1']] });
+    const result = await repo.findExistingForOfferVersionGroup('group-1', null, testDb);
+    expect(result).toBe('so-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('inner join "customer_offers"');
+    expect(exec.calls[0].params).toContain('group-1');
+  });
+
+  test('excludes the current order when requested', async () => {
+    exec.enqueue({ rows: [] });
+    await repo.findExistingForOfferVersionGroup('group-1', 'so-1', testDb);
+    expect(exec.calls[0].params).toContain('group-1');
+    expect(exec.calls[0].params).toContain('so-1');
   });
 });
 

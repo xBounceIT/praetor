@@ -504,7 +504,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         | { kind: 'not_found' }
         | { kind: 'not_latest'; source: clientOffersRepo.ClientOffer }
-        | { kind: 'draft'; source: clientOffersRepo.ClientOffer };
+        | { kind: 'draft'; source: clientOffersRepo.ClientOffer }
+        | { kind: 'has_order'; source: clientOffersRepo.ClientOffer };
 
       try {
         result = await withDbTransaction(async (tx) => {
@@ -512,6 +513,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!source) return { kind: 'not_found' as const };
           if (!source.isLatest) return { kind: 'not_latest' as const, source };
           if (source.status === 'draft') return { kind: 'draft' as const, source };
+          if (await clientOffersRepo.findLinkedSaleIdForGroup(source.versionGroupId, tx)) {
+            return { kind: 'has_order' as const, source };
+          }
 
           const sourceItems = await clientOffersRepo.findItemsForOffer(source.id, tx);
           const maxVersionNumber = await clientOffersRepo.findMaxVersionNumber(
@@ -563,6 +567,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       if (result.kind === 'draft') {
         return reply.code(409).send({ error: 'Draft offers cannot create a new version' });
+      }
+      if (result.kind === 'has_order') {
+        return reply.code(409).send({
+          error: 'Cannot create a new version once a sale order has been created from this offer',
+        });
       }
 
       await logAudit({

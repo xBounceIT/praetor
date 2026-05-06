@@ -236,6 +236,19 @@ export const findLinkedSaleId = async (
   return rows[0]?.id ?? null;
 };
 
+export const findLinkedSaleIdForGroup = async (
+  versionGroupId: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .innerJoin(customerOffers, eq(sales.linkedOfferId, customerOffers.id))
+    .where(eq(customerOffers.versionGroupId, versionGroupId))
+    .limit(1);
+  return rows[0]?.id ?? null;
+};
+
 export const findItemsForOffer = async (
   offerId: string,
   exec: DbExecutor = db,

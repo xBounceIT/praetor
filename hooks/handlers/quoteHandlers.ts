@@ -110,12 +110,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const deleteClientOffer = async (id: string) => {
     try {
       await api.clientOffers.delete(id);
-      setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
-      setQuotes((prev) =>
-        prev.map((quote) =>
-          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
-        ),
-      );
+      await refreshClientQuoteFlow();
     } catch (err) {
       console.error('Failed to delete client offer:', err);
       throw err;

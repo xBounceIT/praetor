@@ -198,6 +198,14 @@ describe('findLinkedSaleId', () => {
     expect(exec.calls[0].sql).toContain('"linked_offer_id" = $1');
     expect(result).toBe('s-1');
   });
+
+  test('findLinkedSaleIdForGroup joins orders to any offer in the version group', async () => {
+    exec.enqueue({ rows: [['s-1']] });
+    const result = await clientOffersRepo.findLinkedSaleIdForGroup('group-1', testDb);
+    expect(result).toBe('s-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('inner join "customer_offers"');
+    expect(exec.calls[0].params).toContain('group-1');
+  });
 });
 
 describe('create', () => {

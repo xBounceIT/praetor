@@ -163,6 +163,7 @@ export const findStatusAndClientName = async (
 
 export type OfferLink = {
   id: string;
+  versionGroupId: string;
   linkedQuoteId: string | null;
   status: string;
   isLatest: boolean;
@@ -175,6 +176,7 @@ export const findOfferDetails = async (
   const rows = await exec
     .select({
       id: customerOffers.id,
+      versionGroupId: customerOffers.versionGroupId,
       linkedQuoteId: customerOffers.linkedQuoteId,
       status: customerOffers.status,
       isLatest: customerOffers.isLatest,
@@ -182,6 +184,25 @@ export const findOfferDetails = async (
     .from(customerOffers)
     .where(eq(customerOffers.id, offerId));
   return rows[0] ?? null;
+};
+
+export const findExistingForOfferVersionGroup = async (
+  versionGroupId: string,
+  excludeOrderId: string | null = null,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ id: sales.id })
+    .from(sales)
+    .innerJoin(customerOffers, eq(sales.linkedOfferId, customerOffers.id))
+    .where(
+      and(
+        eq(customerOffers.versionGroupId, versionGroupId),
+        excludeOrderId ? ne(sales.id, excludeOrderId) : undefined,
+      ),
+    )
+    .limit(1);
+  return rows[0]?.id ?? null;
 };
 
 export const findExistingForOffer = async (

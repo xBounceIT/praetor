@@ -479,7 +479,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         const hasOrder = offerIdsWithOrders.has(row.id);
         const canMutateLatest = row.isLatest;
         const canCreateVersion = Boolean(
-          onCreateOfferVersion && row.isLatest && row.status !== 'draft',
+          onCreateOfferVersion && row.isLatest && row.status !== 'draft' && !hasOrder,
         );
 
         return (
