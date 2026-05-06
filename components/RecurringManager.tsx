@@ -7,6 +7,7 @@ import { formatRecurrencePattern } from '../utils/recurrence';
 import RecurringTaskEditModal from './RecurringTaskEditModal';
 import DeleteConfirmModal from './shared/DeleteConfirmModal';
 import StandardTable, { type Column } from './shared/StandardTable';
+import StatusBadge from './shared/StatusBadge';
 import Tooltip from './shared/Tooltip';
 
 export interface RecurringManagerProps {
@@ -42,42 +43,46 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
   const columns: Column<ProjectTask>[] = useMemo(
     () => [
       {
-        header: t('recurring.taskDetails'),
-        id: 'taskDetails',
-        accessorFn: (task) => task.name,
+        header: t('common:labels.client'),
+        id: 'client',
+        accessorFn: (task) => {
+          const project = projectsById.get(task.projectId);
+          return project ? clientsById.get(project.clientId)?.name || '' : '';
+        },
+        cell: ({ value }) => (
+          <span className="text-sm font-bold text-slate-800">
+            {(value as string) || t('recurring.unknown')}
+          </span>
+        ),
+      },
+      {
+        header: t('common:labels.project'),
+        id: 'project',
+        accessorFn: (task) => projectsById.get(task.projectId)?.name || '',
         cell: ({ row: task }) => {
           const project = projectsById.get(task.projectId);
-          const client = project ? clientsById.get(project.clientId) : undefined;
           return (
-            <div className="flex flex-col">
-              <span className="font-bold text-slate-800">{task.name}</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] font-black uppercase text-praetor tracking-wide">
-                  {client?.name || t('recurring.unknown')}
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-xs text-slate-500 flex items-center gap-1">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: project?.color || '#ccc' }}
-                  ></span>
-                  {project?.name || t('recurring.unknown')}
-                </span>
-              </div>
-            </div>
+            <span className="text-sm text-slate-600 inline-flex items-center gap-1.5">
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: project?.color || '#ccc' }}
+              ></span>
+              {project?.name || t('recurring.unknown')}
+            </span>
           );
         },
+      },
+      {
+        header: t('common:labels.task'),
+        id: 'task',
+        accessorFn: (task) => task.name,
+        cell: ({ value }) => <span className="text-sm text-slate-700">{value as string}</span>,
       },
       {
         header: t('recurring.pattern'),
         id: 'pattern',
         accessorFn: (task) => formatRecurrencePattern(task.recurrencePattern, t),
-        cell: ({ value }) => (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide bg-slate-50 text-praetor border border-slate-200">
-            <i className="fa-solid fa-repeat text-[10px]"></i>
-            {value as string}
-          </span>
-        ),
+        cell: ({ value }) => <StatusBadge type="recurrence" label={value as string} />,
       },
       {
         header: t('recurring.startDate'),
@@ -85,11 +90,11 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceStart || '',
         cell: ({ row: task }) =>
           task.recurrenceStart ? (
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+            <span className="text-sm text-slate-600">
               {formatDateOnlyForLocale(task.recurrenceStart)}
             </span>
           ) : (
-            <span className="text-xs text-slate-400">—</span>
+            <span className="text-sm text-slate-400">—</span>
           ),
       },
       {
@@ -98,11 +103,11 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceEnd || '',
         cell: ({ row: task }) =>
           task.recurrenceEnd ? (
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+            <span className="text-sm text-slate-600">
               {formatDateOnlyForLocale(task.recurrenceEnd)}
             </span>
           ) : (
-            <span className="text-xs text-slate-400 italic">{t('recurring.noExpiration')}</span>
+            <span className="text-sm text-slate-400 italic">{t('recurring.noExpiration')}</span>
           ),
       },
       {
@@ -112,16 +117,17 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         align: 'right',
         cell: ({ row: task }) =>
           task.recurrenceDuration ? (
-            <span className="text-xs font-bold text-slate-700">
+            <span className="text-sm font-bold text-slate-700">
               {task.recurrenceDuration}
               {t('recurring.hoursSuffix')}
             </span>
           ) : (
-            <span className="text-xs text-slate-400">—</span>
+            <span className="text-sm text-slate-400">—</span>
           ),
       },
       {
-        header: t('common:labels.actions'),
+        // Empty header so the column shrinks to fit the two icon buttons.
+        header: '',
         id: 'actions',
         align: 'right',
         sticky: 'right',
