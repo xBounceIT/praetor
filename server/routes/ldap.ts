@@ -8,7 +8,9 @@ import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
-const TLS_CA_MAX_LENGTH = 32768;
+// 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
+// sync prevents a save flow where a 32–64 KB chain passes the picker but fails the API.
+const TLS_CA_MAX_LENGTH = 65536;
 const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
 
 // Returns the patch fragment to merge into ldapRepo.update():
