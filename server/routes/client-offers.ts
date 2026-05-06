@@ -1,8 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
+import * as productsRepo from '../repositories/productsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -259,6 +262,47 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
+
+  const snapshotPreState = async (
+    offerId: string,
+    reason: offerVersionsRepo.OfferVersionReason,
+    request: FastifyRequest,
+    tx: DbExecutor,
+  ) => {
+    const pre = await clientOffersRepo.findFullForSnapshot(offerId, tx);
+    if (!pre) return;
+    await offerVersionsRepo.insert(
+      {
+        offerId,
+        snapshot: offerVersionsRepo.buildSnapshot(pre.offer, pre.items),
+        reason,
+        createdByUserId: request.user?.id ?? null,
+      },
+      tx,
+    );
+  };
+
+  const findMissingSnapshotReference = async (
+    snapshot: offerVersionsRepo.OfferVersionSnapshot,
+  ): Promise<string | null> => {
+    const clientExists = await clientsRepo.existsById(snapshot.offer.clientId);
+    if (!clientExists) {
+      return `Snapshot client "${snapshot.offer.clientId}" no longer exists`;
+    }
+
+    const productIds = Array.from(
+      new Set(
+        snapshot.items
+          .map((item) => item.productId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    if (productIds.length === 0) return null;
+
+    const products = await productsRepo.getSnapshots(productIds);
+    const missingProductId = productIds.find((id) => !products.has(id));
+    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+  };
 
   fastify.get(
     '/',
@@ -569,12 +613,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItemsForUpdate) return;
       }
 
+      const isIdOnlyUpdate =
+        nextId !== undefined &&
+        clientId === undefined &&
+        clientName === undefined &&
+        items === undefined &&
+        paymentTerms === undefined &&
+        discount === undefined &&
+        discountType === undefined &&
+        status === undefined &&
+        expirationDate === undefined &&
+        notes === undefined;
+
       let result: {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          // ID-only renames cascade through the FK and don't alter snapshot content, so we
+          // skip them to keep the history clean.
+          if (!isIdOnlyUpdate) {
+            await snapshotPreState(idResult.value, 'update', request, tx);
+          }
           const offer = await clientOffersRepo.update(
             idResult.value,
             {
@@ -678,6 +739,202 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       await clientOffersRepo.deleteById(idResult.value);
       return reply.code(204).send();
+    },
+  );
+
+  const versionParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      versionId: { type: 'string' },
+    },
+    required: ['id', 'versionId'],
+  } as const;
+
+  const offerVersionRowSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      offerId: { type: 'string' },
+      reason: { type: 'string', enum: ['update', 'restore'] },
+      createdByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'offerId', 'reason', 'createdAt'],
+  } as const;
+
+  const offerVersionSchema = {
+    type: 'object',
+    properties: { ...offerVersionRowSchema.properties, snapshot: {} },
+    required: [...offerVersionRowSchema.required, 'snapshot'],
+  } as const;
+
+  fastify.get(
+    '/:id/versions',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.client_offers.view'),
+      ],
+      schema: {
+        tags: ['client-offers'],
+        summary: 'List versions for a client offer',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: offerVersionRowSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const [exists, versions] = await Promise.all([
+        clientOffersRepo.existsById(idResult.value),
+        offerVersionsRepo.listForOffer(idResult.value),
+      ]);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Offer not found' });
+      }
+      return versions;
+    },
+  );
+
+  fastify.get(
+    '/:id/versions/:versionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.client_offers.view'),
+      ],
+      schema: {
+        tags: ['client-offers'],
+        summary: 'Get a single client offer version',
+        params: versionParamSchema,
+        response: {
+          200: offerVersionSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const version = await offerVersionsRepo.findById(idResult.value, versionIdResult.value);
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      return version;
+    },
+  );
+
+  fastify.post(
+    '/:id/versions/:versionId/restore',
+    {
+      onRequest: [requirePermission('sales.client_offers.update')],
+      schema: {
+        tags: ['client-offers'],
+        summary: 'Restore a client offer to a prior version',
+        params: versionParamSchema,
+        response: {
+          200: offerSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      // Independent reads — fan out, then run the gating ladder against resolved values.
+      const [current, linkedSaleId, version] = await Promise.all([
+        clientOffersRepo.findForUpdate(idResult.value),
+        clientOffersRepo.findLinkedSaleId(idResult.value),
+        offerVersionsRepo.findById(idResult.value, versionIdResult.value),
+      ]);
+
+      if (!current) {
+        return reply.code(404).send({ error: 'Offer not found' });
+      }
+      if (current.status !== 'draft') {
+        return reply.code(409).send({
+          error: 'Non-draft offers are read-only',
+          currentStatus: current.status,
+        });
+      }
+      if (linkedSaleId) {
+        return reply.code(409).send({
+          error: 'Cannot restore an offer once a sale order has been created from it',
+        });
+      }
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
+      if (missingSnapshotReference) {
+        return reply.code(409).send({ error: missingSnapshotReference });
+      }
+      const snapshotExpirationDate = version.snapshot.offer.expirationDate;
+      if (!snapshotExpirationDate) {
+        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
+      }
+
+      const snapshotItems: clientOffersRepo.NewClientOfferItem[] = version.snapshot.items.map(
+        ({ id: _itemId, offerId: _offerId, ...rest }) => ({
+          ...rest,
+          id: generateOfferItemId(),
+        }),
+      );
+
+      const restored = await withDbTransaction(async (tx) => {
+        // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
+        await snapshotPreState(idResult.value, 'restore', request, tx);
+
+        const offer = await clientOffersRepo.restoreSnapshotOffer(
+          idResult.value,
+          {
+            clientId: version.snapshot.offer.clientId,
+            clientName: version.snapshot.offer.clientName,
+            paymentTerms: version.snapshot.offer.paymentTerms ?? 'immediate',
+            discount: version.snapshot.offer.discount,
+            discountType: version.snapshot.offer.discountType,
+            status: version.snapshot.offer.status,
+            expirationDate: snapshotExpirationDate,
+            notes: version.snapshot.offer.notes,
+          },
+          tx,
+        );
+        if (!offer) return { offer: null, items: [] };
+        const items = await clientOffersRepo.replaceItems(offer.id, snapshotItems, tx);
+        return { offer, items };
+      });
+
+      if (!restored.offer) {
+        return reply.code(404).send({ error: 'Offer not found' });
+      }
+
+      await logAudit({
+        request,
+        action: 'client_offer.restored',
+        entityType: 'client_offer',
+        entityId: restored.offer.id,
+        details: {
+          targetLabel: restored.offer.id,
+          secondaryLabel: restored.offer.clientName,
+          toValue: versionIdResult.value,
+        },
+      });
+
+      return { ...restored.offer, items: restored.items };
     },
   );
 }

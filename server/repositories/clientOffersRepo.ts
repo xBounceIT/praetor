@@ -177,6 +177,18 @@ export const findItemsForOffer = async (
   return rows.map(mapItem);
 };
 
+export const findFullForSnapshot = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ offer: ClientOffer; items: ClientOfferItem[] } | null> => {
+  const [offerRows, items] = await Promise.all([
+    exec.select().from(customerOffers).where(eq(customerOffers.id, id)).limit(1),
+    findItemsForOffer(id, exec),
+  ]);
+  if (offerRows.length === 0) return null;
+  return { offer: mapOffer(offerRows[0]), items };
+};
+
 export type NewClientOffer = {
   id: string;
   linkedQuoteId: string;
@@ -222,6 +234,37 @@ export type ClientOfferUpdate = {
   status?: string | null;
   expirationDate?: string | null;
   notes?: string | null;
+};
+
+export type ClientOfferRestoreFields = Pick<
+  ClientOffer,
+  'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
+> & {
+  paymentTerms: string;
+  expirationDate: string;
+};
+
+export const restoreSnapshotOffer = async (
+  id: string,
+  snapshot: ClientOfferRestoreFields,
+  exec: DbExecutor = db,
+): Promise<ClientOffer | null> => {
+  const [row] = await exec
+    .update(customerOffers)
+    .set({
+      clientId: snapshot.clientId,
+      clientName: snapshot.clientName,
+      paymentTerms: snapshot.paymentTerms,
+      discount: numericForDb(snapshot.discount),
+      discountType: snapshot.discountType,
+      status: snapshot.status,
+      expirationDate: snapshot.expirationDate,
+      notes: snapshot.notes,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(customerOffers.id, id))
+    .returning();
+  return row ? mapOffer(row) : null;
 };
 
 export const update = async (
