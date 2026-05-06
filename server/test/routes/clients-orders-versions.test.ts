@@ -696,4 +696,96 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(ovInsertMock).not.toHaveBeenCalled();
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
   });
+
+  test('PUT changing only an item productCost snapshots (regression)', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, productCost: 75 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: 75,
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
+      undefined,
+    );
+  });
+
+  test('PUT changing only an item unitType snapshots', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, unitType: 'days' as const }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+            unitType: 'days',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovInsertMock).toHaveBeenCalled();
+  });
 });

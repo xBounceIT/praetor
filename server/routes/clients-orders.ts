@@ -297,6 +297,58 @@ const itemsMatch = (
   return true;
 };
 
+// Fingerprint covers every field that flows into the JSONB snapshot, so cost / MOL / note /
+// unit-type / supplier-source edits all flip the change flag. The looser `itemsMatch` above
+// only powers the source-linked rejection check and is intentionally untouched here.
+const snapshotItemFingerprint = (item: {
+  id?: string | null;
+  productId?: string | null;
+  productName?: string | null;
+  quantity: number | string;
+  unitPrice: number | string;
+  productCost: number | string;
+  productMolPercentage: number | null;
+  discount: number | string | null;
+  note?: string | null;
+  unitType: string;
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice: number | string | null;
+  supplierSaleId?: string | null;
+  supplierSaleItemId?: string | null;
+  supplierSaleSupplierName?: string | null;
+}) =>
+  [
+    item.id ?? '',
+    item.productId ?? '',
+    item.productName ?? '',
+    Number(item.quantity),
+    Number(item.unitPrice),
+    Number(item.productCost),
+    item.productMolPercentage == null ? '' : Number(item.productMolPercentage),
+    item.discount == null ? 0 : Number(item.discount),
+    normalizeNotesValue(item.note),
+    item.unitType,
+    item.supplierQuoteId ?? '',
+    item.supplierQuoteItemId ?? '',
+    item.supplierQuoteSupplierName ?? '',
+    item.supplierQuoteUnitPrice == null ? '' : Number(item.supplierQuoteUnitPrice),
+    item.supplierSaleId ?? '',
+    item.supplierSaleItemId ?? '',
+    item.supplierSaleSupplierName ?? '',
+  ].join('|');
+
+const itemsChangedForSnapshot = (
+  existing: Array<Parameters<typeof snapshotItemFingerprint>[0]>,
+  incoming: Array<Parameters<typeof snapshotItemFingerprint>[0]>,
+): boolean => {
+  if (existing.length !== incoming.length) return true;
+  const a = existing.map(snapshotItemFingerprint).sort();
+  const b = incoming.map(snapshotItemFingerprint).sort();
+  return a.some((fp, i) => fp !== b[i]);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
   // API path is clients-orders for backward compatibility; data is stored in sales/sale_items.
@@ -879,13 +931,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (existingItems === null) {
             existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
           }
-          const normalizedExisting = normalizeItemsForComparison(
-            existingItems as unknown as Array<Record<string, unknown>>,
-          );
-          const normalizedIncoming = normalizeItemsForComparison(
-            (normalizedItems ?? []) as unknown as Array<Record<string, unknown>>,
-          );
-          if (!itemsMatch(normalizedExisting, normalizedIncoming)) {
+          if (itemsChangedForSnapshot(existingItems, normalizedItems ?? [])) {
             hasContentChanges = true;
           }
         }
