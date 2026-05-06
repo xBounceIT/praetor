@@ -163,6 +163,7 @@ const ENABLED_LDAP_CONFIG = {
   groupBaseDn: 'ou=groups,dc=test,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
+  tlsCaCertificate: '',
 };
 
 const resetService = () => {
@@ -256,6 +257,51 @@ describe('getClient', () => {
     };
     expect(opts.tlsOptions.ca).toBeInstanceOf(Buffer);
     expect((opts.tlsOptions.ca as Buffer).length).toBeGreaterThan(0);
+  });
+
+  test('config.tlsCaCertificate populates tlsOptions.ca as a UTF-8 buffer', async () => {
+    const pem = '-----BEGIN CERTIFICATE-----\ndb-stored\n-----END CERTIFICATE-----\n';
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, tlsCaCertificate: pem });
+    await ldapService.getClient();
+    const opts = createClientMock.mock.calls[0]?.[0] as { tlsOptions: { ca?: Buffer } };
+    expect(opts.tlsOptions.ca).toBeInstanceOf(Buffer);
+    expect((opts.tlsOptions.ca as Buffer).toString('utf8')).toBe(pem);
+  });
+
+  test('DB-stored tlsCaCertificate takes precedence over LDAP_TLS_CA_FILE', async () => {
+    const pem = '-----BEGIN CERTIFICATE-----\nfrom-db\n-----END CERTIFICATE-----\n';
+    process.env.LDAP_TLS_CA_FILE = import.meta.path;
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, tlsCaCertificate: pem });
+    await ldapService.getClient();
+    const opts = createClientMock.mock.calls[0]?.[0] as { tlsOptions: { ca?: Buffer } };
+    expect((opts.tlsOptions.ca as Buffer).toString('utf8')).toBe(pem);
+  });
+
+  test('empty config.tlsCaCertificate falls through to LDAP_TLS_CA_FILE', async () => {
+    process.env.LDAP_TLS_CA_FILE = import.meta.path;
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, tlsCaCertificate: '' });
+    await ldapService.getClient();
+    const opts = createClientMock.mock.calls[0]?.[0] as { tlsOptions: { ca?: Buffer } };
+    // The fallback reads the test file itself; the buffer must be that file's contents
+    // and is recognizable by an import statement (not present in any real PEM).
+    expect(opts.tlsOptions.ca).toBeInstanceOf(Buffer);
+    expect((opts.tlsOptions.ca as Buffer).toString('utf8')).toContain(
+      "import realLdap from 'ldapjs'",
+    );
+  });
+});
+
+describe('invalidateConfig', () => {
+  test('drops the cached config so the next getClient call re-reads from the repo', async () => {
+    await ldapService.getClient();
+    expect(ldapRepoGetMock).toHaveBeenCalledTimes(1);
+    // Second call without invalidate uses the cache.
+    await ldapService.getClient();
+    expect(ldapRepoGetMock).toHaveBeenCalledTimes(1);
+    // After invalidate, the next call re-reads.
+    ldapService.invalidateConfig();
+    await ldapService.getClient();
+    expect(ldapRepoGetMock).toHaveBeenCalledTimes(2);
   });
 });
 

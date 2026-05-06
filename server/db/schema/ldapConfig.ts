@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, integer, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 // Single-row config table — `id` is pinned to 1 by both the column default and a CHECK.
 //
@@ -21,6 +30,7 @@ export const ldapConfig = pgTable(
     roleMappings: jsonb('role_mappings')
       .$type<Array<{ ldapGroup: string; role: string }>>()
       .default(sql`'[]'::jsonb`),
+    tlsCaCertificate: text('tls_ca_certificate'),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [check('ldap_config_id_check', sql`${table.id} = 1`)],

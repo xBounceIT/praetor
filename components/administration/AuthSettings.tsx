@@ -1,9 +1,12 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LdapConfig, LdapRoleMapping, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import Toggle from '../shared/Toggle';
+
+const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
+const PEM_END_MARKER = '-----END CERTIFICATE-----';
 
 export interface AuthSettingsProps {
   config: LdapConfig;
@@ -21,6 +24,7 @@ const DEFAULT_CONFIG: LdapConfig = {
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
+  tlsCaCertificate: '',
 };
 
 const isExampleLdapServerUrl = (serverUrl: string) => {
@@ -50,7 +54,35 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'ldap'>('ldap');
+  const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
   const isDirty = JSON.stringify(formData) !== JSON.stringify(config || DEFAULT_CONFIG);
+
+  const handleTlsCaFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset immediately so picking the same file twice still fires onChange.
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 65536) {
+      setErrors((prev) => ({
+        ...prev,
+        tlsCaCertificate: t('admin.ldap.errors.tlsCaFileTooLarge', 'File too large (max 64 KB)'),
+      }));
+      return;
+    }
+    try {
+      const text = await file.text();
+      setFormData((prev) => ({ ...prev, tlsCaCertificate: text }));
+      setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
+    } catch {
+      setErrors((prev) => ({
+        ...prev,
+        tlsCaCertificate: t(
+          'admin.ldap.errors.tlsCaFileReadFailed',
+          'Could not read the selected file',
+        ),
+      }));
+    }
+  };
 
   const roleOptions = roles.length
     ? roles.map((role) => ({ id: role.id, name: role.name }))
@@ -103,6 +135,17 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
       newErrors.bindCredentials = t(
         'admin.ldap.errors.bindCredentialsRequired',
         'Both Bind DN and Bind Password are required together',
+      );
+    }
+
+    const trimmedCa = formData.tlsCaCertificate.trim();
+    if (
+      trimmedCa !== '' &&
+      (!trimmedCa.includes(PEM_BEGIN_MARKER) || !trimmedCa.includes(PEM_END_MARKER))
+    ) {
+      newErrors.tlsCaCertificate = t(
+        'admin.ldap.errors.tlsCaInvalidPem',
+        'Certificate must be PEM-encoded with BEGIN/END CERTIFICATE markers',
       );
     }
 
@@ -359,6 +402,81 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
                     </p>
                   )}
                 </div>
+              </div>
+            </section>
+
+            {/* TLS / Certificates */}
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                <i className="fa-solid fa-lock text-praetor"></i>
+                <h3 className="font-bold text-slate-800">
+                  {t('admin.ldap.tls.title', 'TLS / Certificates')}
+                </h3>
+              </div>
+              <div className="p-6 space-y-3">
+                <label
+                  htmlFor="ldap-tls-ca-textarea"
+                  className="block text-xs font-bold text-slate-400 uppercase tracking-wider"
+                >
+                  {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
+                </label>
+                <p className="text-xs text-slate-500">
+                  {t(
+                    'admin.ldap.tls.caCertificateHelp',
+                    'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
+                  )}
+                </p>
+                <textarea
+                  id="ldap-tls-ca-textarea"
+                  rows={8}
+                  value={formData.tlsCaCertificate}
+                  onChange={(e) => {
+                    setFormData({ ...formData, tlsCaCertificate: e.target.value });
+                    if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                  }}
+                  placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
+                  className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  spellCheck={false}
+                />
+                {errors.tlsCaCertificate && (
+                  <p className="text-red-500 text-[10px] font-bold">{errors.tlsCaCertificate}</p>
+                )}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => tlsCaFileInputRef.current?.click()}
+                    className="text-xs bg-slate-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    <i className="fa-solid fa-file-arrow-up mr-1.5"></i>
+                    {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
+                  </button>
+                  {formData.tlsCaCertificate.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, tlsCaCertificate: '' });
+                        if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                      }}
+                      className="text-xs text-slate-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
+                    >
+                      <i className="fa-solid fa-trash-can mr-1.5"></i>
+                      {t('admin.ldap.tls.clear', 'Clear')}
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-400 italic">
+                    {t(
+                      'admin.ldap.tls.caClearedHint',
+                      'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+                    )}
+                  </span>
+                </div>
+                <input
+                  ref={tlsCaFileInputRef}
+                  type="file"
+                  accept=".pem,.crt,.cer,.cert"
+                  onChange={handleTlsCaFileImport}
+                  className="hidden"
+                />
               </div>
             </section>
 

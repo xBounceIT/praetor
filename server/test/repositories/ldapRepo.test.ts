@@ -25,6 +25,7 @@ const PROJECTION_KEYS = [
   'groupBaseDn',
   'groupFilter',
   'roleMappings',
+  'tlsCaCertificate',
 ] as const;
 type ProjectionKey = (typeof PROJECTION_KEYS)[number];
 type RowFields = Record<ProjectionKey, unknown>;
@@ -39,6 +40,7 @@ const baseFields: RowFields = {
   groupBaseDn: 'ou=groups',
   groupFilter: '(member={0})',
   roleMappings: [] as ldapRepo.LdapRoleMapping[],
+  tlsCaCertificate: null,
 };
 
 const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
@@ -153,6 +155,49 @@ describe('DEFAULT_CONFIG', () => {
       groupBaseDn: 'ou=groups,dc=example,dc=com',
       groupFilter: '(member={0})',
       roleMappings: [],
+      tlsCaCertificate: '',
     });
+  });
+});
+
+describe('tlsCaCertificate clear semantics', () => {
+  test('mapRow collapses NULL to empty string so the type stays non-nullable', async () => {
+    exec.enqueue({ rows: [buildRow({ tlsCaCertificate: null })] });
+    const result = await ldapRepo.get(testDb);
+    expect(result?.tlsCaCertificate).toBe('');
+  });
+
+  test('mapRow returns the stored PEM unchanged when present', async () => {
+    const pem = '-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----\n';
+    exec.enqueue({ rows: [buildRow({ tlsCaCertificate: pem })] });
+    const result = await ldapRepo.get(testDb);
+    expect(result?.tlsCaCertificate).toBe(pem);
+  });
+
+  test('update with non-empty PEM binds the value as a parameter', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    const pem = '-----BEGIN CERTIFICATE-----\nXYZ\n-----END CERTIFICATE-----\n';
+    await ldapRepo.update({ tlsCaCertificate: pem }, testDb);
+    expect(exec.calls[0].params).toContain(pem);
+  });
+
+  test('update with empty string emits literal NULL (clear), not a bound parameter', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    await ldapRepo.update({ tlsCaCertificate: '' }, testDb);
+    // No bound param holds an empty string — the clear path uses sql`NULL` directly,
+    // which Drizzle emits as the SQL token rather than a placeholder.
+    expect(exec.calls[0].params).not.toContain('');
+    expect(exec.calls[0].sql.toUpperCase()).toContain('NULL');
+  });
+
+  test('update with tlsCaCertificate undefined preserves the existing column reference', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    await ldapRepo.update({ enabled: true }, testDb);
+    // Preserve branch references the column itself; no PEM-shaped bound parameter.
+    const params = exec.calls[0].params;
+    expect(params.some((p) => typeof p === 'string' && p.includes('BEGIN CERTIFICATE'))).toBe(
+      false,
+    );
+    expect(exec.calls[0].sql).toContain('"tls_ca_certificate"');
   });
 });

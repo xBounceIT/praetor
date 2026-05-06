@@ -578,6 +578,7 @@ const App: React.FC = () => {
     groupBaseDn: 'ou=groups,dc=example,dc=com',
     groupFilter: '(member={0})',
     roleMappings: [],
+    tlsCaCertificate: '',
   });
   const [generalSettings, setGeneralSettings] = useState({
     currency: '€',

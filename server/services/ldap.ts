@@ -54,6 +54,10 @@ class LDAPService {
     this.config = await ldapRepo.get();
   }
 
+  invalidateConfig(): void {
+    this.config = null;
+  }
+
   async getClient(): Promise<LdapClient | null> {
     if (!this.config) {
       await this.loadConfig();
@@ -72,7 +76,12 @@ class LDAPService {
       rejectUnauthorized: process.env.LDAP_REJECT_UNAUTHORIZED !== 'false',
     };
 
-    if (process.env.LDAP_TLS_CA_FILE && fs.existsSync(process.env.LDAP_TLS_CA_FILE)) {
+    // CA precedence: DB-stored PEM wins; otherwise fall back to LDAP_TLS_CA_FILE.
+    // Node's TLS layer accepts a single Buffer with one or more concatenated
+    // PEM blocks, so chain certs in the textarea work without extra parsing.
+    if (this.config.tlsCaCertificate) {
+      tlsOptions.ca = Buffer.from(this.config.tlsCaCertificate, 'utf8');
+    } else if (process.env.LDAP_TLS_CA_FILE && fs.existsSync(process.env.LDAP_TLS_CA_FILE)) {
       tlsOptions.ca = fs.readFileSync(process.env.LDAP_TLS_CA_FILE);
     }
 
