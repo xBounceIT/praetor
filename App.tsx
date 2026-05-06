@@ -2455,6 +2455,7 @@ const App: React.FC = () => {
                 projects={projects}
                 clients={clients}
                 onAction={handleRecurringAction}
+                onUpdate={handleMakeRecurring}
               />
             )}
             {activeView === 'settings' && (
