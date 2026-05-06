@@ -145,7 +145,19 @@
     "clientChangeRepriceCancel": "Cancel",
     "supplierQuoteColumn": "Supplier Quote",
     "revenue": "Revenue",
-    "molLabel": "MOL"
+    "molLabel": "MOL",
+    "versionHistory": {
+      "title": "Version History",
+      "empty": "No previous versions yet. Saves will appear here.",
+      "previewBanner": "Previewing version from {{date}}",
+      "backToCurrent": "Back to current",
+      "restoreButton": "Restore this version",
+      "restoreConfirmTitle": "Restore this version?",
+      "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
+      "reasonUpdate": "Save",
+      "reasonRestore": "Restored",
+      "loadFailed": "Failed to load version history."
+    }
   },
   "clientOffers": {
     "title": "Client Offers",

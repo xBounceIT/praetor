@@ -218,6 +218,50 @@ describe('update', () => {
   });
 });
 
+describe('restoreSnapshotQuote', () => {
+  test('sets nullable notes directly instead of COALESCE-keeping the old value', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    await clientQuotesRepo.restoreSnapshotQuote(
+      'cq-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 10,
+        discountType: 'percentage',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "quotes"');
+    expect(sql).not.toContain('coalesce');
+    expect(exec.calls[0].params).toContain(null);
+    expect(exec.calls[0].params).toContain('cq-1');
+  });
+
+  test('returns null when no row is restored', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await clientQuotesRepo.restoreSnapshotQuote(
+      'cq-x',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 10,
+        discountType: 'percentage',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(result).toBeNull();
+  });
+});
+
 describe('replaceItems', () => {
   test('issues DELETE then bulk INSERT and preserves order', async () => {
     exec.enqueue({ rows: [] });

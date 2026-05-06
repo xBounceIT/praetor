@@ -162,6 +162,19 @@ describe('findContactsForUpdate', () => {
   });
 });
 
+describe('existsById', () => {
+  test('returns true when a client row exists', async () => {
+    exec.enqueue({ rows: [['c-1']] });
+    expect(await clientsRepo.existsById('c-1', testDb)).toBe(true);
+    expect(exec.calls[0].params).toContain('c-1');
+  });
+
+  test('returns false when a client row is missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientsRepo.existsById('c-x', testDb)).toBe(false);
+  });
+});
+
 describe('findByFiscalCode', () => {
   test('queries with LOWER for case-insensitive match without exclude', async () => {
     exec.enqueue({ rows: [['c-1']] });

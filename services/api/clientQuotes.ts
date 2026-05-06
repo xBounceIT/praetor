@@ -1,4 +1,4 @@
-import type { Quote } from '../../types';
+import type { Quote, QuoteVersion, QuoteVersionRow } from '../../types';
 import { fetchApi } from './client';
 import { normalizeQuote } from './normalizers';
 
@@ -20,4 +20,15 @@ export const clientQuotesApi = {
 
   delete: (id: string): Promise<void> =>
     fetchApi(`/sales/client-quotes/${id}`, { method: 'DELETE' }),
+
+  listVersions: (id: string): Promise<QuoteVersionRow[]> =>
+    fetchApi<QuoteVersionRow[]>(`/sales/client-quotes/${id}/versions`),
+
+  getVersion: (id: string, versionId: string): Promise<QuoteVersion> =>
+    fetchApi<QuoteVersion>(`/sales/client-quotes/${id}/versions/${versionId}`),
+
+  restoreVersion: (id: string, versionId: string): Promise<Quote> =>
+    fetchApi<Quote>(`/sales/client-quotes/${id}/versions/${versionId}/restore`, {
+      method: 'POST',
+    }).then(normalizeQuote),
 };

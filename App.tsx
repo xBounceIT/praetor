@@ -2122,6 +2122,20 @@ const App: React.FC = () => {
                   supplierQuotes={supplierQuotes}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
+                  onQuoteRestored={async (restored) => {
+                    // Patch the restored quote eagerly so the modal reflects it instantly,
+                    // then refetch the whole flow because restore can also delete draft
+                    // linked sales server-side.
+                    setQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
+                    const [quotesData, offersData, ordersData] = await Promise.all([
+                      api.quotes.list(),
+                      api.clientOffers.list(),
+                      api.clientsOrders.list(),
+                    ]);
+                    setQuotes(quotesData);
+                    setClientOffers(offersData);
+                    setClientsOrders(ordersData);
+                  }}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
                   offers={clientOffers}
