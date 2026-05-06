@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildGroupLookupFilter,
   buildUserLookupFilter,
   buildUserSyncFilter,
   escapeLdapFilterValue,
+  validateGroupFilterTemplate,
   validateUserFilterTemplate,
 } from '../../utils/ldap-filter.ts';
 
@@ -93,5 +95,36 @@ describe('buildUserSyncFilter', () => {
     expect(() => buildUserSyncFilter('(uid={0}')).toThrow(
       /userFilter cannot be used for LDAP sync/,
     );
+  });
+});
+
+describe('validateGroupFilterTemplate', () => {
+  test('accepts a well-formed group filter with the {0} placeholder', () => {
+    expect(validateGroupFilterTemplate('(member={0})')).toEqual({
+      ok: true,
+      value: '(member={0})',
+    });
+  });
+
+  test('rejects group filters that do not include the {0} placeholder', () => {
+    const result = validateGroupFilterTemplate('(member=uid=alice,dc=test,dc=com)');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('{0}');
+  });
+
+  test('rejects malformed group filter syntax', () => {
+    const result = validateGroupFilterTemplate('(member={0}');
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('buildGroupLookupFilter', () => {
+  test('substitutes the escaped group lookup value into the {0} placeholder', () => {
+    const filter = buildGroupLookupFilter('(member={0})', 'uid=a(b)c,dc=test,dc=com');
+    expect(filter.toString()).toBe('(member=uid=a\\28b\\29c,dc=test,dc=com)');
+  });
+
+  test('throws when the group template has no placeholder', () => {
+    expect(() => buildGroupLookupFilter('(member=alice)', 'alice')).toThrow(/\{0\}/);
   });
 });

@@ -21,6 +21,8 @@ import projectsRoutes from './routes/projects.ts';
 import reportsRoutes from './routes/reports.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
+import ssoRoutes from './routes/sso.ts';
+import ssoAuthRoutes from './routes/sso-auth.ts';
 import supplierInvoicesRoutes from './routes/supplier-invoices.ts';
 import supplierOrdersRoutes from './routes/supplier-orders.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
@@ -96,6 +98,7 @@ export const buildApp = async () => {
   });
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
+  await fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
   await fastify.register(aiRoutes, { prefix: '/api/ai' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(clientsRoutes, { prefix: '/api/clients' });
@@ -103,6 +106,7 @@ export const buildApp = async () => {
   await fastify.register(tasksRoutes, { prefix: '/api/tasks' });
   await fastify.register(entriesRoutes, { prefix: '/api/entries' });
   await fastify.register(settingsRoutes, { prefix: '/api/settings' });
+  await fastify.register(ssoRoutes, { prefix: '/api/sso' });
   await fastify.register(ldapRoutes, { prefix: '/api/ldap' });
   await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
   await fastify.register(productsRoutes, { prefix: '/api/products' });

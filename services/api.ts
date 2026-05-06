@@ -5,7 +5,7 @@
 
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
-export { getAuthToken, setAuthToken } from './api/client';
+export { getApiBase, getAuthToken, setAuthToken } from './api/client';
 export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
@@ -24,6 +24,7 @@ export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
 export { rolesApi } from './api/roles';
 export { settingsApi } from './api/settings';
+export { ssoApi } from './api/sso';
 export { supplierInvoicesApi } from './api/supplierInvoices';
 export { supplierOrdersApi } from './api/supplierOrders';
 export { supplierQuotesApi } from './api/supplierQuotes';
@@ -34,7 +35,7 @@ export { workUnitsApi } from './api/workUnits';
 
 import { aiApi } from './api/ai';
 import { authApi } from './api/auth';
-import { getAuthToken, setAuthToken } from './api/client';
+import { getApiBase, getAuthToken, setAuthToken } from './api/client';
 import { clientOffersApi } from './api/clientOffers';
 import { clientQuotesApi } from './api/clientQuotes';
 import { clientsApi } from './api/clients';
@@ -52,6 +53,7 @@ import { projectsApi } from './api/projects';
 import { reportsApi } from './api/reports';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
+import { ssoApi } from './api/sso';
 import { supplierInvoicesApi } from './api/supplierInvoices';
 import { supplierOrdersApi } from './api/supplierOrders';
 import { supplierQuotesApi } from './api/supplierQuotes';
@@ -82,6 +84,7 @@ export default {
   notifications: notificationsApi,
   workUnits: workUnitsApi,
   settings: settingsApi,
+  sso: ssoApi,
   ldap: ldapApi,
   generalSettings: generalSettingsApi,
   email: emailApi,
@@ -89,4 +92,5 @@ export default {
   logs: logsApi,
   setAuthToken,
   getAuthToken,
+  getApiBase,
 };

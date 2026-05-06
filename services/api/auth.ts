@@ -1,5 +1,5 @@
 import type { User } from '../../types';
-import { fetchApi, getAuthToken, setAuthToken } from './client';
+import { fetchApi, getApiBase, getAuthToken, setAuthToken } from './client';
 import type { LoginResponse } from './contracts';
 import { normalizeUser } from './normalizers';
 
@@ -73,6 +73,17 @@ export const authApi = {
         body: JSON.stringify({ username, password }),
       }),
     ),
+
+  consumeSsoTicket: (ticket: string): Promise<LoginResponse> =>
+    runCanonicalAuthFlow(() =>
+      fetchApi('/auth/sso/consume', {
+        method: 'POST',
+        body: JSON.stringify({ ticket }),
+      }),
+    ),
+
+  getSsoStartUrl: (protocol: 'oidc' | 'saml', slug: string): string =>
+    `${getApiBase()}/auth/sso/${protocol}/${encodeURIComponent(slug)}/start`,
 
   me: (): Promise<User> => fetchCanonicalAuthUser(),
 

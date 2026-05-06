@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import realLdap from 'ldapjs';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realExternalAuth from '../../services/external-auth.ts';
 import ldapService from '../../services/ldap.ts';
 import * as realInitials from '../../utils/initials.ts';
 import * as realLogger from '../../utils/logger.ts';
@@ -11,6 +12,7 @@ import * as realOrderIds from '../../utils/order-ids.ts';
 const ldapjsSnapshot = realLdap;
 const ldapRepoSnapshot = { ...realLdapRepo };
 const usersRepoSnapshot = { ...realUsersRepo };
+const externalAuthSnapshot = { ...realExternalAuth };
 const initialsSnapshot = { ...realInitials };
 const loggerSnapshot = { ...realLogger };
 const orderIdsSnapshot = { ...realOrderIds };
@@ -19,6 +21,7 @@ const ldapRepoGetMock = mock();
 const findLoginUserByUsernameMock = mock();
 const updateNameByUsernameMock = mock();
 const createUserMock = mock();
+const applyExternalRolesForUserMock = mock();
 
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
 type SearchResponse = {
@@ -128,6 +131,10 @@ beforeAll(() => {
     updateNameByUsername: updateNameByUsernameMock,
     createUser: createUserMock,
   }));
+  mock.module('../../services/external-auth.ts', () => ({
+    ...externalAuthSnapshot,
+    applyExternalRolesForUser: applyExternalRolesForUserMock,
+  }));
   mock.module('../../utils/initials.ts', () => ({
     ...initialsSnapshot,
     computeAvatarInitials: (name: string) => name.slice(0, 2).toUpperCase(),
@@ -148,6 +155,7 @@ afterAll(() => {
   mock.module('ldapjs', () => ({ default: ldapjsSnapshot }));
   mock.module('../../repositories/ldapRepo.ts', () => ldapRepoSnapshot);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
+  mock.module('../../services/external-auth.ts', () => externalAuthSnapshot);
   mock.module('../../utils/initials.ts', () => initialsSnapshot);
   mock.module('../../utils/logger.ts', () => loggerSnapshot);
   mock.module('../../utils/order-ids.ts', () => orderIdsSnapshot);
@@ -188,9 +196,11 @@ beforeEach(() => {
   findLoginUserByUsernameMock.mockReset();
   updateNameByUsernameMock.mockReset();
   createUserMock.mockReset();
+  applyExternalRolesForUserMock.mockReset();
   createClientMock.mockClear();
 
   ldapRepoGetMock.mockResolvedValue(ENABLED_LDAP_CONFIG);
+  applyExternalRolesForUserMock.mockResolvedValue(['user']);
   nextFixture = {};
   lastClientStats = null;
 });
@@ -334,6 +344,28 @@ describe('authenticate', () => {
     // The real parseFilter (preserved via snapshot) returns a Filter instance whose
     // `toString()` renders the canonical filter text.
     expect(String(search?.options.filter)).toBe('(uid=alice)');
+  });
+
+  test('invalid stored group filter does not block a valid LDAP bind', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member=uid=alice,dc=test,dc=com)',
+    });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
+          status: 0,
+        },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('alice', 'pw');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toEqual([]);
+    expect(result.roleIds).toEqual(['user']);
   });
 });
 

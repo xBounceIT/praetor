@@ -1,8 +1,8 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
-import type { User } from '../types';
+import type { PublicSsoProvider, User } from '../types';
 
 export interface LoginProps {
   users: User[];
@@ -19,6 +19,52 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = new URL(window.location.href);
+    const ssoError = url.searchParams.get('sso_error');
+    const ssoTicket = url.searchParams.get('sso_ticket');
+
+    if (ssoError) setError(ssoError);
+
+    if (ssoError || ssoTicket) {
+      url.searchParams.delete('sso_error');
+      url.searchParams.delete('sso_ticket');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+
+    const loadSsoProviders = async () => {
+      try {
+        const providers = await api.sso.listPublicProviders();
+        if (!cancelled) setSsoProviders(providers);
+      } catch {
+        if (!cancelled) setSsoProviders([]);
+      }
+    };
+
+    const consumeTicket = async (ticket: string) => {
+      setIsLoading(true);
+      try {
+        const response = await api.auth.consumeSsoTicket(ticket);
+        if (!cancelled) onLogin(response.user, response.token);
+      } catch (err) {
+        if (!cancelled) {
+          setError((err as Error).message || t('auth:login.errors.invalidCredentials'));
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    loadSsoProviders();
+    if (ssoTicket) void consumeTicket(ssoTicket);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onLogin, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +92,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
     }
   };
 
+  const handleSsoLogin = (provider: PublicSsoProvider) => {
+    setError('');
+    window.location.href = api.auth.getSsoStartUrl(provider.protocol, provider.slug);
+  };
+
   return (
     <div className="min-h-screen bg-praetor flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-md">
@@ -70,6 +121,30 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 <i className="fa-solid fa-xmark"></i>
               </button>
             )}
+          </div>
+        )}
+
+        {ssoProviders.length > 0 && (
+          <div className="space-y-3 mb-5">
+            {ssoProviders.map((provider) => (
+              <button
+                key={`${provider.protocol}-${provider.slug}`}
+                type="button"
+                onClick={() => handleSsoLogin(provider)}
+                disabled={isLoading}
+                className="w-full py-2.5 text-sm bg-white text-slate-700 font-bold rounded-xl border border-slate-200 hover:border-praetor hover:text-praetor transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <i
+                  className={`fa-solid ${provider.protocol === 'saml' ? 'fa-building-shield' : 'fa-key'}`}
+                ></i>
+                {provider.name}
+              </button>
+            ))}
+            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-slate-300">
+              <div className="h-px flex-1 bg-slate-100"></div>
+              <span>{t('auth:login.orPassword', 'or use password')}</span>
+              <div className="h-px flex-1 bg-slate-100"></div>
+            </div>
           </div>
         )}
 

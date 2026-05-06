@@ -4,7 +4,7 @@ import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
-import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -123,6 +123,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const enabledValue = parseBoolean(enabled);
       let normalizedUserFilter = userFilter;
+      let normalizedGroupFilter = groupFilter;
 
       if (enabledValue) {
         const serverUrlResult = requireNonEmptyString(serverUrl, 'serverUrl');
@@ -144,6 +145,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const groupFilterResult = requireNonEmptyString(groupFilter, 'groupFilter');
         if (!groupFilterResult.ok) return badRequest(reply, groupFilterResult.message);
+        const groupFilterTemplateResult = validateGroupFilterTemplate(groupFilterResult.value);
+        if (!groupFilterTemplateResult.ok) {
+          return badRequest(reply, groupFilterTemplateResult.message);
+        }
+        normalizedGroupFilter = groupFilterTemplateResult.value;
       }
 
       const hasBindDn = bindDn !== undefined && bindDn !== null && bindDn !== '';
@@ -196,7 +202,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         bindPassword,
         userFilter: normalizedUserFilter,
         groupBaseDn,
-        groupFilter,
+        groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
       });
 
