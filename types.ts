@@ -345,6 +345,26 @@ export interface ClientOffer {
   updatedAt: number;
 }
 
+export type OfferVersionReason = 'update' | 'restore';
+
+export interface OfferVersionSnapshot {
+  schemaVersion: 1;
+  offer: Omit<ClientOffer, 'items'>;
+  items: ClientOfferItem[];
+}
+
+export interface OfferVersionRow {
+  id: string;
+  offerId: string;
+  reason: OfferVersionReason;
+  createdByUserId: string | null;
+  createdAt: number;
+}
+
+export interface OfferVersion extends OfferVersionRow {
+  snapshot: OfferVersionSnapshot;
+}
+
 export interface ClientsOrderItem {
   id: string;
   orderId: string;

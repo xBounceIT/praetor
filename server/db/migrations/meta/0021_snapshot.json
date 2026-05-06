@@ -1,6 +1,6 @@
 {
-  "id": "77a71018-f80c-4530-b9a8-85dccf993adf",
-  "prevId": "33370702-59c0-4a67-bdef-a6f4eb6e7dae",
+  "id": "14cca4f5-f6b8-4281-9e67-815d7441e5be",
+  "prevId": "77a71018-f80c-4530-b9a8-85dccf993adf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3780,6 +3780,103 @@
         "supplier_invoices_status_check": {
           "name": "supplier_invoices_status_check",
           "value": "\"supplier_invoices\".\"status\" IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.supplier_order_versions": {
+      "name": "supplier_order_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'update'"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_supplier_order_versions_order_id_created_at": {
+          "name": "idx_supplier_order_versions_order_id_created_at",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "supplier_order_versions_order_id_supplier_sales_id_fk": {
+          "name": "supplier_order_versions_order_id_supplier_sales_id_fk",
+          "tableFrom": "supplier_order_versions",
+          "tableTo": "supplier_sales",
+          "columnsFrom": ["order_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "supplier_order_versions_created_by_user_id_users_id_fk": {
+          "name": "supplier_order_versions_created_by_user_id_users_id_fk",
+          "tableFrom": "supplier_order_versions",
+          "tableTo": "users",
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_supplier_order_versions_reason": {
+          "name": "chk_supplier_order_versions_reason",
+          "value": "\"supplier_order_versions\".\"reason\" IN ('update', 'restore')"
         }
       },
       "isRLSEnabled": false
