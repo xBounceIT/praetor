@@ -5,6 +5,7 @@ import buildApp from './app.ts';
 import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
+import { runDrizzleMigrations } from './db/migrationsRunner.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -122,6 +123,7 @@ try {
   if (dbReady) logger.info('PostgreSQL ready');
 
   await bootstrapDatabase();
+  await runDrizzleMigrations();
 
   // Ensure required bootstrap user data always exists.
   await ensureBootstrapAdmin();

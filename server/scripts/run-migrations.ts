@@ -14,33 +14,12 @@
 // The behaviour is identical; only the framing differs.
 
 import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import pg from 'pg';
-
-const parsedDbPort = Number.parseInt(process.env.DB_PORT ?? '5432', 10);
-const dbPort = Number.isFinite(parsedDbPort) ? parsedDbPort : 5432;
-
-const pool = new pg.Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: dbPort,
-  database: process.env.DB_NAME || 'praetor',
-  user: process.env.DB_USER || 'praetor',
-  password: process.env.DB_PASSWORD || 'praetor',
-});
-
-const db = drizzle(pool);
+import { runDrizzleMigrations } from '../db/migrationsRunner.ts';
 
 try {
-  console.log(
-    `Applying Drizzle migrations against ${process.env.DB_HOST ?? 'localhost'}:${dbPort}/${process.env.DB_NAME ?? 'praetor'}...`,
-  );
-  await migrate(db, { migrationsFolder: './db/migrations' });
-  console.log('Migrations applied (or already up to date).');
+  await runDrizzleMigrations();
 } catch (err) {
   console.error('Migration failed:');
   console.error(err);
   process.exitCode = 1;
-} finally {
-  await pool.end();
 }

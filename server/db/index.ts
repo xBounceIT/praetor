@@ -1,18 +1,12 @@
 import dotenv from 'dotenv';
 import pg from 'pg';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
+import { createDbPoolConfig } from './config.ts';
 
 dotenv.config({ quiet: true });
 
 const { Pool } = pg;
 const logger = createChildLogger({ module: 'db' });
-
-const envInt = (key: string, fallback: number) => {
-  const raw = process.env[key];
-  if (!raw) return fallback;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) ? n : fallback;
-};
 
 // The pg pool that backs `db/drizzle.ts`'s `db` instance. Exported so that:
 //   - `index.ts` (server bootstrap) can run the schema-bootstrap, table-existence probe,
@@ -22,16 +16,7 @@ const envInt = (key: string, fallback: number) => {
 //   - `routes/reports.ts` can build a separate `drizzle(pool, …)` instance with a query-
 //     count `logger`, so per-request dataset budgets stay enforced.
 // Application repository code goes through the shared `db` from `db/drizzle.ts`.
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'tempo',
-  user: process.env.DB_USER || 'tempo',
-  password: process.env.DB_PASSWORD || 'tempo',
-  max: envInt('PG_POOL_MAX', 10),
-  idleTimeoutMillis: envInt('PG_POOL_IDLE_TIMEOUT_MS', 300_000),
-  connectionTimeoutMillis: envInt('PG_POOL_CONN_TIMEOUT_MS', 2_000),
-});
+const pool = new Pool(createDbPoolConfig());
 
 pool.on('error', (err) => {
   logger.error({ err: serializeError(err) }, 'Unexpected error on idle database client');

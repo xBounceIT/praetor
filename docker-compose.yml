@@ -53,21 +53,9 @@ services:
     expose:
       - '3001'
     depends_on:
-      db-migrations:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  # Apply pending Drizzle migrations before the API starts
-  db-migrations:
-    build: *backend-build
-    image: *backend-image
-    container_name: praetor-db-migrations
-    command: ['bun', 'run', 'db:migrate']
-    environment: *backend-db-env
-    depends_on:
       postgres:
         condition: service_healthy
-    restart: 'no'
+    restart: unless-stopped
 
   # Frontend (Caddy serving static files)
   frontend:
