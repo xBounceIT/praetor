@@ -321,6 +321,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -403,6 +404,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -428,6 +430,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -453,6 +456,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'confirmed',
       notes: null,
     });
@@ -507,6 +511,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -533,6 +538,27 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  test('409 when a referenced product is deleted between pre-check and tx (FK race)', async () => {
+    setupHappyPath();
+    const fkError = Object.assign(new Error('foreign key violation'), {
+      code: '23503',
+      cause: undefined,
+    });
+    Object.setPrototypeOf(fkError, (await import('pg')).DatabaseError.prototype);
+    withDbTransactionMock.mockImplementationOnce(async () => {
+      throw fkError;
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('no longer exists');
+  });
 });
 
 describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
@@ -545,6 +571,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -579,6 +606,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -605,6 +633,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
       clientName: 'Client',
       paymentTerms: 'immediate',
       discount: 0,
+      discountType: 'percentage' as const,
       status: 'draft',
       notes: null,
     });
@@ -619,5 +648,52 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT with field present but value unchanged does NOT snapshot', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        paymentTerms: 'immediate',
+        discount: 0,
+        discountType: 'percentage',
+        notes: '',
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovInsertMock).not.toHaveBeenCalled();
+    expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
   });
 });

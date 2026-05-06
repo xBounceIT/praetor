@@ -8,7 +8,7 @@ import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import {
   generateClientOrderId,
   generateItemId,
@@ -853,7 +853,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const willReplaceItems = !isSourceLinkedOrder && items !== undefined;
-      const shouldSnapshot = hasLockedFieldUpdates && !isSourceLinkedOrder;
+
+      let hasContentChanges = false;
+      if (!isSourceLinkedOrder && hasLockedFieldUpdates) {
+        if (
+          (linkedOfferIdValue !== undefined &&
+            linkedOfferIdValue !== existingOrder.linkedOfferId) ||
+          (clientIdValue !== undefined &&
+            clientIdValue !== null &&
+            clientIdValue !== existingOrder.clientId) ||
+          (clientNameValue !== undefined &&
+            clientNameValue !== null &&
+            clientNameValue !== existingOrder.clientName) ||
+          (paymentTerms !== undefined && paymentTerms !== existingOrder.paymentTerms) ||
+          (discountValue !== undefined &&
+            discountValue !== null &&
+            Number(discountValue) !== Number(existingOrder.discount)) ||
+          (discountTypeValue !== undefined && discountTypeValue !== existingOrder.discountType) ||
+          (notes !== undefined &&
+            normalizeNotesValue(notes) !== normalizeNotesValue(existingOrder.notes))
+        ) {
+          hasContentChanges = true;
+        }
+        if (!hasContentChanges && items !== undefined) {
+          if (existingItems === null) {
+            existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+          }
+          const normalizedExisting = normalizeItemsForComparison(
+            existingItems as unknown as Array<Record<string, unknown>>,
+          );
+          const normalizedIncoming = normalizeItemsForComparison(
+            (normalizedItems ?? []) as unknown as Array<Record<string, unknown>>,
+          );
+          if (!itemsMatch(normalizedExisting, normalizedIncoming)) {
+            hasContentChanges = true;
+          }
+        }
+      }
+      const shouldSnapshot = hasContentChanges;
 
       let result: {
         order: clientsOrdersRepo.ClientOrder | null;
@@ -1092,26 +1129,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const restored = await withDbTransaction(async (tx) => {
-        await snapshotPreState(idResult.value, 'restore', request, tx);
+      let restored: {
+        order: clientsOrdersRepo.ClientOrder | null;
+        items: clientsOrdersRepo.ClientOrderItem[];
+      };
+      try {
+        restored = await withDbTransaction(async (tx) => {
+          await snapshotPreState(idResult.value, 'restore', request, tx);
 
-        const order = await clientsOrdersRepo.restoreSnapshotOrder(
-          idResult.value,
-          {
-            clientId: version.snapshot.order.clientId,
-            clientName: version.snapshot.order.clientName,
-            paymentTerms: version.snapshot.order.paymentTerms,
-            discount: version.snapshot.order.discount,
-            discountType: version.snapshot.order.discountType,
-            status: version.snapshot.order.status,
-            notes: version.snapshot.order.notes,
-          },
-          tx,
-        );
-        if (!order) return { order: null, items: [] };
-        const items = await clientsOrdersRepo.replaceItems(order.id, snapshotItems, tx);
-        return { order, items };
-      });
+          const order = await clientsOrdersRepo.restoreSnapshotOrder(
+            idResult.value,
+            {
+              clientId: version.snapshot.order.clientId,
+              clientName: version.snapshot.order.clientName,
+              paymentTerms: version.snapshot.order.paymentTerms,
+              discount: version.snapshot.order.discount,
+              discountType: version.snapshot.order.discountType,
+              status: version.snapshot.order.status,
+              notes: version.snapshot.order.notes,
+            },
+            tx,
+          );
+          if (!order) return { order: null, items: [] };
+          const items = await clientsOrdersRepo.replaceItems(order.id, snapshotItems, tx);
+          return { order, items };
+        });
+      } catch (error) {
+        // The pre-tx reference check is racy — a referenced client/product can be deleted
+        // between validation and the restore writes. Translate the resulting FK violation to a
+        // 409 instead of leaking a 500.
+        if (getForeignKeyViolation(error)) {
+          return reply.code(409).send({
+            error: 'Snapshot references a client or product that no longer exists',
+          });
+        }
+        throw error;
+      }
 
       if (!restored.order) {
         return reply.code(404).send({ error: 'Order not found' });

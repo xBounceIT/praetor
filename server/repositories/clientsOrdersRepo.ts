@@ -114,6 +114,7 @@ export type ExistingClientOrder = {
   clientName: string;
   paymentTerms: string | null;
   discount: number;
+  discountType: 'percentage' | 'currency';
   status: string;
   notes: string | null;
 };
@@ -131,6 +132,7 @@ export const findForUpdate = async (
       clientName: sales.clientName,
       paymentTerms: sales.paymentTerms,
       discount: sales.discount,
+      discountType: sales.discountType,
       status: sales.status,
       notes: sales.notes,
     })
@@ -145,6 +147,7 @@ export const findForUpdate = async (
     clientName: rows[0].clientName,
     paymentTerms: rows[0].paymentTerms,
     discount: parseDbNumber(rows[0].discount, 0),
+    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
     status: rows[0].status,
     notes: rows[0].notes,
   };
