@@ -734,6 +734,45 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   onChange={(groupFilter) => setLdapForm({ ...ldapForm, groupFilter })}
                 />
               </div>
+
+              <div className="border-t border-slate-100 p-6">
+                <RoleMappings
+                  mappings={ldapForm.roleMappings.map((mapping) => ({
+                    externalGroup: mapping.ldapGroup,
+                    role: mapping.role,
+                  }))}
+                  roleOptions={roleOptions}
+                  errors={errors}
+                  errorPrefix="ldapRoleMapping_"
+                  heading={t('admin.ldap.roleMappings')}
+                  addLabel={t('admin.ldap.addMapping')}
+                  noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
+                  externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
+                  onAdd={() =>
+                    setLdapForm({
+                      ...ldapForm,
+                      roleMappings: [
+                        ...ldapForm.roleMappings,
+                        { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
+                      ],
+                    })
+                  }
+                  onRemove={(index) =>
+                    setLdapForm({
+                      ...ldapForm,
+                      roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
+                    })
+                  }
+                  onChange={(index, field, value) =>
+                    updateLdapMapping(
+                      index,
+                      field === 'externalGroup' ? 'ldapGroup' : 'role',
+                      value,
+                    )
+                  }
+                  renderRoleSelect={renderRoleSelect}
+                />
+              </div>
             </section>
 
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -808,41 +847,6 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   className="hidden"
                 />
               </div>
-            </section>
-
-            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <RoleMappings
-                mappings={ldapForm.roleMappings.map((mapping) => ({
-                  externalGroup: mapping.ldapGroup,
-                  role: mapping.role,
-                }))}
-                roleOptions={roleOptions}
-                errors={errors}
-                errorPrefix="ldapRoleMapping_"
-                heading={t('admin.ldap.roleMappings')}
-                addLabel={t('admin.ldap.addMapping')}
-                noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
-                externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
-                onAdd={() =>
-                  setLdapForm({
-                    ...ldapForm,
-                    roleMappings: [
-                      ...ldapForm.roleMappings,
-                      { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
-                    ],
-                  })
-                }
-                onRemove={(index) =>
-                  setLdapForm({
-                    ...ldapForm,
-                    roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
-                  })
-                }
-                onChange={(index, field, value) =>
-                  updateLdapMapping(index, field === 'externalGroup' ? 'ldapGroup' : 'role', value)
-                }
-                renderRoleSelect={renderRoleSelect}
-              />
             </section>
 
             <div className="flex justify-end">
