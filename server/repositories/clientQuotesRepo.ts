@@ -368,6 +368,14 @@ export type ClientQuoteUpdate = {
   notes?: string | null;
 };
 
+export type ClientQuoteRestoreFields = Pick<
+  ClientQuote,
+  'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
+> & {
+  paymentTerms: string;
+  expirationDate: string;
+};
+
 export const update = async (
   id: string,
   patch: ClientQuoteUpdate,
@@ -385,6 +393,29 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(quotes.id, id))
+    .returning(QUOTE_BASE_PROJECTION);
+  return rows[0] ? mapQuote(rows[0]) : null;
+};
+
+export const restoreSnapshotQuote = async (
+  id: string,
+  snapshot: ClientQuoteRestoreFields,
+  exec: DbExecutor = db,
+): Promise<ClientQuote | null> => {
+  const rows = await exec
+    .update(quotes)
+    .set({
+      clientId: snapshot.clientId,
+      clientName: snapshot.clientName,
+      paymentTerms: snapshot.paymentTerms,
+      discount: numericForDb(snapshot.discount),
+      discountType: snapshot.discountType,
+      status: snapshot.status,
+      expirationDate: snapshot.expirationDate,
+      notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(quotes.id, id))

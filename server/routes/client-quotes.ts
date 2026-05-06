@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
@@ -438,6 +439,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
       tx,
     );
+  };
+
+  const findMissingSnapshotReference = async (
+    snapshot: quoteVersionsRepo.QuoteVersionSnapshot,
+  ): Promise<string | null> => {
+    const clientExists = await clientsRepo.existsById(snapshot.quote.clientId);
+    if (!clientExists) {
+      return `Snapshot client "${snapshot.quote.clientId}" no longer exists`;
+    }
+
+    const productIds = Array.from(
+      new Set(
+        snapshot.items
+          .map((item) => item.productId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    if (productIds.length === 0) return null;
+
+    const products = await productsRepo.getSnapshots(productIds);
+    const missingProductId = productIds.find((id) => !products.has(id));
+    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
   };
 
   // GET / - List all quotes with their items
@@ -1035,6 +1058,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!version) {
         return reply.code(404).send({ error: 'Version not found' });
       }
+      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
+      if (missingSnapshotReference) {
+        return reply.code(409).send({ error: missingSnapshotReference });
+      }
+      const snapshotExpirationDate = version.snapshot.quote.expirationDate;
+      if (!snapshotExpirationDate) {
+        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
+      }
 
       const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => ({
@@ -1055,16 +1086,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
         await snapshotPreState(idResult.value, 'restore', request, tx);
 
-        const quote = await clientQuotesRepo.update(
+        const quote = await clientQuotesRepo.restoreSnapshotQuote(
           idResult.value,
           {
             clientId: version.snapshot.quote.clientId,
             clientName: version.snapshot.quote.clientName,
-            paymentTerms: version.snapshot.quote.paymentTerms,
+            paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
             discount: version.snapshot.quote.discount,
             discountType: version.snapshot.quote.discountType,
             status: version.snapshot.quote.status,
-            expirationDate: version.snapshot.quote.expirationDate,
+            expirationDate: snapshotExpirationDate,
             notes: version.snapshot.quote.notes,
           },
           tx,

@@ -224,6 +224,11 @@ export const findContactsForUpdate = async (
   return { contacts: parseContactsFromDb(rows[0].contacts) };
 };
 
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec.select({ id: clients.id }).from(clients).where(eq(clients.id, id));
+  return rows.length > 0;
+};
+
 export const findByFiscalCode = async (
   fiscalCode: string,
   excludeId: string | null,

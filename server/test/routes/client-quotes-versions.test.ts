@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realProductsRepo from '../../repositories/productsRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
@@ -18,7 +20,9 @@ import { signToken } from '../helpers/jwt.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const clientsRepoSnap = { ...realClientsRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
+const productsRepoSnap = { ...realProductsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const auditSnap = { ...realAudit };
@@ -38,7 +42,11 @@ const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
+const cqRestoreSnapshotQuoteMock = mock();
 const cqReplaceItemsMock = mock();
+
+const clientsExistsByIdMock = mock();
+const productsGetSnapshotsMock = mock();
 
 const qvListForQuoteMock = mock();
 const qvFindByIdMock = mock();
@@ -65,6 +73,10 @@ beforeAll(async () => {
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    existsById: clientsExistsByIdMock,
+  }));
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
     existsById: cqExistsByIdMock,
@@ -77,7 +89,12 @@ beforeAll(async () => {
     findItemsForQuote: cqFindItemsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
     update: cqUpdateMock,
+    restoreSnapshotQuote: cqRestoreSnapshotQuoteMock,
     replaceItems: cqReplaceItemsMock,
+  }));
+  mock.module('../../repositories/productsRepo.ts', () => ({
+    ...productsRepoSnap,
+    getSnapshots: productsGetSnapshotsMock,
   }));
   mock.module('../../repositories/quoteVersionsRepo.ts', () => ({
     ...quoteVersionsRepoSnap,
@@ -106,7 +123,9 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
+  mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -192,7 +211,10 @@ const allMocks = [
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
+  cqRestoreSnapshotQuoteMock,
   cqReplaceItemsMock,
+  clientsExistsByIdMock,
+  productsGetSnapshotsMock,
   qvListForQuoteMock,
   qvFindByIdMock,
   qvInsertMock,
@@ -316,7 +338,11 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       items: [SAMPLE_ITEM],
     });
     qvInsertMock.mockResolvedValue({ ...SAMPLE_VERSION_ROW, reason: 'restore' });
-    cqUpdateMock.mockResolvedValue(SAMPLE_QUOTE);
+    clientsExistsByIdMock.mockResolvedValue(true);
+    productsGetSnapshotsMock.mockResolvedValue(
+      new Map([['p-1', { productCost: 50, productMolPercentage: null }]]),
+    );
+    cqRestoreSnapshotQuoteMock.mockResolvedValue(SAMPLE_QUOTE);
     cqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
   };
 
@@ -340,7 +366,13 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       undefined,
     );
     // Quote and items applied
-    expect(cqUpdateMock).toHaveBeenCalled();
+    expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1');
+    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
+      'q-1',
+      expect.objectContaining({ notes: null }),
+      undefined,
+    );
     expect(cqReplaceItemsMock).toHaveBeenCalled();
     // Atomically wrapped
     expect(withDbTransactionMock).toHaveBeenCalled();
@@ -365,7 +397,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     });
 
     expect(res.statusCode).toBe(409);
-    expect(cqUpdateMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
     expect(qvInsertMock).not.toHaveBeenCalled();
   });
 
@@ -380,7 +412,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     });
 
     expect(res.statusCode).toBe(404);
-    expect(cqUpdateMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
   });
 
   test('409 when quote is confirmed', async () => {
@@ -398,7 +430,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     });
 
     expect(res.statusCode).toBe(409);
-    expect(cqUpdateMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
   });
 
   test('409 when non-draft linked sale exists', async () => {
@@ -418,7 +450,39 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(409);
     expect(cqDeleteDraftSalesForQuoteMock).not.toHaveBeenCalled();
-    expect(cqUpdateMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when snapshot client no longer exists', async () => {
+    setupHappyPath();
+    clientsExistsByIdMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Snapshot client');
+    expect(cqDeleteDraftSalesForQuoteMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when snapshot product no longer exists', async () => {
+    setupHappyPath();
+    productsGetSnapshotsMock.mockResolvedValue(new Map());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Snapshot product');
+    expect(cqDeleteDraftSalesForQuoteMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
   });
 
   test('404 when version not found (and no cross-quote leak)', async () => {
@@ -440,7 +504,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(404);
     // findById should be scoped on (quoteId, versionId) so a foreign versionId returns null
     expect(qvFindByIdMock).toHaveBeenCalledWith('q-1', 'qv-other');
-    expect(cqUpdateMock).not.toHaveBeenCalled();
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
   });
 
   test('403 without update permission (view only)', async () => {

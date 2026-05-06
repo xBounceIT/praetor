@@ -250,17 +250,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setIsModalOpen(true);
   }, []);
 
-  const handleVersionPreview = useCallback((version: QuoteVersion) => {
-    setPreviewVersion(version);
-    setFormData(
-      quoteToFormData({
-        ...version.snapshot.quote,
-        items: version.snapshot.items.map(normalizeQuoteItem),
-        status: version.snapshot.quote.status as Quote['status'],
-      }),
-    );
-    setErrors({});
-  }, []);
+  const handleVersionPreview = useCallback(
+    (version: QuoteVersion) => {
+      setPreviewVersion(version);
+      setFormData(
+        quoteToFormData({
+          ...version.snapshot.quote,
+          id: editingQuote?.id ?? version.snapshot.quote.id,
+          items: version.snapshot.items.map(normalizeQuoteItem),
+          status: version.snapshot.quote.status as Quote['status'],
+        }),
+      );
+      setErrors({});
+    },
+    [editingQuote],
+  );
 
   const handleClearPreview = useCallback(() => {
     if (editingQuote) setFormData(quoteToFormData(editingQuote));
