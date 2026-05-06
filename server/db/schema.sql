@@ -971,6 +971,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_offer_code_version
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_latest_version_group
     ON customer_offers(version_group_id)
     WHERE is_latest = TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_latest
+    ON customer_offers(linked_quote_id)
+    WHERE is_latest = TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_version
+    ON customer_offers(linked_quote_id, version_number);
 CREATE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id
     ON customer_offers(linked_quote_id);
 CREATE INDEX IF NOT EXISTS idx_customer_offers_version_group_id ON customer_offers(version_group_id);
@@ -2176,8 +2181,13 @@ CREATE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id ON customer_offer
 CREATE INDEX IF NOT EXISTS idx_customer_offers_version_group_id ON customer_offers(version_group_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_offer_code_version
     ON customer_offers(offer_code, version_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_version
+    ON customer_offers(linked_quote_id, version_number);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_latest_version_group
     ON customer_offers(version_group_id)
+    WHERE is_latest = TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_latest
+    ON customer_offers(linked_quote_id)
     WHERE is_latest = TRUE;
 
 -- Enforce unit_type values at DB level (idempotent)

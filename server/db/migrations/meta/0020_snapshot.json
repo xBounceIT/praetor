@@ -821,6 +821,27 @@
           "method": "btree",
           "with": {}
         },
+        "idx_customer_offers_linked_quote_version": {
+          "name": "idx_customer_offers_linked_quote_version",
+          "columns": [
+            {
+              "expression": "linked_quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_customer_offers_linked_quote_id": {
           "name": "idx_customer_offers_linked_quote_id",
           "columns": [

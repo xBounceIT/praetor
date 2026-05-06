@@ -785,7 +785,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let linkedQuoteIdValue: string | null = null;
-      if (linkedOfferId !== undefined && linkedOfferIdValue) {
+      const isChangingOfferLink =
+        linkedOfferId !== undefined &&
+        Boolean(linkedOfferIdValue) &&
+        linkedOfferIdValue !== existingOrder.linkedOfferId;
+
+      if (isChangingOfferLink && linkedOfferIdValue) {
         if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== linkedOfferIdValue) {
           return reply.code(409).send({
             error: 'Orders cannot be relinked to a different offer',

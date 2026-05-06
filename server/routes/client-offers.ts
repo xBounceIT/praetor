@@ -288,8 +288,10 @@ const buildItemsForVersionClone = (
 
 const isOfferVersionUniqueViolation = (dup: ReturnType<typeof getUniqueViolation>) =>
   dup?.constraint === 'idx_customer_offers_offer_code_version' ||
+  dup?.constraint === 'idx_customer_offers_linked_quote_version' ||
   dup?.constraint === 'idx_customer_offers_latest_version_group' ||
   dup?.detail?.includes('(offer_code, version_number)') ||
+  dup?.detail?.includes('(linked_quote_id, version_number)') ||
   dup?.detail?.includes('(version_group_id)');
 
 const isOfferLinkedQuoteUniqueViolation = (dup: ReturnType<typeof getUniqueViolation>) =>

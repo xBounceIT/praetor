@@ -58,6 +58,10 @@ export const customerOffers = pgTable(
     uniqueIndex('idx_customer_offers_linked_quote_latest')
       .on(table.linkedQuoteId)
       .where(sql`${table.isLatest} = true`),
+    uniqueIndex('idx_customer_offers_linked_quote_version').on(
+      table.linkedQuoteId,
+      table.versionNumber,
+    ),
     index('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),
     index('idx_customer_offers_version_group_id').on(table.versionGroupId),
     index('idx_customer_offers_client_id').on(table.clientId),

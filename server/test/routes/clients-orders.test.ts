@@ -128,6 +128,44 @@ const payloadWithOffer = {
   ],
 };
 
+const orderFixture = (overrides: Record<string, unknown> = {}) => ({
+  id: 'so-1',
+  linkedQuoteId: 'cq-1',
+  linkedOfferId: 'co-1',
+  clientId: 'c-1',
+  clientName: 'Acme',
+  paymentTerms: 'immediate',
+  discount: 0,
+  discountType: 'percentage',
+  status: 'draft',
+  notes: null,
+  createdAt: 1,
+  updatedAt: 1,
+  ...overrides,
+});
+
+const orderItemFixture = (overrides: Record<string, unknown> = {}) => ({
+  id: 'soi-1',
+  orderId: 'so-1',
+  productId: 'p-1',
+  productName: 'Consulting',
+  quantity: 1,
+  unitPrice: 100,
+  productCost: 0,
+  productMolPercentage: null,
+  supplierQuoteId: null,
+  supplierQuoteItemId: null,
+  supplierQuoteSupplierName: null,
+  supplierQuoteUnitPrice: null,
+  supplierSaleId: null,
+  supplierSaleItemId: null,
+  supplierSaleSupplierName: null,
+  unitType: 'hours',
+  note: null,
+  discount: 0,
+  ...overrides,
+});
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -221,6 +259,27 @@ describe('POST /api/clients-orders', () => {
 });
 
 describe('PUT /api/clients-orders/:id', () => {
+  test('allows updates that preserve an older offer link', async () => {
+    findForUpdateMock.mockResolvedValue(orderFixture());
+    updateMock.mockResolvedValue(orderFixture({ status: 'sent', updatedAt: 2 }));
+    findItemsForOrderMock.mockResolvedValue([orderItemFixture()]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/so-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'co-1', status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findOfferDetailsMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      'so-1',
+      expect.objectContaining({ linkedOfferId: 'co-1', status: 'sent' }),
+      tx,
+    );
+  });
+
   test('rejects relinking a draft order to a non-latest source offer version', async () => {
     findForUpdateMock.mockResolvedValue({
       id: 'so-1',
