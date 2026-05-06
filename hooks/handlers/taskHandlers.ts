@@ -30,6 +30,23 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
     duration?: number,
   ) => {
     try {
+      // Editing an already-recurring task: wipe its placeholder entries first
+      // so generateRecurringEntries doesn't leave behind orphans from the old
+      // pattern/date range (e.g. weekly → monthly, or moving end date earlier).
+      // No-op for the first-time "make recurring" flow.
+      const existing = projectTasks.find((t) => t.id === taskId);
+      if (existing?.isRecurring) {
+        await api.entries.bulkDelete(existing.projectId, existing.name, {
+          placeholderOnly: true,
+        });
+        setEntries((prev) =>
+          prev.filter(
+            (e) =>
+              !(e.isPlaceholder && e.projectId === existing.projectId && e.task === existing.name),
+          ),
+        );
+      }
+
       const updated = await api.tasks.update(taskId, {
         isRecurring: true,
         recurrencePattern: pattern,

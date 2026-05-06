@@ -22,7 +22,6 @@ import Login from './components/Login';
 import NotFound from './components/NotFound';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
-import RecurringManager from './components/RecurringManager';
 import AiReportingView from './components/reports/AiReportingView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
@@ -34,6 +33,7 @@ import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
 import Tooltip from './components/shared/Tooltip';
 import DailyView from './components/timesheet/DailyView';
+import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
 import WorkUnitsView from './components/WorkUnitsView';
@@ -1861,6 +1861,7 @@ const App: React.FC = () => {
   const handleUpdateSupplierOrder = supplierQuoteHandlers.updateSupplierOrder;
   const handleDeleteSupplierOrder = supplierQuoteHandlers.deleteSupplierOrder;
   const handleCreateSupplierOrderFromQuote = supplierQuoteHandlers.createSupplierOrderFromQuote;
+  const refreshSupplierOrderFlow = supplierQuoteHandlers.refreshSupplierOrderFlow;
 
   const handleUpdateSupplierInvoice = supplierInvoiceHandlers.update;
   const handleDeleteSupplierInvoice = supplierInvoiceHandlers.delete;
@@ -2262,6 +2263,7 @@ const App: React.FC = () => {
                     setSupplierQuoteFilterId(quoteId);
                     setActiveView('sales/supplier-quotes');
                   }}
+                  onOrderRestored={refreshSupplierOrderFlow}
                   currency={generalSettings.currency}
                   quoteFilterId={supplierQuoteFilterId}
                 />
@@ -2465,6 +2467,7 @@ const App: React.FC = () => {
                 projects={projects}
                 clients={clients}
                 onAction={handleRecurringAction}
+                onUpdate={handleMakeRecurring}
               />
             )}
             {activeView === 'settings' && (

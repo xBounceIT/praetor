@@ -27,7 +27,8 @@ export type StatusType =
   | 'office'
   | 'customer_premise'
   | 'remote'
-  | 'transfer';
+  | 'transfer'
+  | 'recurrence';
 
 export interface StatusBadgeProps {
   type: StatusType;
@@ -144,6 +145,10 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
     transfer: {
       container: 'bg-teal-50 text-teal-600 border-teal-100',
       icon: 'fa-car',
+    },
+    recurrence: {
+      container: 'bg-slate-50 text-praetor border-slate-200',
+      icon: 'fa-repeat',
     },
   };
 

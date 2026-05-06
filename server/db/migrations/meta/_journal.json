@@ -152,8 +152,15 @@
     {
       "idx": 21,
       "version": "7",
+      "when": 1778097133669,
+      "tag": "0021_add_supplier_order_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
       "when": 1778624172000,
-      "tag": "0021_add_supplier_quote_versions",
+      "tag": "0022_add_supplier_quote_versions",
       "breakpoints": true
     }
   ]

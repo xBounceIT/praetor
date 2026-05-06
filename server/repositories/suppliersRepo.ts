@@ -44,6 +44,15 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<Suppl
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(eq(suppliers.id, id))
+    .limit(1);
+  return rows.length > 0;
+};
+
 export const findNameById = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ name: suppliers.name })

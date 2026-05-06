@@ -1,6 +1,6 @@
 {
-  "id": "14cca4f5-f6b8-4281-9e67-815d7441e5be",
-  "prevId": "77a71018-f80c-4530-b9a8-85dccf993adf",
+  "id": "a1f2b3c4-d5e6-4789-9abc-def012345022",
+  "prevId": "14cca4f5-f6b8-4281-9e67-815d7441e5be",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3988,6 +3988,103 @@
         "chk_supplier_quote_items_unit_type": {
           "name": "chk_supplier_quote_items_unit_type",
           "value": "\"supplier_quote_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.supplier_quote_versions": {
+      "name": "supplier_quote_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "quote_id": {
+          "name": "quote_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'update'"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_supplier_quote_versions_quote_id_created_at": {
+          "name": "idx_supplier_quote_versions_quote_id_created_at",
+          "columns": [
+            {
+              "expression": "quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "supplier_quote_versions_quote_id_supplier_quotes_id_fk": {
+          "name": "supplier_quote_versions_quote_id_supplier_quotes_id_fk",
+          "tableFrom": "supplier_quote_versions",
+          "tableTo": "supplier_quotes",
+          "columnsFrom": ["quote_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "supplier_quote_versions_created_by_user_id_users_id_fk": {
+          "name": "supplier_quote_versions_created_by_user_id_users_id_fk",
+          "tableFrom": "supplier_quote_versions",
+          "tableTo": "users",
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_supplier_quote_versions_reason": {
+          "name": "chk_supplier_quote_versions_reason",
+          "value": "\"supplier_quote_versions\".\"reason\" IN ('update', 'restore')"
         }
       },
       "isRLSEnabled": false
