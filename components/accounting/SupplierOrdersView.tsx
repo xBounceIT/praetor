@@ -1,7 +1,14 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product, Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import type {
+  Product,
+  Supplier,
+  SupplierOrderVersion,
+  SupplierSaleOrder,
+  SupplierSaleOrderItem,
+} from '../../types';
+import { formatInsertDateTime } from '../../utils/date';
 import { formatDiscountValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -11,6 +18,7 @@ import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import SupplierOrderVersionsPanel from './SupplierOrderVersionsPanel';
 
 const getOrderStatusLabel = (
   status: SupplierSaleOrder['status'],
@@ -64,6 +72,7 @@ export interface SupplierOrdersViewProps {
   onDeleteOrder: (id: string) => void | Promise<void>;
   onCreateInvoice?: (order: SupplierSaleOrder) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
+  onOrderRestored?: (order: SupplierSaleOrder) => void | Promise<void>;
   currency: string;
   quoteFilterId?: string | null;
 }
@@ -77,10 +86,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onDeleteOrder,
   onCreateInvoice,
   onViewQuote,
+  onOrderRestored,
   currency,
   quoteFilterId,
 }) => {
-  const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
+  const { t, i18n } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const activeSuppliers = useMemo(
     () => suppliers.filter((supplier) => !supplier.isDisabled),
@@ -103,6 +113,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const [orderToDelete, setOrderToDelete] = useState<SupplierSaleOrder | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<SupplierOrderVersion | null>(null);
   const [formData, setFormData] = useState<Partial<SupplierSaleOrder>>({
     linkedQuoteId: '',
     supplierId: '',
@@ -115,7 +126,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     notes: '',
   });
 
-  const isReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
+  const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
+  const isReadOnly = baseReadOnly || previewVersion !== null;
 
   const openEditModal = useCallback((order: SupplierSaleOrder) => {
     setEditingOrder(order);
@@ -123,8 +135,45 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       ...order,
       items: order.items.map((item) => ({ ...item })),
     });
+    setPreviewVersion(null);
     setIsModalOpen(true);
   }, []);
+
+  const closeEditModal = useCallback(() => {
+    setIsModalOpen(false);
+    setPreviewVersion(null);
+  }, []);
+
+  const handleVersionPreview = useCallback((version: SupplierOrderVersion) => {
+    setPreviewVersion(version);
+    setFormData({
+      ...version.snapshot.order,
+      items: version.snapshot.items.map((item) => ({ ...item })),
+    });
+  }, []);
+
+  const handleClearPreview = useCallback(() => {
+    if (editingOrder) {
+      setFormData({
+        ...editingOrder,
+        items: editingOrder.items.map((item) => ({ ...item })),
+      });
+    }
+    setPreviewVersion(null);
+  }, [editingOrder]);
+
+  const handleVersionRestored = useCallback(
+    async (updated: SupplierSaleOrder) => {
+      setEditingOrder(updated);
+      setFormData({
+        ...updated,
+        items: updated.items.map((item) => ({ ...item })),
+      });
+      setPreviewVersion(null);
+      if (onOrderRestored) await onOrderRestored(updated);
+    },
+    [onOrderRestored],
+  );
 
   const confirmDelete = useCallback((order: SupplierSaleOrder) => {
     setOrderToDelete(order);
@@ -408,388 +457,419 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
-                <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
-              </div>
-              {t('accounting:supplierOrders.editOrder')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
-            {isReadOnly && (
-              <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <span className="text-xs font-bold text-amber-700">
-                  {t('accounting:supplierOrders.readOnlyStatus')}
-                </span>
-              </div>
-            )}
-
-            {/* Linked Quote Info */}
-            {formData.linkedQuoteId && (
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                    <i className="fa-solid fa-link"></i>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">
-                      {t('accounting:supplierOrders.linkedQuote')}
-                    </div>
-                    <div className="text-xs text-praetor">
-                      {t('accounting:supplierOrders.linkedQuoteInfo', {
-                        number: formData.linkedQuoteId,
-                      })}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      {t('accounting:supplierOrders.quoteDetailsReadOnly')}
-                    </div>
-                  </div>
+      <Modal isOpen={isModalOpen} onClose={closeEditModal}>
+        <div className="flex items-start gap-4">
+          <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
+              <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+                  <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
                 </div>
-                {onViewQuote && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const linkedQuoteId = formData.linkedQuoteId;
-                      if (!linkedQuoteId) return;
-                      onViewQuote(linkedQuoteId);
-                    }}
-                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
-                  >
-                    {t('accounting:supplierOrders.viewQuote')}
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierOrders.orderDetails')}
-              </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierOrders.supplier')}
-                  </label>
-                  <CustomSelect
-                    options={supplierOptions}
-                    value={formData.supplierId || ''}
-                    onChange={(value) => {
-                      const supplier = suppliers.find((item) => item.id === value);
-                      setFormData((prev) => ({
-                        ...prev,
-                        supplierId: value as string,
-                        supplierName: supplier?.name || '',
-                      }));
-                    }}
-                    searchable={true}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierOrders.orderNumber')}
-                  </label>
-                  <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
-                    {editingOrder?.id || '—'}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierOrders.paymentTerms')}
-                  </label>
-                  <CustomSelect
-                    options={paymentTermsOptions}
-                    value={formData.paymentTerms || 'immediate'}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        paymentTerms: value as SupplierSaleOrder['paymentTerms'],
-                      }))
-                    }
-                    searchable={false}
-                    disabled={isReadOnly}
-                  />
-                </div>
-              </div>
+                {t('accounting:supplierOrders.editOrder')}
+              </h3>
+              <button
+                onClick={closeEditModal}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:supplierOrders.items')}
-                </h4>
-              </div>
-
-              {(formData.items || []).length > 0 && (
-                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
-                    <div className="col-span-1">{t('common:labels.quantity')}</div>
-                    <div className="col-span-2">
-                      {t('crm:internalListing.salePrice')} ({currency})
-                    </div>
-                    <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
-                    <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
-                    <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
-                  </div>
-                  <div className="w-8 shrink-0"></div>
+            <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
+              {previewVersion && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                  <span className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                    <i className="fa-solid fa-clock-rotate-left"></i>
+                    {t('accounting:supplierOrders.versionHistory.previewBanner', {
+                      date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearPreview}
+                    className="whitespace-nowrap text-xs font-bold text-amber-800 hover:underline"
+                  >
+                    {t('accounting:supplierOrders.versionHistory.backToCurrent')}
+                  </button>
+                </div>
+              )}
+              {baseReadOnly && (
+                <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <span className="text-xs font-bold text-amber-700">
+                    {t('accounting:supplierOrders.readOnlyStatus')}
+                  </span>
                 </div>
               )}
 
-              {(formData.items || []).length > 0 ? (
-                <div className="space-y-3">
-                  {formData.items?.map((item, index) => {
-                    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
-                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-                    const lineTotal = lineSubtotal - lineDiscount;
+              {/* Linked Quote Info */}
+              {formData.linkedQuoteId && (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                      <i className="fa-solid fa-link"></i>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {t('accounting:supplierOrders.linkedQuote')}
+                      </div>
+                      <div className="text-xs text-praetor">
+                        {t('accounting:supplierOrders.linkedQuoteInfo', {
+                          number: formData.linkedQuoteId,
+                        })}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {t('accounting:supplierOrders.quoteDetailsReadOnly')}
+                      </div>
+                    </div>
+                  </div>
+                  {onViewQuote && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const linkedQuoteId = formData.linkedQuoteId;
+                        if (!linkedQuoteId) return;
+                        onViewQuote(linkedQuoteId);
+                      }}
+                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                    >
+                      {t('accounting:supplierOrders.viewQuote')}
+                    </button>
+                  )}
+                </div>
+              )}
 
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
-                      >
-                        <div className="lg:hidden space-y-2">
-                          <CustomSelect
-                            options={productOptions}
-                            value={item.productId}
-                            onChange={(value) => updateItem(index, 'productId', value as string)}
-                            searchable={true}
-                            disabled={isReadOnly}
-                            buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                {t('common:labels.quantity')}
-                              </label>
-                              <ValidatedNumberInput
-                                value={item.quantity}
-                                disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
-                              />
+              <div className="space-y-2">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:supplierOrders.orderDetails')}
+                </h4>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierOrders.supplier')}
+                    </label>
+                    <CustomSelect
+                      options={supplierOptions}
+                      value={formData.supplierId || ''}
+                      onChange={(value) => {
+                        const supplier = suppliers.find((item) => item.id === value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          supplierId: value as string,
+                          supplierName: supplier?.name || '',
+                        }));
+                      }}
+                      searchable={true}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierOrders.orderNumber')}
+                    </label>
+                    <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
+                      {editingOrder?.id || '—'}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierOrders.paymentTerms')}
+                    </label>
+                    <CustomSelect
+                      options={paymentTermsOptions}
+                      value={formData.paymentTerms || 'immediate'}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          paymentTerms: value as SupplierSaleOrder['paymentTerms'],
+                        }))
+                      }
+                      searchable={false}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                    <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                    {t('accounting:supplierOrders.items')}
+                  </h4>
+                </div>
+
+                {(formData.items || []).length > 0 && (
+                  <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
+                      <div className="col-span-1">{t('common:labels.quantity')}</div>
+                      <div className="col-span-2">
+                        {t('crm:internalListing.salePrice')} ({currency})
+                      </div>
+                      <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                      <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
+                      <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                    </div>
+                    <div className="w-8 shrink-0"></div>
+                  </div>
+                )}
+
+                {(formData.items || []).length > 0 ? (
+                  <div className="space-y-3">
+                    {formData.items?.map((item, index) => {
+                      const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+                      const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+                      const lineTotal = lineSubtotal - lineDiscount;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                        >
+                          <div className="lg:hidden space-y-2">
+                            <CustomSelect
+                              options={productOptions}
+                              value={item.productId}
+                              onChange={(value) => updateItem(index, 'productId', value as string)}
+                              searchable={true}
+                              disabled={isReadOnly}
+                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  {t('common:labels.quantity')}
+                                </label>
+                                <ValidatedNumberInput
+                                  value={item.quantity}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  {t('crm:internalListing.salePrice')}
+                                </label>
+                                <ValidatedNumberInput
+                                  value={item.unitPrice}
+                                  formatDecimals={2}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  {t('accounting:supplierOrders.discount')}
+                                </label>
+                                <ValidatedNumberInput
+                                  value={item.discount || 0}
+                                  formatDecimals={2}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  {t('common:labels.total')}
+                                </label>
+                                <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                  {lineTotal.toFixed(2)} {currency}
+                                </div>
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                {t('crm:internalListing.salePrice')}
-                              </label>
-                              <ValidatedNumberInput
-                                value={item.unitPrice}
-                                formatDecimals={2}
+                            <input
+                              type="text"
+                              value={item.note || ''}
+                              disabled={isReadOnly}
+                              placeholder={t('accounting:supplierOrders.notes')}
+                              onChange={(event) => updateItem(index, 'note', event.target.value)}
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                            />
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => removeItem(index)}
                                 disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
-                              />
+                                className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                {t('accounting:supplierOrders.discount')}
-                              </label>
-                              <ValidatedNumberInput
-                                value={item.discount || 0}
-                                formatDecimals={2}
-                                disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                {t('common:labels.total')}
-                              </label>
-                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                          </div>
+                          <div className="hidden lg:flex items-start gap-2">
+                            <div className="grid flex-1 grid-cols-12 gap-2">
+                              <div className="lg:col-span-3 min-w-0">
+                                <CustomSelect
+                                  options={productOptions}
+                                  value={item.productId}
+                                  onChange={(value) =>
+                                    updateItem(index, 'productId', value as string)
+                                  }
+                                  searchable={true}
+                                  disabled={isReadOnly}
+                                  buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                />
+                              </div>
+                              <div className="lg:col-span-1">
+                                <ValidatedNumberInput
+                                  value={item.quantity}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="lg:col-span-2">
+                                <ValidatedNumberInput
+                                  value={item.unitPrice}
+                                  formatDecimals={2}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="lg:col-span-1">
+                                <ValidatedNumberInput
+                                  value={item.discount || 0}
+                                  formatDecimals={2}
+                                  disabled={isReadOnly}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="lg:col-span-2">
+                                <input
+                                  type="text"
+                                  value={item.note || ''}
+                                  disabled={isReadOnly}
+                                  onChange={(event) =>
+                                    updateItem(index, 'note', event.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </div>
+                              <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
                                 {lineTotal.toFixed(2)} {currency}
                               </div>
                             </div>
-                          </div>
-                          <input
-                            type="text"
-                            value={item.note || ''}
-                            disabled={isReadOnly}
-                            placeholder={t('accounting:supplierOrders.notes')}
-                            onChange={(event) => updateItem(index, 'note', event.target.value)}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                          />
-                          <div className="flex justify-end">
                             <button
                               type="button"
                               onClick={() => removeItem(index)}
                               disabled={isReadOnly}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
                           </div>
                         </div>
-                        <div className="hidden lg:flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-12 gap-2">
-                            <div className="lg:col-span-3 min-w-0">
-                              <CustomSelect
-                                options={productOptions}
-                                value={item.productId}
-                                onChange={(value) =>
-                                  updateItem(index, 'productId', value as string)
-                                }
-                                searchable={true}
-                                disabled={isReadOnly}
-                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="lg:col-span-1">
-                              <ValidatedNumberInput
-                                value={item.quantity}
-                                disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                              />
-                            </div>
-                            <div className="lg:col-span-2">
-                              <ValidatedNumberInput
-                                value={item.unitPrice}
-                                formatDecimals={2}
-                                disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                              />
-                            </div>
-                            <div className="lg:col-span-1">
-                              <ValidatedNumberInput
-                                value={item.discount || 0}
-                                formatDecimals={2}
-                                disabled={isReadOnly}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                              />
-                            </div>
-                            <div className="lg:col-span-2">
-                              <input
-                                type="text"
-                                value={item.note || ''}
-                                disabled={isReadOnly}
-                                onChange={(event) => updateItem(index, 'note', event.target.value)}
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                              />
-                            </div>
-                            <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                              {lineTotal.toFixed(2)} {currency}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeItem(index)}
-                            disabled={isReadOnly}
-                            className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('accounting:supplierOrders.noItemsAdded')}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
-              <div className="md:w-2/3 space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierOrders.notes')}
-                </label>
-                <textarea
-                  rows={4}
-                  value={formData.notes || ''}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
-                />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                    {t('accounting:supplierOrders.noItemsAdded')}
+                  </div>
+                )}
               </div>
 
-              <div className="md:w-1/3">
-                <CostSummaryPanel
-                  currency={currency}
-                  subtotal={totals.subtotal}
-                  total={totals.total}
-                  subtotalLabel={t('accounting:supplierOrders.subtotal')}
-                  totalLabel={t('accounting:supplierOrders.total')}
-                  globalDiscount={{
-                    label: t('accounting:supplierOrders.discount'),
-                    value: formData.discount || 0,
-                    type: formData.discountType || 'percentage',
-                    onChange: (value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        discount: value === '' ? 0 : Number(value),
-                      })),
-                    onTypeChange: (type) =>
-                      setFormData((prev) => ({ ...prev, discountType: type })),
-                    disabled: isReadOnly,
-                  }}
-                  discountRow={
-                    totals.discountAmount > 0
-                      ? {
-                          label: t('sales:clientOffers.discountAmount', {
-                            value: formatDiscountValue(
-                              formData.discount ?? 0,
-                              formData.discountType ?? 'percentage',
-                              currency,
-                            ),
-                          }),
-                          amount: totals.discountAmount,
-                        }
-                      : undefined
-                  }
-                />
-              </div>
-            </div>
+              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+                <div className="md:w-2/3 space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierOrders.notes')}
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={formData.notes || ''}
+                    disabled={isReadOnly}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  />
+                </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              {!isReadOnly && (
+                <div className="md:w-1/3">
+                  <CostSummaryPanel
+                    currency={currency}
+                    subtotal={totals.subtotal}
+                    total={totals.total}
+                    subtotalLabel={t('accounting:supplierOrders.subtotal')}
+                    totalLabel={t('accounting:supplierOrders.total')}
+                    globalDiscount={{
+                      label: t('accounting:supplierOrders.discount'),
+                      value: formData.discount || 0,
+                      type: formData.discountType || 'percentage',
+                      onChange: (value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          discount: value === '' ? 0 : Number(value),
+                        })),
+                      onTypeChange: (type) =>
+                        setFormData((prev) => ({ ...prev, discountType: type })),
+                      disabled: isReadOnly,
+                    }}
+                    discountRow={
+                      totals.discountAmount > 0
+                        ? {
+                            label: t('sales:clientOffers.discountAmount', {
+                              value: formatDiscountValue(
+                                formData.discount ?? 0,
+                                formData.discountType ?? 'percentage',
+                                currency,
+                              ),
+                            }),
+                            amount: totals.discountAmount,
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
                 <button
-                  type="submit"
-                  className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                  type="button"
+                  onClick={closeEditModal}
+                  className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
                 >
-                  {t('common:buttons.update')}
+                  {t('common:buttons.cancel')}
                 </button>
-              )}
-            </div>
-          </form>
+                {!isReadOnly && (
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                  >
+                    {t('common:buttons.update')}
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+          {editingOrder?.id && (
+            <SupplierOrderVersionsPanel
+              orderId={editingOrder.id}
+              selectedVersionId={previewVersion?.id ?? null}
+              onPreview={handleVersionPreview}
+              onClearPreview={handleClearPreview}
+              onRestored={handleVersionRestored}
+              disabled={baseReadOnly}
+            />
+          )}
         </div>
       </Modal>
 
