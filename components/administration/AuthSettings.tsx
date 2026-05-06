@@ -1,8 +1,16 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ldapApi } from '../../services/api';
 import { getApiBase } from '../../services/api/client';
-import type { LdapConfig, Role, SsoProtocol, SsoProvider, SsoRoleMapping } from '../../types';
+import type {
+  LdapConfig,
+  LdapTestResponse,
+  Role,
+  SsoProtocol,
+  SsoProvider,
+  SsoRoleMapping,
+} from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import Toggle from '../shared/Toggle';
 
@@ -79,6 +87,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     saml: buildDefaultProvider('saml'),
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [testUsername, setTestUsername] = useState('');
+  const [testPassword, setTestPassword] = useState('');
+  const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+  const [testResult, setTestResult] = useState<LdapTestResponse | null>(null);
+  const [isTestingLdap, setIsTestingLdap] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savingProvider, setSavingProvider] = useState<SsoProtocol | null>(null);
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
@@ -140,6 +153,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     setTimeout(() => setIsSaved(false), 3000);
   };
 
+  const isLdapDirty = JSON.stringify(ldapForm) !== JSON.stringify(config || DEFAULT_LDAP_CONFIG);
+
   const updateLdapMapping = (index: number, field: 'ldapGroup' | 'role', value: string) => {
     const roleMappings = [...ldapForm.roleMappings];
     roleMappings[index] = { ...roleMappings[index], [field]: value };
@@ -193,6 +208,55 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     if (!validateLdap()) return;
     await onSave(ldapForm);
     showSaved();
+  };
+
+  const handleTestLdap = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setTestErrors({});
+    setTestResult(null);
+
+    const nextErrors: Record<string, string> = {};
+    const username = testUsername.trim();
+    if (!username) {
+      nextErrors.testUsername = t(
+        'admin.ldap.errors.testUsernameRequired',
+        'Test username is required',
+      );
+    }
+    if (!testPassword.trim()) {
+      nextErrors.testPassword = t(
+        'admin.ldap.errors.testPasswordRequired',
+        'Test password is required',
+      );
+    }
+    if (!ldapForm.enabled) {
+      nextErrors.enabled = t('admin.ldap.errors.mustBeEnabled', 'LDAP must be enabled to test');
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setTestErrors(nextErrors);
+      return;
+    }
+
+    setIsTestingLdap(true);
+    try {
+      const result = await ldapApi.testAuthentication(username, testPassword);
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({
+        success: false,
+        authenticated: false,
+        username,
+        message:
+          err instanceof Error
+            ? err.message
+            : t('admin.ldap.test.failureMessage', 'Authentication failed.'),
+        groups: [],
+        roleIds: [],
+      });
+    } finally {
+      setIsTestingLdap(false);
+    }
   };
 
   const updateProviderDraft = (protocol: SsoProtocol, patch: Partial<SsoProvider>) => {
@@ -599,196 +663,307 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </div>
 
       {activeTab === 'ldap' && (
-        <form onSubmit={handleSaveLdap} className="space-y-8">
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <i className="fa-solid fa-server text-praetor"></i>
-                <h3 className="font-bold text-slate-800">{t('admin.ldap.serverConfig')}</h3>
+        <div className="space-y-8">
+          <form onSubmit={handleSaveLdap} className="space-y-8">
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <i className="fa-solid fa-server text-praetor"></i>
+                  <h3 className="font-bold text-slate-800">{t('admin.ldap.serverConfig')}</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Toggle
+                    checked={ldapForm.enabled}
+                    onChange={(enabled) => setLdapForm({ ...ldapForm, enabled })}
+                  />
+                  <span className="text-sm font-medium text-slate-600">
+                    {t('admin.ldap.enabled')}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={ldapForm.enabled}
-                  onChange={(enabled) => setLdapForm({ ...ldapForm, enabled })}
-                />
-                <span className="text-sm font-medium text-slate-600">
-                  {t('admin.ldap.enabled')}
-                </span>
-              </div>
-            </div>
 
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field
-                label={t('admin.ldap.serverUrlLabel')}
-                value={ldapForm.serverUrl}
-                error={errors.serverUrl}
-                monospace
-                onChange={(serverUrl) => setLdapForm({ ...ldapForm, serverUrl })}
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Field
+                  label={t('admin.ldap.serverUrlLabel')}
+                  value={ldapForm.serverUrl}
+                  error={errors.serverUrl}
+                  monospace
+                  onChange={(serverUrl) => setLdapForm({ ...ldapForm, serverUrl })}
+                />
+                <Field
+                  label={t('admin.ldap.baseDnLabel')}
+                  value={ldapForm.baseDn}
+                  error={errors.baseDn}
+                  monospace
+                  onChange={(baseDn) => setLdapForm({ ...ldapForm, baseDn })}
+                />
+                <Field
+                  label={t('admin.ldap.userSearchFilter')}
+                  value={ldapForm.userFilter}
+                  error={errors.userFilter}
+                  monospace
+                  onChange={(userFilter) => setLdapForm({ ...ldapForm, userFilter })}
+                />
+                <Field
+                  label={t('admin.ldap.bindDnLabel')}
+                  value={ldapForm.bindDn}
+                  error={errors.bindCredentials}
+                  monospace
+                  onChange={(bindDn) => setLdapForm({ ...ldapForm, bindDn })}
+                />
+                <Field
+                  label={t('admin.ldap.bindPasswordLabel')}
+                  type="password"
+                  value={ldapForm.bindPassword}
+                  error={errors.bindCredentials}
+                  monospace
+                  onChange={(bindPassword) => setLdapForm({ ...ldapForm, bindPassword })}
+                />
+                <Field
+                  label={t('admin.ldap.groupSearchBase')}
+                  value={ldapForm.groupBaseDn}
+                  error={errors.groupBaseDn}
+                  monospace
+                  onChange={(groupBaseDn) => setLdapForm({ ...ldapForm, groupBaseDn })}
+                />
+                <Field
+                  label={t('admin.ldap.groupMemberFilter')}
+                  value={ldapForm.groupFilter}
+                  error={errors.groupFilter}
+                  monospace
+                  onChange={(groupFilter) => setLdapForm({ ...ldapForm, groupFilter })}
+                />
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                <i className="fa-solid fa-lock text-praetor"></i>
+                <h3 className="font-bold text-slate-800">
+                  {t('admin.ldap.tls.title', 'TLS / Certificates')}
+                </h3>
+              </div>
+              <div className="p-6 space-y-3">
+                <label
+                  htmlFor="ldap-tls-ca-textarea"
+                  className="block text-xs font-bold text-slate-400 uppercase tracking-wider"
+                >
+                  {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
+                </label>
+                <p className="text-xs text-slate-500">
+                  {t(
+                    'admin.ldap.tls.caCertificateHelp',
+                    'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
+                  )}
+                </p>
+                <textarea
+                  id="ldap-tls-ca-textarea"
+                  rows={8}
+                  value={ldapForm.tlsCaCertificate}
+                  onChange={(event) => {
+                    setLdapForm({ ...ldapForm, tlsCaCertificate: event.target.value });
+                    if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                  }}
+                  placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
+                  className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  spellCheck={false}
+                />
+                {errors.tlsCaCertificate && (
+                  <p className="text-red-500 text-[10px] font-bold">{errors.tlsCaCertificate}</p>
+                )}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => tlsCaFileInputRef.current?.click()}
+                    className="text-xs bg-slate-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    <i className="fa-solid fa-file-arrow-up mr-1.5"></i>
+                    {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
+                  </button>
+                  {ldapForm.tlsCaCertificate.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLdapForm({ ...ldapForm, tlsCaCertificate: '' });
+                        if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                      }}
+                      className="text-xs text-slate-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
+                    >
+                      <i className="fa-solid fa-trash-can mr-1.5"></i>
+                      {t('admin.ldap.tls.clear', 'Clear')}
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-400 italic">
+                    {t(
+                      'admin.ldap.tls.caClearedHint',
+                      'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+                    )}
+                  </span>
+                </div>
+                <input
+                  ref={tlsCaFileInputRef}
+                  type="file"
+                  accept=".pem,.crt,.cer,.cert"
+                  onChange={handleTlsCaFileImport}
+                  className="hidden"
+                />
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <RoleMappings
+                mappings={ldapForm.roleMappings.map((mapping) => ({
+                  externalGroup: mapping.ldapGroup,
+                  role: mapping.role,
+                }))}
+                roleOptions={roleOptions}
+                errors={errors}
+                errorPrefix="ldapRoleMapping_"
+                heading={t('admin.ldap.roleMappings')}
+                addLabel={t('admin.ldap.addMapping')}
+                noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
+                externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
+                onAdd={() =>
+                  setLdapForm({
+                    ...ldapForm,
+                    roleMappings: [
+                      ...ldapForm.roleMappings,
+                      { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
+                    ],
+                  })
+                }
+                onRemove={(index) =>
+                  setLdapForm({
+                    ...ldapForm,
+                    roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
+                  })
+                }
+                onChange={(index, field, value) =>
+                  updateLdapMapping(index, field === 'externalGroup' ? 'ldapGroup' : 'role', value)
+                }
+                renderRoleSelect={renderRoleSelect}
               />
-              <Field
-                label={t('admin.ldap.baseDnLabel')}
-                value={ldapForm.baseDn}
-                error={errors.baseDn}
-                monospace
-                onChange={(baseDn) => setLdapForm({ ...ldapForm, baseDn })}
-              />
-              <Field
-                label={t('admin.ldap.userSearchFilter')}
-                value={ldapForm.userFilter}
-                error={errors.userFilter}
-                monospace
-                onChange={(userFilter) => setLdapForm({ ...ldapForm, userFilter })}
-              />
-              <Field
-                label={t('admin.ldap.bindDnLabel')}
-                value={ldapForm.bindDn}
-                error={errors.bindCredentials}
-                monospace
-                onChange={(bindDn) => setLdapForm({ ...ldapForm, bindDn })}
-              />
-              <Field
-                label={t('admin.ldap.bindPasswordLabel')}
-                type="password"
-                value={ldapForm.bindPassword}
-                error={errors.bindCredentials}
-                monospace
-                onChange={(bindPassword) => setLdapForm({ ...ldapForm, bindPassword })}
-              />
-              <Field
-                label={t('admin.ldap.groupSearchBase')}
-                value={ldapForm.groupBaseDn}
-                error={errors.groupBaseDn}
-                monospace
-                onChange={(groupBaseDn) => setLdapForm({ ...ldapForm, groupBaseDn })}
-              />
-              <Field
-                label={t('admin.ldap.groupMemberFilter')}
-                value={ldapForm.groupFilter}
-                error={errors.groupFilter}
-                monospace
-                onChange={(groupFilter) => setLdapForm({ ...ldapForm, groupFilter })}
-              />
+            </section>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all"
+              >
+                {t('admin.ldap.saveConfiguration', 'Save Configuration')}
+              </button>
             </div>
-          </section>
+          </form>
 
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-              <i className="fa-solid fa-lock text-praetor"></i>
-              <h3 className="font-bold text-slate-800">
-                {t('admin.ldap.tls.title', 'TLS / Certificates')}
-              </h3>
+              <i className="fa-solid fa-vial text-praetor"></i>
+              <h3 className="font-bold text-slate-800">{t('admin.ldap.connectionTester')}</h3>
             </div>
-            <div className="p-6 space-y-3">
-              <label
-                htmlFor="ldap-tls-ca-textarea"
-                className="block text-xs font-bold text-slate-400 uppercase tracking-wider"
-              >
-                {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
-              </label>
-              <p className="text-xs text-slate-500">
-                {t(
-                  'admin.ldap.tls.caCertificateHelp',
-                  'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
-                )}
-              </p>
-              <textarea
-                id="ldap-tls-ca-textarea"
-                rows={8}
-                value={ldapForm.tlsCaCertificate}
-                onChange={(event) => {
-                  setLdapForm({ ...ldapForm, tlsCaCertificate: event.target.value });
-                  if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
-                }}
-                placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
-                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                spellCheck={false}
-              />
-              {errors.tlsCaCertificate && (
-                <p className="text-red-500 text-[10px] font-bold">{errors.tlsCaCertificate}</p>
-              )}
-              <div className="flex items-center gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => tlsCaFileInputRef.current?.click()}
-                  className="text-xs bg-slate-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors"
-                >
-                  <i className="fa-solid fa-file-arrow-up mr-1.5"></i>
-                  {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                </button>
-                {ldapForm.tlsCaCertificate.trim() !== '' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLdapForm({ ...ldapForm, tlsCaCertificate: '' });
-                      if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
-                    }}
-                    className="text-xs text-slate-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
-                  >
-                    <i className="fa-solid fa-trash-can mr-1.5"></i>
-                    {t('admin.ldap.tls.clear', 'Clear')}
-                  </button>
-                )}
-                <span className="text-[10px] text-slate-400 italic">
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
+              <form onSubmit={handleTestLdap} className="space-y-4">
+                <p className="text-xs text-slate-500">
                   {t(
-                    'admin.ldap.tls.caClearedHint',
-                    'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+                    'admin.ldap.testDescription',
+                    'Enter credentials to test authentication and group retrieval against the saved configuration.',
                   )}
-                </span>
+                </p>
+                {isLdapDirty && (
+                  <p className="text-[10px] font-bold text-amber-600">
+                    {t(
+                      'admin.ldap.test.unsavedChanges',
+                      'Save the LDAP configuration before testing recent changes.',
+                    )}
+                  </p>
+                )}
+                <Field
+                  label={t('admin.ldap.testUsername')}
+                  value={testUsername}
+                  error={testErrors.testUsername}
+                  onChange={(value) => {
+                    setTestUsername(value);
+                    if (testErrors.testUsername) setTestErrors({ ...testErrors, testUsername: '' });
+                  }}
+                />
+                <Field
+                  label={t('admin.ldap.testPassword')}
+                  value={testPassword}
+                  type="password"
+                  error={testErrors.testPassword}
+                  onChange={(value) => {
+                    setTestPassword(value);
+                    if (testErrors.testPassword) setTestErrors({ ...testErrors, testPassword: '' });
+                  }}
+                />
+                {testErrors.enabled && (
+                  <p className="text-amber-600 text-[10px] font-bold">{testErrors.enabled}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={isTestingLdap || !ldapForm.enabled}
+                  className="w-full bg-praetor text-white py-2.5 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all disabled:opacity-50"
+                >
+                  {isTestingLdap ? (
+                    <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  ) : (
+                    t('admin.ldap.testAuthentication')
+                  )}
+                </button>
+              </form>
+
+              <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs overflow-y-auto min-h-64 border border-slate-800 shadow-inner">
+                {isTestingLdap ? (
+                  <div className="text-slate-400 animate-pulse">
+                    {t('admin.ldap.test.connecting', 'Connecting to LDAP server...')}
+                  </div>
+                ) : testResult ? (
+                  <div className="space-y-3">
+                    <div
+                      className={`font-bold ${testResult.authenticated ? 'text-emerald-400' : 'text-red-400'}`}
+                    >
+                      [
+                      {testResult.authenticated
+                        ? t('admin.ldap.test.success', 'SUCCESS')
+                        : t('admin.ldap.test.failure', 'FAILURE')}
+                      ] {testResult.message}
+                    </div>
+                    {testResult.authenticated && (
+                      <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-slate-400">
+                        <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
+                        <span className="text-slate-200 break-all">{testResult.userDn || '-'}</span>
+                        <span>{t('admin.ldap.test.roleIds', 'Mapped Roles')}</span>
+                        <span className="text-slate-200">
+                          {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
+                        </span>
+                        <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
+                        <span className="text-slate-200">
+                          {testResult.groups.length ? testResult.groups.join(', ') : '-'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t border-slate-800 pt-3">
+                      <div className="text-slate-500 mb-2">
+                        {t('admin.ldap.test.serverResponse', 'Server Response')}
+                      </div>
+                      <pre className="text-slate-300 whitespace-pre-wrap break-words">
+                        {JSON.stringify(testResult, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-slate-600 italic">
+                    {t('admin.ldap.test.waiting', 'Waiting for test execution...')}
+                    <br />
+                    <br />
+                    <span className="opacity-50">
+                      {t('admin.ldap.test.logOutput', 'Log output will appear here after testing.')}
+                    </span>
+                  </div>
+                )}
               </div>
-              <input
-                ref={tlsCaFileInputRef}
-                type="file"
-                accept=".pem,.crt,.cer,.cert"
-                onChange={handleTlsCaFileImport}
-                className="hidden"
-              />
             </div>
           </section>
-
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <RoleMappings
-              mappings={ldapForm.roleMappings.map((mapping) => ({
-                externalGroup: mapping.ldapGroup,
-                role: mapping.role,
-              }))}
-              roleOptions={roleOptions}
-              errors={errors}
-              errorPrefix="ldapRoleMapping_"
-              heading={t('admin.ldap.roleMappings')}
-              addLabel={t('admin.ldap.addMapping')}
-              noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
-              externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
-              onAdd={() =>
-                setLdapForm({
-                  ...ldapForm,
-                  roleMappings: [
-                    ...ldapForm.roleMappings,
-                    { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
-                  ],
-                })
-              }
-              onRemove={(index) =>
-                setLdapForm({
-                  ...ldapForm,
-                  roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
-                })
-              }
-              onChange={(index, field, value) =>
-                updateLdapMapping(index, field === 'externalGroup' ? 'ldapGroup' : 'role', value)
-              }
-              renderRoleSelect={renderRoleSelect}
-            />
-          </section>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all"
-            >
-              {t('admin.ldap.saveConfiguration', 'Save Configuration')}
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
       {(activeTab === 'oidc' || activeTab === 'saml') && (

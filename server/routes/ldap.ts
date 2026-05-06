@@ -102,6 +102,29 @@ const ldapConfigUpdateBodySchema = {
   },
 } as const;
 
+const ldapTestBodySchema = {
+  type: 'object',
+  properties: {
+    username: { type: 'string' },
+    password: { type: 'string' },
+  },
+  required: ['username', 'password'],
+} as const;
+
+const ldapTestResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    authenticated: { type: 'boolean' },
+    username: { type: 'string' },
+    message: { type: 'string' },
+    userDn: { type: 'string' },
+    groups: { type: 'array', items: { type: 'string' } },
+    roleIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['success', 'authenticated', 'username', 'message', 'groups', 'roleIds'],
+} as const;
+
 const ldapSyncResponseSchema = {
   type: 'object',
   properties: {
@@ -274,6 +297,51 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
       return updated;
+    },
+  );
+
+  // POST /test - Test LDAP authentication for supplied credentials (admin only)
+  fastify.post(
+    '/test',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.authentication.update')],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Test LDAP authentication',
+        body: ldapTestBodySchema,
+        response: {
+          200: ldapTestResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { username, password } = request.body as { username: unknown; password: unknown };
+
+      const usernameResult = requireNonEmptyString(username, 'username');
+      if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
+
+      const passwordResult = requireNonEmptyString(password, 'password');
+      if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
+
+      const ldapService = (await import('../services/ldap.ts')).default;
+      const result = await ldapService.authenticateWithProfile(
+        usernameResult.value,
+        passwordResult.value,
+      );
+      const authenticated = result.authenticated;
+
+      return {
+        success: authenticated,
+        authenticated,
+        username: usernameResult.value,
+        message: authenticated
+          ? 'LDAP authentication succeeded'
+          : 'LDAP authentication failed. Verify the credentials and saved LDAP configuration.',
+        userDn: result.userDn,
+        groups: authenticated ? result.groups : [],
+        roleIds: authenticated ? result.roleIds : [],
+      };
     },
   );
 

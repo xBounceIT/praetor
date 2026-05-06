@@ -200,6 +200,16 @@ export interface LdapConfig {
   tlsCaCertificate: string;
 }
 
+export interface LdapTestResponse {
+  success: boolean;
+  authenticated: boolean;
+  username: string;
+  message: string;
+  userDn?: string;
+  groups: string[];
+  roleIds: string[];
+}
+
 export type SsoProtocol = 'oidc' | 'saml';
 
 export interface SsoRoleMapping {
