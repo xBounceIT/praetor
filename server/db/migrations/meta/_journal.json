@@ -166,8 +166,15 @@
     {
       "idx": 23,
       "version": "7",
-      "when": 1778105100076,
-      "tag": "0023_add_ldap_ca_certificate",
+      "when": 1778104934157,
+      "tag": "0023_add_order_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778106233320,
+      "tag": "0024_add_ldap_ca_certificate",
       "breakpoints": true
     }
   ]
