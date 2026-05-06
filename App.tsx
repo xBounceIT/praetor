@@ -2208,6 +2208,11 @@ const App: React.FC = () => {
                   products={products}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
+                  onOrderRestored={(restored) => {
+                    setClientsOrders((prev) =>
+                      prev.map((o) => (o.id === restored.id ? restored : o)),
+                    );
+                  }}
                   currency={generalSettings.currency}
                   onViewOffer={(offerId) => {
                     setClientQuoteFilterId(null);

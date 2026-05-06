@@ -8,6 +8,7 @@ export * from './generalSettings.ts';
 export * from './invoices.ts';
 export * from './ldapConfig.ts';
 export * from './notifications.ts';
+export * from './orderVersions.ts';
 export * from './productCategories.ts';
 export * from './productSubcategories.ts';
 export * from './products.ts';

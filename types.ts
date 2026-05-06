@@ -395,6 +395,26 @@ export interface ClientsOrder {
   warnings?: string[];
 }
 
+export type OrderVersionReason = 'update' | 'restore';
+
+export interface OrderVersionSnapshot {
+  schemaVersion: 1;
+  order: Omit<ClientsOrder, 'items' | 'linkedQuoteId' | 'linkedOfferId' | 'warnings'>;
+  items: ClientsOrderItem[];
+}
+
+export interface OrderVersionRow {
+  id: string;
+  orderId: string;
+  reason: OrderVersionReason;
+  createdByUserId: string | null;
+  createdAt: number;
+}
+
+export interface OrderVersion extends OrderVersionRow {
+  snapshot: OrderVersionSnapshot;
+}
+
 export type View =
   // Timesheets module
   | 'timesheets/tracker'

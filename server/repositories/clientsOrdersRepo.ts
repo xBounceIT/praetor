@@ -214,6 +214,18 @@ export const findItemsForOrder = async (
   return rows.map(mapItem);
 };
 
+export const findFullForSnapshot = async (
+  orderId: string,
+  exec: DbExecutor = db,
+): Promise<{ order: ClientOrder; items: ClientOrderItem[] } | null> => {
+  const [orderRows, items] = await Promise.all([
+    exec.select().from(sales).where(eq(sales.id, orderId)).limit(1),
+    findItemsForOrder(orderId, exec),
+  ]);
+  if (orderRows.length === 0) return null;
+  return { order: mapOrder(orderRows[0]), items };
+};
+
 export type NewClientOrder = {
   id: string;
   linkedQuoteId: string | null;
@@ -280,6 +292,33 @@ export const update = async (
       discountType: sql`COALESCE(${patch.discountType ?? null}, ${sales.discountType})`,
       status: sql`COALESCE(${patch.status ?? null}, ${sales.status})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${sales.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(sales.id, id))
+    .returning();
+  return rows[0] ? mapOrder(rows[0]) : null;
+};
+
+export type ClientOrderRestoreFields = Pick<
+  ClientOrder,
+  'clientId' | 'clientName' | 'paymentTerms' | 'discount' | 'discountType' | 'status' | 'notes'
+>;
+
+export const restoreSnapshotOrder = async (
+  id: string,
+  snapshot: ClientOrderRestoreFields,
+  exec: DbExecutor = db,
+): Promise<ClientOrder | null> => {
+  const rows = await exec
+    .update(sales)
+    .set({
+      clientId: snapshot.clientId,
+      clientName: snapshot.clientName,
+      paymentTerms: snapshot.paymentTerms ?? 'immediate',
+      discount: numericForDb(snapshot.discount),
+      discountType: snapshot.discountType,
+      status: snapshot.status,
+      notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(sales.id, id))
