@@ -75,6 +75,27 @@ export const findById = async (
   return rows[0] ? mapOrder(rows[0]) : null;
 };
 
+export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: supplierSales.id })
+    .from(supplierSales)
+    .where(eq(supplierSales.id, id))
+    .limit(1);
+  return rows.length > 0;
+};
+
+export const findFullForSnapshot = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ order: SupplierOrder; items: SupplierOrderItem[] } | null> => {
+  const [orderRows, items] = await Promise.all([
+    exec.select().from(supplierSales).where(eq(supplierSales.id, id)).limit(1),
+    findItemsForOrder(id, exec),
+  ]);
+  if (orderRows.length === 0) return null;
+  return { order: mapOrder(orderRows[0]), items };
+};
+
 export const findItemsForOrder = async (
   orderId: string,
   exec: DbExecutor = db,
@@ -222,6 +243,33 @@ export const update = async (
       discountType: sql`COALESCE(${patch.discountType ?? null}, ${supplierSales.discountType})`,
       status: sql`COALESCE(${patch.status ?? null}, ${supplierSales.status})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${supplierSales.notes})`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(supplierSales.id, id))
+    .returning();
+  return row ? mapOrder(row) : null;
+};
+
+export type SupplierOrderRestoreFields = Pick<
+  SupplierOrder,
+  'supplierId' | 'supplierName' | 'paymentTerms' | 'discount' | 'discountType' | 'status' | 'notes'
+>;
+
+export const restoreSnapshotOrder = async (
+  id: string,
+  snapshot: SupplierOrderRestoreFields,
+  exec: DbExecutor = db,
+): Promise<SupplierOrder | null> => {
+  const [row] = await exec
+    .update(supplierSales)
+    .set({
+      supplierId: snapshot.supplierId,
+      supplierName: snapshot.supplierName,
+      paymentTerms: snapshot.paymentTerms ?? 'immediate',
+      discount: numericForDb(snapshot.discount),
+      discountType: snapshot.discountType,
+      status: snapshot.status,
+      notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(supplierSales.id, id))

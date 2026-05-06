@@ -1,6 +1,6 @@
 {
-  "id": "14cca4f5-f6b8-4281-9e67-815d7441e5be",
-  "prevId": "77a71018-f80c-4530-b9a8-85dccf993adf",
+  "id": "a8acd122-596a-4f5d-a194-cd01b02bea28",
+  "prevId": "14cca4f5-f6b8-4281-9e67-815d7441e5be",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1394,6 +1394,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'[]'::jsonb"
+        },
+        "tls_ca_certificate": {
+          "name": "tls_ca_certificate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
