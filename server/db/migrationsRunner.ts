@@ -11,8 +11,41 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const migrationsFolder = join(__dirname, 'migrations');
 const MIGRATION_LOCK_KEY = 'praetor:drizzle-migrations';
-const MIGRATION_LOCK_SQL = 'SELECT pg_advisory_lock(hashtextextended($1, 0::bigint))';
+const MIGRATION_LOCK_SQL = 'SELECT pg_try_advisory_lock(hashtextextended($1, 0::bigint)) AS locked';
 const MIGRATION_UNLOCK_SQL = 'SELECT pg_advisory_unlock(hashtextextended($1, 0::bigint))';
+const MIGRATION_LOCK_RETRY_MS = 1_000;
+const MIGRATION_LOCK_MAX_ATTEMPTS = 60;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const acquireMigrationLock = async (client: PoolClient): Promise<void> => {
+  for (let attempt = 1; attempt <= MIGRATION_LOCK_MAX_ATTEMPTS; attempt += 1) {
+    const result = await client.query<{ locked: boolean }>(MIGRATION_LOCK_SQL, [
+      MIGRATION_LOCK_KEY,
+    ]);
+
+    if (result.rows[0]?.locked === true) {
+      return;
+    }
+
+    if (attempt === MIGRATION_LOCK_MAX_ATTEMPTS) {
+      throw new Error(
+        `Timed out waiting for Drizzle migration advisory lock after ${MIGRATION_LOCK_MAX_ATTEMPTS} attempts`,
+      );
+    }
+
+    logger.warn(
+      {
+        attempt,
+        maxAttempts: MIGRATION_LOCK_MAX_ATTEMPTS,
+        retryMs: MIGRATION_LOCK_RETRY_MS,
+      },
+      'Drizzle migration advisory lock is held; retrying',
+    );
+
+    await sleep(MIGRATION_LOCK_RETRY_MS);
+  }
+};
 
 export const runDrizzleMigrations = async (): Promise<void> => {
   const pool = new pg.Pool(createDbPoolConfig({ max: 1 }));
@@ -37,7 +70,7 @@ export const runDrizzleMigrations = async (): Promise<void> => {
       'Applying Drizzle migrations',
     );
 
-    await client.query(MIGRATION_LOCK_SQL, [MIGRATION_LOCK_KEY]);
+    await acquireMigrationLock(client);
     hasMigrationLock = true;
 
     const db = drizzle(client);

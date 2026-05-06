@@ -13,6 +13,7 @@
 // order, and records them in the same `__drizzle_migrations` tracking table.
 // The behaviour is identical; only the framing differs.
 
+import 'dotenv/config';
 import { runDrizzleMigrations } from '../db/migrationsRunner.ts';
 
 try {
