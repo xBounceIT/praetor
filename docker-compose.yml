@@ -1,3 +1,16 @@
+x-backend-image: &backend-image praetor-backend
+
+x-backend-build: &backend-build
+  context: ./server
+  dockerfile: Dockerfile
+
+x-backend-db-env: &backend-db-env
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_NAME: ${POSTGRES_DB:-praetor}
+  DB_USER: ${POSTGRES_USER:-praetor}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+
 services:
   # Developer compose (builds images from local source).
   # PostgreSQL Database
@@ -23,17 +36,12 @@ services:
 
   # Backend API Server
   backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    build: *backend-build
+    image: *backend-image
     container_name: praetor-backend
     environment:
+      <<: *backend-db-env
       PORT: 3001
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-praetor}
-      DB_USER: ${POSTGRES_USER:-praetor}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -45,9 +53,21 @@ services:
     expose:
       - '3001'
     depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Apply pending Drizzle migrations before the API starts
+  db-migrations:
+    build: *backend-build
+    image: *backend-image
+    container_name: praetor-db-migrations
+    command: ['bun', 'run', 'db:migrate']
+    environment: *backend-db-env
+    depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
+    restart: 'no'
 
   # Frontend (Caddy serving static files)
   frontend:
