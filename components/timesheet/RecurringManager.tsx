@@ -132,10 +132,6 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         sticky: 'right',
         disableSorting: true,
         disableFiltering: true,
-        // Force the sticky-right column to fit content rather than absorb
-        // remaining table width (default for sticky:right was width: auto).
-        headerClassName: 'w-px',
-        className: 'w-px',
         cell: ({ row: task }) => (
           <div className="flex items-center justify-end gap-1">
             <Tooltip label={t('common:buttons.edit')}>

@@ -2165,6 +2165,9 @@ const App: React.FC = () => {
                   supplierQuotes={supplierQuotes}
                   offerIdsWithOrders={offerIdsWithOrders}
                   onUpdateOffer={handleUpdateClientOffer}
+                  onOfferRestored={async () => {
+                    setClientOffers(await api.clientOffers.list());
+                  }}
                   onDeleteOffer={handleDeleteClientOffer}
                   onCreateClientsOrder={handleCreateClientsOrderFromOffer}
                   onViewQuote={(quoteId) => {
