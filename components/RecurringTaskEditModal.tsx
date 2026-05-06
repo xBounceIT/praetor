@@ -7,6 +7,7 @@ import { formatRecurrencePattern } from '../utils/recurrence';
 import CustomRepeatModal from './shared/CustomRepeatModal';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
 export interface RecurringTaskEditModalProps {
   isOpen: boolean;
@@ -156,13 +157,10 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
             >
               {t('recurring.duration')}
             </label>
-            <input
+            <ValidatedNumberInput
               id="recurring-duration"
-              type="number"
-              min="0"
-              step="0.5"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              onValueChange={setDuration}
               placeholder="0.0"
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:ring-2 focus:ring-praetor focus:border-praetor outline-none"
             />
