@@ -402,6 +402,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate === undefined &&
         notes === undefined;
 
+      const hasContentUpdate =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        status !== undefined ||
+        expirationDate !== undefined ||
+        notes !== undefined;
+
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
       if (supplierId !== undefined) {
@@ -462,9 +471,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
-          // ID-only renames cascade through the FK and don't alter snapshot content, so we
-          // skip them to keep the history clean.
-          if (!isIdOnlyUpdate) {
+          // Snapshot only when the patch carries actual content. ID-only renames cascade
+          // through the FK without altering snapshot fields, and empty PUTs are no-ops in
+          // `update()` — both would otherwise create misleading "Save" rows.
+          if (hasContentUpdate) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
           const quote = await supplierQuotesRepo.update(idResult.value, patch, tx);

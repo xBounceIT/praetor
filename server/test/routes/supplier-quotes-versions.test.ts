@@ -479,4 +479,20 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
     expect(sqvInsertMock).not.toHaveBeenCalled();
     expect(sqFindFullForSnapshotMock).not.toHaveBeenCalled();
   });
+
+  test('PUT with empty body does NOT snapshot (no content change, repo treats as no-op)', async () => {
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(SAMPLE_QUOTE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+    expect(sqFindFullForSnapshotMock).not.toHaveBeenCalled();
+  });
 });

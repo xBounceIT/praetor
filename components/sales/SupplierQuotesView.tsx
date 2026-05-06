@@ -13,6 +13,7 @@ import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
   formatInsertDate,
+  formatInsertDateTime,
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
@@ -78,7 +79,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onViewOrders,
   currency,
 }) => {
-  const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
+  const { t, i18n } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(
     () => [
@@ -675,7 +676,27 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
-              {isReadOnly && (
+              {previewVersion && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 bg-amber-50">
+                  <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
+                    <i className="fa-solid fa-clock-rotate-left"></i>
+                    {t('sales:supplierQuotes.versionHistory.previewBanner', {
+                      date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                      defaultValue: 'Previewing version from {{date}}',
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearPreview}
+                    className="text-xs font-bold text-amber-800 hover:underline whitespace-nowrap"
+                  >
+                    {t('sales:supplierQuotes.versionHistory.backToCurrent', {
+                      defaultValue: 'Back to current',
+                    })}
+                  </button>
+                </div>
+              )}
+              {baseReadOnly && (
                 <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                   <span className="text-amber-700 text-xs font-bold">
                     {t('sales:supplierQuotes.readOnlyLinked', {
