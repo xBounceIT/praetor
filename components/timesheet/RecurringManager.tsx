@@ -1,14 +1,14 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, Project, ProjectTask } from '../types';
-import { formatDateOnlyForLocale } from '../utils/date';
-import { formatRecurrencePattern } from '../utils/recurrence';
+import type { Client, Project, ProjectTask } from '../../types';
+import { formatDateOnlyForLocale } from '../../utils/date';
+import { formatRecurrencePattern } from '../../utils/recurrence';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 import RecurringTaskEditModal from './RecurringTaskEditModal';
-import DeleteConfirmModal from './shared/DeleteConfirmModal';
-import StandardTable, { type Column } from './shared/StandardTable';
-import StatusBadge from './shared/StatusBadge';
-import Tooltip from './shared/Tooltip';
 
 export interface RecurringManagerProps {
   tasks: ProjectTask[];
@@ -126,13 +126,16 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
           ),
       },
       {
-        // Empty header so the column shrinks to fit the two icon buttons.
-        header: '',
+        header: t('common:labels.actions'),
         id: 'actions',
         align: 'right',
         sticky: 'right',
         disableSorting: true,
         disableFiltering: true,
+        // Force the sticky-right column to fit content rather than absorb
+        // remaining table width (default for sticky:right was width: auto).
+        headerClassName: 'w-px',
+        className: 'w-px',
         cell: ({ row: task }) => (
           <div className="flex items-center justify-end gap-1">
             <Tooltip label={t('common:buttons.edit')}>

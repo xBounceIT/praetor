@@ -1,13 +1,13 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProjectTask } from '../types';
-import { getLocalDateString } from '../utils/date';
-import { formatRecurrencePattern } from '../utils/recurrence';
-import CustomRepeatModal from './shared/CustomRepeatModal';
-import CustomSelect from './shared/CustomSelect';
-import Modal from './shared/Modal';
-import ValidatedNumberInput from './shared/ValidatedNumberInput';
+import type { ProjectTask } from '../../types';
+import { getLocalDateString } from '../../utils/date';
+import { formatRecurrencePattern } from '../../utils/recurrence';
+import CustomRepeatModal from '../shared/CustomRepeatModal';
+import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface RecurringTaskEditModalProps {
   isOpen: boolean;
