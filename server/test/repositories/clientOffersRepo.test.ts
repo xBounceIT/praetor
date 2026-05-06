@@ -312,6 +312,71 @@ describe('replaceItems', () => {
   });
 });
 
+describe('findFullForSnapshot', () => {
+  // The items helper hits its query during synchronous async-fn evaluation, so it lands
+  // ahead of the offer thenable in the enqueue queue.
+  test('returns offer + items when offer exists', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    exec.enqueue({ rows: [offerRow()] });
+    const result = await clientOffersRepo.findFullForSnapshot('co-1', testDb);
+    expect(result).not.toBeNull();
+    expect(result?.offer.id).toBe('co-1');
+    expect(result?.items).toHaveLength(1);
+    expect(result?.items[0].id).toBe('coi-1');
+  });
+
+  test('returns null when offer is missing', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    const result = await clientOffersRepo.findFullForSnapshot('co-x', testDb);
+    expect(result).toBeNull();
+  });
+});
+
+describe('restoreSnapshotOffer', () => {
+  test('sets nullable notes directly instead of COALESCE-keeping the old value', async () => {
+    exec.enqueue({ rows: [offerRow()] });
+    await clientOffersRepo.restoreSnapshotOffer(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 5,
+        discountType: 'percentage',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "customer_offers"');
+    expect(sql).not.toContain('coalesce');
+    expect(exec.calls[0].params).toContain(null);
+    expect(exec.calls[0].params).toContain('co-1');
+  });
+
+  test('returns null when no row is restored', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await clientOffersRepo.restoreSnapshotOffer(
+      'co-x',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 5,
+        discountType: 'percentage',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(result).toBeNull();
+  });
+});
+
 describe('deleteById', () => {
   test('returns true when row deleted', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });

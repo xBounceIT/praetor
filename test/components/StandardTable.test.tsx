@@ -165,4 +165,32 @@ describe('<StandardTable />', () => {
     // We just confirm Bob's text still renders — the classNames are an implementation detail.
     expect(screen.getByText('Bob')).toBeInTheDocument();
   });
+
+  test('sticky-right last column does not stretch; rightmost non-sticky column does and keeps its alignment', () => {
+    const columns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      { header: 'Age', accessorKey: 'age' as const, id: 'age', align: 'right' as const },
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <button type="button">x</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={columns} />);
+
+    // rows[0] is the header; rows[1] is Alice's data row.
+    const aliceRow = screen.getAllByRole('row')[1];
+    const cells = aliceRow.querySelectorAll('td');
+    expect(cells.length).toBe(3);
+
+    // Stretch column (Age): absorbs leftover width AND keeps its right alignment.
+    expect(cells[1].className).toContain('w-full');
+    expect(cells[1].className).toContain('text-right');
+    expect(cells[1].className).not.toMatch(/\bw-px\b/);
+
+    // Sticky-right action column: stays w-auto, never w-full.
+    expect(cells[2].className).toContain('w-auto');
+    expect(cells[2].className).not.toMatch(/\bw-full\b/);
+  });
 });
