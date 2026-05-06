@@ -279,6 +279,26 @@ export interface Quote {
   updatedAt: number;
 }
 
+export type QuoteVersionReason = 'update' | 'restore';
+
+export interface QuoteVersionSnapshot {
+  schemaVersion: 1;
+  quote: Omit<Quote, 'items' | 'isExpired' | 'linkedOfferId'>;
+  items: QuoteItem[];
+}
+
+export interface QuoteVersionRow {
+  id: string;
+  quoteId: string;
+  reason: QuoteVersionReason;
+  createdByUserId: string | null;
+  createdAt: number;
+}
+
+export interface QuoteVersion extends QuoteVersionRow {
+  snapshot: QuoteVersionSnapshot;
+}
+
 export interface ClientOfferItem {
   id: string;
   offerId: string;

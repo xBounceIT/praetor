@@ -138,8 +138,15 @@
     {
       "idx": 19,
       "version": "7",
+      "when": 1778019372919,
+      "tag": "0019_add_quote_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
       "when": 1778025600000,
-      "tag": "0019_client_offer_versioning",
+      "tag": "0020_client_offer_versioning",
       "breakpoints": true
     }
   ]

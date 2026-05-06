@@ -65,3 +65,19 @@ export const formatInsertDate = (timestamp: number | null | undefined): string =
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 };
+
+export const formatInsertDateTime = (
+  timestamp: number | null | undefined,
+  locales?: string | string[],
+): string => {
+  if (timestamp === null || timestamp === undefined) return '-';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString(locales, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
