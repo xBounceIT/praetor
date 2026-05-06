@@ -19,10 +19,12 @@ import { convertUnitPrice, parseNumberInputValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
+import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface TotalsBreakdown {
@@ -109,6 +111,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [formData, setFormData] = useState<Partial<SupplierQuote>>(getDefaultFormData());
 
   const isReadOnly = Boolean(editingQuote?.linkedOrderId);
+
+  const readOnlyReason = t('sales:supplierQuotes.readOnlyLinked', {
+    defaultValue: 'This quote is read-only because an order was created from it.',
+  });
+  const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
+  const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
+  const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
 
   const hasOrderForQuote = useCallback((quote: SupplierQuote) => Boolean(quote.linkedOrderId), []);
 
@@ -221,36 +230,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
-  };
-
-  const renderUnitSelector = (index: number, item: SupplierQuoteItem) => {
-    const product = item.productId ? products.find((p) => p.id === item.productId) : undefined;
-    const isSupply = product?.type === 'supply';
-
-    if (isSupply) {
-      const qty = Number(item.quantity) || 0;
-      return (
-        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-          {qty === 1 ? t('sales:supplierQuotes.unit') : t('sales:supplierQuotes.units')}
-        </span>
-      );
-    }
-
-    const unitOptions = [
-      { id: 'unit', name: t('sales:supplierQuotes.unit') },
-      { id: 'hours', name: t('sales:supplierQuotes.hours') },
-      { id: 'days', name: t('sales:supplierQuotes.days') },
-    ];
-
-    return (
-      <CustomSelect
-        options={unitOptions}
-        value={item.unitType || 'unit'}
-        onChange={(value) => handleUnitTypeChange(index, value as SupplierUnitType)}
-        disabled={isReadOnly}
-        buttonClassName="py-2 text-xs px-2"
-      />
-    );
   };
 
   const columns = useMemo<Column<SupplierQuote>[]>(
@@ -671,6 +650,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 {t('sales:supplierQuotes.supplierInformation', {
                   defaultValue: 'Supplier Information',
                 })}
+                <FieldTooltip
+                  description={t('sales:fieldInfo.supplierInformation', {
+                    defaultValue: 'Supplier and document details',
+                  })}
+                  status={readOnlyStatus}
+                  statusLabel={statusLabel}
+                />
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -761,6 +747,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.supplierItems', {
+                      defaultValue: 'Line items for this quote',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 {!isReadOnly && (
                   <button
@@ -801,6 +794,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
                     const lineTotal = item.quantity * item.unitPrice;
+                    const itemProduct = item.productId
+                      ? products.find((p) => p.id === item.productId)
+                      : undefined;
+                    const isSupply = itemProduct?.type === 'supply';
                     return (
                       <div
                         key={item.id}
@@ -841,7 +838,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
                                   /
                                 </span>
-                                {renderUnitSelector(index, item)}
+                                <UnitTypeSelector
+                                  value={item.unitType || 'unit'}
+                                  onChange={(val) => handleUnitTypeChange(index, val)}
+                                  isSupply={isSupply}
+                                  quantity={Number(item.quantity) || 0}
+                                  disabled={isReadOnly}
+                                  i18nPrefix="sales:supplierQuotes"
+                                />
                               </div>
                             </div>
                           </div>
@@ -911,7 +915,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
                                 /
                               </span>
-                              {renderUnitSelector(index, item)}
+                              <UnitTypeSelector
+                                value={item.unitType || 'unit'}
+                                onChange={(val) => handleUnitTypeChange(index, val)}
+                                isSupply={isSupply}
+                                quantity={Number(item.quantity) || 0}
+                                disabled={isReadOnly}
+                                i18nPrefix="sales:supplierQuotes"
+                              />
                             </div>
                             <div className="col-span-3 flex items-center gap-1.5">
                               <ValidatedNumberInput
@@ -972,6 +983,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+                  <FieldTooltip
+                    description={t('sales:fieldInfo.notes', {
+                      defaultValue: 'Additional notes for the entire document',
+                    })}
+                    status={readOnlyStatus}
+                    statusLabel={statusLabel}
+                  />
                 </h4>
                 <textarea
                   rows={4}

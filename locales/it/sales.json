@@ -10,6 +10,8 @@
     "clientInformation": "Dettagli cliente e documento",
     "productsServices": "Prodotti e servizi per questo preventivo",
     "items": "Voci per questa offerta",
+    "supplierInformation": "Dettagli fornitore e documento",
+    "supplierItems": "Voci di questo preventivo",
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
