@@ -116,12 +116,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [formData, setFormData] = useState<Partial<SupplierQuote>>(getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<SupplierQuoteVersion | null>(null);
 
-  const baseReadOnly = Boolean(editingQuote?.linkedOrderId);
+  const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
 
-  const readOnlyReason = t('sales:supplierQuotes.readOnlyLinked', {
+  const readOnlyLinkedReason = t('sales:supplierQuotes.readOnlyLinked', {
     defaultValue: 'This quote is read-only because an order was created from it.',
   });
+  const readOnlyStatusReason = t('sales:supplierQuotes.readOnlyStatus', {
+    defaultValue: 'Read-only due to non-draft status',
+  });
+  const readOnlyReason = editingQuote?.linkedOrderId ? readOnlyLinkedReason : readOnlyStatusReason;
   const statusEditable = t('sales:fieldInfo.statusEditable', { defaultValue: 'Editable' });
   const statusLabel = t('sales:fieldInfo.statusLabel', { defaultValue: 'Status:' });
   const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
@@ -404,13 +408,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         cell: ({ row }) => {
           const hasOrder = hasOrderForQuote(row);
           const history = isHistoryRow(row);
+          const isRowReadOnly = row.status !== 'draft';
 
           const isEditDisabled = hasOrder;
           const editTitle = hasOrder
             ? t('sales:supplierQuotes.orderAlreadyExists', {
                 defaultValue: 'An order for this quote already exists.',
               })
-            : t('common:buttons.edit', { defaultValue: 'Edit' });
+            : isRowReadOnly
+              ? t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
+              : t('common:buttons.edit', { defaultValue: 'Edit' });
 
           const isCreateOrderDisabled = history || hasOrder;
           const createOrderTitle = hasOrder
@@ -449,7 +456,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     disabled={isEditDisabled}
                     className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                   >
-                    <i className="fa-solid fa-pen-to-square"></i>
+                    <i
+                      className={`fa-solid ${isRowReadOnly && !hasOrder ? 'fa-eye' : 'fa-pen-to-square'}`}
+                    ></i>
                   </button>
                 )}
               </Tooltip>
@@ -677,11 +686,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
               {baseReadOnly && (
                 <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                  <span className="text-amber-700 text-xs font-bold">
-                    {t('sales:supplierQuotes.readOnlyLinked', {
-                      defaultValue: 'This quote is read-only because an order was created from it.',
-                    })}
-                  </span>
+                  <span className="text-amber-700 text-xs font-bold">{readOnlyReason}</span>
                 </div>
               )}
               {editingQuote?.linkedOrderId && (
