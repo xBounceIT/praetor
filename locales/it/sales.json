@@ -235,6 +235,7 @@
     "addQuote": "Aggiungi preventivo",
     "viewQuote": "Vedi preventivo",
     "readOnlyLinked": "Questo preventivo è in sola lettura perché è stato creato un ordine da esso.",
+    "readOnlyStatus": "Sola lettura per stato non bozza",
     "linkedOrderTitle": "Ordine Collegato",
     "linkedOrderInfo": "Ordine #{{number}}",
     "orderDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
