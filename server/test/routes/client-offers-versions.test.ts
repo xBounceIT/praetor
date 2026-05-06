@@ -354,9 +354,13 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
       expect.objectContaining({ offerId: 'off-1', reason: 'restore', createdByUserId: 'u1' }),
       undefined,
     );
-    // Snapshot reference validation ran
-    expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1');
-    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    // Snapshot reference validation ran inside the tx. The second arg is the tx executor;
+    // bun's toHaveBeenCalledWith(..., undefined) hangs the runner, so we read positional
+    // args from mock.calls directly.
+    expect(clientsExistsByIdMock).toHaveBeenCalled();
+    expect(clientsExistsByIdMock.mock.calls[0]?.[0]).toBe('c1');
+    expect(productsGetSnapshotsMock).toHaveBeenCalled();
+    expect(productsGetSnapshotsMock.mock.calls[0]?.[0]).toEqual(['p-1']);
     // Offer + items applied
     expect(coRestoreSnapshotOfferMock).toHaveBeenCalledWith(
       'off-1',
@@ -480,7 +484,8 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(404);
     // findById should be scoped on (offerId, versionId) so a foreign versionId returns null
-    expect(ovFindByIdMock).toHaveBeenCalledWith('off-1', 'ov-other');
+    expect(ovFindByIdMock).toHaveBeenCalled();
+    expect(ovFindByIdMock.mock.calls[0]?.slice(0, 2)).toEqual(['off-1', 'ov-other']);
     expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
   });
 
