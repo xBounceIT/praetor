@@ -33,8 +33,11 @@ mock.module('../../services/api/clientOffers', () => ({
   },
 }));
 
-// Stable rendering for createdAt; the panel passes (timestamp, language).
+// Stable rendering for createdAt; the panel passes (timestamp, language). Spread the real
+// module so unrelated date helpers stay available if the panel grows new imports.
+const realDate = await import('../../utils/date');
 mock.module('../../utils/date', () => ({
+  ...realDate,
   formatInsertDateTime: (ts: number) => `formatted-${ts}`,
 }));
 
@@ -135,9 +138,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // Modal portal sets body overflow: hidden; reset between tests to avoid bleed.
+  // Modal's useEffect leaves body.style.overflow='hidden' when it mounts and only resets
+  // it on unmount; testing-library's cleanup unmounts the panel which doesn't always run
+  // the Modal's cleanup if the confirm modal was open. Reset it explicitly.
   document.body.style.overflow = '';
-  document.body.innerHTML = '';
 });
 
 describe('<OfferVersionsPanel />', () => {
