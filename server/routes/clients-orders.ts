@@ -1,11 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as orderVersionsRepo from '../repositories/orderVersionsRepo.ts';
+import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import {
   generateClientOrderId,
   generateItemId,
@@ -294,9 +297,101 @@ const itemsMatch = (
   return true;
 };
 
+// Fingerprint covers every field that flows into the JSONB snapshot, so cost / MOL / note /
+// unit-type / supplier-source edits all flip the change flag. The looser `itemsMatch` above
+// only powers the source-linked rejection check and is intentionally untouched here.
+const snapshotItemFingerprint = (item: {
+  id?: string | null;
+  productId?: string | null;
+  productName?: string | null;
+  quantity: number | string;
+  unitPrice: number | string;
+  productCost: number | string;
+  productMolPercentage: number | null;
+  discount: number | string | null;
+  note?: string | null;
+  unitType: string;
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice: number | string | null;
+  supplierSaleId?: string | null;
+  supplierSaleItemId?: string | null;
+  supplierSaleSupplierName?: string | null;
+}) =>
+  [
+    item.id ?? '',
+    item.productId ?? '',
+    item.productName ?? '',
+    Number(item.quantity),
+    Number(item.unitPrice),
+    Number(item.productCost),
+    item.productMolPercentage == null ? '' : Number(item.productMolPercentage),
+    item.discount == null ? 0 : Number(item.discount),
+    normalizeNotesValue(item.note),
+    item.unitType,
+    item.supplierQuoteId ?? '',
+    item.supplierQuoteItemId ?? '',
+    item.supplierQuoteSupplierName ?? '',
+    item.supplierQuoteUnitPrice == null ? '' : Number(item.supplierQuoteUnitPrice),
+    item.supplierSaleId ?? '',
+    item.supplierSaleItemId ?? '',
+    item.supplierSaleSupplierName ?? '',
+  ].join('|');
+
+const itemsChangedForSnapshot = (
+  existing: Array<Parameters<typeof snapshotItemFingerprint>[0]>,
+  incoming: Array<Parameters<typeof snapshotItemFingerprint>[0]>,
+): boolean => {
+  if (existing.length !== incoming.length) return true;
+  const a = existing.map(snapshotItemFingerprint).sort();
+  const b = incoming.map(snapshotItemFingerprint).sort();
+  return a.some((fp, i) => fp !== b[i]);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
   // API path is clients-orders for backward compatibility; data is stored in sales/sale_items.
+
+  const snapshotPreState = async (
+    orderId: string,
+    reason: orderVersionsRepo.OrderVersionReason,
+    request: FastifyRequest,
+    tx: DbExecutor,
+  ) => {
+    const pre = await clientsOrdersRepo.findFullForSnapshot(orderId, tx);
+    if (!pre) return;
+    await orderVersionsRepo.insert(
+      {
+        orderId,
+        snapshot: orderVersionsRepo.buildSnapshot(pre.order, pre.items),
+        reason,
+        createdByUserId: request.user?.id ?? null,
+      },
+      tx,
+    );
+  };
+
+  const findMissingSnapshotReference = async (
+    snapshot: orderVersionsRepo.OrderVersionSnapshot,
+  ): Promise<string | null> => {
+    const productIds = Array.from(
+      new Set(
+        snapshot.items
+          .map((item) => item.productId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    const [clientExists, products] = await Promise.all([
+      clientsRepo.existsById(snapshot.order.clientId),
+      productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(new Map()),
+    ]);
+    if (!clientExists) {
+      return `Snapshot client "${snapshot.order.clientId}" no longer exists`;
+    }
+    const missingProductId = productIds.find((id) => !products.has(id));
+    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+  };
 
   fastify.get(
     '/',
@@ -811,12 +906,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const willReplaceItems = !isSourceLinkedOrder && items !== undefined;
 
+      let hasContentChanges = false;
+      if (!isSourceLinkedOrder && hasLockedFieldUpdates) {
+        if (
+          (linkedOfferIdValue !== undefined &&
+            linkedOfferIdValue !== existingOrder.linkedOfferId) ||
+          (clientIdValue !== undefined &&
+            clientIdValue !== null &&
+            clientIdValue !== existingOrder.clientId) ||
+          (clientNameValue !== undefined &&
+            clientNameValue !== null &&
+            clientNameValue !== existingOrder.clientName) ||
+          (paymentTerms !== undefined && paymentTerms !== existingOrder.paymentTerms) ||
+          (discountValue !== undefined &&
+            discountValue !== null &&
+            Number(discountValue) !== Number(existingOrder.discount)) ||
+          (discountTypeValue !== undefined && discountTypeValue !== existingOrder.discountType) ||
+          (notes !== undefined &&
+            normalizeNotesValue(notes) !== normalizeNotesValue(existingOrder.notes))
+        ) {
+          hasContentChanges = true;
+        }
+        if (!hasContentChanges && items !== undefined) {
+          if (existingItems === null) {
+            existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+          }
+          if (itemsChangedForSnapshot(existingItems, normalizedItems ?? [])) {
+            hasContentChanges = true;
+          }
+        }
+      }
+      const shouldSnapshot = hasContentChanges;
+
       let result: {
         order: clientsOrdersRepo.ClientOrder | null;
         items: clientsOrdersRepo.ClientOrderItem[];
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          if (shouldSnapshot) {
+            await snapshotPreState(idResult.value, 'update', request, tx);
+          }
           const order = await clientsOrdersRepo.update(
             idResult.value,
             {
@@ -889,6 +1019,216 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
       return { ...updatedOrder, items: updatedItems };
+    },
+  );
+
+  const versionParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      versionId: { type: 'string' },
+    },
+    required: ['id', 'versionId'],
+  } as const;
+
+  const orderVersionRowSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      orderId: { type: 'string' },
+      reason: { type: 'string', enum: ['update', 'restore'] },
+      createdByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'orderId', 'reason', 'createdAt'],
+  } as const;
+
+  const orderVersionSchema = {
+    type: 'object',
+    properties: { ...orderVersionRowSchema.properties, snapshot: {} },
+    required: [...orderVersionRowSchema.required, 'snapshot'],
+  } as const;
+
+  fastify.get(
+    '/:id/versions',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_orders.view'),
+      ],
+      schema: {
+        tags: ['clients-orders'],
+        summary: 'List versions for a client order',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: orderVersionRowSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const [exists, versions] = await Promise.all([
+        clientsOrdersRepo.existsById(idResult.value),
+        orderVersionsRepo.listForOrder(idResult.value),
+      ]);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+      return versions;
+    },
+  );
+
+  fastify.get(
+    '/:id/versions/:versionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_orders.view'),
+      ],
+      schema: {
+        tags: ['clients-orders'],
+        summary: 'Get a single client order version',
+        params: versionParamSchema,
+        response: {
+          200: orderVersionSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const version = await orderVersionsRepo.findById(idResult.value, versionIdResult.value);
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      return version;
+    },
+  );
+
+  fastify.post(
+    '/:id/versions/:versionId/restore',
+    {
+      onRequest: [requirePermission('accounting.clients_orders.update')],
+      schema: {
+        tags: ['clients-orders'],
+        summary: 'Restore a client order to a prior version',
+        params: versionParamSchema,
+        response: {
+          200: clientOrderSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const [current, version] = await Promise.all([
+        clientsOrdersRepo.findForUpdate(idResult.value),
+        orderVersionsRepo.findById(idResult.value, versionIdResult.value),
+      ]);
+
+      if (!current) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+      if (current.linkedOfferId || current.linkedQuoteId) {
+        return reply.code(409).send({ error: 'Source-linked orders cannot be restored' });
+      }
+      if (current.status !== 'draft') {
+        return reply.code(409).send({
+          error: 'Non-draft clients_orders are read-only',
+          currentStatus: current.status,
+        });
+      }
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
+      if (missingSnapshotReference) {
+        return reply.code(409).send({ error: missingSnapshotReference });
+      }
+
+      const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = [];
+      for (const { orderId: _o, id: _i, ...rest } of version.snapshot.items) {
+        if (!rest.productId) {
+          // sale_items.product_id is NOT NULL with FK; restore would otherwise fail mid-tx.
+          return reply.code(409).send({
+            error: `Snapshot item "${rest.productName}" is missing a product reference`,
+          });
+        }
+        snapshotItems.push({
+          ...rest,
+          id: generateItemId('si-'),
+          productId: rest.productId,
+        });
+      }
+
+      let restored: {
+        order: clientsOrdersRepo.ClientOrder | null;
+        items: clientsOrdersRepo.ClientOrderItem[];
+      };
+      try {
+        restored = await withDbTransaction(async (tx) => {
+          await snapshotPreState(idResult.value, 'restore', request, tx);
+
+          const order = await clientsOrdersRepo.restoreSnapshotOrder(
+            idResult.value,
+            {
+              clientId: version.snapshot.order.clientId,
+              clientName: version.snapshot.order.clientName,
+              paymentTerms: version.snapshot.order.paymentTerms,
+              discount: version.snapshot.order.discount,
+              discountType: version.snapshot.order.discountType,
+              status: version.snapshot.order.status,
+              notes: version.snapshot.order.notes,
+            },
+            tx,
+          );
+          if (!order) return { order: null, items: [] };
+          const items = await clientsOrdersRepo.replaceItems(order.id, snapshotItems, tx);
+          return { order, items };
+        });
+      } catch (error) {
+        // The pre-tx reference check is racy — a referenced client/product can be deleted
+        // between validation and the restore writes. Translate the resulting FK violation to a
+        // 409 instead of leaking a 500.
+        if (getForeignKeyViolation(error)) {
+          return reply.code(409).send({
+            error: 'Snapshot references a client or product that no longer exists',
+          });
+        }
+        throw error;
+      }
+
+      if (!restored.order) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+
+      await logAudit({
+        request,
+        action: 'client_order.restored',
+        entityType: 'client_order',
+        entityId: restored.order.id,
+        details: {
+          targetLabel: restored.order.id,
+          secondaryLabel: restored.order.clientName,
+          toValue: versionIdResult.value,
+        },
+      });
+
+      return { ...restored.order, items: restored.items };
     },
   );
 

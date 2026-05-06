@@ -1,4 +1,4 @@
-import type { ClientsOrder } from '../../types';
+import type { ClientsOrder, OrderVersion, OrderVersionRow } from '../../types';
 import { fetchApi } from './client';
 import { normalizeClientsOrder } from './normalizers';
 
@@ -19,4 +19,15 @@ export const clientsOrdersApi = {
     }).then(normalizeClientsOrder),
 
   delete: (id: string): Promise<void> => fetchApi(`/clients-orders/${id}`, { method: 'DELETE' }),
+
+  listVersions: (id: string): Promise<OrderVersionRow[]> =>
+    fetchApi<OrderVersionRow[]>(`/clients-orders/${id}/versions`),
+
+  getVersion: (id: string, versionId: string): Promise<OrderVersion> =>
+    fetchApi<OrderVersion>(`/clients-orders/${id}/versions/${versionId}`),
+
+  restoreVersion: (id: string, versionId: string): Promise<ClientsOrder> =>
+    fetchApi<ClientsOrder>(`/clients-orders/${id}/versions/${versionId}/restore`, {
+      method: 'POST',
+    }).then(normalizeClientsOrder),
 };
