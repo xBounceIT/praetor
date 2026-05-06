@@ -1861,6 +1861,7 @@ const App: React.FC = () => {
   const handleUpdateSupplierOrder = supplierQuoteHandlers.updateSupplierOrder;
   const handleDeleteSupplierOrder = supplierQuoteHandlers.deleteSupplierOrder;
   const handleCreateSupplierOrderFromQuote = supplierQuoteHandlers.createSupplierOrderFromQuote;
+  const refreshSupplierOrderFlow = supplierQuoteHandlers.refreshSupplierOrderFlow;
 
   const handleUpdateSupplierInvoice = supplierInvoiceHandlers.update;
   const handleDeleteSupplierInvoice = supplierInvoiceHandlers.delete;
@@ -2255,6 +2256,7 @@ const App: React.FC = () => {
                     setSupplierQuoteFilterId(quoteId);
                     setActiveView('sales/supplier-quotes');
                   }}
+                  onOrderRestored={refreshSupplierOrderFlow}
                   currency={generalSettings.currency}
                   quoteFilterId={supplierQuoteFilterId}
                 />
