@@ -132,6 +132,11 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         sticky: 'right',
         disableSorting: true,
         disableFiltering: true,
+        // Override StandardTable's inline `width: auto` for sticky-right via
+        // Tailwind's important suffix (generates `width: 1px !important`)
+        // so the column shrinks to fit just the two icon buttons.
+        headerClassName: 'w-px!',
+        className: 'w-px!',
         cell: ({ row: task }) => (
           <div className="flex items-center justify-end gap-1">
             <Tooltip label={t('common:buttons.edit')}>
