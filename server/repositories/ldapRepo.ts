@@ -14,6 +14,7 @@ export type LdapConfig = {
   groupBaseDn: string;
   groupFilter: string;
   roleMappings: LdapRoleMapping[];
+  tlsCaCertificate: string;
 };
 
 export type LdapConfigPatch = Partial<LdapConfig>;
@@ -28,6 +29,7 @@ export const DEFAULT_CONFIG: LdapConfig = {
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
+  tlsCaCertificate: '',
 };
 
 const LDAP_PROJECTION = {
@@ -40,6 +42,7 @@ const LDAP_PROJECTION = {
   groupBaseDn: ldapConfig.groupBaseDn,
   groupFilter: ldapConfig.groupFilter,
   roleMappings: ldapConfig.roleMappings,
+  tlsCaCertificate: ldapConfig.tlsCaCertificate,
 } as const;
 
 type LdapRow = {
@@ -52,6 +55,7 @@ type LdapRow = {
   groupBaseDn: string | null;
   groupFilter: string | null;
   roleMappings: LdapRoleMapping[] | null;
+  tlsCaCertificate: string | null;
 };
 
 // Schema columns are nullable but always populated at runtime via DB defaults on the seeded
@@ -71,6 +75,7 @@ const mapRow = (row: LdapRow): LdapConfig => ({
   groupBaseDn: row.groupBaseDn ?? DEFAULT_CONFIG.groupBaseDn,
   groupFilter: row.groupFilter ?? DEFAULT_CONFIG.groupFilter,
   roleMappings: row.roleMappings ?? [],
+  tlsCaCertificate: row.tlsCaCertificate ?? '',
 });
 
 export const get = async (exec: DbExecutor = db): Promise<LdapConfig | null> => {
@@ -88,6 +93,15 @@ export const update = async (
   // both branches share the JSONB type.
   const roleMappingsParam =
     patch.roleMappings === undefined ? null : JSON.stringify(patch.roleMappings);
+  // `tlsCaCertificate` is the only nullable text column that callers can explicitly clear:
+  // omit key → preserve, '' → NULL (clear), non-empty string → set. COALESCE can't express
+  // "clear" because null and undefined both collapse to the existing-value branch.
+  const tlsCaParam =
+    patch.tlsCaCertificate === undefined
+      ? sql`${ldapConfig.tlsCaCertificate}`
+      : patch.tlsCaCertificate === ''
+        ? sql`NULL`
+        : sql`${patch.tlsCaCertificate}`;
   const result = await exec
     .update(ldapConfig)
     .set({
@@ -100,6 +114,7 @@ export const update = async (
       groupBaseDn: sql`COALESCE(${patch.groupBaseDn ?? null}, ${ldapConfig.groupBaseDn})`,
       groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
       roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
+      tlsCaCertificate: tlsCaParam,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(ldapConfig.id, 1))

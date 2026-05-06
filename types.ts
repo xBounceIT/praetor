@@ -197,6 +197,7 @@ export interface LdapConfig {
   groupBaseDn: string;
   groupFilter: string;
   roleMappings: LdapRoleMapping[];
+  tlsCaCertificate: string;
 }
 
 export type SmtpEncryption = 'insecure' | 'ssl' | 'tls';

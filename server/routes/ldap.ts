@@ -1,3 +1,4 @@
+import { X509Certificate } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
@@ -6,6 +7,45 @@ import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
+
+const TLS_CA_MAX_LENGTH = 32768;
+const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
+
+// Returns the patch fragment to merge into ldapRepo.update():
+//   - omitted body field   → {} (preserve existing column)
+//   - null / empty / blank → { tlsCaCertificate: '' } (clear the column)
+//   - non-empty PEM        → { tlsCaCertificate: <canonical PEM> }
+// AuthSettings.tsx does a lighter marker-only check for fast UI feedback;
+// this is the authoritative parse via X509Certificate.
+const parseTlsCaForPatch = (
+  raw: unknown,
+): { ok: true; patch: { tlsCaCertificate?: string } } | { ok: false; message: string } => {
+  if (raw === undefined) return { ok: true, patch: {} };
+  if (raw === null) return { ok: true, patch: { tlsCaCertificate: '' } };
+  if (typeof raw !== 'string') {
+    return { ok: false, message: 'tlsCaCertificate must be a string' };
+  }
+  if (raw.trim() === '') return { ok: true, patch: { tlsCaCertificate: '' } };
+  if (raw.length > TLS_CA_MAX_LENGTH) {
+    return { ok: false, message: `tlsCaCertificate exceeds ${TLS_CA_MAX_LENGTH} characters` };
+  }
+  const normalized = `${raw.replace(/\r\n/g, '\n').trim()}\n`;
+  const blocks = normalized.match(PEM_BLOCK_REGEX);
+  if (!blocks || blocks.length === 0) {
+    return {
+      ok: false,
+      message: 'tlsCaCertificate must be PEM-encoded with BEGIN/END CERTIFICATE markers',
+    };
+  }
+  for (const block of blocks) {
+    try {
+      new X509Certificate(block);
+    } catch {
+      return { ok: false, message: 'tlsCaCertificate is not a valid PEM certificate' };
+    }
+  }
+  return { ok: true, patch: { tlsCaCertificate: normalized } };
+};
 
 const roleMappingSchema = {
   type: 'object',
@@ -28,6 +68,7 @@ const ldapConfigSchema = {
     groupBaseDn: { type: 'string' },
     groupFilter: { type: 'string' },
     roleMappings: { type: 'array', items: roleMappingSchema },
+    tlsCaCertificate: { type: 'string' },
   },
   required: [
     'enabled',
@@ -39,6 +80,7 @@ const ldapConfigSchema = {
     'groupBaseDn',
     'groupFilter',
     'roleMappings',
+    'tlsCaCertificate',
   ],
 } as const;
 
@@ -54,6 +96,7 @@ const ldapConfigUpdateBodySchema = {
     groupBaseDn: { type: 'string' },
     groupFilter: { type: 'string' },
     roleMappings: { type: 'array', items: roleMappingSchema },
+    tlsCaCertificate: { type: ['string', 'null'], maxLength: TLS_CA_MAX_LENGTH },
   },
 } as const;
 
@@ -100,6 +143,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = request.body as {
+        enabled?: boolean;
+        serverUrl?: string;
+        baseDn?: string;
+        bindDn?: string;
+        bindPassword?: string;
+        userFilter?: string;
+        groupBaseDn?: string;
+        groupFilter?: string;
+        roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
+        tlsCaCertificate?: string | null;
+      };
       const {
         enabled,
         serverUrl,
@@ -110,18 +165,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupBaseDn,
         groupFilter,
         roleMappings,
-      } = request.body as {
-        enabled?: boolean;
-        serverUrl?: string;
-        baseDn?: string;
-        bindDn?: string;
-        bindPassword?: string;
-        userFilter?: string;
-        groupBaseDn?: string;
-        groupFilter?: string;
-        roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
-      };
+      } = body;
       const enabledValue = parseBoolean(enabled);
+      const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
+      if (!tlsCaResult.ok) {
+        return badRequest(reply, tlsCaResult.message);
+      }
       let normalizedUserFilter = userFilter;
 
       if (enabledValue) {
@@ -198,15 +247,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupBaseDn,
         groupFilter,
         roleMappings: validatedMappings,
+        ...tlsCaResult.patch,
       });
+
+      // Drop the cached config in the singleton LDAPService so the next
+      // authenticate()/syncUsers() call re-reads from the DB. Without this,
+      // any config change (CA cert, server URL, bind creds) would only
+      // take effect after a backend restart.
+      const ldapService = (await import('../services/ldap.ts')).default;
+      ldapService.invalidateConfig();
 
       await logAudit({
         request,
         action: 'ldap_config.updated',
         entityType: 'ldap_config',
-        details: {
-          secondaryLabel: updated.serverUrl,
-        },
+        details: { secondaryLabel: updated.serverUrl },
       });
       return updated;
     },

@@ -141,6 +141,13 @@
       "when": 1778019372919,
       "tag": "0019_add_quote_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778086299203,
+      "tag": "0020_add_ldap_ca_certificate",
+      "breakpoints": true
     }
   ]
 }
