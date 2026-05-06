@@ -265,6 +265,15 @@ const StandardTable = <T extends object>({
     [columns, hiddenColIds, getColId],
   );
 
+  // Rightmost non-sticky column absorbs leftover width. When the last column is
+  // sticky-right, this prevents that sticky column from expanding to fill space.
+  const stretchColumnIdx = useMemo(() => {
+    for (let i = visibleColumns.length - 1; i >= 0; i--) {
+      if (visibleColumns[i].sticky !== 'right') return i;
+    }
+    return -1;
+  }, [visibleColumns]);
+
   // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
 
@@ -1195,6 +1204,7 @@ const StandardTable = <T extends object>({
                     const isSorted = sortState?.colId === colId;
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === visibleColumns.length - 1;
+                    const isStretchColumn = colIdx === stretchColumnIdx;
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
                       ? 'left'
@@ -1213,7 +1223,7 @@ const StandardTable = <T extends object>({
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         <span className="inline-flex items-center gap-1">
                           <span>{col.header}</span>
@@ -1296,6 +1306,7 @@ const StandardTable = <T extends object>({
                         const val = getValue(row, col);
                         const isFirstColumn = colIdx === 0;
                         const isLastColumn = colIdx === visibleColumns.length - 1;
+                        const isStretchColumn = colIdx === stretchColumnIdx;
                         // Force alignment: first column left, last column right, otherwise use col.align
                         const effectiveAlign = isFirstColumn
                           ? 'left'
@@ -1317,7 +1328,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto text-right' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${!isLastRow ? 'border-b border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${!isLastRow ? 'border-b border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                           >
                             {col.sticky === 'right' ? (
                               <div className="flex justify-end items-center w-full h-full">

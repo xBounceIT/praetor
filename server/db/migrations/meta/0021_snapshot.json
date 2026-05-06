@@ -1,6 +1,6 @@
 {
-  "id": "77a71018-f80c-4530-b9a8-85dccf993adf",
-  "prevId": "33370702-59c0-4a67-bdef-a6f4eb6e7dae",
+  "id": "41920677-2aec-4861-a1d4-1762916a7667",
+  "prevId": "77a71018-f80c-4530-b9a8-85dccf993adf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1620,6 +1620,103 @@
         "chk_offer_versions_reason": {
           "name": "chk_offer_versions_reason",
           "value": "\"offer_versions\".\"reason\" IN ('update', 'restore')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.order_versions": {
+      "name": "order_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'update'"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_order_versions_order_id_created_at": {
+          "name": "idx_order_versions_order_id_created_at",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "order_versions_order_id_sales_id_fk": {
+          "name": "order_versions_order_id_sales_id_fk",
+          "tableFrom": "order_versions",
+          "tableTo": "sales",
+          "columnsFrom": ["order_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "order_versions_created_by_user_id_users_id_fk": {
+          "name": "order_versions_created_by_user_id_users_id_fk",
+          "tableFrom": "order_versions",
+          "tableTo": "users",
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_order_versions_reason": {
+          "name": "chk_order_versions_reason",
+          "value": "\"order_versions\".\"reason\" IN ('update', 'restore')"
         }
       },
       "isRLSEnabled": false

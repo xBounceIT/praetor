@@ -75,7 +75,7 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
 - **CDN-pinned deps**: see the importmap in `index.html`
-- **Tests**: `bun run test` (Bun test runner; suites under `server/test/`). Other layers still rely on manual testing.
+- **Tests**: `bun run test` runs both backend (`server/test/`) and frontend (`test/`) suites via the Bun test runner; frontend tests use `@testing-library/react`. **New features and bug fixes must ship with unit tests** that exercise the new behavior — backend tests under `server/test/` mirroring the source layout, frontend under `test/` (e.g. `test/components/Foo.test.tsx`). For bug fixes, the test should fail on the old code and pass on the fix. Manual testing supplements automated tests; it does not replace them.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: App runs on remote Docker containers — do not run commands locally for testing
 - **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
