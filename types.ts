@@ -601,6 +601,26 @@ export interface SupplierSaleOrder {
   updatedAt: number;
 }
 
+export type SupplierOrderVersionReason = 'update' | 'restore';
+
+export interface SupplierOrderVersionSnapshot {
+  schemaVersion: 1;
+  order: Omit<SupplierSaleOrder, 'items'>;
+  items: SupplierSaleOrderItem[];
+}
+
+export interface SupplierOrderVersionRow {
+  id: string;
+  orderId: string;
+  reason: SupplierOrderVersionReason;
+  createdByUserId: string | null;
+  createdAt: number;
+}
+
+export interface SupplierOrderVersion extends SupplierOrderVersionRow {
+  snapshot: SupplierOrderVersionSnapshot;
+}
+
 export interface SupplierInvoiceItem {
   id: string;
   invoiceId: string;

@@ -1,8 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
+import * as supplierOrderVersionsRepo from '../repositories/supplierOrderVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
+import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -175,6 +178,43 @@ const normalizeItems = (
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
+
+  const snapshotPreState = async (
+    orderId: string,
+    reason: supplierOrderVersionsRepo.SupplierOrderVersionReason,
+    request: FastifyRequest,
+    tx: DbExecutor,
+  ) => {
+    const pre = await supplierOrdersRepo.findFullForSnapshot(orderId, tx);
+    if (!pre) return;
+    await supplierOrderVersionsRepo.insert(
+      {
+        orderId,
+        snapshot: supplierOrderVersionsRepo.buildSnapshot(pre.order, pre.items),
+        reason,
+        createdByUserId: request.user?.id ?? null,
+      },
+      tx,
+    );
+  };
+
+  const findMissingSnapshotReference = async (
+    snapshot: supplierOrderVersionsRepo.SupplierOrderVersionSnapshot,
+  ): Promise<string | null> => {
+    const supplierExists = await suppliersRepo.existsById(snapshot.order.supplierId);
+    if (!supplierExists) {
+      return `Snapshot supplier "${snapshot.order.supplierId}" no longer exists`;
+    }
+
+    const productIds = snapshot.items
+      .map((item) => item.productId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    if (productIds.length === 0) return null;
+
+    const products = await productsRepo.getSnapshots(productIds);
+    const missingProductId = productIds.find((id) => !products.has(id));
+    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+  };
 
   fastify.get(
     '/',
@@ -488,10 +528,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
+      const shouldSnapshot = hasLockedFieldUpdates || status !== undefined;
+
       let updated: supplierOrdersRepo.SupplierOrder | null;
       let resultItems: supplierOrdersRepo.SupplierOrderItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
+          if (shouldSnapshot) {
+            await snapshotPreState(idResult.value, 'update', request, tx);
+          }
           const order = await supplierOrdersRepo.update(idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
           const finalItems = normalizedItems
@@ -530,6 +575,209 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         ...updated,
         items: resultItems,
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------
+  // Version history
+  // ---------------------------------------------------------------------------------------
+
+  const versionParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      versionId: { type: 'string' },
+    },
+    required: ['id', 'versionId'],
+  } as const;
+
+  const orderVersionRowSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      orderId: { type: 'string' },
+      reason: { type: 'string', enum: ['update', 'restore'] },
+      createdByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'orderId', 'reason', 'createdAt'],
+  } as const;
+
+  const orderVersionSchema = {
+    type: 'object',
+    properties: { ...orderVersionRowSchema.properties, snapshot: {} },
+    required: [...orderVersionRowSchema.required, 'snapshot'],
+  } as const;
+
+  // GET /:id/versions - List versions for an order
+  fastify.get(
+    '/:id/versions',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.supplier_orders.view'),
+      ],
+      schema: {
+        tags: ['supplier-orders'],
+        summary: 'List versions for a supplier sale order',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: orderVersionRowSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const [exists, versions] = await Promise.all([
+        supplierOrdersRepo.existsById(idResult.value),
+        supplierOrderVersionsRepo.listForOrder(idResult.value),
+      ]);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+      return versions;
+    },
+  );
+
+  // GET /:id/versions/:versionId - Get a single version with its snapshot
+  fastify.get(
+    '/:id/versions/:versionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.supplier_orders.view'),
+      ],
+      schema: {
+        tags: ['supplier-orders'],
+        summary: 'Get a single supplier sale order version',
+        params: versionParamSchema,
+        response: {
+          200: orderVersionSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const version = await supplierOrderVersionsRepo.findById(
+        idResult.value,
+        versionIdResult.value,
+      );
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      return version;
+    },
+  );
+
+  // POST /:id/versions/:versionId/restore - Atomic restore (snapshots current first)
+  fastify.post(
+    '/:id/versions/:versionId/restore',
+    {
+      onRequest: [requirePermission('accounting.supplier_orders.update')],
+      schema: {
+        tags: ['supplier-orders'],
+        summary: 'Restore a supplier sale order to a prior version',
+        params: versionParamSchema,
+        response: {
+          200: orderSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const [linkedInvoiceId, current, version] = await Promise.all([
+        supplierOrdersRepo.findLinkedInvoiceId(idResult.value),
+        supplierOrdersRepo.findExistingForUpdate(idResult.value),
+        supplierOrderVersionsRepo.findById(idResult.value, versionIdResult.value),
+      ]);
+
+      if (linkedInvoiceId) {
+        return reply
+          .code(409)
+          .send({ error: 'Cannot restore an order once an invoice has been created from it' });
+      }
+      if (!current) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+      if (current.status !== 'draft') {
+        return reply
+          .code(409)
+          .send({ error: 'Non-draft orders are read-only', currentStatus: current.status });
+      }
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
+      if (missingSnapshotReference) {
+        return reply.code(409).send({ error: missingSnapshotReference });
+      }
+
+      const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
+        ({ orderId: _o, ...rest }) => ({
+          ...rest,
+          id: generateItemId('ssi-'),
+          // Empty-string productIds slip through some snapshots; the DB column needs NULL.
+          productId: rest.productId || null,
+        }),
+      );
+
+      const restored = await withDbTransaction(async (tx) => {
+        await snapshotPreState(idResult.value, 'restore', request, tx);
+
+        const order = await supplierOrdersRepo.restoreSnapshotOrder(
+          idResult.value,
+          {
+            supplierId: version.snapshot.order.supplierId,
+            supplierName: version.snapshot.order.supplierName,
+            paymentTerms: version.snapshot.order.paymentTerms,
+            discount: version.snapshot.order.discount,
+            discountType: version.snapshot.order.discountType,
+            status: version.snapshot.order.status,
+            notes: version.snapshot.order.notes,
+          },
+          tx,
+        );
+        if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+        const items = await supplierOrdersRepo.replaceItems(order.id, snapshotItems, tx);
+        return { order, items };
+      });
+
+      if (!restored.order) {
+        return reply.code(404).send({ error: 'Order not found' });
+      }
+
+      await logAudit({
+        request,
+        action: 'supplier_order.restored',
+        entityType: 'supplier_order',
+        entityId: restored.order.id,
+        details: {
+          targetLabel: restored.order.id,
+          secondaryLabel: restored.order.supplierName,
+          toValue: versionIdResult.value,
+        },
+      });
+
+      return {
+        ...restored.order,
+        items: restored.items,
       };
     },
   );

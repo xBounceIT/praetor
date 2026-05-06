@@ -21,6 +21,7 @@ export * from './roles.ts';
 export * from './sales.ts';
 export * from './settings.ts';
 export * from './supplierInvoices.ts';
+export * from './supplierOrderVersions.ts';
 export * from './supplierQuotes.ts';
 export * from './supplierSales.ts';
 export * from './suppliers.ts';
