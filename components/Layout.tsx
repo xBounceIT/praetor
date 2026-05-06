@@ -672,7 +672,7 @@ const Layout: React.FC<LayoutProps> = ({
       </nav>
 
       <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-slate-800 capitalize flex items-center gap-3">
             <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
             {isNotFound

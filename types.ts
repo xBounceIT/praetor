@@ -604,6 +604,26 @@ export interface SupplierQuote {
   updatedAt: number;
 }
 
+export type SupplierQuoteVersionReason = 'update' | 'restore';
+
+export interface SupplierQuoteVersionSnapshot {
+  schemaVersion: 1;
+  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId'>;
+  items: SupplierQuoteItem[];
+}
+
+export interface SupplierQuoteVersionRow {
+  id: string;
+  quoteId: string;
+  reason: SupplierQuoteVersionReason;
+  createdByUserId: string | null;
+  createdAt: number;
+}
+
+export interface SupplierQuoteVersion extends SupplierQuoteVersionRow {
+  snapshot: SupplierQuoteVersionSnapshot;
+}
+
 export interface SupplierSaleOrderItem {
   id: string;
   orderId: string;

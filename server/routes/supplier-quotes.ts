@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
+import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
+import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -172,6 +175,50 @@ const validateAndNormalizeItems = (
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
+
+  const snapshotPreState = async (
+    quoteId: string,
+    reason: supplierQuoteVersionsRepo.SupplierQuoteVersionReason,
+    request: FastifyRequest,
+    tx: DbExecutor,
+  ) => {
+    const pre = await supplierQuotesRepo.findFullForSnapshot(quoteId, tx);
+    if (!pre) return;
+    await supplierQuoteVersionsRepo.insert(
+      {
+        quoteId,
+        snapshot: supplierQuoteVersionsRepo.buildSnapshot(pre.quote, pre.items),
+        reason,
+        createdByUserId: request.user?.id ?? null,
+      },
+      tx,
+    );
+  };
+
+  const findMissingSnapshotReference = async (
+    snapshot: supplierQuoteVersionsRepo.SupplierQuoteVersionSnapshot,
+  ): Promise<string | null> => {
+    const productIds = Array.from(
+      new Set(
+        snapshot.items
+          .map((item) => item.productId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+
+    const [supplier, products] = await Promise.all([
+      suppliersRepo.findById(snapshot.quote.supplierId),
+      productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(null),
+    ]);
+
+    if (!supplier) {
+      return `Snapshot supplier "${snapshot.quote.supplierId}" no longer exists`;
+    }
+    if (!products) return null;
+
+    const missingProductId = productIds.find((id) => !products.has(id));
+    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+  };
 
   fastify.get(
     '/',
@@ -355,6 +402,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate === undefined &&
         notes === undefined;
 
+      const hasContentUpdate =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        status !== undefined ||
+        expirationDate !== undefined ||
+        notes !== undefined;
+
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
       if (supplierId !== undefined) {
@@ -415,6 +471,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
+          // Snapshot only when the patch carries actual content. ID-only renames cascade
+          // through the FK without altering snapshot fields, and empty PUTs are no-ops in
+          // `update()` — both would otherwise create misleading "Save" rows.
+          if (hasContentUpdate) {
+            await snapshotPreState(idResult.value, 'update', request, tx);
+          }
           const quote = await supplierQuotesRepo.update(idResult.value, patch, tx);
           if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
           const finalItems = normalizedItems
@@ -449,6 +511,204 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         ...projectQuote(updated),
         items: resultItems.map(projectItem),
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------
+  // Version history
+  // ---------------------------------------------------------------------------------------
+
+  const versionParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      versionId: { type: 'string' },
+    },
+    required: ['id', 'versionId'],
+  } as const;
+
+  const supplierQuoteVersionRowSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      quoteId: { type: 'string' },
+      reason: { type: 'string', enum: ['update', 'restore'] },
+      createdByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'quoteId', 'reason', 'createdAt'],
+  } as const;
+
+  const supplierQuoteVersionSchema = {
+    type: 'object',
+    properties: { ...supplierQuoteVersionRowSchema.properties, snapshot: {} },
+    required: [...supplierQuoteVersionRowSchema.required, 'snapshot'],
+  } as const;
+
+  fastify.get(
+    '/:id/versions',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.supplier_quotes.view'),
+      ],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'List versions for a supplier quote',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: supplierQuoteVersionRowSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const [exists, versions] = await Promise.all([
+        supplierQuotesRepo.existsById(idResult.value),
+        supplierQuoteVersionsRepo.listForQuote(idResult.value),
+      ]);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+      return versions;
+    },
+  );
+
+  fastify.get(
+    '/:id/versions/:versionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.supplier_quotes.view'),
+      ],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'Get a single supplier quote version',
+        params: versionParamSchema,
+        response: {
+          200: supplierQuoteVersionSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const version = await supplierQuoteVersionsRepo.findById(
+        idResult.value,
+        versionIdResult.value,
+      );
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      return version;
+    },
+  );
+
+  fastify.post(
+    '/:id/versions/:versionId/restore',
+    {
+      onRequest: [requirePermission('sales.supplier_quotes.update')],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'Restore a supplier quote to a prior version',
+        params: versionParamSchema,
+        response: {
+          200: supplierQuoteSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, versionId } = request.params as { id: string; versionId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
+
+      const [linkedOrderId, exists, version] = await Promise.all([
+        supplierQuotesRepo.findLinkedOrderId(idResult.value),
+        supplierQuotesRepo.existsById(idResult.value),
+        supplierQuoteVersionsRepo.findById(idResult.value, versionIdResult.value),
+      ]);
+
+      if (linkedOrderId) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      }
+      if (!exists) {
+        return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+      if (!version) {
+        return reply.code(404).send({ error: 'Version not found' });
+      }
+      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
+      if (missingSnapshotReference) {
+        return reply.code(409).send({ error: missingSnapshotReference });
+      }
+      const snapshotExpirationDate = version.snapshot.quote.expirationDate;
+      if (!snapshotExpirationDate) {
+        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
+      }
+
+      const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
+        ({ quoteId: _q, ...rest }) => ({
+          ...rest,
+          id: generateItemId('sqi-'),
+          productId: rest.productId || null,
+          unitType: rest.unitType ?? 'unit',
+          note: rest.note ?? null,
+        }),
+      );
+
+      const restored = await withDbTransaction(async (tx) => {
+        // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
+        await snapshotPreState(idResult.value, 'restore', request, tx);
+
+        const quote = await supplierQuotesRepo.restoreSnapshotQuote(
+          idResult.value,
+          {
+            supplierId: version.snapshot.quote.supplierId,
+            supplierName: version.snapshot.quote.supplierName,
+            paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
+            status: version.snapshot.quote.status,
+            expirationDate: snapshotExpirationDate,
+            notes: version.snapshot.quote.notes,
+          },
+          tx,
+        );
+        if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+        const items = await supplierQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
+        return { quote, items };
+      });
+
+      if (!restored.quote) {
+        return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+
+      await logAudit({
+        request,
+        action: 'supplier_quote.restored',
+        entityType: 'supplier_quote',
+        entityId: restored.quote.id,
+        details: {
+          targetLabel: restored.quote.id,
+          secondaryLabel: restored.quote.supplierName,
+          toValue: versionIdResult.value,
+        },
+      });
+
+      return {
+        ...projectQuote(restored.quote),
+        items: restored.items.map(projectItem),
       };
     },
   );
