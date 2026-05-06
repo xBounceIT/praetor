@@ -40,4 +40,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_customer_offers_offer_code_version"
 	ON "customer_offers" USING btree ("offer_code","version_number");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_customer_offers_latest_version_group"
 	ON "customer_offers" USING btree ("version_group_id")
+	WHERE "is_latest" = true;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_customer_offers_linked_quote_latest"
+	ON "customer_offers" USING btree ("linked_quote_id")
 	WHERE "is_latest" = true;

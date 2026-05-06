@@ -292,6 +292,10 @@ const isOfferVersionUniqueViolation = (dup: ReturnType<typeof getUniqueViolation
   dup?.detail?.includes('(offer_code, version_number)') ||
   dup?.detail?.includes('(version_group_id)');
 
+const isOfferLinkedQuoteUniqueViolation = (dup: ReturnType<typeof getUniqueViolation>) =>
+  dup?.constraint === 'idx_customer_offers_linked_quote_latest' ||
+  dup?.detail?.includes('(linked_quote_id)');
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -446,6 +450,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Offer ID already exists' });
         }
+        if (isOfferLinkedQuoteUniqueViolation(dup)) {
+          return reply.code(409).send({ error: 'An offer already exists for this quote' });
+        }
         if (isOfferVersionUniqueViolation(dup)) {
           return reply.code(409).send({ error: 'Offer version already exists' });
         }
@@ -528,7 +535,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discount: source.discount,
               discountType: source.discountType,
               status: 'draft',
-              expirationDate: source.expirationDate ?? new Date().toISOString().slice(0, 10),
+              expirationDate: new Date().toISOString().slice(0, 10),
               notes: source.notes,
             },
             tx,

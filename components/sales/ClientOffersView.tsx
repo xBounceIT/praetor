@@ -321,11 +321,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       ),
     },
     {
-      header: 'id',
-      accessorKey: 'id',
-      hidden: true,
-    },
-    {
       header: t('crm:clients.tableHeaders.insertDate'),
       id: 'createdAt',
       accessorFn: (row) => row.createdAt ?? 0,
@@ -772,10 +767,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       return;
     }
 
+    const { id: _omitId, offerCode: rawOfferCode, ...rest } = formData;
     const payload: Partial<ClientOffer> = {
-      ...formData,
-      id: undefined,
-      offerCode: editingOffer ? undefined : formData.offerCode?.trim(),
+      ...rest,
       discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
@@ -783,6 +777,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         productCost: Number(item.productCost ?? 0),
       })),
     };
+    if (!editingOffer) {
+      payload.offerCode = rawOfferCode?.trim();
+    }
 
     if (editingOffer) {
       await onUpdateOffer(editingOffer.id, payload);

@@ -805,6 +805,22 @@
           "method": "btree",
           "with": {}
         },
+        "idx_customer_offers_linked_quote_latest": {
+          "name": "idx_customer_offers_linked_quote_latest",
+          "columns": [
+            {
+              "expression": "linked_quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"customer_offers\".\"is_latest\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_customer_offers_linked_quote_id": {
           "name": "idx_customer_offers_linked_quote_id",
           "columns": [
