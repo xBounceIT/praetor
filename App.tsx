@@ -2127,7 +2127,14 @@ const App: React.FC = () => {
                     // then refetch the whole flow because restore can also delete draft
                     // linked sales server-side.
                     setQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
-                    await refreshClientQuoteFlow();
+                    const [quotesData, offersData, ordersData] = await Promise.all([
+                      api.quotes.list(),
+                      api.clientOffers.list(),
+                      api.clientsOrders.list(),
+                    ]);
+                    setQuotes(quotesData);
+                    setClientOffers(offersData);
+                    setClientsOrders(ordersData);
                   }}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
