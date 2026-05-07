@@ -7,6 +7,7 @@ import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
+import { formatLocalDateOnly } from '../../utils/date.ts';
 import { ForeignKeyError } from '../../utils/http-errors.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -339,6 +340,7 @@ describe('POST /api/tasks', () => {
     createMock.mockResolvedValue({ ...SAMPLE_TASK, isRecurring: true });
     findClientIdMock.mockResolvedValue(null);
 
+    const expectedToday = formatLocalDateOnly(new Date());
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/tasks',
@@ -353,7 +355,7 @@ describe('POST /api/tasks', () => {
 
     expect(res.statusCode).toBe(201);
     const call = createMock.mock.calls[0][0] as { recurrenceStart: string };
-    expect(call.recurrenceStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(call.recurrenceStart).toBe(expectedToday);
     // No client → no client cascades
     expect(assignClientToUserMock).not.toHaveBeenCalled();
     expect(assignClientToTopManagersMock).not.toHaveBeenCalled();
