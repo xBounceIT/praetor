@@ -76,6 +76,30 @@ describe('getTimesheetsSection', () => {
     );
     expect(result.totals.avgEntryHours).toBe(0);
   });
+
+  test('top* / byMonth / byLocation rows are mapped through helpers', async () => {
+    // Promise.all order: totals, topUsers, topClients, topProjects, topTasks, byMonth, byLocation.
+    exec.enqueue({ rows: [{ hours: '10', entry_count: '1', total_cost: '50' }] });
+    exec.enqueue({ rows: [{ label: 'Alice', value: '8', entry_count: '4' }] });
+    exec.enqueue({ rows: [{ label: 'Acme', value: '6', entry_count: '3' }] });
+    exec.enqueue({ rows: [{ label: 'Phoenix', value: '5', entry_count: '2' }] });
+    exec.enqueue({ rows: [{ label: 'Implement', value: '4', entry_count: '1' }] });
+    exec.enqueue({
+      rows: [{ label: '2026-01', hours: '10', entry_count: '1', total_cost: '50' }],
+    });
+    exec.enqueue({ rows: [{ location: 'office', hours: '7', entry_count: '2' }] });
+
+    const result = await repo.getTimesheetsSection(
+      { fromDate: FROM, toDate: TO, allowedTimesheetUserIds: null, topLimit: 10 },
+      testDb,
+    );
+    expect(result.topHoursByUser).toEqual([{ label: 'Alice', value: 8, entryCount: 4 }]);
+    expect(result.topHoursByClient).toEqual([{ label: 'Acme', value: 6, entryCount: 3 }]);
+    expect(result.topHoursByProject).toEqual([{ label: 'Phoenix', value: 5, entryCount: 2 }]);
+    expect(result.topHoursByTask).toEqual([{ label: 'Implement', value: 4, entryCount: 1 }]);
+    expect(result.byMonth).toEqual([{ label: '2026-01', hours: 10, entryCount: 1, cost: 50 }]);
+    expect(result.byLocation).toEqual([{ location: 'office', hours: 7, entryCount: 2 }]);
+  });
 });
 
 describe('getProjectsSection', () => {
@@ -214,6 +238,47 @@ describe('getProjectsSection', () => {
     expect(exec.calls[0].params).toEqual(['u1']);
     expect(exec.calls[1].params).toEqual(['u1', 50]);
   });
+
+  test('items rows are mapped through toDbText/Boolean coercion', async () => {
+    exec.enqueue({ rows: [{ count: '1', disabled_count: '0' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'p1',
+          name: 'Phoenix',
+          client_id: 'c1',
+          client_name: 'Acme',
+          description: 'desc',
+          is_disabled: false,
+        },
+      ],
+    });
+    exec.enqueue({ rows: [] });
+    const result = await repo.getProjectsSection(
+      {
+        viewerId: 'u1',
+        fromDate: FROM,
+        toDate: TO,
+        canViewAllProjects: true,
+        canViewTimesheets: true,
+        canViewAllTimesheets: true,
+        allowedTimesheetUserIds: null,
+        itemsLimit: 50,
+        topLimit: 10,
+      },
+      testDb,
+    );
+    expect(result.items).toEqual([
+      {
+        id: 'p1',
+        name: 'Phoenix',
+        clientId: 'c1',
+        clientName: 'Acme',
+        description: 'desc',
+        isDisabled: false,
+      },
+    ]);
+  });
 });
 
 describe('getTasksSection', () => {
@@ -301,6 +366,50 @@ describe('getTasksSection', () => {
       disabledCount: 1,
       recurringCount: 3,
     });
+  });
+
+  test('items + topByHours rows are mapped through helpers', async () => {
+    exec.enqueue({ rows: [{ count: '1', disabled_count: '0', recurring_count: '1' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 't1',
+          name: 'Build',
+          project_id: 'p1',
+          project_name: 'Phoenix',
+          is_disabled: false,
+          is_recurring: true,
+          recurrence_pattern: 'weekly',
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ label: 'Build', hours: '12.5', entry_count: '3' }] });
+    const result = await repo.getTasksSection(
+      {
+        viewerId: 'u1',
+        fromDate: FROM,
+        toDate: TO,
+        canViewAllTasks: true,
+        canViewTimesheets: true,
+        canViewAllTimesheets: true,
+        allowedTimesheetUserIds: null,
+        itemsLimit: 50,
+        topLimit: 10,
+      },
+      testDb,
+    );
+    expect(result.items).toEqual([
+      {
+        id: 't1',
+        name: 'Build',
+        projectId: 'p1',
+        projectName: 'Phoenix',
+        isDisabled: false,
+        isRecurring: true,
+        recurrencePattern: 'weekly',
+      },
+    ]);
+    expect(result.topByHours).toEqual([{ label: 'Build', value: 12.5, entryCount: 3 }]);
   });
 
   // The !canViewAllTasks branches funnel through `timeEntriesTasksJoin` (defined in tasksRepo).

@@ -197,3 +197,154 @@ describe('deleteById', () => {
     expect(await supplierOrdersRepo.deleteById('so-x', testDb)).toBe(false);
   });
 });
+
+describe('listAllItems', () => {
+  test('orders items by created_at ASC and maps fields', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await supplierOrdersRepo.listAllItems(testDb);
+    expect(exec.calls[0].sql).toContain('order by "supplier_sale_items"."created_at" asc');
+    expect(result[0].id).toBe('ssi-1');
+    expect(result[0].orderId).toBe('so-1');
+    expect(result[0].quantity).toBe(1);
+  });
+});
+
+describe('existsById', () => {
+  test('returns true when row exists', async () => {
+    exec.enqueue({ rows: [['so-1']] });
+    expect(await supplierOrdersRepo.existsById('so-1', testDb)).toBe(true);
+  });
+
+  test('returns false when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierOrdersRepo.existsById('so-x', testDb)).toBe(false);
+  });
+});
+
+describe('findItemsForOrder', () => {
+  test('selects items filtered by orderId and maps them', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await supplierOrdersRepo.findItemsForOrder('so-1', testDb);
+    expect(exec.calls[0].sql).toContain('from "supplier_sale_items"');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('ssi-1');
+  });
+});
+
+describe('findFullForSnapshot', () => {
+  test('returns order and items when order exists', async () => {
+    // Promise.all dispatches `findItemsForOrder(id)` first (its async body runs to its first
+    // await before the sibling thenable is consumed), so the items query dequeues first.
+    exec.enqueue({ rows: [itemRow()] });
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await supplierOrdersRepo.findFullForSnapshot('so-1', testDb);
+    expect(result).not.toBeNull();
+    expect(result?.order.id).toBe('so-1');
+    expect(result?.items).toHaveLength(1);
+  });
+
+  test('returns null when order not found', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await supplierOrdersRepo.findFullForSnapshot('so-x', testDb)).toBeNull();
+  });
+});
+
+describe('findExistingByLinkedQuote', () => {
+  test('returns id when found', async () => {
+    exec.enqueue({ rows: [['so-1']] });
+    expect(await supplierOrdersRepo.findExistingByLinkedQuote('q-1', testDb)).toBe('so-1');
+    expect(exec.calls[0].params).toContain('q-1');
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierOrdersRepo.findExistingByLinkedQuote('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('create', () => {
+  test('inserts and returns mapped order', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await supplierOrdersRepo.create(
+      {
+        id: 'so-1',
+        linkedQuoteId: 'q-1',
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 5,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain('insert into "supplier_sales"');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(exec.calls[0].params).toContain('q-1');
+    expect(exec.calls[0].params).toContain('Acme');
+    expect(result.id).toBe('so-1');
+  });
+});
+
+describe('restoreSnapshotOrder', () => {
+  test('updates with snapshot fields and returns mapped order', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await supplierOrdersRepo.restoreSnapshotOrder(
+      'so-1',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 5,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: 'restored',
+      },
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain('update "supplier_sales"');
+    expect(exec.calls[0].sql).toContain('CURRENT_TIMESTAMP');
+    expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(result?.id).toBe('so-1');
+  });
+
+  test('falls back to "immediate" paymentTerms when snapshot.paymentTerms is null', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await supplierOrdersRepo.restoreSnapshotOrder(
+      'so-1',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: null,
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].params).toContain('immediate');
+  });
+
+  test('returns null when no row updated', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await supplierOrdersRepo.restoreSnapshotOrder(
+      'so-x',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(result).toBeNull();
+  });
+});

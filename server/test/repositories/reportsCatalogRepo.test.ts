@@ -83,6 +83,85 @@ describe('getSuppliersSection', () => {
       },
     ]);
   });
+
+  test('product stats branch fires only when canListProducts; rows map per-supplier', async () => {
+    exec.enqueue({ rows: [{ count: '1', disabled_count: '0' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 's1',
+          name: 'ACorp',
+          supplier_code: null,
+          contact_name: null,
+          email: null,
+          phone: null,
+          address: null,
+          is_disabled: false,
+        },
+      ],
+    });
+    // Promise.all order: quoteStatsPromise (null) then productStatsPromise.
+    exec.enqueue({
+      rows: [
+        { supplier_id: 's1', product_count: '7' },
+        { supplier_id: 'unknown', product_count: '99' },
+      ],
+    });
+    const result = await repo.getSuppliersSection(
+      {
+        fromDate: FROM,
+        toDate: TO,
+        canViewSupplierQuotes: false,
+        canListProducts: true,
+        itemsLimit: 50,
+      },
+      testDb,
+    );
+    expect(exec.calls).toHaveLength(3);
+    expect(result.activitySummary).toEqual([
+      {
+        supplierId: 's1',
+        quotesCount: null,
+        quotesNet: null,
+        productsCount: 7,
+      },
+    ]);
+  });
+
+  test('quote stats rows for unknown supplier_ids are silently ignored', async () => {
+    exec.enqueue({ rows: [{ count: '1', disabled_count: '0' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 's1',
+          name: 'ACorp',
+          supplier_code: null,
+          contact_name: null,
+          email: null,
+          phone: null,
+          address: null,
+          is_disabled: false,
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ supplier_id: 'unknown', quote_count: '99', net_value: '999' }] });
+    const result = await repo.getSuppliersSection(
+      {
+        fromDate: FROM,
+        toDate: TO,
+        canViewSupplierQuotes: true,
+        canListProducts: false,
+        itemsLimit: 50,
+      },
+      testDb,
+    );
+    expect(result.activitySummary[0]).toEqual({
+      supplierId: 's1',
+      quotesCount: null,
+      quotesNet: null,
+      productsCount: null,
+    });
+  });
 });
 
 describe('getSupplierQuotesSection', () => {
@@ -136,6 +215,23 @@ describe('getSupplierQuotesSection', () => {
       },
     ]);
   });
+
+  test('byMonth/byStatus/topSuppliersByNet rows are mapped through helpers', async () => {
+    // Promise.all order: totals, byStatus, byMonth, topSuppliers, topQuotes.
+    exec.enqueue({ rows: [{ count: '0', total_net: '0', avg_net: '0' }] });
+    exec.enqueue({ rows: [{ status: 'sent', count: '4', total_net: '900' }] });
+    exec.enqueue({ rows: [{ label: '2026-01', count: '4', total_net: '900' }] });
+    exec.enqueue({ rows: [{ label: 'ACorp', quote_count: '4', value: '900' }] });
+    exec.enqueue({ rows: [] });
+
+    const result = await repo.getSupplierQuotesSection(
+      { fromDate: FROM, toDate: TO, topLimit: 10 },
+      testDb,
+    );
+    expect(result.byStatus).toEqual([{ status: 'sent', count: 4, totalNet: 900 }]);
+    expect(result.byMonth).toEqual([{ label: '2026-01', count: 4, totalNet: 900 }]);
+    expect(result.topSuppliersByNet).toEqual([{ label: 'ACorp', value: 900, quoteCount: 4 }]);
+  });
 });
 
 describe('getCatalogSection', () => {
@@ -171,5 +267,43 @@ describe('getCatalogSection', () => {
     const usageCall = exec.calls.find((c) => c.sql.includes('WITH usage_rows'));
     expect(usageCall?.params).toEqual([FROM, TO, FROM, TO, FROM, TO, 8]);
     expect(usageCall?.sql).toContain('LIMIT $7');
+  });
+
+  test('byType / byCategory / bySubcategory / productsBySupplier / top* rows are mapped through helpers', async () => {
+    // Promise.all order: counts, byType, byCategory, bySubcategory, productsBySupplier,
+    // topProductsByUsage, topProductsByRevenue.
+    exec.enqueue({
+      rows: [{ internal_count: '0', external_count: '0', disabled_count: '0' }],
+    });
+    exec.enqueue({ rows: [{ label: 'service', value: '5' }] });
+    exec.enqueue({ rows: [{ label: 'consulting', value: '4' }] });
+    exec.enqueue({ rows: [{ label: 'training', value: '3' }] });
+    exec.enqueue({ rows: [{ label: 'ACorp', value: '2' }] });
+    exec.enqueue({
+      rows: [
+        {
+          product_id: 'p1',
+          product_name: 'Widget',
+          usage_count: '7',
+          quantity_total: '15',
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ product_id: 'p2', product_name: 'Gadget', value: '420' }] });
+
+    const result = await repo.getCatalogSection(
+      { fromDate: FROM, toDate: TO, topLimit: 10 },
+      testDb,
+    );
+    expect(result.byType).toEqual([{ label: 'service', value: 5 }]);
+    expect(result.byCategory).toEqual([{ label: 'consulting', value: 4 }]);
+    expect(result.bySubcategory).toEqual([{ label: 'training', value: 3 }]);
+    expect(result.productsBySupplierCount).toEqual([{ label: 'ACorp', value: 2 }]);
+    expect(result.topProductsByUsage).toEqual([
+      { productId: 'p1', productName: 'Widget', usageCount: 7, quantity: 15 },
+    ]);
+    expect(result.topProductsByRevenue).toEqual([
+      { productId: 'p2', productName: 'Gadget', value: 420 },
+    ]);
   });
 });
