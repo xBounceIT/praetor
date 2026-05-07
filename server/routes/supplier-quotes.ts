@@ -2,13 +2,22 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as supplierQuoteAttachmentsRepo from '../repositories/supplierQuoteAttachmentsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import { generateItemId } from '../utils/order-ids.ts';
+import {
+  ATTACHMENT_MAX_BYTES,
+  deleteSupplierQuoteAttachment,
+  isAllowedAttachment,
+  openSupplierQuoteAttachment,
+  saveSupplierQuoteAttachment,
+} from '../utils/fileStorage.ts';
+import { createChildLogger } from '../utils/logger.ts';
+import { generateItemId, generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -713,6 +722,307 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // ---------------------------------------------------------------------------------------
+  // Attachments
+  // ---------------------------------------------------------------------------------------
+
+  const attachmentsLogger = createChildLogger({ module: 'supplier-quote-attachments' });
+
+  const attachmentParamSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      attachmentId: { type: 'string' },
+    },
+    required: ['id', 'attachmentId'],
+  } as const;
+
+  const supplierQuoteAttachmentSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      quoteId: { type: 'string' },
+      fileName: { type: 'string' },
+      mimeType: { type: 'string' },
+      fileSize: { type: 'number' },
+      uploadedByUserId: { type: ['string', 'null'] },
+      createdAt: { type: 'number' },
+    },
+    required: ['id', 'quoteId', 'fileName', 'mimeType', 'fileSize', 'createdAt'],
+  } as const;
+
+  const projectAttachment = (attachment: supplierQuoteAttachmentsRepo.SupplierQuoteAttachment) => ({
+    id: attachment.id,
+    quoteId: attachment.quoteId,
+    fileName: attachment.fileName,
+    mimeType: attachment.mimeType,
+    fileSize: attachment.fileSize,
+    uploadedByUserId: attachment.uploadedByUserId,
+    createdAt: attachment.createdAt,
+  });
+
+  // Mutation guard mirrors the existing supplier-quote edit rules: only `draft` quotes that
+  // are not yet linked to an order may be modified. Returns the quote on success, or sends
+  // the appropriate error response and returns null.
+  const assertQuoteEditableForAttachments = async (
+    id: string,
+    reply: FastifyReply,
+  ): Promise<supplierQuotesRepo.SupplierQuote | null> => {
+    const quote = await supplierQuotesRepo.findById(id);
+    if (!quote) {
+      reply.code(404).send({ error: 'Supplier quote not found' });
+      return null;
+    }
+    const status = normalizeSupplierQuoteStatus(quote.status);
+    if (status !== 'draft') {
+      reply.code(409).send({ error: 'Attachments can only be modified on draft supplier quotes' });
+      return null;
+    }
+    const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(id);
+    if (linkedOrderId) {
+      reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      return null;
+    }
+    return quote;
+  };
+
+  fastify.get(
+    '/:id/attachments',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.supplier_quotes.view'),
+      ],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'List attachments for a supplier quote',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: supplierQuoteAttachmentSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const exists = await supplierQuotesRepo.existsById(idResult.value);
+      if (!exists) {
+        return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+      const attachments = await supplierQuoteAttachmentsRepo.listForQuote(idResult.value);
+      return attachments.map(projectAttachment);
+    },
+  );
+
+  fastify.post(
+    '/:id/attachments',
+    {
+      onRequest: [requirePermission('sales.supplier_quotes.update')],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'Upload an attachment to a supplier quote',
+        params: idParamSchema,
+        consumes: ['multipart/form-data'],
+        response: {
+          201: supplierQuoteAttachmentSchema,
+          ...standardErrorResponses,
+          413: { type: 'object', properties: { error: { type: 'string' } }, required: ['error'] },
+          415: { type: 'object', properties: { error: { type: 'string' } }, required: ['error'] },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!request.isMultipart()) {
+        return reply.code(400).send({ error: 'Request must be multipart/form-data' });
+      }
+
+      const quote = await assertQuoteEditableForAttachments(idResult.value, reply);
+      if (!quote) return;
+
+      let uploaded: { storedName: string; size: number } | null = null;
+      try {
+        const part = await request.file();
+        if (!part) {
+          return reply.code(400).send({ error: 'A file is required' });
+        }
+
+        const originalName = part.filename?.trim();
+        if (!originalName) {
+          return reply.code(400).send({ error: 'Uploaded file is missing a filename' });
+        }
+
+        const mimeType = part.mimetype || 'application/octet-stream';
+        if (!isAllowedAttachment(mimeType, originalName)) {
+          return reply
+            .code(415)
+            .send({ error: 'File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.' });
+        }
+
+        let buffer: Buffer;
+        try {
+          buffer = await part.toBuffer();
+        } catch (err) {
+          if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
+            return reply.code(413).send({ error: 'File exceeds the 10 MB upload limit' });
+          }
+          throw err;
+        }
+
+        if (buffer.byteLength > ATTACHMENT_MAX_BYTES) {
+          return reply.code(413).send({ error: 'File exceeds the 10 MB upload limit' });
+        }
+        if (buffer.byteLength === 0) {
+          return reply.code(400).send({ error: 'Uploaded file is empty' });
+        }
+
+        uploaded = await saveSupplierQuoteAttachment(buffer, originalName);
+
+        const attachment = await supplierQuoteAttachmentsRepo.insert({
+          id: generatePrefixedId('sqa'),
+          quoteId: idResult.value,
+          fileName: originalName,
+          storedName: uploaded.storedName,
+          mimeType,
+          fileSize: uploaded.size,
+          uploadedByUserId: request.user?.id ?? null,
+        });
+
+        await logAudit({
+          request,
+          action: 'supplier_quote_attachment.uploaded',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: {
+            targetLabel: attachment.fileName,
+            secondaryLabel: quote.supplierName,
+          },
+        });
+
+        uploaded = null;
+        return reply.code(201).send(projectAttachment(attachment));
+      } finally {
+        if (uploaded) {
+          // DB insert failed after file landed on disk — clean up so we don't leave orphans.
+          await deleteSupplierQuoteAttachment(uploaded.storedName).catch((err) => {
+            attachmentsLogger.warn(
+              { err, storedName: uploaded?.storedName },
+              'Failed to clean up orphaned upload after error',
+            );
+          });
+        }
+      }
+    },
+  );
+
+  fastify.get(
+    '/:id/attachments/:attachmentId/download',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.supplier_quotes.view'),
+      ],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'Download a supplier-quote attachment',
+        params: attachmentParamSchema,
+        response: {
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, attachmentId } = request.params as { id: string; attachmentId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
+
+      const attachment = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
+      if (!attachment || attachment.quoteId !== idResult.value) {
+        return reply.code(404).send({ error: 'Attachment not found' });
+      }
+
+      let opened;
+      try {
+        opened = await openSupplierQuoteAttachment(attachment.storedName);
+      } catch (err) {
+        attachmentsLogger.warn(
+          { err, attachmentId: attachment.id },
+          'Stored attachment file is missing or unreadable',
+        );
+        return reply.code(404).send({ error: 'Attachment file is no longer available' });
+      }
+
+      const safeName = attachment.fileName.replace(/"/g, '');
+      reply.header('Content-Type', attachment.mimeType || 'application/octet-stream');
+      reply.header('Content-Length', String(opened.size));
+      reply.header('Content-Disposition', `attachment; filename="${safeName}"`);
+      return reply.send(opened.stream);
+    },
+  );
+
+  fastify.delete(
+    '/:id/attachments/:attachmentId',
+    {
+      onRequest: [requirePermission('sales.supplier_quotes.update')],
+      schema: {
+        tags: ['supplier-quotes'],
+        summary: 'Delete a supplier-quote attachment',
+        params: attachmentParamSchema,
+        response: {
+          204: { type: 'null' },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, attachmentId } = request.params as { id: string; attachmentId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
+
+      const quote = await assertQuoteEditableForAttachments(idResult.value, reply);
+      if (!quote) return;
+
+      const existing = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
+      if (!existing || existing.quoteId !== idResult.value) {
+        return reply.code(404).send({ error: 'Attachment not found' });
+      }
+
+      const deleted = await supplierQuoteAttachmentsRepo.deleteById(attachmentIdResult.value);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Attachment not found' });
+      }
+
+      await deleteSupplierQuoteAttachment(deleted.storedName).catch((err) => {
+        attachmentsLogger.warn(
+          { err, storedName: deleted.storedName },
+          'Failed to remove attachment file from disk',
+        );
+      });
+
+      await logAudit({
+        request,
+        action: 'supplier_quote_attachment.deleted',
+        entityType: 'supplier_quote',
+        entityId: idResult.value,
+        details: {
+          targetLabel: deleted.fileName,
+          secondaryLabel: quote.supplierName,
+        },
+      });
+      return reply.code(204).send();
+    },
+  );
+
   fastify.delete(
     '/:id',
     {
@@ -739,9 +1049,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete a quote once an order has been created from it' });
       }
 
+      // Fetch attachment metadata BEFORE deleting the quote — the FK cascade will drop the
+      // rows, leaving us no way to learn which files to clean off disk.
+      const attachmentsToCleanup = await supplierQuoteAttachmentsRepo.listForQuote(idResult.value);
+
       const deleted = await supplierQuotesRepo.deleteById(idResult.value);
       if (!deleted) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+
+      for (const attachment of attachmentsToCleanup) {
+        await deleteSupplierQuoteAttachment(attachment.storedName).catch((err) => {
+          attachmentsLogger.warn(
+            { err, storedName: attachment.storedName },
+            'Failed to remove attachment file during quote delete',
+          );
+        });
       }
 
       await logAudit({

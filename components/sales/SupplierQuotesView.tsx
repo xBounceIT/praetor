@@ -28,6 +28,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
@@ -1061,6 +1062,24 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       defaultValue: 'No items added yet',
                     })}
                   </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                {editingQuote?.id && previewVersion === null ? (
+                  <SupplierQuoteAttachmentsSection
+                    quoteId={editingQuote.id}
+                    isReadOnly={baseReadOnly}
+                  />
+                ) : (
+                  !editingQuote && (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                      <i className="fa-solid fa-paperclip mr-2"></i>
+                      {t('sales:supplierQuotes.attachments.saveQuoteFirst', {
+                        defaultValue: 'Save the quote first to add attachments.',
+                      })}
+                    </p>
+                  )
                 )}
               </div>
 

@@ -625,6 +625,16 @@ export interface SupplierQuoteVersion extends SupplierQuoteVersionRow {
   snapshot: SupplierQuoteVersionSnapshot;
 }
 
+export interface SupplierQuoteAttachment {
+  id: string;
+  quoteId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedByUserId: string | null;
+  createdAt: number;
+}
+
 export interface SupplierSaleOrderItem {
   id: string;
   orderId: string;
