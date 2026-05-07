@@ -77,6 +77,89 @@ jobs:
       - name: Run tests
         run: bun run test
 
+  ldap-integration:
+    name: LDAP Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: server
+
+      - name: Generate self-signed CA + server cert
+        working-directory: server/test/integration
+        run: |
+          mkdir -p .certs
+          cd .certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
+            -keyout ca.key -out ca.crt -subj "/CN=Praetor Test CA" \
+            -config ../fixtures/openssl.cnf -extensions v3_ca
+          openssl req -newkey rsa:2048 -nodes -keyout server.key \
+            -out server.csr -subj "/CN=localhost" \
+            -config ../fixtures/openssl.cnf
+          openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+            -CAcreateserial -out server.crt -days 30 \
+            -extfile ../fixtures/openssl.cnf -extensions v3_server
+          # bitnami/openldap runs as uid 1001; world-readable certs avoid permission issues.
+          chmod 644 *.crt *.key
+
+      - name: Start OpenLDAP container
+        working-directory: server/test/integration
+        run: |
+          docker run -d --name praetor-ldap \
+            -p 1389:1389 -p 1636:1636 \
+            -e LDAP_ROOT="dc=praetor,dc=test" \
+            -e LDAP_ADMIN_USERNAME=admin \
+            -e LDAP_ADMIN_PASSWORD=adminpass \
+            -e LDAP_SKIP_DEFAULT_TREE=yes \
+            -e LDAP_CUSTOM_LDIF_DIR=/ldifs \
+            -e LDAP_ENABLE_TLS=yes \
+            -e LDAP_TLS_CERT_FILE=/certs/server.crt \
+            -e LDAP_TLS_KEY_FILE=/certs/server.key \
+            -e LDAP_TLS_CA_FILE=/certs/ca.crt \
+            -v "$PWD/fixtures":/ldifs:ro \
+            -v "$PWD/.certs":/certs:ro \
+            bitnami/openldap:2.6
+
+      - name: Wait for LDAP ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker exec praetor-ldap ldapsearch -x -H ldap://localhost:1389 \
+                 -b "dc=praetor,dc=test" -D "cn=admin,dc=praetor,dc=test" \
+                 -w adminpass "(uid=alice)" uid >/dev/null 2>&1; then
+              echo "LDAP ready after ~$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::LDAP did not become ready within 60s"
+          docker logs praetor-ldap
+          exit 1
+
+      - name: Run LDAP integration tests
+        working-directory: server
+        env:
+          LDAP_TEST_URL: ldap://localhost:1389
+          LDAP_TEST_TLS_URL: ldaps://localhost:1636
+          LDAP_TLS_CA_FILE: ${{ github.workspace }}/server/test/integration/.certs/ca.crt
+          LDAP_REJECT_UNAUTHORIZED: 'true'
+        run: bun run test:integration
+
+      - name: Capture LDAP logs on failure
+        if: failure()
+        run: docker logs praetor-ldap
+
+      - name: Tear down LDAP container
+        if: always()
+        run: docker rm -f praetor-ldap || true
+
   build:
     name: Frontend Build
     runs-on: ubuntu-latest

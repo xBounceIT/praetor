@@ -34,6 +34,9 @@ server/.tmp/
 .env
 server/.env
 
+# Generated LDAP integration test certs
+server/test/integration/.certs/
+
 # Todo file
 todo.md
 
