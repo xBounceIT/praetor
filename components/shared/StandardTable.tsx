@@ -471,6 +471,14 @@ const StandardTable = <T extends object>({
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
 
+  useEffect(() => {
+    if (totalPages === 0) {
+      if (currentPage !== 1) setCurrentPage(1);
+      return;
+    }
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   // Pre-computed once per data/columns change so each filter popup open is O(1)
   // instead of re-scanning the full dataset on every header re-render.
   const filterOptionsByCol = useMemo(() => {

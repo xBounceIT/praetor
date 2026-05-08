@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -455,6 +455,39 @@ describe('<StandardTable />', () => {
     const tbody = container.querySelector('tbody') as HTMLElement;
     const bodyRows = tbody.querySelectorAll('tr');
     expect(bodyRows.length).toBe(20);
+  });
+
+  test('clamps current page when data changes reduce the page count', async () => {
+    const many: Row[] = Array.from({ length: 12 }, (_, i) => ({
+      id: String(i + 1),
+      name: `User${i + 1}`,
+      age: 20 + i,
+    }));
+    const { rerender } = render(
+      <StandardTable<Row>
+        title="ClampPage"
+        data={many}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+      />,
+    );
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '3' }));
+    });
+    expect(screen.getByText('User11')).toBeInTheDocument();
+
+    rerender(
+      <StandardTable<Row>
+        title="ClampPage"
+        data={many.slice(0, 4)}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('User1')).toBeInTheDocument());
+    expect(screen.queryByText('table.noResults')).not.toBeInTheDocument();
   });
 
   test('pagination "showing" counter renders and previous-button disables on page 1', () => {
