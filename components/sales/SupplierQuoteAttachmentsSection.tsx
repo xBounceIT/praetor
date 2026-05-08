@@ -7,9 +7,9 @@ import { formatInsertDateTime } from '../../utils/date';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
 
-const ALLOWED_EXT = new Set(['xlsx', 'xls', 'csv', 'pdf', 'doc', 'docx']);
+const ALLOWED_EXT = new Set(['xlsx', 'pdf', 'docx']);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ACCEPT_ATTR = '.xlsx,.xls,.csv,.pdf,.doc,.docx';
+const ACCEPT_ATTR = '.xlsx,.pdf,.docx';
 
 const formatFileSize = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -84,7 +84,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       const ext = getExtension(file.name);
       if (!ALLOWED_EXT.has(ext)) {
         return t('sales:supplierQuotes.attachments.errors.invalidType', {
-          defaultValue: 'File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.',
+          defaultValue: 'File type not allowed. Use xlsx, pdf, or docx.',
         });
       }
       return null;
@@ -228,7 +228,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
           </span>
           <span className="text-xs text-slate-400">
             {t('sales:supplierQuotes.attachments.allowedTypes', {
-              defaultValue: 'Allowed: xlsx, xls, csv, pdf, doc, docx · max 10 MB',
+              defaultValue: 'Allowed: xlsx, pdf, docx · max 10 MB',
             })}
           </span>
           <input

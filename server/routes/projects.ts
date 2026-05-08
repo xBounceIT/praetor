@@ -75,6 +75,22 @@ const projectUpdateBodySchema = {
   },
 } as const;
 
+class PermissionError extends Error {}
+
+const canAccessClient = (request: FastifyRequest, clientId: string) => {
+  if (hasPermission(request, 'crm.clients_all.view')) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
+};
+
+const canAccessProject = (request: FastifyRequest, projectId: string) => {
+  if (hasPermission(request, 'projects.manage_all.view')) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects
   fastify.get(
@@ -137,6 +153,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+      if (!(await canAccessClient(request, clientIdResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const id = generatePrefixedId('p');
       let projectColor = '#3b82f6';
@@ -202,6 +221,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       let deletedProject: { projectName: string; clientId: string };
 
@@ -271,6 +293,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { name, clientId, description, color, isDisabled } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       let normalizedColor = color;
       if (color !== undefined && color !== null && color !== '') {
         const colorResult = validateHexColor(color, 'color');
@@ -293,6 +318,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           const requestedClientId =
             typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
+          if (
+            requestedClientId !== previousClientId &&
+            !(await canAccessClient(request, requestedClientId))
+          ) {
+            throw new PermissionError();
+          }
           const clientChanged = requestedClientId !== previousClientId;
           const assignedUserIds = clientChanged
             ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
@@ -339,6 +370,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { updated, clientChanged, action };
         });
       } catch (err) {
+        if (err instanceof PermissionError) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
         if (err instanceof NotFoundError) {
           return reply.code(404).send({ error: err.message });
         }
@@ -381,6 +415,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       return projectsRepo.findAssignedUserIds(idResult.value);
     },
   );
@@ -406,6 +443,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);

@@ -53,6 +53,8 @@ const assignTaskToUserMock = mock(async () => undefined);
 const assignClientToTopManagersMock = mock(async () => undefined);
 const assignProjectToTopManagersMock = mock(async () => undefined);
 const assignTaskToTopManagersMock = mock(async () => undefined);
+const isProjectAssignedToUserMock = mock();
+const isTaskAssignedToUserMock = mock();
 
 // audit + db
 const logAuditMock = mock(async () => undefined);
@@ -100,6 +102,8 @@ beforeAll(async () => {
     assignClientToTopManagers: assignClientToTopManagersMock,
     assignProjectToTopManagers: assignProjectToTopManagersMock,
     assignTaskToTopManagers: assignTaskToTopManagersMock,
+    isProjectAssignedToUser: isProjectAssignedToUserMock,
+    isTaskAssignedToUser: isTaskAssignedToUserMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -183,6 +187,8 @@ const allMocks = [
   assignClientToTopManagersMock,
   assignProjectToTopManagersMock,
   assignTaskToTopManagersMock,
+  isProjectAssignedToUserMock,
+  isTaskAssignedToUserMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -202,6 +208,8 @@ beforeEach(async () => {
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
   assignTaskToTopManagersMock.mockImplementation(async () => undefined);
+  isProjectAssignedToUserMock.mockResolvedValue(true);
+  isTaskAssignedToUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/tasks');
 });
@@ -451,6 +459,21 @@ describe('POST /api/tasks', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403: scoped creator cannot create under unassigned project', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.tasks.create']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(createMock).not.toHaveBeenCalled();
   });
 });
 
@@ -704,6 +727,21 @@ describe('PUT /api/tasks/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403: scoped updater cannot update unassigned task', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.tasks.update']);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { name: 'New' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 

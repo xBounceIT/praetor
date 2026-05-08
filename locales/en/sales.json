@@ -301,7 +301,7 @@
       "title": "Attachments",
       "uploadButton": "Upload file",
       "dropHere": "Drop a file here or click to upload",
-      "allowedTypes": "Allowed: xlsx, xls, csv, pdf, doc, docx · max 10 MB",
+      "allowedTypes": "Allowed: xlsx, pdf, docx · max 10 MB",
       "empty": "No attachments yet.",
       "uploading": "Uploading...",
       "downloadAction": "Download",
@@ -311,7 +311,7 @@
       "loadFailed": "Failed to load attachments.",
       "errors": {
         "tooLarge": "File exceeds the 10 MB upload limit",
-        "invalidType": "File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.",
+        "invalidType": "File type not allowed. Use xlsx, pdf, or docx.",
         "uploadFailed": "Upload failed",
         "downloadFailed": "Download failed",
         "deleteFailed": "Delete failed"

@@ -433,6 +433,30 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
     expect(saveAttachmentMock).not.toHaveBeenCalled();
   });
 
+  test('415 rejects active Office and CSV attachment formats', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    for (const [fileName, mimeType] of [
+      ['formula.csv', 'text/csv'],
+      ['legacy.xls', 'application/vnd.ms-excel'],
+      ['macro.doc', 'application/msword'],
+    ] as const) {
+      const { payload, contentType } = buildMultipartBody(fileName, mimeType, Buffer.from('x'));
+
+      const res = await testApp.inject({
+        method: 'POST',
+        url: '/api/sales/supplier-quotes/sq-1/attachments',
+        headers: { ...authHeader(), 'content-type': contentType },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(415);
+    }
+
+    expect(saveAttachmentMock).not.toHaveBeenCalled();
+  });
+
   test('accepts xlsx with browser-fallback application/octet-stream MIME', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

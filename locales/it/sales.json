@@ -301,7 +301,7 @@
       "title": "Allegati",
       "uploadButton": "Carica file",
       "dropHere": "Trascina un file qui o clicca per caricarlo",
-      "allowedTypes": "Consentiti: xlsx, xls, csv, pdf, doc, docx · max 10 MB",
+      "allowedTypes": "Consentiti: xlsx, pdf, docx · max 10 MB",
       "empty": "Nessun allegato.",
       "uploading": "Caricamento...",
       "downloadAction": "Scarica",
@@ -311,7 +311,7 @@
       "loadFailed": "Caricamento degli allegati non riuscito.",
       "errors": {
         "tooLarge": "Il file supera il limite di 10 MB",
-        "invalidType": "Tipo di file non consentito. Usa xlsx, xls, csv, pdf, doc o docx.",
+        "invalidType": "Tipo di file non consentito. Usa xlsx, pdf o docx.",
         "uploadFailed": "Caricamento non riuscito",
         "downloadFailed": "Download non riuscito",
         "deleteFailed": "Eliminazione non riuscita"

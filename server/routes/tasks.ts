@@ -97,6 +97,20 @@ const userIdsSchema = {
   required: ['userIds'],
 } as const;
 
+const canAccessProject = (request: FastifyRequest, projectId: string) => {
+  if (hasPermission(request, 'projects.manage_all.view')) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
+};
+
+const canAccessTask = (request: FastifyRequest, taskId: string) => {
+  if (hasPermission(request, 'projects.tasks_all.view')) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isTaskAssignedToUser(userId, taskId);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks
   fastify.get(
@@ -173,6 +187,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
+      if (!(await canAccessProject(request, projectIdResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const durationResult = optionalLocalizedNonNegativeNumber(
         recurrenceDuration,
@@ -395,6 +412,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessTask(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       const durationResult = optionalLocalizedNonNegativeNumber(
         recurrenceDuration,
         'recurrenceDuration',
@@ -486,6 +506,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessTask(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const deleted = await tasksRepo.deleteById(idResult.value);
       if (!deleted) {
@@ -525,6 +548,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessTask(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       return tasksRepo.findAssignedUserIds(idResult.value);
     },
   );
@@ -550,6 +576,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessTask(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);

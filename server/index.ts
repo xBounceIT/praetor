@@ -2,15 +2,19 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import buildApp from './app.ts';
-import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
+import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
 import { runDrizzleMigrations } from './db/migrationsRunner.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
+import {
+  INSECURE_DEFAULT_ADMIN_PASSWORD,
+  INSECURE_DEFAULT_ENCRYPTION_KEY,
+  INSECURE_DEFAULT_JWT_SECRET,
+  validateRequiredNonDefaultEnv,
+} from './utils/runtimeConfig.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
-const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
-const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
 const logger = createChildLogger({ module: 'startup' });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,23 +38,15 @@ const parseBooleanEnv = (value: string | undefined): boolean => {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
-const warnInsecureRuntimeDefaults = () => {
-  const warnings: string[] = [];
+const assertSecureRuntimeConfig = () => {
+  const errors = [
+    validateRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRET),
+    validateRequiredNonDefaultEnv('ENCRYPTION_KEY', INSECURE_DEFAULT_ENCRYPTION_KEY),
+    validateRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORD),
+  ].filter((error): error is string => error !== null);
 
-  if ((process.env.JWT_SECRET || '').trim() === DEFAULT_JWT_SECRET) {
-    warnings.push('JWT_SECRET is using the default placeholder value.');
-  }
-
-  if ((process.env.ENCRYPTION_KEY || '').trim() === DEFAULT_ENCRYPTION_KEY) {
-    warnings.push('ENCRYPTION_KEY is using the default placeholder value.');
-  }
-
-  if ((process.env.ADMIN_DEFAULT_PASSWORD || '').trim() === DEFAULT_ADMIN_PASSWORD) {
-    warnings.push('ADMIN_DEFAULT_PASSWORD is using the default placeholder value.');
-  }
-
-  for (const warning of warnings) {
-    logger.warn({ warning }, 'Security warning');
+  if (errors.length > 0) {
+    throw new Error(errors.join(' '));
   }
 };
 
@@ -101,7 +97,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 // Start server
 try {
-  warnInsecureRuntimeDefaults();
+  assertSecureRuntimeConfig();
 
   // One-time probe to confirm DB connectivity without logging on every pooled connection.
   // Retry briefly to handle container startup ordering.

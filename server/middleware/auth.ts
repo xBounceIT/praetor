@@ -3,8 +3,24 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
+import {
+  INSECURE_DEFAULT_JWT_SECRET,
+  readRequiredNonDefaultEnv,
+  TEST_JWT_SECRET,
+} from '../utils/runtimeConfig.ts';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
+const resolveJwtSecret = () => {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (
+    process.env.NODE_ENV === 'test' &&
+    (!configured || configured === INSECURE_DEFAULT_JWT_SECRET)
+  ) {
+    return TEST_JWT_SECRET;
+  }
+  return readRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRET);
+};
+
+const JWT_SECRET = resolveJwtSecret();
 
 type SessionJwtPayload = JwtPayload & {
   userId: string;

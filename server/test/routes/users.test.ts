@@ -58,6 +58,9 @@ const replaceUserProjectsMock = mock();
 const replaceUserTasksMock = mock();
 const clearProjectCascadeAssignmentsMock = mock();
 const applyProjectCascadeToClientsMock = mock();
+const filterAssignedClientIdsMock = mock();
+const filterAssignedProjectIdsMock = mock();
+const filterAssignedTaskIdsMock = mock();
 
 // audit / drizzle
 const logAuditMock = mock(async () => undefined);
@@ -105,6 +108,9 @@ beforeAll(async () => {
     replaceUserTasks: replaceUserTasksMock,
     clearProjectCascadeAssignments: clearProjectCascadeAssignmentsMock,
     applyProjectCascadeToClients: applyProjectCascadeToClientsMock,
+    filterAssignedClientIds: filterAssignedClientIdsMock,
+    filterAssignedProjectIds: filterAssignedProjectIdsMock,
+    filterAssignedTaskIds: filterAssignedTaskIdsMock,
   }));
   mock.module('../../utils/permissions.ts', () => ({
     ...permissionsSnap,
@@ -235,6 +241,9 @@ const allMocks = [
   replaceUserTasksMock,
   clearProjectCascadeAssignmentsMock,
   applyProjectCascadeToClientsMock,
+  filterAssignedClientIdsMock,
+  filterAssignedProjectIdsMock,
+  filterAssignedTaskIdsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -250,6 +259,9 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(ALL_USER_PERMS);
   withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
   logAuditMock.mockImplementation(async () => undefined);
+  filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
+  filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
+  filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -1149,5 +1161,22 @@ describe('POST /api/users/:id/assignments', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403 scoped manager cannot assign clients outside own scope', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.employee_assignments.update']);
+    filterAssignedClientIdsMock.mockResolvedValue(new Set());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${MANAGER_USER.id}/assignments`,
+      headers: managerAuth(),
+      payload: { clientIds: ['c-out'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(replaceUserClientsMock).not.toHaveBeenCalled();
+    expect(filterAssignedClientIdsMock).toHaveBeenCalledWith(MANAGER_USER.id, ['c-out']);
   });
 });
