@@ -6,12 +6,16 @@ import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
 
-// Modal renders into a portal via createPortal, which doesn't reliably surface in
-// screen queries with happy-dom + React 19. Replace it with a passthrough that
-// renders children inline when isOpen.
-mock.module('../../components/shared/Modal', () => ({
-  default: ({ isOpen, children }: { isOpen: boolean; children: ReactNode }) =>
-    isOpen ? <div data-testid="modal">{children}</div> : null,
+// Modal renders via createPortal, which doesn't reliably surface in screen
+// queries with happy-dom + React 19. Replace createPortal with a passthrough
+// so the real Modal source still runs but its children render inline. This
+// also avoids globally mocking '../../components/shared/Modal', which would
+// leak across test files in the same Bun process.
+const reactDom = await import('react-dom');
+mock.module('react-dom', () => ({
+  ...reactDom,
+  default: reactDom.default,
+  createPortal: (children: ReactNode) => <div data-testid="modal">{children}</div>,
 }));
 
 const SupplierQuotesView = (await import('../../components/sales/SupplierQuotesView')).default;
