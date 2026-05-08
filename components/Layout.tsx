@@ -88,7 +88,9 @@ const Layout: React.FC<LayoutProps> = ({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isRoleSubmenuOpen, setIsRoleSubmenuOpen] = useState(false);
   const roleSubmenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsedPinned, setIsCollapsedPinned] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const isCollapsed = isCollapsedPinned && !isHovered;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   /* Removed module switcher state and refs */
   const menuRef = useRef<HTMLDivElement>(null);
@@ -182,7 +184,10 @@ const Layout: React.FC<LayoutProps> = ({
     });
   };
 
-  const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+  const toggleSidebar = () => {
+    setIsCollapsedPinned(!isCollapsedPinned);
+    setIsHovered(false);
+  };
   /* Removed module switcher state and refs */
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
@@ -558,10 +563,21 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">
+    <div className="h-screen flex flex-col md:flex-row md:relative bg-slate-50 overflow-hidden">
+      <div
+        aria-hidden="true"
+        className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsedPinned ? 'md:w-20' : 'md:w-64'}`}
+      />
       <nav
-        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30
+        onMouseEnter={() => {
+          if (isCollapsedPinned) setIsHovered(true);
+        }}
+        onMouseLeave={() => {
+          if (isCollapsedPinned) setIsHovered(false);
+        }}
+        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30 md:absolute md:inset-y-0 md:left-0
           ${isCollapsed ? 'md:w-20' : 'md:w-64'}
+          ${isCollapsedPinned && isHovered ? 'md:shadow-2xl md:shadow-black/30' : ''}
           w-full`}
       >
         <div
@@ -588,7 +604,7 @@ const Layout: React.FC<LayoutProps> = ({
           <button
             onClick={toggleSidebar}
             className={`hidden md:flex absolute -right-3 top-12 w-6 h-6 bg-praetor border border-white/20 rounded-full items-center justify-center text-white/70 hover:text-white hover:bg-praetor transition-all z-40
-              ${isCollapsed ? 'rotate-180' : ''}`}
+              ${isCollapsedPinned ? 'rotate-180' : ''}`}
           >
             <i className="fa-solid fa-chevron-left text-[10px]"></i>
           </button>
