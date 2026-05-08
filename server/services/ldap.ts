@@ -39,9 +39,24 @@ interface LdapSearchResult {
 }
 
 interface LdapSearchEntry {
-  objectName: string;
-  object: Record<string, unknown>;
+  // ldapjs v3 emits a DN object here; legacy/mocked shapes use a string. Both have toString().
+  objectName: string | { toString(): string };
+  // Legacy ldapjs v2 (and existing test mocks) expose a pre-flattened attribute map.
+  object?: Record<string, unknown>;
+  // ldapjs v3 exposes parsed attributes as { type, values: string[] } pairs.
+  attributes?: Array<{ type: string; values: string[] }>;
 }
+
+const flattenSearchEntryAttributes = (entry: LdapSearchEntry): Record<string, unknown> => {
+  if (entry.object && typeof entry.object === 'object') {
+    return entry.object;
+  }
+  const flat: Record<string, unknown> = {};
+  for (const attr of entry.attributes ?? []) {
+    flat[attr.type] = attr.values;
+  }
+  return flat;
+};
 
 class LDAPService {
   config: ldapRepo.LdapConfig | null;
@@ -168,7 +183,8 @@ class LDAPService {
         let foundDn: string | null = null;
 
         res.on('searchEntry', (entry: LdapSearchEntry) => {
-          foundDn = entry.objectName;
+          // v3 emits a DN object; bind serializes via writeString which throws on non-strings.
+          foundDn = entry.objectName?.toString() ?? null;
         });
 
         res.on('error', (err: Error) => {
@@ -227,7 +243,7 @@ class LDAPService {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry: LdapSearchEntry) => {
-            entries.push(entry.object as unknown as LdapEntry);
+            entries.push(flattenSearchEntryAttributes(entry) as unknown as LdapEntry);
           });
 
           res.on('error', (err: Error) => {
