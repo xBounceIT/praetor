@@ -12,7 +12,7 @@
     "items": "Voci per questa offerta",
     "supplierInformation": "Dettagli fornitore e documento",
     "supplierItems": "Voci di questo preventivo",
-    "attachments": "File ricevuti dal fornitore (xlsx, pdf, doc...). Modificabili solo per i preventivi in bozza.",
+    "attachments": "File ricevuti dal fornitore",
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },

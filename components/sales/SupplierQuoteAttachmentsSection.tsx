@@ -193,8 +193,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
         {t('sales:supplierQuotes.attachments.title', { defaultValue: 'Attachments' })}
         <FieldTooltip
           description={t('sales:fieldInfo.attachments', {
-            defaultValue:
-              'Files received from the supplier (xlsx, pdf, doc...). Editable on draft quotes only.',
+            defaultValue: 'Files received from the supplier',
           })}
           status={readOnlyStatus}
           statusLabel={statusLabel}
