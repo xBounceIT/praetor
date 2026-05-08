@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { decodeHTMLAttribute } from 'entities';
 import type { ExternalIdentity } from '../../repositories/externalIdentitiesRepo.ts';
 import type { SsoLoginTicket } from '../../repositories/ssoLoginTicketsRepo.ts';
 import type { SsoProvider } from '../../repositories/ssoProvidersRepo.ts';
@@ -48,15 +49,6 @@ class CookieJar {
   }
 }
 
-const htmlDecode = (value: string): string =>
-  value
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-
 const fetchWithCookies = async (
   jar: CookieJar,
   url: URL | string,
@@ -81,7 +73,7 @@ const extractLoginAction = (html: string, pageUrl: URL): URL => {
     html.match(/<form\b[^>]*\baction=["'][^"']+["'][^>]*>/i)?.[0];
   const action = loginForm?.match(/\baction=["']([^"']+)["']/i)?.[1];
   if (!action) throw new Error(`Keycloak login form action not found at ${pageUrl.href}`);
-  return new URL(htmlDecode(action), pageUrl);
+  return new URL(decodeHTMLAttribute(action), pageUrl);
 };
 
 const extractFormFields = (html: string): Record<string, string> => {
@@ -91,7 +83,7 @@ const extractFormFields = (html: string): Record<string, string> => {
     const name = tag.match(/\bname=["']([^"']+)["']/i)?.[1];
     if (!name) continue;
     const value = tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? '';
-    fields[htmlDecode(name)] = htmlDecode(value);
+    fields[decodeHTMLAttribute(name)] = decodeHTMLAttribute(value);
   }
   return fields;
 };
