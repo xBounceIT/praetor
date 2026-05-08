@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usersApi } from '../../services/api';
+import { usersApi } from '../../services/api/users';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';

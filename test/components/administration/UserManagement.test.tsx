@@ -6,6 +6,16 @@ import { installI18nMock } from '../../helpers/i18n';
 
 installI18nMock();
 
+const usersApiMock = {
+  getAssignments: mock(async () => ({ clientIds: [], projectIds: [], taskIds: [] })),
+  getRoles: mock(async () => ({ roleIds: ['user'], primaryRoleId: 'user' })),
+  updateAssignments: mock(async () => {}),
+};
+
+mock.module('../../../services/api/users', () => ({
+  usersApi: usersApiMock,
+}));
+
 const UserManagement = (await import('../../../components/administration/UserManagement')).default;
 
 const updatePermission = 'administration.user_management.update';
@@ -59,6 +69,9 @@ const getRowFor = (text: string) => {
 describe('<UserManagement />', () => {
   beforeEach(() => {
     localStorage.clear();
+    usersApiMock.getAssignments.mockClear();
+    usersApiMock.getRoles.mockClear();
+    usersApiMock.updateAssignments.mockClear();
   });
 
   test('renders user details through StandardTable columns', () => {
