@@ -77,7 +77,11 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const supplierQuotes = makeStubSetter<SupplierQuoteLike>([]);
   const supplierOrders = makeStubSetter<SupplierOrderLike>([]);
   const supplierInvoices = makeStubSetter<SupplierInvoiceLike>([]);
-  const supplierQuoteFilterId = makeStubScalar<string | null>(null);
+  const initialFilterId =
+    typeof overrides.supplierQuoteFilterId === 'string' || overrides.supplierQuoteFilterId === null
+      ? (overrides.supplierQuoteFilterId as string | null)
+      : null;
+  const supplierQuoteFilterId = makeStubScalar<string | null>(initialFilterId);
   const setActiveView = mock(() => {});
   const handlers = makeSupplierQuoteHandlers({
     supplierQuoteFilterId: supplierQuoteFilterId.get(),
@@ -183,7 +187,7 @@ describe('makeSupplierQuoteHandlers', () => {
     const ctx = buildHandlers({ supplierQuoteFilterId: 'sq-other' });
 
     await ctx.handlers.updateSupplierQuote('sq-1', { status: 'sent' } as never);
-    expect(ctx.supplierQuoteFilterId.get()).toBeNull();
+    expect(ctx.supplierQuoteFilterId.get()).toBe('sq-other');
   });
 
   test('updateSupplierQuote swallows errors', async () => {
