@@ -78,4 +78,5 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 - **Tests**: `bun run test` runs both backend (`server/test/`) and frontend (`test/`) suites via the Bun test runner; frontend tests use `@testing-library/react`. **New features and bug fixes must ship with unit tests** that exercise the new behavior — backend tests under `server/test/` mirroring the source layout, frontend under `test/` (e.g. `test/components/Foo.test.tsx`). For bug fixes, the test should fail on the old code and pass on the fix. Manual testing supplements automated tests; it does not replace them.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: The app itself runs on remote Docker containers. Do not run Docker commands locally, but Bun test commands such as `bun test` and `bun run test` may be run locally.
+- **Commit and PR titles**: Always format commit messages and pull request titles as `scope(category): description`.
 - **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
