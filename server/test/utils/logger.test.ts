@@ -46,13 +46,16 @@ describe('loggerOptions (snapshot of module-load env)', () => {
   });
 
   test('transport presence matches the LOG_PRETTY/NODE_ENV rules', () => {
-    const explicit = process.env.LOG_PRETTY?.trim().toLowerCase();
+    // Mirror parseBooleanEnv from logger.ts: any defined value (even whitespace)
+    // is treated as explicit and only the truthy strings flip pretty on.
+    const raw = process.env.LOG_PRETTY;
     let shouldBePretty: boolean;
-    if (explicit && explicit.length > 0) {
-      shouldBePretty =
-        explicit === '1' || explicit === 'true' || explicit === 'yes' || explicit === 'on';
-    } else {
+    if (raw === undefined) {
       shouldBePretty = !isProduction;
+    } else {
+      const normalized = raw.trim().toLowerCase();
+      shouldBePretty =
+        normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
     }
 
     if (shouldBePretty) {
