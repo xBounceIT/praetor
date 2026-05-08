@@ -2,9 +2,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'b
 import { decodeHTMLAttribute } from 'entities';
 import type { ExternalIdentity } from '../../repositories/externalIdentitiesRepo.ts';
 import type { SsoLoginTicket } from '../../repositories/ssoLoginTicketsRepo.ts';
-import type { SsoProvider } from '../../repositories/ssoProvidersRepo.ts';
+import {
+  DEFAULT_OIDC_FIELDS,
+  DEFAULT_SAML_FIELDS,
+  type SsoProvider,
+} from '../../repositories/ssoProvidersRepo.ts';
 import type { SsoState } from '../../repositories/ssoStatesRepo.ts';
-import type { AuthUser, LoginUser, NewFullUser } from '../../repositories/usersRepo.ts';
+import {
+  type AuthUser,
+  EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+  LDAP_PLACEHOLDER_PASSWORD_HASH,
+  type LoginUser,
+  type NewFullUser,
+} from '../../repositories/usersRepo.ts';
 import {
   ALICE_PASSWORD,
   ALICE_USERNAME,
@@ -29,7 +39,7 @@ type StoredUser = LoginUser & {
 
 type FormResult =
   | { type: 'redirect'; url: URL }
-  | { type: 'saml-post'; action: URL; fields: Record<string, string> };
+  | { type: 'saml-post'; fields: Record<string, string> };
 
 class CookieJar {
   private readonly cookies = new Map<string, string>();
@@ -112,7 +122,6 @@ const resolveLoginResult = async (
     if (html.includes('SAMLResponse')) {
       return {
         type: 'saml-post',
-        action: currentUrl,
         fields: extractFormFields(html),
       };
     }
@@ -162,7 +171,7 @@ const oidcProvider: SsoProvider = {
   issuerUrl: KEYCLOAK_ISSUER,
   clientId: OIDC_CLIENT_ID,
   clientSecret: '',
-  scopes: 'openid profile email',
+  scopes: DEFAULT_OIDC_FIELDS.scopes,
   metadataUrl: '',
   metadataXml: '',
   entryPoint: '',
@@ -171,10 +180,10 @@ const oidcProvider: SsoProvider = {
   spIssuer: '',
   privateKey: '',
   publicCert: '',
-  usernameAttribute: 'preferred_username',
-  nameAttribute: 'name',
-  emailAttribute: 'email',
-  groupsAttribute: 'groups',
+  usernameAttribute: DEFAULT_OIDC_FIELDS.usernameAttribute,
+  nameAttribute: DEFAULT_OIDC_FIELDS.nameAttribute,
+  emailAttribute: DEFAULT_OIDC_FIELDS.emailAttribute,
+  groupsAttribute: DEFAULT_OIDC_FIELDS.groupsAttribute,
   roleMappings,
 };
 
@@ -187,7 +196,7 @@ const samlProvider: SsoProvider = {
   issuerUrl: '',
   clientId: '',
   clientSecret: '',
-  scopes: 'openid profile email',
+  scopes: DEFAULT_OIDC_FIELDS.scopes,
   metadataUrl: `${KEYCLOAK_ISSUER}/protocol/saml/descriptor`,
   metadataXml: '',
   entryPoint: '',
@@ -197,9 +206,9 @@ const samlProvider: SsoProvider = {
   privateKey: '',
   publicCert: '',
   usernameAttribute: 'username',
-  nameAttribute: 'name',
-  emailAttribute: 'email',
-  groupsAttribute: 'groups',
+  nameAttribute: DEFAULT_SAML_FIELDS.nameAttribute,
+  emailAttribute: DEFAULT_SAML_FIELDS.emailAttribute,
+  groupsAttribute: DEFAULT_SAML_FIELDS.groupsAttribute,
   roleMappings,
 };
 
@@ -233,7 +242,7 @@ const resetStores = (): void => {
     role: 'user',
     avatarInitials: 'LA',
     isDisabled: false,
-    passwordHash: '$2a$10$invalidpasswordhashforldapuser00000000000000',
+    passwordHash: EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
     costPerHour: 0,
     employeeType: 'app_user',
     roles: ['user'],
@@ -249,19 +258,8 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
       db: {},
     }));
     mock.module('../../repositories/ssoProvidersRepo.ts', () => ({
-      DEFAULT_OIDC_FIELDS: {
-        scopes: 'openid profile email',
-        usernameAttribute: 'preferred_username',
-        nameAttribute: 'name',
-        emailAttribute: 'email',
-        groupsAttribute: 'groups',
-      },
-      DEFAULT_SAML_FIELDS: {
-        usernameAttribute: 'nameID',
-        nameAttribute: 'name',
-        emailAttribute: 'email',
-        groupsAttribute: 'groups',
-      },
+      DEFAULT_OIDC_FIELDS,
+      DEFAULT_SAML_FIELDS,
       findBySlug: async (slug: string) =>
         slug === OIDC_PROVIDER_SLUG
           ? oidcProvider
@@ -327,18 +325,18 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
       syncTopManagerAssignmentsForUser: async () => {},
     }));
     mock.module('../../repositories/usersRepo.ts', () => ({
-      EXTERNAL_PLACEHOLDER_PASSWORD_HASH: '$2a$10$invalidpasswordhashforldapuser00000000000000',
-      LDAP_PLACEHOLDER_PASSWORD_HASH: '$2a$10$invalidpasswordhashforldapuser00000000000000',
+      EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+      LDAP_PLACEHOLDER_PASSWORD_HASH,
       findAuthUserById: async (id: string) => {
         const user = users.get(id);
         return user ? toAuthUser(user) : null;
       },
       findLoginUserByNormalizedUsername: async (username: string) => {
         const normalized = username.trim().toLowerCase();
-        return (
-          [...users.values()].find((user) => user.username.trim().toLowerCase() === normalized) ??
-          null
-        );
+        for (const user of users.values()) {
+          if (user.username.trim().toLowerCase() === normalized) return user;
+        }
+        return null;
       },
       insertUser: async (user: NewFullUser) => {
         users.set(user.id, {
