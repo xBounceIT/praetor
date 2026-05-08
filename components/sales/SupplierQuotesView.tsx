@@ -1069,6 +1069,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <SupplierQuoteAttachmentsSection
                   quoteId={editingQuote.id}
                   isReadOnly={baseReadOnly}
+                  readOnlyStatus={readOnlyStatus}
+                  statusLabel={statusLabel}
                 />
               ) : (
                 !editingQuote && (

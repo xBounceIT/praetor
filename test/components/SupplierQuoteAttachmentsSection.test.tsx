@@ -95,7 +95,14 @@ afterEach(() => {
 
 describe('<SupplierQuoteAttachmentsSection />', () => {
   test('renders empty state and the upload zone when editable', async () => {
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalledWith('sq-1'));
     expect(screen.getByText('No attachments yet.')).toBeInTheDocument();
     expect(screen.getByText('Drop a file here or click to upload')).toBeInTheDocument();
@@ -103,7 +110,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
 
   test('renders attachments newest-first and shows formatted size', async () => {
     listAttachmentsMock.mockImplementation(() => Promise.resolve([ATTACHMENT_B, ATTACHMENT_A]));
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
     expect(screen.getByText('second.pdf')).toBeInTheDocument();
     // 2048 bytes => 2.0 KB; 5242880 bytes => 5.0 MB
@@ -113,7 +127,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
 
   test('hides upload zone and delete buttons when read-only', async () => {
     listAttachmentsMock.mockImplementation(() => Promise.resolve([ATTACHMENT_A]));
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={true} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={true}
+        readOnlyStatus="Read-only"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
     expect(screen.queryByText('Drop a file here or click to upload')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument();
@@ -128,7 +149,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
       fileName: 'new.xlsx',
     };
     uploadAttachmentMock.mockImplementation(() => Promise.resolve(created));
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalled());
 
     const file = new File(['contents'], 'new.xlsx', {
@@ -142,7 +170,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
   });
 
   test('rejects disallowed file types client-side without calling the API', async () => {
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalled());
 
     const exe = new File(['x'], 'malware.exe', { type: 'application/octet-stream' });
@@ -158,7 +193,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
   });
 
   test('rejects oversized files client-side', async () => {
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalled());
 
     // Forge a File whose `size` property reports >10 MB without actually allocating that much.
@@ -178,7 +220,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
   test('confirms before deleting and removes the row on success', async () => {
     listAttachmentsMock.mockImplementation(() => Promise.resolve([ATTACHMENT_A]));
     deleteAttachmentMock.mockImplementation(() => Promise.resolve());
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText('Delete'));
@@ -193,7 +242,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     uploadAttachmentMock.mockImplementation(() =>
       Promise.reject(new Error('Quotes become read-only once an order exists')),
     );
-    render(<SupplierQuoteAttachmentsSection quoteId="sq-1" isReadOnly={false} />);
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={false}
+        readOnlyStatus="Editable"
+        statusLabel="Status:"
+      />,
+    );
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalled());
 
     const file = new File(['x'], 'order.xlsx', {

@@ -5,6 +5,7 @@ import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import FieldTooltip from '../shared/FieldTooltip';
 
 const ALLOWED_EXT = new Set(['xlsx', 'xls', 'csv', 'pdf', 'doc', 'docx']);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -32,11 +33,17 @@ const getExtension = (name: string): string => {
 interface SupplierQuoteAttachmentsSectionProps {
   quoteId: string;
   isReadOnly: boolean;
+  /** Resolved string for the FieldTooltip status row (e.g. "Editable" or the read-only reason). */
+  readOnlyStatus: string;
+  /** Localized "Status:" label prefix; mirrors the other sections in SupplierQuotesView. */
+  statusLabel: string;
 }
 
 const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionProps> = ({
   quoteId,
   isReadOnly,
+  readOnlyStatus,
+  statusLabel,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'common']);
   const [attachments, setAttachments] = useState<SupplierQuoteAttachment[]>([]);
@@ -184,13 +191,15 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
         <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
         {t('sales:supplierQuotes.attachments.title', { defaultValue: 'Attachments' })}
+        <FieldTooltip
+          description={t('sales:fieldInfo.attachments', {
+            defaultValue:
+              'Files received from the supplier (xlsx, pdf, doc...). Editable on draft quotes only.',
+          })}
+          status={readOnlyStatus}
+          statusLabel={statusLabel}
+        />
       </h4>
-      <p className="text-xs text-slate-500">
-        {t('sales:supplierQuotes.attachments.description', {
-          defaultValue:
-            'Files received from the supplier (xlsx, pdf, doc...). Available on draft quotes only.',
-        })}
-      </p>
 
       {!isReadOnly && (
         // <label> + hidden <input type="file"> gets us native click-to-open and keyboard focus

@@ -12,6 +12,7 @@
     "items": "Line items for this offer",
     "supplierInformation": "Supplier and document details",
     "supplierItems": "Line items for this quote",
+    "attachments": "Files received from the supplier (xlsx, pdf, doc...). Editable on draft quotes only.",
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
@@ -298,7 +299,6 @@
     },
     "attachments": {
       "title": "Attachments",
-      "description": "Files received from the supplier (xlsx, pdf, doc...). Available on draft quotes only.",
       "uploadButton": "Upload file",
       "dropHere": "Drop a file here or click to upload",
       "allowedTypes": "Allowed: xlsx, xls, csv, pdf, doc, docx · max 10 MB",

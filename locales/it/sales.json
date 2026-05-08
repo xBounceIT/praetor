@@ -12,6 +12,7 @@
     "items": "Voci per questa offerta",
     "supplierInformation": "Dettagli fornitore e documento",
     "supplierItems": "Voci di questo preventivo",
+    "attachments": "File ricevuti dal fornitore (xlsx, pdf, doc...). Modificabili solo per i preventivi in bozza.",
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
@@ -298,7 +299,6 @@
     },
     "attachments": {
       "title": "Allegati",
-      "description": "File ricevuti dal fornitore (xlsx, pdf, doc...). Disponibile solo per i preventivi in bozza.",
       "uploadButton": "Carica file",
       "dropHere": "Trascina un file qui o clicca per caricarlo",
       "allowedTypes": "Consentiti: xlsx, xls, csv, pdf, doc, docx · max 10 MB",
