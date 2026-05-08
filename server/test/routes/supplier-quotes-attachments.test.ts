@@ -410,6 +410,52 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
     expect(saveAttachmentMock).not.toHaveBeenCalled();
   });
 
+  test('415 when extension is disallowed even if MIME claims an allowed type', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    // Attacker uploads payload.exe but lies that it's a PDF — extension allowlist must
+    // gate this regardless of the client-supplied MIME type.
+    const { payload, contentType } = buildMultipartBody(
+      'payload.exe',
+      'application/pdf',
+      Buffer.from('MZ\x90\x00binary'),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/attachments',
+      headers: { ...authHeader(), 'content-type': contentType },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(415);
+    expect(saveAttachmentMock).not.toHaveBeenCalled();
+  });
+
+  test('accepts xlsx with browser-fallback application/octet-stream MIME', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    saveAttachmentMock.mockResolvedValue({ storedName: 'abc-123.xlsx', size: 11 });
+    sqaInsertMock.mockResolvedValue(SAMPLE_ATTACHMENT);
+
+    const { payload, contentType } = buildMultipartBody(
+      'order.xlsx',
+      'application/octet-stream',
+      Buffer.from('xlsx-bytes-'),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/attachments',
+      headers: { ...authHeader(), 'content-type': contentType },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(saveAttachmentMock).toHaveBeenCalledTimes(1);
+  });
+
   test('cleans up file when DB insert fails', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

@@ -25,10 +25,16 @@ export const getExtensionFromName = (name: string): string => {
 };
 
 export const isAllowedAttachment = (mimeType: string, fileName: string): boolean => {
+  // Extension is the firm gate: a file with an extension outside the allowlist is rejected
+  // regardless of the client-supplied MIME type, otherwise an attacker could upload e.g.
+  // `payload.exe` by claiming `application/pdf`.
   const ext = getExtensionFromName(fileName);
-  if (ATTACHMENT_ALLOWED_MIME.has(mimeType)) return true;
-  if (ATTACHMENT_ALLOWED_EXT.has(ext)) return true;
-  return false;
+  if (!ATTACHMENT_ALLOWED_EXT.has(ext)) return false;
+  // Some browsers (Safari, some Chrome configs) report `application/octet-stream` for
+  // legitimate xlsx/doc uploads, so accept that as a generic fallback when the extension
+  // itself is allowed. All other MIME types must be on the allowlist.
+  if (mimeType === 'application/octet-stream') return true;
+  return ATTACHMENT_ALLOWED_MIME.has(mimeType);
 };
 
 const getUploadRoot = (): string => {
