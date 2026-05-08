@@ -126,7 +126,7 @@ jobs:
             -e LDAP_TLS_CA_FILE=/certs/ca.crt \
             -v "$PWD/fixtures":/ldifs:ro \
             -v "$PWD/.certs":/certs:ro \
-            bitnami/openldap:2.6
+            bitnamilegacy/openldap:2.6.10-debian-12-r4
 
       - name: Wait for LDAP ready
         run: |
