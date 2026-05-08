@@ -43,6 +43,18 @@ describe('<Layout />', () => {
     expect(classes).not.toContain('z-20');
   });
 
+  test('desktop sidebar paints above the sticky page header', () => {
+    const { container } = renderLayout();
+
+    const nav = container.querySelector('nav');
+    const header = container.querySelector('header');
+    const navClasses = nav?.className.split(/\s+/) ?? [];
+    const headerClasses = header?.className.split(/\s+/) ?? [];
+
+    expect(navClasses).toContain('z-50');
+    expect(headerClasses).toContain('z-40');
+  });
+
   test('collapsed sidebar auto-expands on hover and collapses again on mouse leave', () => {
     const { container } = renderLayout();
 
@@ -66,7 +78,7 @@ describe('<Layout />', () => {
     expect(nav.className).not.toContain('md:w-64');
   });
 
-  test('layout spacer keeps content from reflowing when sidebar hover-expands', () => {
+  test('layout spacer pushes content when sidebar hover-expands', () => {
     const { container } = renderLayout();
 
     const collapseToggle = container.querySelector('button.hidden.md\\:flex') as HTMLButtonElement;
@@ -78,6 +90,10 @@ describe('<Layout />', () => {
     expect(spacer.className).toContain('md:w-20');
 
     fireEvent.mouseEnter(nav);
+    expect(spacer.className).toContain('md:w-64');
+    expect(spacer.className).not.toContain('md:w-20');
+
+    fireEvent.mouseLeave(nav);
     expect(spacer.className).toContain('md:w-20');
     expect(spacer.className).not.toContain('md:w-64');
   });
