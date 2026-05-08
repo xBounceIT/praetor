@@ -71,6 +71,36 @@ export const findLoginUserByUsername = async (
   };
 };
 
+export const findLoginUserByNormalizedUsername = async (
+  username: string,
+  exec: DbExecutor = db,
+): Promise<LoginUser | null> => {
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return null;
+  const rows = await exec
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      role: users.role,
+      passwordHash: users.passwordHash,
+      avatarInitials: users.avatarInitials,
+      isDisabled: users.isDisabled,
+    })
+    .from(users)
+    .where(sql`LOWER(${users.username}) = ${normalized}`);
+  if (!rows[0]) return null;
+  return {
+    id: rows[0].id,
+    name: rows[0].name,
+    username: rows[0].username,
+    role: rows[0].role,
+    passwordHash: rows[0].passwordHash,
+    avatarInitials: rows[0].avatarInitials,
+    isDisabled: rows[0].isDisabled ?? false,
+  };
+};
+
 export const getPasswordHash = async (
   userId: string,
   exec: DbExecutor = db,
@@ -109,6 +139,7 @@ export const updateNameByUsername = async (
 // For users that authenticate externally (e.g. LDAP) and must never log in locally. Satisfies
 // the `password_hash NOT NULL` column with a malformed bcrypt that no plaintext can match.
 export const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
+export const EXTERNAL_PLACEHOLDER_PASSWORD_HASH = LDAP_PLACEHOLDER_PASSWORD_HASH;
 
 export type NewUser = {
   id: string;

@@ -197,6 +197,76 @@ jobs:
         if: always()
         run: docker rm -f praetor-ldap || true
 
+  sso-integration:
+    name: SSO Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: server
+
+      - name: Start Keycloak container
+        working-directory: server/test/integration
+        run: |
+          docker run -d --name praetor-keycloak \
+            -p 18080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            -v "$PWD/fixtures/keycloak":/opt/keycloak/data/import:ro \
+            quay.io/keycloak/keycloak:26.6.1 \
+            start-dev --import-realm
+
+      - name: Wait for Keycloak ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:18080/realms/praetor-sso/.well-known/openid-configuration >/dev/null; then
+              echo "Keycloak ready after ~$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Keycloak did not become ready within 120s"
+          docker logs praetor-keycloak
+          exit 1
+
+      - name: Run SSO integration tests
+        working-directory: server
+        env:
+          SSO_TEST_KEYCLOAK_URL: http://localhost:18080
+          SSO_TEST_REQUEST_ORIGIN: http://localhost:3001
+          FRONTEND_URL: http://localhost:3000
+          SSO_CALLBACK_BASE_URL: http://localhost:3001
+          LOG_LEVEL: fatal
+        run: bun test ./test/integration/sso-keycloak.integration.test.ts 2>&1 | tee /tmp/sso-integration.log
+
+      - name: Capture Keycloak container logs (always)
+        if: always()
+        run: |
+          echo "===== praetor-keycloak container logs ====="
+          docker logs praetor-keycloak 2>&1 || true
+          echo "===== end container logs ====="
+
+      - name: Upload SSO integration test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sso-integration-logs
+          path: |
+            /tmp/sso-integration.log
+          retention-days: 7
+
+      - name: Tear down Keycloak container
+        if: always()
+        run: docker rm -f praetor-keycloak || true
+
   build:
     name: Frontend Build
     runs-on: ubuntu-latest

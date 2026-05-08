@@ -3,6 +3,7 @@ import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realExternalAuth from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -21,6 +22,7 @@ const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
+const externalAuthSnap = { ...realExternalAuth };
 
 // Auth-middleware deps: the real authenticateToken runs end-to-end on /me and /switch-role,
 // so we mock its three downstream calls.
@@ -36,6 +38,8 @@ const logAuditMock = mock(async () => undefined);
 // External: bcryptjs.compare and the LDAP service (dynamically imported by /login)
 const bcryptCompareMock = mock();
 const ldapAuthenticateMock = mock();
+const ldapAuthenticateWithProfileMock = mock();
+const applyExternalRoleIdsForUserMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
 
@@ -63,8 +67,15 @@ beforeAll(async () => {
     default: { compare: bcryptCompareMock },
     compare: bcryptCompareMock,
   }));
+  mock.module('../../services/external-auth.ts', () => ({
+    ...externalAuthSnap,
+    applyExternalRoleIdsForUser: applyExternalRoleIdsForUserMock,
+  }));
   mock.module('../../services/ldap.ts', () => ({
-    default: { authenticate: ldapAuthenticateMock },
+    default: {
+      authenticate: ldapAuthenticateMock,
+      authenticateWithProfile: ldapAuthenticateWithProfileMock,
+    },
   }));
 
   authRoutePlugin = (await import('../../routes/auth.ts')).default as FastifyPluginAsync;
@@ -77,6 +88,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
+  mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../services/ldap.ts', () => ldapServiceSnap);
 });
 
@@ -110,6 +122,8 @@ const allMocks = [
   logAuditMock,
   bcryptCompareMock,
   ldapAuthenticateMock,
+  ldapAuthenticateWithProfileMock,
+  applyExternalRoleIdsForUserMock,
 ];
 
 let testApp: FastifyInstance;
@@ -126,6 +140,14 @@ beforeEach(async () => {
 
   // Defaults for /login: LDAP off (returns false), bcrypt fails by default
   ldapAuthenticateMock.mockResolvedValue(false);
+  ldapAuthenticateWithProfileMock.mockResolvedValue({
+    authenticated: false,
+    groups: [],
+    roleIds: ['user'],
+  });
+  applyExternalRoleIdsForUserMock.mockImplementation(async (_userId: string, roleIds: string[]) =>
+    roleIds.length > 0 ? roleIds : ['user'],
+  );
   bcryptCompareMock.mockResolvedValue(false);
 
   testApp = await buildRouteTestApp(authRoutePlugin, '/api/auth');
@@ -185,7 +207,11 @@ describe('POST /api/auth/login', () => {
 
   test('200: LDAP success skips bcrypt', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
-    ldapAuthenticateMock.mockResolvedValue(true);
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: ['admins'],
+      roleIds: ['admin'],
+    });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -194,13 +220,20 @@ describe('POST /api/auth/login', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(ldapAuthenticateMock).toHaveBeenCalledWith('alice', 'secret');
+    expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
+    expect(applyExternalRoleIdsForUserMock).toHaveBeenCalledWith('u1', ['admin']);
     expect(bcryptCompareMock).not.toHaveBeenCalled();
+    const body = JSON.parse(res.body);
+    expect(body.user.role).toBe('admin');
   });
 
   test('200: LDAP returns false, bcrypt succeeds (fallback)', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
-    ldapAuthenticateMock.mockResolvedValue(false);
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      groups: [],
+      roleIds: ['user'],
+    });
     bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -215,7 +248,7 @@ describe('POST /api/auth/login', () => {
 
   test('200: LDAP throws, bcrypt fallback succeeds', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
-    ldapAuthenticateMock.mockRejectedValue(new Error('LDAP server unreachable'));
+    ldapAuthenticateWithProfileMock.mockRejectedValue(new Error('LDAP server unreachable'));
     bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -275,7 +308,11 @@ describe('POST /api/auth/login', () => {
 
   test('401 wrong password (LDAP off, bcrypt fails)', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
-    ldapAuthenticateMock.mockResolvedValue(false);
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      groups: [],
+      roleIds: ['user'],
+    });
     bcryptCompareMock.mockResolvedValue(false);
 
     const res = await testApp.inject({
