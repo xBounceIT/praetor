@@ -135,6 +135,10 @@ jobs:
                  -b "dc=praetor,dc=test" -D "cn=admin,dc=praetor,dc=test" \
                  -w adminpass "(uid=alice)" uid >/dev/null 2>&1; then
               echo "LDAP ready after ~$((i*2))s"
+              echo "--- Seeded directory contents (baseDn subtree, dn only):"
+              docker exec praetor-ldap ldapsearch -x -H ldap://localhost:1389 \
+                -b "dc=praetor,dc=test" -D "cn=admin,dc=praetor,dc=test" \
+                -w adminpass "(objectClass=*)" dn 2>&1 | grep '^dn:' || true
               exit 0
             fi
             sleep 2

@@ -93,8 +93,12 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     expect((createUserMock.mock.calls[0][0] as { username: string }).username).toBe('bob');
   });
 
-  test('narrowed userFilter (uid=alice) syncs only alice', async () => {
-    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ userFilter: '(uid=alice)' }));
+  test('narrowed userFilter syncs only alice', async () => {
+    // After buildUserSyncFilter substitutes {0} with *, this becomes
+    // (&(uid=*)(givenName=Alice)) which matches only alice in the fixture.
+    ldapRepoGetMock.mockResolvedValue(
+      buildTestConfig({ userFilter: '(&(uid={0})(givenName=Alice))' }),
+    );
     ldapService.invalidateConfig();
 
     const result = await ldapService.syncUsers();
