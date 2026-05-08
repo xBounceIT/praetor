@@ -227,3 +227,109 @@ describe('deleteById', () => {
     expect(await supplierQuotesRepo.deleteById('q-x', testDb)).toBeNull();
   });
 });
+
+describe('existsById', () => {
+  test('returns true when matching row exists', async () => {
+    exec.enqueue({ rows: [['q-1']] });
+    expect(await supplierQuotesRepo.existsById('q-1', testDb)).toBe(true);
+  });
+
+  test('returns false when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.existsById('q-x', testDb)).toBe(false);
+  });
+});
+
+describe('findItemsForQuote', () => {
+  test('selects items filtered by quoteId and maps them', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await supplierQuotesRepo.findItemsForQuote('q-1', testDb);
+    expect(exec.calls[0].sql).toContain('from "supplier_quote_items"');
+    expect(exec.calls[0].params).toContain('q-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('sqi-1');
+  });
+});
+
+describe('findFullForSnapshot', () => {
+  test('returns quote and items when quote exists', async () => {
+    // Promise.all dispatches `findItemsForQuote(id)` first (its async body runs to its first
+    // await before the sibling thenable is consumed), so the items query dequeues first.
+    exec.enqueue({ rows: [itemRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
+    const result = await supplierQuotesRepo.findFullForSnapshot('q-1', testDb);
+    expect(result).not.toBeNull();
+    expect(result?.quote.id).toBe('q-1');
+    expect(result?.items).toHaveLength(1);
+  });
+
+  test('returns null when quote not found', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.findFullForSnapshot('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('create', () => {
+  test('inserts and returns mapped quote', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    const result = await supplierQuotesRepo.create(
+      {
+        id: 'q-1',
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain('insert into "supplier_quotes"');
+    expect(exec.calls[0].params).toContain('q-1');
+    expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('2026-06-01');
+    expect(result.id).toBe('q-1');
+  });
+});
+
+describe('restoreSnapshotQuote', () => {
+  test('updates with snapshot fields and returns mapped quote', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    const result = await supplierQuotesRepo.restoreSnapshotQuote(
+      'q-1',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        status: 'sent',
+        expirationDate: '2026-06-01',
+        notes: 'restored',
+      },
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain('update "supplier_quotes"');
+    expect(exec.calls[0].sql).toContain('CURRENT_TIMESTAMP');
+    expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('sent');
+    expect(exec.calls[0].params).toContain('q-1');
+    expect(result?.id).toBe('q-1');
+  });
+
+  test('returns null when no row updated', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await supplierQuotesRepo.restoreSnapshotQuote(
+      'q-x',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        paymentTerms: 'net30',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(result).toBeNull();
+  });
+});
