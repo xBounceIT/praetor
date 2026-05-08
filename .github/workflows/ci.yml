@@ -221,7 +221,7 @@ jobs:
             -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
             -v "$PWD/fixtures/keycloak":/opt/keycloak/data/import:ro \
-            quay.io/keycloak/keycloak:26.0.7 \
+            quay.io/keycloak/keycloak:26.6.1 \
             start-dev --import-realm
 
       - name: Wait for Keycloak ready
