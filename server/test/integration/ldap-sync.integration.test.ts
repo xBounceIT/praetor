@@ -51,8 +51,6 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
     ldapRepoGetMock.mockResolvedValue(buildTestConfig());
     findLoginUserByUsernameMock.mockResolvedValue(null);
-    updateNameByUsernameMock.mockResolvedValue(undefined);
-    createUserMock.mockResolvedValue(undefined);
     ldapService.invalidateConfig();
   });
 

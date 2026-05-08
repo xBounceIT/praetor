@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import fs from 'node:fs';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
 import { ALICE_PASSWORD, buildTestConfig, SHOULD_SKIP } from './helpers/ldapTestEnv.ts';
@@ -13,6 +13,10 @@ type LdapServiceShape = {
 };
 
 describe.skipIf(SHOULD_SKIP_TLS)('LDAP integration: LDAPS / TLS', () => {
+  // SHOULD_SKIP_TLS guarantees these are defined when the suite runs.
+  const tlsUrl = TLS_URL as string;
+  const caFile = CA_FILE as string;
+
   const ldapRepoSnap = { ...realLdapRepo };
   const ldapRepoGetMock = mock();
   let ldapService: LdapServiceShape;
@@ -43,16 +47,9 @@ describe.skipIf(SHOULD_SKIP_TLS)('LDAP integration: LDAPS / TLS', () => {
   beforeEach(() => {
     ldapRepoGetMock.mockReset();
     process.env.LDAP_REJECT_UNAUTHORIZED = 'true';
-    process.env.LDAP_TLS_CA_FILE = CA_FILE;
-    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: TLS_URL as string }));
+    process.env.LDAP_TLS_CA_FILE = caFile;
+    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: tlsUrl }));
     ldapService.invalidateConfig();
-  });
-
-  afterEach(() => {
-    for (const key of ENV_KEYS) {
-      if (envBackup[key] === undefined) delete process.env[key];
-      else process.env[key] = envBackup[key];
-    }
   });
 
   test('LDAPS with LDAP_TLS_CA_FILE env: alice authenticates', async () => {
@@ -60,10 +57,10 @@ describe.skipIf(SHOULD_SKIP_TLS)('LDAP integration: LDAPS / TLS', () => {
   });
 
   test('LDAPS with PEM in DB config (tlsCaCertificate): alice authenticates', async () => {
-    const pem = fs.readFileSync(CA_FILE as string, 'utf8');
+    const pem = fs.readFileSync(caFile, 'utf8');
     delete process.env.LDAP_TLS_CA_FILE;
     ldapRepoGetMock.mockResolvedValue(
-      buildTestConfig({ serverUrl: TLS_URL as string, tlsCaCertificate: pem }),
+      buildTestConfig({ serverUrl: tlsUrl, tlsCaCertificate: pem }),
     );
     ldapService.invalidateConfig();
 
@@ -73,7 +70,7 @@ describe.skipIf(SHOULD_SKIP_TLS)('LDAP integration: LDAPS / TLS', () => {
   test('LDAPS with rejectUnauthorized=true and no CA: auth fails', async () => {
     delete process.env.LDAP_TLS_CA_FILE;
     process.env.LDAP_REJECT_UNAUTHORIZED = 'true';
-    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: TLS_URL as string }));
+    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: tlsUrl }));
     ldapService.invalidateConfig();
 
     expect(await ldapService.authenticate('alice', ALICE_PASSWORD)).toBe(false);
@@ -82,7 +79,7 @@ describe.skipIf(SHOULD_SKIP_TLS)('LDAP integration: LDAPS / TLS', () => {
   test('LDAPS with LDAP_REJECT_UNAUTHORIZED=false and no CA: auth succeeds', async () => {
     delete process.env.LDAP_TLS_CA_FILE;
     process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
-    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: TLS_URL as string }));
+    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ serverUrl: tlsUrl }));
     ldapService.invalidateConfig();
 
     expect(await ldapService.authenticate('alice', ALICE_PASSWORD)).toBe(true);

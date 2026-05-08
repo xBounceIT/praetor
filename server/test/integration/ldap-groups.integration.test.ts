@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import ldap from 'ldapjs';
+import { buildUserLookupFilter } from '../../utils/ldap-filter.ts';
 import {
   ALICE_DN,
   SHOULD_SKIP,
@@ -21,11 +22,11 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: group filter wire format', () =>
   });
 
   afterAll(() => {
-    if (client) client.unbind(() => {});
+    client.unbind(() => {});
   });
 
   test('groupFilter (member={DN}) returns expected groups for alice', async () => {
-    const filter = `(member=${ALICE_DN})`;
+    const filter = buildUserLookupFilter('(member={0})', ALICE_DN);
 
     const found = await new Promise<string[]>((resolve, reject) => {
       const results: string[] = [];
