@@ -1065,23 +1065,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 )}
               </div>
 
-              <div className="border-t border-slate-100 pt-4">
-                {editingQuote?.id && previewVersion === null ? (
-                  <SupplierQuoteAttachmentsSection
-                    quoteId={editingQuote.id}
-                    isReadOnly={baseReadOnly}
-                  />
-                ) : (
-                  !editingQuote && (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                      <i className="fa-solid fa-paperclip mr-2"></i>
-                      {t('sales:supplierQuotes.attachments.saveQuoteFirst', {
-                        defaultValue: 'Save the quote first to add attachments.',
-                      })}
-                    </p>
-                  )
-                )}
-              </div>
+              {editingQuote?.id && previewVersion === null ? (
+                <SupplierQuoteAttachmentsSection
+                  quoteId={editingQuote.id}
+                  isReadOnly={baseReadOnly}
+                />
+              ) : (
+                !editingQuote && (
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                    <i className="fa-solid fa-paperclip mr-2"></i>
+                    {t('sales:supplierQuotes.attachments.saveQuoteFirst', {
+                      defaultValue: 'Save the quote first to add attachments.',
+                    })}
+                  </p>
+                )
+              )}
 
               <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
                 <div className="w-full space-y-4 md:w-2/3">

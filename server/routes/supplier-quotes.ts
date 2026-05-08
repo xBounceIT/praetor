@@ -768,19 +768,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     id: string,
     reply: FastifyReply,
   ): Promise<supplierQuotesRepo.SupplierQuote | null> => {
-    const quote = await supplierQuotesRepo.findById(id);
+    const [quote, linkedOrderId] = await Promise.all([
+      supplierQuotesRepo.findById(id),
+      supplierQuotesRepo.findLinkedOrderId(id),
+    ]);
     if (!quote) {
       reply.code(404).send({ error: 'Supplier quote not found' });
       return null;
     }
-    const status = normalizeSupplierQuoteStatus(quote.status);
-    if (status !== 'draft') {
-      reply.code(409).send({ error: 'Attachments can only be modified on draft supplier quotes' });
-      return null;
-    }
-    const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(id);
     if (linkedOrderId) {
       reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      return null;
+    }
+    if (normalizeSupplierQuoteStatus(quote.status) !== 'draft') {
+      reply.code(409).send({ error: 'Attachments can only be modified on draft supplier quotes' });
       return null;
     }
     return quote;
@@ -992,12 +993,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const quote = await assertQuoteEditableForAttachments(idResult.value, reply);
       if (!quote) return;
 
-      const existing = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
-      if (!existing || existing.quoteId !== idResult.value) {
-        return reply.code(404).send({ error: 'Attachment not found' });
-      }
-
-      const deleted = await supplierQuoteAttachmentsRepo.deleteById(attachmentIdResult.value);
+      const deleted = await supplierQuoteAttachmentsRepo.deleteById(
+        attachmentIdResult.value,
+        idResult.value,
+      );
       if (!deleted) {
         return reply.code(404).send({ error: 'Attachment not found' });
       }
@@ -1058,14 +1057,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
       }
 
-      for (const attachment of attachmentsToCleanup) {
-        await deleteSupplierQuoteAttachment(attachment.storedName).catch((err) => {
-          attachmentsLogger.warn(
-            { err, storedName: attachment.storedName },
-            'Failed to remove attachment file during quote delete',
-          );
-        });
-      }
+      await Promise.all(
+        attachmentsToCleanup.map((attachment) =>
+          deleteSupplierQuoteAttachment(attachment.storedName).catch((err) => {
+            attachmentsLogger.warn(
+              { err, storedName: attachment.storedName },
+              'Failed to remove attachment file during quote delete',
+            );
+          }),
+        ),
+      );
 
       await logAudit({
         request,

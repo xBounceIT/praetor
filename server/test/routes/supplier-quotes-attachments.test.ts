@@ -502,7 +502,6 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
   test('204 removes row, file, and audits', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqaFindByIdMock.mockResolvedValue(SAMPLE_ATTACHMENT);
     sqaDeleteByIdMock.mockResolvedValue(SAMPLE_ATTACHMENT);
 
     const res = await testApp.inject({
@@ -512,7 +511,7 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
     });
 
     expect(res.statusCode).toBe(204);
-    expect(sqaDeleteByIdMock).toHaveBeenCalledWith('sqa-1');
+    expect(sqaDeleteByIdMock).toHaveBeenCalledWith('sqa-1', 'sq-1');
     expect(deleteAttachmentMock).toHaveBeenCalledWith('abc-123.xlsx');
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'supplier_quote_attachment.deleted' }),
@@ -536,7 +535,8 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
   test('404 when attachment belongs to another quote', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqaFindByIdMock.mockResolvedValue({ ...SAMPLE_ATTACHMENT, quoteId: 'sq-other' });
+    // deleteById is scoped on (id, quoteId) so a mismatched quoteId yields no row.
+    sqaDeleteByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -545,7 +545,7 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
     });
 
     expect(res.statusCode).toBe(404);
-    expect(sqaDeleteByIdMock).not.toHaveBeenCalled();
+    expect(deleteAttachmentMock).not.toHaveBeenCalled();
   });
 });
 

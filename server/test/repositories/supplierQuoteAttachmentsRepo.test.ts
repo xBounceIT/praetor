@@ -96,19 +96,20 @@ describe('insert', () => {
 });
 
 describe('deleteById', () => {
-  test('returns the deleted row including storedName for cleanup', async () => {
+  test('scopes deletion by attachmentId AND quoteId so cross-quote ids 404 cleanly', async () => {
     exec.enqueue({ rows: [attachmentRow()] });
-    const result = await supplierQuoteAttachmentsRepo.deleteById('sqa-1', testDb);
+    const result = await supplierQuoteAttachmentsRepo.deleteById('sqa-1', 'q-1', testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('delete from "supplier_quote_attachments"');
     expect(sql).toContain('"id" = $1');
+    expect(sql).toContain('"quote_id" = $2');
     expect(sql).toContain('returning');
-    expect(exec.calls[0].params).toEqual(['sqa-1']);
+    expect(exec.calls[0].params).toEqual(['sqa-1', 'q-1']);
     expect(result?.storedName).toBe('abc-123.xlsx');
   });
 
-  test('returns null when no row deleted', async () => {
+  test('returns null when no row deleted (id mismatch or wrong quote)', async () => {
     exec.enqueue({ rows: [] });
-    expect(await supplierQuoteAttachmentsRepo.deleteById('missing', testDb)).toBeNull();
+    expect(await supplierQuoteAttachmentsRepo.deleteById('missing', 'q-1', testDb)).toBeNull();
   });
 });

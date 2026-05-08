@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { supplierQuoteAttachments } from '../db/schema/supplierQuoteAttachments.ts';
 
@@ -77,13 +77,21 @@ export const insert = async (
   return mapRow(row);
 };
 
+// Scoped on BOTH attachmentId and quoteId so an attachment-id from another quote can't be
+// deleted via the wrong route — same defense-in-depth pattern as `supplierQuoteVersionsRepo.findById`.
 export const deleteById = async (
   attachmentId: string,
+  quoteId: string,
   exec: DbExecutor = db,
 ): Promise<SupplierQuoteAttachment | null> => {
   const rows = await exec
     .delete(supplierQuoteAttachments)
-    .where(eq(supplierQuoteAttachments.id, attachmentId))
+    .where(
+      and(
+        eq(supplierQuoteAttachments.id, attachmentId),
+        eq(supplierQuoteAttachments.quoteId, quoteId),
+      ),
+    )
     .returning();
   return rows[0] ? mapRow(rows[0]) : null;
 };

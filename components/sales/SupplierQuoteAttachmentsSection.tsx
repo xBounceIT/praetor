@@ -180,7 +180,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   }, [pendingDelete, quoteId, t]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 border-t border-slate-100 pt-4">
       <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
         <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
         {t('sales:supplierQuotes.attachments.title', { defaultValue: 'Attachments' })}
