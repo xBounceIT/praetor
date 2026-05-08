@@ -21,7 +21,6 @@ export interface DatePickerButtonProps {
 const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   value,
   onChange,
-  onClear,
   label,
   placeholder,
   disabled = false,
@@ -141,14 +140,6 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
     setIsOpen(false);
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedDate(null);
-    setHours(0);
-    setMinutes(0);
-    onClear?.();
-  };
-
   const handleOpen = () => {
     if (disabled) return;
     const initialPosition = calculatePosition();
@@ -188,19 +179,9 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
           <div
             ref={dropdownRef}
             style={dropdownStyles}
-            className="bg-white border border-slate-200 rounded-2xl shadow-xl animate-in fade-in zoom-in-95 duration-100 origin-top-left w-80"
+            className="w-80 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-3"
           >
-            <div className="relative p-3">
-              {value && onClear && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  aria-label={`${label}: ${t('buttons.clear')}`}
-                  className="absolute right-3 top-3 z-10 grid size-7 place-items-center rounded-full bg-white/90 text-slate-400 shadow-sm ring-1 ring-slate-200 transition-colors hover:text-red-500"
-                >
-                  <i className="fa-solid fa-circle-xmark" />
-                </button>
-              )}
+            <div>
               <Calendar
                 selectedDate={selectedDate ?? undefined}
                 onDateSelect={handleDateSelect}
@@ -209,7 +190,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
               />
             </div>
 
-            <div className="border-t border-slate-100 p-3">
+            <div>
               <div className="flex items-center gap-2">
                 <input
                   type="time"
