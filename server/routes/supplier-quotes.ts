@@ -969,8 +969,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // RFC 6266: provide an ASCII-safe `filename` for legacy clients plus an RFC 5987
       // `filename*` with UTF-8 encoding for Unicode filenames. Strip CR/LF/quote/backslash
       // from the legacy form to prevent header injection through user-controlled filenames.
+      // `encodeURIComponent` already emits valid `%XX%XX` UTF-8 byte pairs; we only need to
+      // additionally encode `'`, `(`, `)` per RFC 5987 (the legacy global `escape()` would
+      // emit invalid `%uXXXX` for non-BMP codepoints, hence explicit replacements here).
       const asciiFallback = attachment.fileName.replace(/[\r\n"\\]/g, '');
-      const utf8EncodedName = encodeURIComponent(attachment.fileName).replace(/['()]/g, escape);
+      const utf8EncodedName = encodeURIComponent(attachment.fileName)
+        .replace(/'/g, '%27')
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29');
       reply.header('Content-Type', attachment.mimeType || 'application/octet-stream');
       reply.header('Content-Length', String(opened.size));
       reply.header(
