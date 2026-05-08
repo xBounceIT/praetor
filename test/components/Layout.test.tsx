@@ -46,45 +46,39 @@ describe('<Layout />', () => {
   test('collapsed sidebar auto-expands on hover and collapses again on mouse leave', () => {
     const { container } = renderLayout();
 
-    const nav = container.querySelector('nav');
-    const collapseToggle = container.querySelector(
-      'button.hidden.md\\:flex',
-    ) as HTMLButtonElement | null;
+    const nav = container.querySelector('nav') as HTMLElement;
+    const collapseToggle = container.querySelector('button.hidden.md\\:flex') as HTMLButtonElement;
     expect(nav).not.toBeNull();
     expect(collapseToggle).not.toBeNull();
 
-    // Pin sidebar to collapsed state.
-    fireEvent.click(collapseToggle as HTMLButtonElement);
-    expect(nav?.className).toContain('md:w-20');
-    expect(nav?.className).not.toContain('md:w-64');
+    fireEvent.click(collapseToggle);
+    expect(nav.className).toContain('md:w-20');
+    expect(nav.className).not.toContain('md:w-64');
 
-    // Hovering the collapsed sidebar expands it visually without unpinning.
-    fireEvent.mouseEnter(nav as HTMLElement);
-    expect(nav?.className).toContain('md:w-64');
-    expect(nav?.className).not.toContain('md:w-20');
-    // Toggle chevron still reflects the pinned (collapsed) state.
-    expect(collapseToggle?.className).toContain('rotate-180');
+    fireEvent.mouseEnter(nav);
+    expect(nav.className).toContain('md:w-64');
+    expect(nav.className).not.toContain('md:w-20');
+    // Chevron must keep reflecting the pinned state, not the hover-expanded visual.
+    expect(collapseToggle.className).toContain('rotate-180');
 
-    // Leaving the sidebar collapses it back.
-    fireEvent.mouseLeave(nav as HTMLElement);
-    expect(nav?.className).toContain('md:w-20');
-    expect(nav?.className).not.toContain('md:w-64');
+    fireEvent.mouseLeave(nav);
+    expect(nav.className).toContain('md:w-20');
+    expect(nav.className).not.toContain('md:w-64');
   });
 
   test('layout spacer keeps content from reflowing when sidebar hover-expands', () => {
     const { container } = renderLayout();
 
     const collapseToggle = container.querySelector('button.hidden.md\\:flex') as HTMLButtonElement;
-    const spacer = container.querySelector('div[aria-hidden="true"]');
-    const nav = container.querySelector('nav');
+    const spacer = container.querySelector('div[aria-hidden="true"]') as HTMLElement;
+    const nav = container.querySelector('nav') as HTMLElement;
     expect(spacer).not.toBeNull();
 
     fireEvent.click(collapseToggle);
-    expect(spacer?.className).toContain('md:w-20');
+    expect(spacer.className).toContain('md:w-20');
 
-    fireEvent.mouseEnter(nav as HTMLElement);
-    // Spacer reserves the pinned (collapsed) width even while hover-expanded.
-    expect(spacer?.className).toContain('md:w-20');
-    expect(spacer?.className).not.toContain('md:w-64');
+    fireEvent.mouseEnter(nav);
+    expect(spacer.className).toContain('md:w-20');
+    expect(spacer.className).not.toContain('md:w-64');
   });
 });

@@ -569,8 +569,12 @@ const Layout: React.FC<LayoutProps> = ({
         className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsedPinned ? 'md:w-20' : 'md:w-64'}`}
       />
       <nav
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (isCollapsedPinned) setIsHovered(true);
+        }}
+        onMouseLeave={() => {
+          if (isCollapsedPinned) setIsHovered(false);
+        }}
         className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30 md:absolute md:inset-y-0 md:left-0
           ${isCollapsed ? 'md:w-20' : 'md:w-64'}
           ${isCollapsedPinned && isHovered ? 'md:shadow-2xl md:shadow-black/30' : ''}
