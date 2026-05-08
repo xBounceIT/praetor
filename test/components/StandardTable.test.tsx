@@ -221,7 +221,13 @@ describe('<StandardTable />', () => {
   // Sorting (ascending / descending via the per-column filter popup)
   // ---------------------------------------------------------------------------
   test('sorting ascending by name reorders the rendered rows', () => {
-    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    // Render with intentionally unsorted data so a no-op sort would fail.
+    const unsortedRows: Row[] = [
+      { id: '3', name: 'Charlie', age: 35 },
+      { id: '1', name: 'Alice', age: 30 },
+      { id: '2', name: 'Bob', age: 25 },
+    ];
+    render(<StandardTable<Row> title="People" data={unsortedRows} columns={sampleColumns} />);
     openFilterFor('Name');
     act(() => {
       fireEvent.click(screen.getByText('table.sortAsc'));
