@@ -4,7 +4,8 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import {
-  INSECURE_DEFAULT_JWT_SECRET,
+  INSECURE_DEFAULT_JWT_SECRETS,
+  isInsecureEnvValue,
   readRequiredNonDefaultEnv,
   TEST_JWT_SECRET,
 } from '../utils/runtimeConfig.ts';
@@ -13,11 +14,11 @@ const resolveJwtSecret = () => {
   const configured = process.env.JWT_SECRET?.trim();
   if (
     process.env.NODE_ENV === 'test' &&
-    (!configured || configured === INSECURE_DEFAULT_JWT_SECRET)
+    (!configured || isInsecureEnvValue(configured, INSECURE_DEFAULT_JWT_SECRETS))
   ) {
     return TEST_JWT_SECRET;
   }
-  return readRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRET);
+  return readRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS);
 };
 
 const JWT_SECRET = resolveJwtSecret();

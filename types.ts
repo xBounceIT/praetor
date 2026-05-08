@@ -200,6 +200,50 @@ export interface LdapConfig {
   tlsCaCertificate: string;
 }
 
+export interface LdapTestResponse {
+  success: boolean;
+  authenticated: boolean;
+  username: string;
+  message: string;
+  userDn?: string;
+  groups: string[];
+  roleIds: string[];
+}
+
+export type SsoProtocol = 'oidc' | 'saml';
+
+export interface SsoRoleMapping {
+  externalGroup: string;
+  role: string;
+}
+
+export interface SsoProvider {
+  id: string;
+  protocol: SsoProtocol;
+  slug: string;
+  name: string;
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  metadataUrl: string;
+  metadataXml: string;
+  entryPoint: string;
+  idpIssuer: string;
+  idpCert: string;
+  spIssuer: string;
+  privateKey: string;
+  publicCert: string;
+  usernameAttribute: string;
+  nameAttribute: string;
+  emailAttribute: string;
+  groupsAttribute: string;
+  roleMappings: SsoRoleMapping[];
+}
+
+export type PublicSsoProvider = Pick<SsoProvider, 'protocol' | 'slug' | 'name'>;
+
 export type SmtpEncryption = 'insecure' | 'ssl' | 'tls';
 
 export interface EmailConfig {

@@ -566,7 +566,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className="h-screen flex flex-col md:flex-row md:relative bg-slate-50 overflow-hidden">
       <div
         aria-hidden="true"
-        className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsedPinned ? 'md:w-20' : 'md:w-64'}`}
+        className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:w-20' : 'md:w-64'}`}
       />
       <nav
         onMouseEnter={() => {
@@ -575,7 +575,7 @@ const Layout: React.FC<LayoutProps> = ({
         onMouseLeave={() => {
           if (isCollapsedPinned) setIsHovered(false);
         }}
-        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30 md:absolute md:inset-y-0 md:left-0
+        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-50 md:absolute md:inset-y-0 md:left-0
           ${isCollapsed ? 'md:w-20' : 'md:w-64'}
           ${isCollapsedPinned && isHovered ? 'md:shadow-2xl md:shadow-black/30' : ''}
           w-full`}

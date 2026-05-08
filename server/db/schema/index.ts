@@ -22,6 +22,7 @@ export * from './reportChatSessions.ts';
 export * from './roles.ts';
 export * from './sales.ts';
 export * from './settings.ts';
+export * from './sso.ts';
 export * from './supplierInvoices.ts';
 export * from './supplierOrderVersions.ts';
 export * from './supplierQuoteAttachments.ts';

@@ -3,7 +3,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
-  INSECURE_DEFAULT_ADMIN_PASSWORD,
+  INSECURE_DEFAULT_ADMIN_PASSWORDS,
   readRequiredNonDefaultEnv,
 } from '../utils/runtimeConfig.ts';
 import { query } from './index.ts';
@@ -14,7 +14,7 @@ export const DEFAULT_ADMIN_USER_ID = 'u1';
 const logger = createChildLogger({ module: 'db:bootstrap-admin' });
 
 const resolveBootstrapAdminPassword = () =>
-  readRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORD, {
+  readRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORDS, {
     missing: 'ADMIN_DEFAULT_PASSWORD must be set before creating the bootstrap admin',
     defaultValue: 'ADMIN_DEFAULT_PASSWORD must not use the default password',
   });

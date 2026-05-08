@@ -185,16 +185,19 @@ const ensureSubmittedAssignmentsInScope = async (
   if (!userId || hasPermission(request, 'administration.user_management_all.view')) return true;
 
   if (clientIds && !hasPermission(request, 'crm.clients_all.view')) {
+    if (clientIds.length === 0) return false;
     const allowed = await userAssignmentsRepo.filterAssignedClientIds(userId, clientIds);
     if (clientIds.some((id) => !allowed.has(id))) return false;
   }
 
   if (projectIds && !hasPermission(request, 'projects.manage_all.view')) {
+    if (projectIds.length === 0) return false;
     const allowed = await userAssignmentsRepo.filterAssignedProjectIds(userId, projectIds);
     if (projectIds.some((id) => !allowed.has(id))) return false;
   }
 
   if (taskIds && !hasPermission(request, 'projects.tasks_all.view')) {
+    if (taskIds.length === 0) return false;
     const allowed = await userAssignmentsRepo.filterAssignedTaskIds(userId, taskIds);
     if (taskIds.some((id) => !allowed.has(id))) return false;
   }

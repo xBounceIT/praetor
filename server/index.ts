@@ -8,9 +8,9 @@ import { query } from './db/index.ts';
 import { runDrizzleMigrations } from './db/migrationsRunner.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
-  INSECURE_DEFAULT_ADMIN_PASSWORD,
-  INSECURE_DEFAULT_ENCRYPTION_KEY,
-  INSECURE_DEFAULT_JWT_SECRET,
+  INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  INSECURE_DEFAULT_ENCRYPTION_KEYS,
+  INSECURE_DEFAULT_JWT_SECRETS,
   validateRequiredNonDefaultEnv,
 } from './utils/runtimeConfig.ts';
 
@@ -40,9 +40,9 @@ const parseBooleanEnv = (value: string | undefined): boolean => {
 
 const assertSecureRuntimeConfig = () => {
   const errors = [
-    validateRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRET),
-    validateRequiredNonDefaultEnv('ENCRYPTION_KEY', INSECURE_DEFAULT_ENCRYPTION_KEY),
-    validateRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORD),
+    validateRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS),
+    validateRequiredNonDefaultEnv('ENCRYPTION_KEY', INSECURE_DEFAULT_ENCRYPTION_KEYS),
+    validateRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORDS),
   ].filter((error): error is string => error !== null);
 
   if (errors.length > 0) {

@@ -1179,4 +1179,20 @@ describe('POST /api/users/:id/assignments', () => {
     expect(replaceUserClientsMock).not.toHaveBeenCalled();
     expect(filterAssignedClientIdsMock).toHaveBeenCalledWith(MANAGER_USER.id, ['c-out']);
   });
+
+  test('403 scoped manager cannot clear assignments with an empty array', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.employee_assignments.update']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${MANAGER_USER.id}/assignments`,
+      headers: managerAuth(),
+      payload: { clientIds: [] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(replaceUserClientsMock).not.toHaveBeenCalled();
+    expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
+  });
 });

@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { getLocalDateString } from '../../utils/date';
 import Calendar from './Calendar';
 
+const formatTimeValue = (hours: number, minutes: number) =>
+  `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
 export interface DatePickerButtonProps {
   value: Date | null;
   onChange: (date: Date) => void;
@@ -18,7 +21,6 @@ export interface DatePickerButtonProps {
 const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   value,
   onChange,
-  onClear,
   label,
   placeholder,
   disabled = false,
@@ -103,12 +105,21 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
       month: 'short',
       year: 'numeric',
     });
-    const timeStr = `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-    return `${dateStr} ${timeStr}`;
+    return `${dateStr} ${formatTimeValue(value.getHours(), value.getMinutes())}`;
   };
 
   const handleDateSelect = (dateStr: string) => {
     setSelectedDate(dateStr);
+  };
+
+  const handleTimeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [nextHours, nextMinutes] = event.target.value.split(':').map(Number);
+    if (Number.isFinite(nextHours)) {
+      setHours(Math.min(23, Math.max(0, nextHours)));
+    }
+    if (Number.isFinite(nextMinutes)) {
+      setMinutes(Math.min(59, Math.max(0, nextMinutes)));
+    }
   };
 
   const handleApply = () => {
@@ -127,14 +138,6 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
       }
     }
     setIsOpen(false);
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedDate(null);
-    setHours(0);
-    setMinutes(0);
-    onClear?.();
   };
 
   const handleOpen = () => {
@@ -176,67 +179,35 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
           <div
             ref={dropdownRef}
             style={dropdownStyles}
-            className="bg-white border border-slate-200 rounded-2xl shadow-xl animate-in fade-in zoom-in-95 duration-100 origin-top-left w-80"
+            className="w-80 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-3"
           >
-            <div className="p-3">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>{label}</span>
-                {value && onClear && (
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    className="text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    <i className="fa-solid fa-circle-xmark" />
-                  </button>
-                )}
-              </div>
-
+            <div>
               <Calendar
                 selectedDate={selectedDate ?? undefined}
                 onDateSelect={handleDateSelect}
                 allowWeekendSelection
                 startOfWeek="Monday"
               />
+            </div>
 
-              <div className="mt-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    {t('labels.time')}
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={String(hours).padStart(2, '0')}
-                      onChange={(e) =>
-                        setHours(Math.min(23, Math.max(0, parseInt(e.target.value, 10) || 0)))
-                      }
-                      className="w-12 px-2 py-1.5 text-sm text-center bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                    <span className="text-slate-400 font-bold">:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={String(minutes).padStart(2, '0')}
-                      onChange={(e) =>
-                        setMinutes(Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)))
-                      }
-                      className="w-12 px-2 py-1.5 text-sm text-center bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-praetor"
-                    />
-                  </div>
-                  <div className="ml-auto">
-                    <button
-                      type="button"
-                      onClick={handleApply}
-                      className="px-4 py-1.5 text-sm font-bold bg-praetor text-white rounded-lg hover:opacity-90 transition-opacity"
-                    >
-                      {t('buttons.apply')}
-                    </button>
-                  </div>
-                </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  aria-label={t('labels.time')}
+                  value={formatTimeValue(hours, minutes)}
+                  onChange={handleTimeChange}
+                  className="h-10 flex-1 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+                />
+                <button
+                  type="button"
+                  onClick={handleApply}
+                  aria-label={t('buttons.apply')}
+                  title={t('buttons.apply')}
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-praetor text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2"
+                >
+                  <i className="fa-solid fa-check" />
+                </button>
               </div>
             </div>
           </div>,
