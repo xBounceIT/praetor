@@ -176,6 +176,13 @@
       "when": 1778106233320,
       "tag": "0024_add_ldap_ca_certificate",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778196941020,
+      "tag": "0025_add_supplier_quote_attachments",
+      "breakpoints": true
     }
   ]
 }

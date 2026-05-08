@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
@@ -73,6 +74,14 @@ export const buildApp = async () => {
     errorResponseBuilder: () => ({
       error: 'Too many requests',
     }),
+  });
+
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+      files: 1,
+      fields: 0,
+    },
   });
 
   await fastify.register(swagger, {
