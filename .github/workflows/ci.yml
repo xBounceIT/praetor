@@ -171,11 +171,27 @@ jobs:
           LDAP_TEST_TLS_URL: ldaps://localhost:1636
           LDAP_TLS_CA_FILE: ${{ github.workspace }}/server/test/integration/.certs/ca.crt
           LDAP_REJECT_UNAUTHORIZED: 'true'
-        run: bun run test:integration
+          # Suppress pino output from expected-failure paths (auth catch block emits
+          # logger.error with node:net stack traces that GH Actions otherwise picks up
+          # as misleading annotations even though those tests pass by asserting false).
+          LOG_LEVEL: fatal
+        run: bun run test:integration 2>&1 | tee /tmp/ldap-integration.log
 
-      - name: Capture LDAP logs on failure
-        if: failure()
-        run: docker logs praetor-ldap
+      - name: Capture LDAP container logs (always)
+        if: always()
+        run: |
+          echo "===== praetor-ldap container logs ====="
+          docker logs praetor-ldap 2>&1 || true
+          echo "===== end container logs ====="
+
+      - name: Upload integration test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ldap-integration-logs
+          path: |
+            /tmp/ldap-integration.log
+          retention-days: 7
 
       - name: Tear down LDAP container
         if: always()
