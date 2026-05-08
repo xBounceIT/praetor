@@ -449,7 +449,7 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
 });
 
 describe('GET /api/sales/supplier-quotes/:id/attachments/:attachmentId/download', () => {
-  test('200 streams file with Content-Disposition', async () => {
+  test('200 streams file with RFC 6266 Content-Disposition (ASCII + UTF-8)', async () => {
     sqaFindByIdMock.mockResolvedValue(SAMPLE_ATTACHMENT);
     const { Readable } = await import('node:stream');
     openAttachmentMock.mockResolvedValue({
@@ -464,11 +464,42 @@ describe('GET /api/sales/supplier-quotes/:id/attachments/:attachmentId/download'
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.headers['content-disposition']).toBe('attachment; filename="order.xlsx"');
+    expect(res.headers['content-disposition']).toBe(
+      `attachment; filename="order.xlsx"; filename*=UTF-8''order.xlsx`,
+    );
     expect(res.headers['content-type']).toBe(
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     expect(res.body).toBe('hello world');
+  });
+
+  test('strips CR/LF/quote from Content-Disposition filename to prevent header injection', async () => {
+    sqaFindByIdMock.mockResolvedValue({
+      ...SAMPLE_ATTACHMENT,
+      fileName: 'evil"\r\nSet-Cookie: pwn=1.xlsx',
+    });
+    const { Readable } = await import('node:stream');
+    openAttachmentMock.mockResolvedValue({
+      stream: Readable.from(Buffer.from('x')),
+      size: 1,
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/supplier-quotes/sq-1/attachments/sqa-1/download',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const disposition = res.headers['content-disposition'] as string;
+    expect(disposition).not.toContain('\r');
+    expect(disposition).not.toContain('\n');
+    // Quote stripped from the legacy `filename=` parameter; filename* preserves the original
+    // (URL-encoded) so non-ASCII filenames still round-trip on RFC-5987-aware clients.
+    expect(disposition).toMatch(
+      /^attachment; filename="evilSet-Cookie: pwn=1\.xlsx"; filename\*=UTF-8''/,
+    );
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   test('404 when attachment id belongs to a different quote', async () => {

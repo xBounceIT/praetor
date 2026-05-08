@@ -855,6 +855,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const originalName = part.filename?.trim();
+
+        // Drain the multipart stream up front, before any validation early-returns. If we
+        // bail on filename/MIME without consuming `part.file`, fastify-multipart leaves the
+        // request body un-drained which can stall the connection until the parser times out.
+        let buffer: Buffer;
+        try {
+          buffer = await part.toBuffer();
+        } catch (err) {
+          if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
+            return reply.code(413).send({ error: 'File exceeds the 10 MB upload limit' });
+          }
+          throw err;
+        }
+
         if (!originalName) {
           return reply.code(400).send({ error: 'Uploaded file is missing a filename' });
         }
@@ -864,16 +878,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply
             .code(415)
             .send({ error: 'File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.' });
-        }
-
-        let buffer: Buffer;
-        try {
-          buffer = await part.toBuffer();
-        } catch (err) {
-          if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
-            return reply.code(413).send({ error: 'File exceeds the 10 MB upload limit' });
-          }
-          throw err;
         }
 
         if (buffer.byteLength > ATTACHMENT_MAX_BYTES) {
@@ -894,6 +898,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           fileSize: uploaded.size,
           uploadedByUserId: request.user?.id ?? null,
         });
+        // DB row is now the source of truth — clear the cleanup token before audit so a
+        // failing audit log doesn't unlink the file under a live row.
+        uploaded = null;
 
         await logAudit({
           request,
@@ -906,11 +913,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           },
         });
 
-        uploaded = null;
         return reply.code(201).send(projectAttachment(attachment));
       } finally {
         if (uploaded) {
-          // DB insert failed after file landed on disk — clean up so we don't leave orphans.
           await deleteSupplierQuoteAttachment(uploaded.storedName).catch((err) => {
             attachmentsLogger.warn(
               { err, storedName: uploaded?.storedName },
@@ -961,10 +966,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Attachment file is no longer available' });
       }
 
-      const safeName = attachment.fileName.replace(/"/g, '');
+      // RFC 6266: provide an ASCII-safe `filename` for legacy clients plus an RFC 5987
+      // `filename*` with UTF-8 encoding for Unicode filenames. Strip CR/LF/quote/backslash
+      // from the legacy form to prevent header injection through user-controlled filenames.
+      const asciiFallback = attachment.fileName.replace(/[\r\n"\\]/g, '');
+      const utf8EncodedName = encodeURIComponent(attachment.fileName).replace(/['()]/g, escape);
       reply.header('Content-Type', attachment.mimeType || 'application/octet-stream');
       reply.header('Content-Length', String(opened.size));
-      reply.header('Content-Disposition', `attachment; filename="${safeName}"`);
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8EncodedName}`,
+      );
       return reply.send(opened.stream);
     },
   );
