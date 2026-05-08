@@ -147,6 +147,23 @@ jobs:
           docker logs praetor-ldap
           exit 1
 
+      - name: Wait for LDAPS (1636) ready
+        run: |
+          for i in $(seq 1 15); do
+            # Reachability + TLS handshake from the runner host using the generated CA.
+            if openssl s_client -connect localhost:1636 \
+                 -CAfile server/test/integration/.certs/ca.crt \
+                 -verify_return_error </dev/null >/dev/null 2>&1; then
+              echo "LDAPS ready after ~$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::LDAPS did not become ready within 30s — TLS likely failed to start"
+          echo "--- Container logs (slapd / TLS startup):"
+          docker logs praetor-ldap
+          exit 1
+
       - name: Run LDAP integration tests
         working-directory: server
         env:
