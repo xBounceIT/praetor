@@ -51,6 +51,7 @@ const cpoDeleteByIdMock = mock();
 // userAssignmentsRepo
 const assignClientToUserMock = mock(async () => undefined);
 const assignClientToTopManagersMock = mock(async () => undefined);
+const isClientAssignedToUserMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
@@ -97,6 +98,7 @@ beforeAll(async () => {
     ...userAssignmentsRepoSnap,
     assignClientToUser: assignClientToUserMock,
     assignClientToTopManagers: assignClientToTopManagersMock,
+    isClientAssignedToUser: isClientAssignedToUserMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -202,6 +204,7 @@ const allMocks = [
   cpoDeleteByIdMock,
   assignClientToUserMock,
   assignClientToTopManagersMock,
+  isClientAssignedToUserMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -217,6 +220,7 @@ beforeEach(async () => {
   logAuditMock.mockImplementation(async () => undefined);
   assignClientToUserMock.mockImplementation(async () => undefined);
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
+  isClientAssignedToUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients');
 });
@@ -518,6 +522,22 @@ describe('PUT /api/clients/:id', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  test('403 when scoped updater is not assigned to client', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients.view', 'crm.clients.update']);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+      payload: { name: 'X' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(findContactsForUpdateMock).not.toHaveBeenCalled();
+    expect(updateClientMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/clients/:id', () => {
@@ -563,6 +583,20 @@ describe('DELETE /api/clients/:id', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403 when scoped deleter is not assigned to client', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients.view', 'crm.clients.delete']);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(deleteClientByIdMock).not.toHaveBeenCalled();
   });
 });
 

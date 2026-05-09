@@ -48,6 +48,8 @@ const assignClientToUserMock = mock(async () => undefined);
 const assignProjectToUserMock = mock(async () => undefined);
 const assignClientToTopManagersMock = mock(async () => undefined);
 const assignProjectToTopManagersMock = mock(async () => undefined);
+const isClientAssignedToUserMock = mock();
+const isProjectAssignedToUserMock = mock();
 
 // audit + db
 const logAuditMock = mock(async () => undefined);
@@ -92,6 +94,8 @@ beforeAll(async () => {
     assignProjectToUser: assignProjectToUserMock,
     assignClientToTopManagers: assignClientToTopManagersMock,
     assignProjectToTopManagers: assignProjectToTopManagersMock,
+    isClientAssignedToUser: isClientAssignedToUserMock,
+    isProjectAssignedToUser: isProjectAssignedToUserMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -169,6 +173,8 @@ const allMocks = [
   assignProjectToUserMock,
   assignClientToTopManagersMock,
   assignProjectToTopManagersMock,
+  isClientAssignedToUserMock,
+  isProjectAssignedToUserMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -186,6 +192,8 @@ beforeEach(async () => {
   assignProjectToUserMock.mockImplementation(async () => undefined);
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
+  isClientAssignedToUserMock.mockResolvedValue(true);
+  isProjectAssignedToUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -370,6 +378,21 @@ describe('POST /api/projects', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  test('403: scoped creator cannot create under unassigned client', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.create']);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(createMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/projects/:id', () => {
@@ -421,6 +444,21 @@ describe('DELETE /api/projects/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403: scoped deleter cannot delete unassigned project', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.delete']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockNameAndClientByIdMock).not.toHaveBeenCalled();
+    expect(deleteByIdMock).not.toHaveBeenCalled();
   });
 });
 
@@ -596,6 +634,25 @@ describe('PUT /api/projects/:id', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  test('403: scoped updater cannot move project under unassigned client', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.manage.update',
+      'projects.manage_all.view',
+    ]);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/projects/:id/users', () => {
@@ -628,6 +685,21 @@ describe('GET /api/projects/:id/users', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403: scoped assignment editor cannot edit unassigned project', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.assignments.update']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects/p-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u1'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockNameAndClientByIdMock).not.toHaveBeenCalled();
   });
 });
 

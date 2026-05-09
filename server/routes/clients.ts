@@ -289,6 +289,13 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
+const canAccessClient = (request: FastifyRequest, clientId: string) => {
+  if (hasPermission(request, 'crm.clients_all.view')) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
@@ -566,6 +573,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      if (!(await canAccessClient(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+
       const hasName = Object.hasOwn(body, 'name');
       const hasClientCode = Object.hasOwn(body, 'clientCode');
       const hasFiscalCode = Object.hasOwn(body, 'fiscalCode');
@@ -808,6 +819,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canAccessClient(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const deleted = await clientsRepo.deleteById(idResult.value);
       if (!deleted) {

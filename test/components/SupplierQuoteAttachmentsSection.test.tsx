@@ -186,7 +186,7 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.'),
+        screen.getByText('File type not allowed. Use xlsx, pdf, or docx.'),
       ).toBeInTheDocument(),
     );
     expect(uploadAttachmentMock).not.toHaveBeenCalled();

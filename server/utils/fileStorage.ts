@@ -7,14 +7,11 @@ export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export const ATTACHMENT_ALLOWED_MIME = new Set<string>([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'text/csv',
   'application/pdf',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-export const ATTACHMENT_ALLOWED_EXT = new Set<string>(['xlsx', 'xls', 'csv', 'pdf', 'doc', 'docx']);
+export const ATTACHMENT_ALLOWED_EXT = new Set<string>(['xlsx', 'pdf', 'docx']);
 
 const SUPPLIER_QUOTE_ATTACHMENTS_DIR = 'supplier-quote-attachments';
 
@@ -31,7 +28,7 @@ export const isAllowedAttachment = (mimeType: string, fileName: string): boolean
   const ext = getExtensionFromName(fileName);
   if (!ATTACHMENT_ALLOWED_EXT.has(ext)) return false;
   // Some browsers (Safari, some Chrome configs) report `application/octet-stream` for
-  // legitimate xlsx/doc uploads, so accept that as a generic fallback when the extension
+  // legitimate xlsx/docx uploads, so accept that as a generic fallback when the extension
   // itself is allowed. All other MIME types must be on the allowlist.
   if (mimeType === 'application/octet-stream') return true;
   return ATTACHMENT_ALLOWED_MIME.has(mimeType);

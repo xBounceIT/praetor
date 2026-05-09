@@ -2,8 +2,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
+import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -20,6 +22,8 @@ const permissionsSnap = { ...realPermissions };
 const entriesRepoSnap = { ...realEntriesRepo };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
+const projectsRepoSnap = { ...realProjectsRepo };
+const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 
 // Auth-middleware deps (real authenticateToken runs)
@@ -43,6 +47,10 @@ const entriesFindContextMock = mock();
 const entriesFindOwnerMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
+const projectsFindClientIdMock = mock();
+const isClientAssignedToUserMock = mock();
+const isProjectAssignedToUserMock = mock();
+const isTaskAssignedToUserMock = mock();
 
 let entriesRoutePlugin: FastifyPluginAsync;
 
@@ -83,6 +91,16 @@ beforeAll(async () => {
     ...tasksRepoSnap,
     findIdByProjectAndName: findIdByProjectAndNameMock,
   }));
+  mock.module('../../repositories/projectsRepo.ts', () => ({
+    ...projectsRepoSnap,
+    findClientId: projectsFindClientIdMock,
+  }));
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
+    ...userAssignmentsRepoSnap,
+    isClientAssignedToUser: isClientAssignedToUserMock,
+    isProjectAssignedToUser: isProjectAssignedToUserMock,
+    isTaskAssignedToUser: isTaskAssignedToUserMock,
+  }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsRepoSnap,
     isUserManagedBy: isUserManagedByMock,
@@ -99,6 +117,8 @@ afterAll(() => {
   mock.module('../../repositories/entriesRepo.ts', () => entriesRepoSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
+  mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
 });
 
@@ -156,6 +176,10 @@ const allMocks = [
   entriesFindContextMock,
   entriesFindOwnerMock,
   entriesDecodeCursorMock,
+  projectsFindClientIdMock,
+  isClientAssignedToUserMock,
+  isProjectAssignedToUserMock,
+  isTaskAssignedToUserMock,
 ];
 
 let testApp: FastifyInstance;
@@ -168,6 +192,10 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TRACKER_PERMS);
+  projectsFindClientIdMock.mockResolvedValue('c1');
+  isClientAssignedToUserMock.mockResolvedValue(true);
+  isProjectAssignedToUserMock.mockResolvedValue(true);
+  isTaskAssignedToUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(entriesRoutePlugin, '/api/entries');
 });
@@ -455,6 +483,55 @@ describe('POST /api/entries', () => {
     expect(res.statusCode).toBe(201);
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
     expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
+  });
+
+  test('400 when project belongs to a different client', async () => {
+    projectsFindClientIdMock.mockResolvedValue('other-client');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Project does not belong to the selected client',
+    });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when project does not exist', async () => {
+    projectsFindClientIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project not found' });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when target user is not assigned to submitted project scope', async () => {
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Not authorized to create entries for this client, project, or task',
+    });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 });
 

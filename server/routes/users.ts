@@ -169,6 +169,42 @@ const maskUserResponse = (
   costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
+const ensureSubmittedAssignmentsInScope = async (
+  request: FastifyRequest,
+  {
+    clientIds,
+    projectIds,
+    taskIds,
+  }: {
+    clientIds?: string[];
+    projectIds?: string[];
+    taskIds?: string[];
+  },
+) => {
+  const userId = request.user?.id;
+  if (!userId || hasPermission(request, 'administration.user_management_all.view')) return true;
+
+  if (clientIds && !hasPermission(request, 'crm.clients_all.view')) {
+    if (clientIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedClientIds(userId, clientIds);
+    if (clientIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  if (projectIds && !hasPermission(request, 'projects.manage_all.view')) {
+    if (projectIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedProjectIds(userId, projectIds);
+    if (projectIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  if (taskIds && !hasPermission(request, 'projects.tasks_all.view')) {
+    if (taskIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedTaskIds(userId, taskIds);
+    if (taskIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  return true;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List users
   fastify.get(
@@ -810,6 +846,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const taskIdsResult = optionalArrayOfStrings(taskIds, 'taskIds');
       if (!taskIdsResult.ok) return badRequest(reply, taskIdsResult.message);
       const resolvedTaskIds = taskIdsResult.value;
+
+      const assignmentsInScope = await ensureSubmittedAssignmentsInScope(request, {
+        clientIds: resolvedClientIds ?? undefined,
+        projectIds: resolvedProjectIds ?? undefined,
+        taskIds: resolvedTaskIds ?? undefined,
+      });
+      if (!assignmentsInScope) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const [targetUser, isTopManager] = await Promise.all([
         usersRepo.findCoreById(idResult.value),

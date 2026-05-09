@@ -2,7 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as entriesRepo from '../repositories/entriesRepo.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
+import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
+import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
@@ -283,6 +285,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         projectIdResult.value,
         taskResult.value,
       );
+      const projectClientId = await projectsRepo.findClientId(projectIdResult.value);
+      if (projectClientId === null) {
+        return badRequest(reply, 'Project not found');
+      }
+      if (projectClientId !== clientIdResult.value) {
+        return badRequest(reply, 'Project does not belong to the selected client');
+      }
+
+      if (!hasPermission(request, 'timesheets.tracker_all.view')) {
+        const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
+          userAssignmentsRepo.isClientAssignedToUser(targetUserId, clientIdResult.value),
+          userAssignmentsRepo.isProjectAssignedToUser(targetUserId, projectIdResult.value),
+          resolvedTaskId
+            ? userAssignmentsRepo.isTaskAssignedToUser(targetUserId, resolvedTaskId)
+            : Promise.resolve(true),
+        ]);
+        if (!clientAllowed || !projectAllowed || !taskAllowed) {
+          return reply
+            .code(403)
+            .send({ error: 'Not authorized to create entries for this client, project, or task' });
+        }
+      }
 
       const created = await entriesRepo.create({
         id: generatePrefixedId('te'),

@@ -2,13 +2,22 @@ import bcrypt from 'bcryptjs';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import {
+  INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  readRequiredNonDefaultEnv,
+} from '../utils/runtimeConfig.ts';
 import { query } from './index.ts';
 
 export const ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_USER_ID = 'u1';
-export const DEFAULT_ADMIN_PASSWORD = 'password';
 
 const logger = createChildLogger({ module: 'db:bootstrap-admin' });
+
+const resolveBootstrapAdminPassword = () =>
+  readRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORDS, {
+    missing: 'ADMIN_DEFAULT_PASSWORD must be set before creating the bootstrap admin',
+    defaultValue: 'ADMIN_DEFAULT_PASSWORD must not use the default password',
+  });
 
 export const ensureBootstrapAdmin = async () => {
   const existingAdmin = await query('SELECT id FROM users WHERE username = $1 LIMIT 1', [
@@ -25,9 +34,7 @@ export const ensureBootstrapAdmin = async () => {
     ]);
     adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : generatePrefixedId('u');
 
-    const rawPassword = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
-    const adminPassword =
-      rawPassword && rawPassword.length > 0 ? rawPassword : DEFAULT_ADMIN_PASSWORD;
+    const adminPassword = resolveBootstrapAdminPassword();
     const passwordHash = await bcrypt.hash(adminPassword, 12);
 
     await usersRepo.createUser({
@@ -40,8 +47,7 @@ export const ensureBootstrapAdmin = async () => {
     });
     logger.info(
       {
-        passwordSource:
-          rawPassword && rawPassword.length > 0 ? 'ADMIN_DEFAULT_PASSWORD' : 'fallback',
+        passwordSource: 'ADMIN_DEFAULT_PASSWORD',
       },
       'Bootstrap admin created',
     );

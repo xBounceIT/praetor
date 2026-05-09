@@ -875,9 +875,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const mimeType = part.mimetype || 'application/octet-stream';
         if (!isAllowedAttachment(mimeType, originalName)) {
-          return reply
-            .code(415)
-            .send({ error: 'File type not allowed. Use xlsx, xls, csv, pdf, doc, or docx.' });
+          return reply.code(415).send({ error: 'File type not allowed. Use xlsx, pdf, or docx.' });
         }
 
         if (buffer.byteLength > ATTACHMENT_MAX_BYTES) {
