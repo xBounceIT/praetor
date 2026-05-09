@@ -356,6 +356,22 @@ describe('<StandardTable />', () => {
     expect(tbody.textContent).toContain('Charlie');
   });
 
+  test('header filter menu uses shadcn border tokens and searches filter options', async () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    const user = await openHeaderFilter('Name');
+
+    const content = document.body.querySelector('[data-slot="dropdown-menu-content"]');
+    expect(content?.className).toContain('border-border');
+
+    const search = screen.getByRole('searchbox', { name: 'table.search Name' });
+    expect(search).toHaveAttribute('placeholder', 'table.search');
+    await user.type(search, 'ali');
+
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Bob' })).toBeNull();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Charlie' })).toBeNull();
+  });
+
   test('does not render the unsolicited toolbar search input', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     expect(screen.queryByPlaceholderText('table.search Name')).not.toBeInTheDocument();

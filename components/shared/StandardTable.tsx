@@ -42,6 +42,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import CustomViewModal from './CustomViewModal';
@@ -210,6 +211,7 @@ const StandardTable = <T extends object>({
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [filterSearchByColumnId, setFilterSearchByColumnId] = useState<Record<string, string>>({});
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
@@ -957,9 +959,25 @@ const StandardTable = <T extends object>({
     const selectedValues = getSelectedFilterValues(column);
     const hasFilter = selectedValues.length > 0;
     const options = getFilterOptions(column.id);
+    const filterSearch = filterSearchByColumnId[column.id] ?? '';
+    const normalizedFilterSearch = filterSearch.trim().toLocaleLowerCase();
+    const visibleOptions = normalizedFilterSearch
+      ? options.filter((option) =>
+          (option || t('table.empty')).toLocaleLowerCase().includes(normalizedFilterSearch),
+        )
+      : options;
 
     return (
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open || !filterSearchByColumnId[column.id]) return;
+          setFilterSearchByColumnId((prev) => {
+            const next = { ...prev };
+            delete next[column.id];
+            return next;
+          });
+        }}
+      >
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
@@ -980,9 +998,24 @@ const StandardTable = <T extends object>({
         >
           <DropdownMenuLabel className="text-xs">{sourceColumn.header}</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <div className="p-1">
+            <Input
+              type="search"
+              value={filterSearch}
+              onChange={(event) => {
+                const value = event.target.value;
+                setFilterSearchByColumnId((prev) => ({ ...prev, [column.id]: value }));
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder={t('table.search')}
+              aria-label={`${t('table.search')} ${sourceColumn.header}`}
+              className="h-8 text-xs"
+            />
+          </div>
           <div className="max-h-64 overflow-y-auto">
-            {options.length > 0 ? (
-              options.map((option) => (
+            {visibleOptions.length > 0 ? (
+              visibleOptions.map((option) => (
                 <DropdownMenuCheckboxItem
                   key={option || '__empty__'}
                   checked={selectedValues.includes(option)}
