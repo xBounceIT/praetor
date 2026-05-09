@@ -194,17 +194,6 @@ input[type="number"] {
   }
 }
 
-@keyframes profile-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 .sidebar-entry-content {
   overflow: hidden;
 }
@@ -215,8 +204,4 @@ input[type="number"] {
 
 .sidebar-entry-content[data-state="closed"] {
   animation: sidebar-entry-up 100ms ease-in;
-}
-
-.profile-menu-content[data-state="open"] {
-  animation: profile-menu-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
