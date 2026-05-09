@@ -47,6 +47,13 @@ const Tooltip: React.FC<TooltipProps> = ({
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const [effectivePosition, setEffectivePosition] = useState<TooltipPosition>(position);
   const [arrowOffset, setArrowOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasLabel = label !== null && label !== undefined && label !== '';
+
+  useEffect(() => {
+    if (disabled || !hasLabel) {
+      setIsVisible(false);
+    }
+  }, [disabled, hasLabel]);
 
   const calcCoords = useCallback((pos: TooltipPosition) => {
     if (!wrapperRef.current) return null;
@@ -183,7 +190,7 @@ const Tooltip: React.FC<TooltipProps> = ({
     setIsVisible(false);
   };
 
-  if (disabled || label === null || label === undefined || label === '') {
+  if (disabled || !hasLabel) {
     return <>{children()}</>;
   }
 
