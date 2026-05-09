@@ -589,6 +589,9 @@ const StandardTable = <T extends object>({
     return [];
   };
 
+  const isRowActionColumn = (col: Column<T>) =>
+    col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null;
+
   const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
@@ -1257,7 +1260,8 @@ const StandardTable = <T extends object>({
                     const col = colsById.get(header.column.id);
                     if (!col) return null;
                     const colId = getColId(col);
-                    const isActionColumn = col.sticky === 'right';
+                    const isStickyRightColumn = col.sticky === 'right';
+                    const isActionColumn = isRowActionColumn(col);
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === headerGroup.headers.length - 1;
                     const isStretchColumn = colIdx === stretchColumnIdx;
@@ -1276,12 +1280,12 @@ const StandardTable = <T extends object>({
                         style={
                           colWidth
                             ? { width: colWidth, minWidth: colWidth }
-                            : isActionColumn
+                            : isStickyRightColumn
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
                         aria-label={isActionColumn ? col.header : undefined}
-                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : isActionColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isActionColumn ? 'sticky right-0 z-20 border-l border-border bg-background' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-background' : ''} ${col.headerClassName || ''}`}
                       >
                         {!isActionColumn && (
                           <div
@@ -1342,7 +1346,8 @@ const StandardTable = <T extends object>({
                         const colId = cell.column.id;
                         const col = colsById.get(colId);
                         if (!col) return null;
-                        const isActionColumn = col.sticky === 'right';
+                        const isStickyRightColumn = col.sticky === 'right';
+                        const isActionColumn = isRowActionColumn(col);
                         const isFirstColumn = colIdx === 0;
                         const isLastColumn = colIdx === visibleCells.length - 1;
                         const isStretchColumn = colIdx === stretchColumnIdx;
@@ -1367,11 +1372,11 @@ const StandardTable = <T extends object>({
                             style={
                               colWidth
                                 ? { width: colWidth, minWidth: colWidth }
-                                : isActionColumn
+                                : isStickyRightColumn
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${isActionColumn ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isActionColumn ? 'sticky right-0 z-20 border-l border-border bg-background transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${isStickyRightColumn ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-background transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>

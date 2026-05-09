@@ -370,6 +370,18 @@ describe('<StandardTable />', () => {
     expect(screen.queryByText('Actions')).not.toBeInTheDocument();
   });
 
+  test('sticky-right data columns stay inline instead of becoming row actions', () => {
+    const cols = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      { header: 'Age', accessorKey: 'age' as const, id: 'age', sticky: 'right' as const },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+
+    expect(screen.getByText('Age')).toBeInTheDocument();
+    expect(screen.getByText('30')).toBeInTheDocument();
+    expect(screen.queryByLabelText('table.rowActions')).not.toBeInTheDocument();
+  });
+
   test('sticky-right body cell collapses actions behind an ellipsis menu', async () => {
     const user = userEvent.setup();
     const cols = [
