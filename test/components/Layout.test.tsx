@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import type { Role, User } from '../../types';
+import { applyTheme } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -95,12 +97,14 @@ describe('<Layout />', () => {
     expect(activeButton?.className).not.toContain('text-black');
   });
 
-  test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', () => {
+  test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', async () => {
     localStorage.setItem('praetor_theme', 'dark');
+    const user = userEvent.setup();
     const { container } = renderLayout();
 
     const trigger = screen.getByRole('button', { name: 'TU Test User roles.manager' });
-    fireEvent.pointerDown(trigger);
+    await user.click(trigger);
+    await screen.findByRole('menu');
 
     const dropdownContent = document.body.querySelector('[data-slot="dropdown-menu-content"]');
     const dropdownIdentity = dropdownContent?.querySelector('.text-popover-foreground');
@@ -109,10 +113,32 @@ describe('<Layout />', () => {
     expect(trigger.className).toContain('text-sidebar-foreground');
     expect(dropdownContent?.className).toContain('dark');
     expect(dropdownContent?.className).not.toContain('border-zinc-200');
+    expect(dropdownContent?.className).toContain('border-border');
     expect(dropdownContent?.getAttribute('data-shadcn-theme')).toBe('dark');
     expect(dropdownIdentity).not.toBeNull();
     expect(dropdownRole).not.toBeNull();
     expect(container.ownerDocument.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  test('open account dropdown updates when shadcn theme changes', async () => {
+    localStorage.setItem('praetor_theme', 'light');
+    const user = userEvent.setup();
+    renderLayout();
+
+    const trigger = screen.getByRole('button', { name: 'TU Test User roles.manager' });
+    await user.click(trigger);
+    await screen.findByRole('menu');
+
+    const dropdownContent = document.body.querySelector('[data-slot="dropdown-menu-content"]');
+    expect(dropdownContent?.getAttribute('data-shadcn-theme')).toBe('light');
+    expect(dropdownContent?.className).not.toContain('dark');
+
+    act(() => {
+      applyTheme('dark');
+    });
+
+    await waitFor(() => expect(dropdownContent?.getAttribute('data-shadcn-theme')).toBe('dark'));
+    expect(dropdownContent?.className).toContain('dark');
   });
 
   test('sidebar trigger toggles desktop icon-collapse state', () => {
@@ -182,16 +208,17 @@ describe('<Layout />', () => {
     isMobileViewport = false;
   });
 
-  test('mobile user menu settings closes the sidebar sheet', () => {
+  test('mobile user menu settings closes the sidebar sheet', async () => {
     isMobileViewport = true;
     const onViewChange = mock(() => {});
+    const user = userEvent.setup();
     renderLayout({ onViewChange });
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
     expect(screen.getByRole('dialog')).toBeDefined();
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'menu.settings' }));
+    await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'menu.settings' }));
 
     expect(onViewChange).toHaveBeenCalledWith('settings');
     expect(screen.queryByRole('dialog')).toBeNull();

@@ -138,12 +138,22 @@ describe('applyTheme', () => {
 
   test('applies dark mode to shadcn theme scopes only', () => {
     const scope = appendThemeScope();
+    let eventTheme: string | undefined;
+    window.addEventListener(
+      'praetor-theme-change',
+      (event) => {
+        eventTheme = (event as CustomEvent<{ resolvedTheme: string }>).detail.resolvedTheme;
+      },
+      { once: true },
+    );
+
     applyTheme('dark');
     const root = document.documentElement;
     expect(root.classList.contains('dark')).toBe(false);
     expect(root.dataset.theme).toBeUndefined();
     expect(scope.classList.contains('dark')).toBe(true);
     expect(scope.dataset.shadcnTheme).toBe('dark');
+    expect(eventTheme).toBe('dark');
   });
 
   test('auto resolves to the browser theme', () => {

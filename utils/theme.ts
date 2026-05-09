@@ -6,10 +6,12 @@ export type ResolvedTheme = Exclude<Theme, 'auto'>;
 const STORAGE_KEY = 'praetor_theme';
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
 const SHADCN_THEME_SCOPE_SELECTOR = '[data-shadcn-theme-scope]';
+const THEME_CHANGE_EVENT_NAME = 'praetor-theme-change';
 
 export const THEME_STORAGE_KEY = STORAGE_KEY;
 export const THEME_MEDIA_QUERY = DARK_MODE_QUERY;
 export const THEME_SCOPE_SELECTOR = SHADCN_THEME_SCOPE_SELECTOR;
+export const THEME_CHANGE_EVENT = THEME_CHANGE_EVENT_NAME;
 
 let removeAutoThemeListener: (() => void) | undefined;
 
@@ -31,6 +33,10 @@ const resolveTheme = (theme: Theme): ResolvedTheme => {
   return theme === 'auto' ? getBrowserTheme() : theme;
 };
 
+export const getResolvedTheme = (theme: Theme = getTheme()): ResolvedTheme => {
+  return resolveTheme(theme);
+};
+
 const clearLegacyRootTheme = () => {
   const root = document.documentElement;
   root.classList.remove('dark');
@@ -44,6 +50,11 @@ const applyResolvedTheme = (theme: ResolvedTheme) => {
     scope.classList.toggle('dark', theme === 'dark');
     scope.dataset.shadcnTheme = theme;
   });
+  window.dispatchEvent(
+    new CustomEvent(THEME_CHANGE_EVENT_NAME, {
+      detail: { resolvedTheme: theme },
+    }),
+  );
 };
 
 const unsubscribeAutoTheme = () => {
