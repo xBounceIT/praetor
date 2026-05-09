@@ -16,6 +16,7 @@ export interface DatePickerButtonProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  buttonClassName?: string;
 }
 
 const DatePickerButton: React.FC<DatePickerButtonProps> = ({
@@ -25,6 +26,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   placeholder,
   disabled = false,
   className = '',
+  buttonClassName = '',
 }) => {
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
@@ -156,7 +158,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
         type="button"
         disabled={disabled}
         onClick={handleOpen}
-        className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors
+        className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors ${buttonClassName}
   ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}
   ${isOpen ? 'border-praetor ring-1 ring-praetor bg-white' : 'border-slate-200 bg-white text-slate-600'}`}
       >
