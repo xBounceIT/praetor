@@ -16,6 +16,7 @@ export interface DatePickerButtonProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  buttonClassName?: string;
 }
 
 const DatePickerButton: React.FC<DatePickerButtonProps> = ({
@@ -25,6 +26,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   placeholder,
   disabled = false,
   className = '',
+  buttonClassName = '',
 }) => {
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
@@ -67,14 +69,14 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
     const buttonRect = buttonRef.current?.getBoundingClientRect();
     if (!buttonRect) return null;
 
-    const dropdownHeight = 400;
+    const dropdownHeight = 360;
     const spaceBelow = window.innerHeight - buttonRect.bottom;
     const shouldOpenUp = spaceBelow < dropdownHeight && buttonRect.top > dropdownHeight;
 
     return {
       position: 'fixed' as const,
       top: shouldOpenUp ? Math.max(8, buttonRect.top - dropdownHeight - 4) : buttonRect.bottom + 4,
-      left: Math.max(8, Math.min(buttonRect.left, window.innerWidth - 320)),
+      left: Math.max(8, Math.min(buttonRect.left, window.innerWidth - 288)),
       zIndex: 1000,
     };
   }, []);
@@ -156,7 +158,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
         type="button"
         disabled={disabled}
         onClick={handleOpen}
-        className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors
+        className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors ${buttonClassName}
   ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}
   ${isOpen ? 'border-praetor ring-1 ring-praetor bg-white' : 'border-slate-200 bg-white text-slate-600'}`}
       >
@@ -179,7 +181,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
           <div
             ref={dropdownRef}
             style={dropdownStyles}
-            className="w-80 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-3"
+            className="w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5"
           >
             <div>
               <Calendar
@@ -187,6 +189,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                 onDateSelect={handleDateSelect}
                 allowWeekendSelection
                 startOfWeek="Monday"
+                size="compact"
               />
             </div>
 
@@ -197,14 +200,14 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-10 flex-1 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+                  className="h-9 flex-1 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
                 />
                 <button
                   type="button"
                   onClick={handleApply}
                   aria-label={t('buttons.apply')}
                   title={t('buttons.apply')}
-                  className="grid size-10 shrink-0 place-items-center rounded-full bg-praetor text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2"
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-praetor text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2"
                 >
                   <i className="fa-solid fa-check" />
                 </button>

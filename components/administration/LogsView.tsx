@@ -16,6 +16,8 @@ const humanizeToken = (value: string) =>
     .trim()
     .toLowerCase();
 
+const tableToolbarButtonClassName = '!h-7 !px-2 !gap-1.5 !rounded-lg !text-[10px] !font-bold';
+
 type TimeRange =
   | 'today'
   | 'yesterday'
@@ -319,6 +321,7 @@ const LogsView: React.FC = () => {
         value={startDate}
         onChange={handleStartDateChange}
         onClear={handleStartDateClear}
+        buttonClassName={tableToolbarButtonClassName}
       />
       <i className="fa-solid fa-arrow-right text-slate-300 text-sm" />
       <DatePickerButton
@@ -326,21 +329,24 @@ const LogsView: React.FC = () => {
         value={endDate}
         onChange={handleEndDateChange}
         onClear={handleEndDateClear}
+        buttonClassName={tableToolbarButtonClassName}
       />
       <CustomSelect
         options={timeRangeOptions}
         value={dropdownValue}
         onChange={handleTimeRangeChange}
         displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName="h-10 px-3 text-sm font-semibold !bg-white"
+        buttonClassName={`${tableToolbarButtonClassName} !bg-white`}
       />
       <button
         type="button"
         onClick={handleRefreshLogs}
         disabled={loading || isRefreshing}
-        className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`${tableToolbarButtonClassName} inline-flex items-center border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
       >
-        <i className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'}`} />
+        <i
+          className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'} text-[10px]`}
+        />
         {t('common:buttons.refresh')}
       </button>
     </div>
