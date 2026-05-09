@@ -348,6 +348,9 @@ describe('<StandardTable />', () => {
 
     await waitFor(() => expect(headerCell.style.width).toBe('160px'));
     expect(headerCell.style.minWidth).toBe('160px');
+    await waitFor(() => expect(headerCell.closest('table')?.className).toContain('table-fixed'));
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
 
     act(() => {
       fireEvent.mouseUp(document);
