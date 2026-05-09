@@ -1,9 +1,24 @@
-import { describe, expect, test } from 'bun:test';
-import { fireEvent, render } from '@testing-library/react';
+import { describe, expect, mock, test } from 'bun:test';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type React from 'react';
 import type { Role, User } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
+
+let isMobileViewport = false;
+
+window.matchMedia = () =>
+  ({
+    matches: isMobileViewport,
+    media: '',
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
 
 const Layout = (await import('../../components/Layout')).default;
 
@@ -13,12 +28,12 @@ const mockUser: User = {
   role: 'manager',
   avatarInitials: 'TU',
   username: 'testuser',
-  permissions: [],
+  permissions: ['timesheets.tracker.view', 'timesheets.recurring.view', 'crm.clients.view'],
 };
 
 const mockRoles: Role[] = [];
 
-const renderLayout = () =>
+const renderLayout = (props?: Partial<React.ComponentProps<typeof Layout>>) =>
   render(
     <Layout
       activeView="timesheets/tracker"
@@ -27,6 +42,7 @@ const renderLayout = () =>
       onLogout={() => {}}
       onSwitchRole={() => {}}
       roles={mockRoles}
+      {...props}
     >
       <div>content</div>
     </Layout>,
@@ -43,58 +59,86 @@ describe('<Layout />', () => {
     expect(classes).not.toContain('z-20');
   });
 
-  test('desktop sidebar paints above the sticky page header', () => {
+  test('renders the shadcn sidebar shell and active menu state', () => {
     const { container } = renderLayout();
 
-    const nav = container.querySelector('nav');
-    const header = container.querySelector('header');
-    const navClasses = nav?.className.split(/\s+/) ?? [];
-    const headerClasses = header?.className.split(/\s+/) ?? [];
+    const wrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
+    const sidebar = container.querySelector('[data-slot="sidebar"]');
+    const activeButtons = container.querySelectorAll(
+      '[data-sidebar="menu-button"][data-active="true"]',
+    );
 
-    expect(navClasses).toContain('z-50');
-    expect(headerClasses).toContain('z-40');
+    expect(wrapper).not.toBeNull();
+    expect(sidebar).not.toBeNull();
+    expect(sidebar?.getAttribute('data-state')).toBe('expanded');
+    expect(activeButtons.length).toBeGreaterThan(0);
+    expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
   });
 
-  test('collapsed sidebar auto-expands on hover and collapses again on mouse leave', () => {
+  test('sidebar trigger toggles desktop icon-collapse state', () => {
+    isMobileViewport = false;
     const { container } = renderLayout();
 
-    const nav = container.querySelector('nav') as HTMLElement;
-    const collapseToggle = container.querySelector('button.hidden.md\\:flex') as HTMLButtonElement;
-    expect(nav).not.toBeNull();
-    expect(collapseToggle).not.toBeNull();
+    const sidebar = container.querySelector('[data-slot="sidebar"]') as HTMLElement;
+    const trigger = container.querySelector('[data-sidebar="trigger"]') as HTMLButtonElement;
 
-    fireEvent.click(collapseToggle);
-    expect(nav.className).toContain('md:w-20');
-    expect(nav.className).not.toContain('md:w-64');
+    expect(sidebar).not.toBeNull();
+    expect(trigger).not.toBeNull();
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
 
-    fireEvent.mouseEnter(nav);
-    expect(nav.className).toContain('md:w-64');
-    expect(nav.className).not.toContain('md:w-20');
-    // Chevron must keep reflecting the pinned state, not the hover-expanded visual.
-    expect(collapseToggle.className).toContain('rotate-180');
+    fireEvent.click(trigger);
 
-    fireEvent.mouseLeave(nav);
-    expect(nav.className).toContain('md:w-20');
-    expect(nav.className).not.toContain('md:w-64');
+    expect(sidebar.getAttribute('data-state')).toBe('collapsed');
+    expect(sidebar.getAttribute('data-collapsible')).toBe('icon');
   });
 
-  test('layout spacer pushes content when sidebar hover-expands', () => {
-    const { container } = renderLayout();
+  test('permission-filtered modules hide inaccessible routes', () => {
+    isMobileViewport = false;
+    renderLayout();
 
-    const collapseToggle = container.querySelector('button.hidden.md\\:flex') as HTMLButtonElement;
-    const spacer = container.querySelector('div[aria-hidden="true"]') as HTMLElement;
-    const nav = container.querySelector('nav') as HTMLElement;
-    expect(spacer).not.toBeNull();
+    expect(screen.getByText('modules.timesheets')).toBeDefined();
+    expect(screen.getByText('modules.crm')).toBeDefined();
+    expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
+    expect(screen.queryByText('routes.suppliers')).toBeNull();
+    expect(screen.queryByText('modules.accounting')).toBeNull();
+  });
 
-    fireEvent.click(collapseToggle);
-    expect(spacer.className).toContain('md:w-20');
+  test('active module expands when active view changes', () => {
+    isMobileViewport = false;
+    const { rerender } = renderLayout();
 
-    fireEvent.mouseEnter(nav);
-    expect(spacer.className).toContain('md:w-64');
-    expect(spacer.className).not.toContain('md:w-20');
+    fireEvent.click(screen.getByRole('button', { name: 'modules.timesheets' }));
 
-    fireEvent.mouseLeave(nav);
-    expect(spacer.className).toContain('md:w-20');
-    expect(spacer.className).not.toContain('md:w-64');
+    rerender(
+      <Layout
+        activeView="crm/clients"
+        onViewChange={() => {}}
+        currentUser={mockUser}
+        onLogout={() => {}}
+        onSwitchRole={() => {}}
+        roles={mockRoles}
+      >
+        <div>content</div>
+      </Layout>,
+    );
+
+    expect(screen.getByRole('button', { name: 'modules.crm' }).getAttribute('data-state')).toBe(
+      'open',
+    );
+  });
+
+  test('mobile route click closes the sidebar sheet', () => {
+    isMobileViewport = true;
+    const onViewChange = mock(() => {});
+    renderLayout({ onViewChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'routes.recurringTasks' }));
+
+    expect(onViewChange).toHaveBeenCalledWith('timesheets/recurring');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    isMobileViewport = false;
   });
 });
