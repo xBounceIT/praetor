@@ -349,6 +349,7 @@ describe('<StandardTable />', () => {
     await waitFor(() => expect(headerCell.style.width).toBe('160px'));
     expect(headerCell.style.minWidth).toBe('160px');
     await waitFor(() => expect(headerCell.closest('table')?.className).toContain('table-fixed'));
+    expect(screen.getByText('Age').closest('th')?.style.minWidth).toBe('88px');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
 
@@ -483,6 +484,7 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-card');
+    expect(actionsHeader.style.minWidth).toBe('48px');
     expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('');
     expect(screen.queryByText('Actions')).not.toBeInTheDocument();
@@ -520,6 +522,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
+    expect(firstActionCell?.style.minWidth).toBe('48px');
     expect(firstActionCell?.className).not.toContain('bg-background');
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');

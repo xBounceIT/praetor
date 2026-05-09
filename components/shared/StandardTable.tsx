@@ -96,6 +96,8 @@ const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
+const ACTION_COLUMN_WIDTH = 48;
+const HEADER_CHAR_WIDTH = 8;
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -659,6 +661,14 @@ const StandardTable = <T extends object>({
 
   const isRowActionColumn = (col: Column<T>) =>
     col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null;
+
+  const getHeaderMinWidth = (col: Column<T>) =>
+    isRowActionColumn(col)
+      ? ACTION_COLUMN_WIDTH
+      : Math.max(
+          DEFAULT_MIN_COL_WIDTH,
+          Math.ceil(col.header.length * HEADER_CHAR_WIDTH + HEADER_RESIZE_EXTRA_WIDTH),
+        );
 
   const getElementLike = (node: ReactNode) => {
     if (isValidElement(node))
@@ -1496,6 +1506,16 @@ const StandardTable = <T extends object>({
       >
         {columns && data ? (
           <Table className={`w-full text-left ${usesFixedTableLayout ? 'table-fixed' : ''}`}>
+            {usesFixedTableLayout && (
+              <colgroup>
+                {table.getVisibleLeafColumns().map((column) => {
+                  const col = colsById.get(column.id);
+                  if (!col) return null;
+                  const colWidth = validColumnWidths[column.id] ?? getHeaderMinWidth(col);
+                  return <col key={column.id} style={{ width: colWidth, minWidth: colWidth }} />;
+                })}
+              </colgroup>
+            )}
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="border-border hover:bg-transparent">
@@ -1514,7 +1534,9 @@ const StandardTable = <T extends object>({
                       : isLastColumn
                         ? 'right'
                         : col.align;
-                    const colWidth = validColumnWidths[colId];
+                    const colWidth =
+                      validColumnWidths[colId] ??
+                      (usesFixedTableLayout || isActionColumn ? getHeaderMinWidth(col) : undefined);
                     const sorted = header.column.getIsSorted();
                     const stickyBorderClass =
                       isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
@@ -1614,7 +1636,11 @@ const StandardTable = <T extends object>({
                           : isLastColumn
                             ? 'right'
                             : col.align;
-                        const colWidth = validColumnWidths[colId];
+                        const colWidth =
+                          validColumnWidths[colId] ??
+                          (usesFixedTableLayout || isActionColumn
+                            ? getHeaderMinWidth(col)
+                            : undefined);
                         const stickyBorderClass =
                           isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
                             ? 'border-l border-border'
