@@ -91,10 +91,15 @@ describe('<Layout />', () => {
     const activeButton = container.querySelector(
       '[data-sidebar="menu-button"][data-active="true"]',
     );
+    const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
+    const brandSubtitle = screen.getByText('roles.manager workspace');
 
     expect(activeButton?.className).toContain('text-sidebar-foreground');
     expect(activeButton?.className).toContain('data-[active=true]:text-sidebar-accent-foreground');
     expect(activeButton?.className).not.toContain('text-black');
+    expect(brandButton?.className).toContain('text-sidebar-foreground');
+    expect(brandButton?.className).toContain('hover:text-sidebar-foreground');
+    expect(brandSubtitle.className).toContain('text-sidebar-foreground/80');
   });
 
   test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', async () => {
