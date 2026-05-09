@@ -1469,7 +1469,7 @@ const StandardTable = <T extends object>({
                               type="button"
                               disabled={!header.column.getCanSort()}
                               onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex min-w-0 items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
                               <span className="truncate">
                                 {header.isPlaceholder
@@ -1484,7 +1484,7 @@ const StandardTable = <T extends object>({
                                       : sorted === 'desc'
                                         ? 'fa-arrow-down'
                                         : 'fa-arrow-up-arrow-down'
-                                  } text-[10px]`}
+                                  } shrink-0 text-[10px] transition-colors`}
                                   aria-hidden="true"
                                 ></i>
                               )}

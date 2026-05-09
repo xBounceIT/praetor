@@ -288,6 +288,21 @@ describe('<StandardTable />', () => {
     expect(rows[2]).toContain('Charlie');
   });
 
+  test('sortable column header uses shadcn hover background and sort icon styling', () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    const headerCell = screen.getByText('Name').closest('th') as HTMLTableCellElement;
+    const sortButton = within(headerCell)
+      .getAllByRole('button')
+      .find((button) => button.textContent?.trim().startsWith('Name')) as HTMLButtonElement;
+    const sortIcon = sortButton.querySelector('i.fa-arrow-up-arrow-down');
+
+    expect(sortButton.className).toContain('rounded-md');
+    expect(sortButton.className).toContain('hover:bg-accent');
+    expect(sortButton.className).toContain('hover:text-accent-foreground');
+    expect(sortIcon?.className).toContain('transition-colors');
+  });
+
   test('sorting descending by age reorders numerically (largest first)', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     clickSortHeader('Age');
