@@ -1,18 +1,54 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { applyTheme, getTheme, THEMES, type Theme } from '../../utils/theme';
+import {
+  applyTheme,
+  getBrowserTheme,
+  getTheme,
+  THEME_MEDIA_QUERY,
+  THEME_STORAGE_KEY,
+  THEMES,
+  type Theme,
+} from '../../utils/theme';
 
-const STORAGE_KEY = 'praetor_theme';
+const originalMatchMedia = window.matchMedia;
+
+const setBrowserDarkMode = (matches: boolean) => {
+  let listener: ((event: MediaQueryListEvent) => void) | undefined;
+  const mediaQuery = {
+    matches,
+    media: THEME_MEDIA_QUERY,
+    onchange: null,
+    addEventListener: (_type: string, callback: (event: MediaQueryListEvent) => void) => {
+      listener = callback;
+    },
+    removeEventListener: () => {
+      listener = undefined;
+    },
+    addListener: (callback: (event: MediaQueryListEvent) => void) => {
+      listener = callback;
+    },
+    removeListener: () => {
+      listener = undefined;
+    },
+    dispatchEvent: () => true,
+    triggerChange: (nextMatches: boolean) => {
+      mediaQuery.matches = nextMatches;
+      listener?.({ matches: nextMatches } as MediaQueryListEvent);
+    },
+  };
+
+  window.matchMedia = (() => mediaQuery as MediaQueryList) as typeof window.matchMedia;
+};
+
+const resetRootTheme = () => {
+  const root = document.documentElement;
+  root.classList.remove('dark');
+  root.removeAttribute('data-theme');
+  root.style.removeProperty('color-scheme');
+};
 
 describe('THEMES constant', () => {
-  test('exposes both "default" and "tempo" themes', () => {
-    expect(Object.keys(THEMES).sort()).toEqual(['default', 'tempo']);
-  });
-
-  test('every theme defines --color-primary and --color-primary-hover', () => {
-    for (const theme of Object.keys(THEMES) as Theme[]) {
-      expect(THEMES[theme]['--color-primary']).toBeDefined();
-      expect(THEMES[theme]['--color-primary-hover']).toBeDefined();
-    }
+  test('exposes light, dark, and auto themes', () => {
+    expect([...THEMES]).toEqual(['light', 'dark', 'auto']);
   });
 });
 
@@ -21,87 +57,114 @@ describe('getTheme', () => {
     localStorage.clear();
   });
 
-  test('returns "default" when nothing is stored', () => {
-    expect(getTheme()).toBe('default');
+  test('returns "auto" when nothing is stored', () => {
+    expect(getTheme()).toBe('auto');
   });
 
-  test('returns "default" when stored value is unrecognized', () => {
-    localStorage.setItem(STORAGE_KEY, 'unknown-theme');
-    expect(getTheme()).toBe('default');
+  test('returns "auto" when stored value is unrecognized', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'unknown-theme');
+    expect(getTheme()).toBe('auto');
   });
 
-  test('returns "tempo" when explicitly stored', () => {
-    localStorage.setItem(STORAGE_KEY, 'tempo');
-    expect(getTheme()).toBe('tempo');
+  test('returns each recognized theme when explicitly stored', () => {
+    for (const theme of THEMES) {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      expect(getTheme()).toBe(theme);
+    }
   });
 
-  test('returns "default" when explicitly stored', () => {
-    localStorage.setItem(STORAGE_KEY, 'default');
-    expect(getTheme()).toBe('default');
+  test('rejects legacy storage values', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'tempo');
+    expect(getTheme()).toBe('auto');
+  });
+});
+
+describe('getBrowserTheme', () => {
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
   });
 
-  test('rejects empty-string storage value', () => {
-    localStorage.setItem(STORAGE_KEY, '');
-    expect(getTheme()).toBe('default');
+  test('returns dark when the browser dark media query matches', () => {
+    setBrowserDarkMode(true);
+    expect(getBrowserTheme()).toBe('dark');
+  });
+
+  test('returns light when the browser dark media query does not match', () => {
+    setBrowserDarkMode(false);
+    expect(getBrowserTheme()).toBe('light');
   });
 });
 
 describe('applyTheme', () => {
   beforeEach(() => {
     localStorage.clear();
-    // Clear inline CSS variables that any prior test (or default styles) may have set.
-    const root = document.documentElement;
-    root.style.removeProperty('--color-primary');
-    root.style.removeProperty('--color-primary-hover');
+    resetRootTheme();
+    setBrowserDarkMode(false);
   });
 
   afterEach(() => {
     localStorage.clear();
-    const root = document.documentElement;
-    root.style.removeProperty('--color-primary');
-    root.style.removeProperty('--color-primary-hover');
+    resetRootTheme();
+    window.matchMedia = originalMatchMedia;
   });
 
   test('writes the chosen theme name to localStorage', () => {
-    applyTheme('tempo');
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('tempo');
+    applyTheme('dark');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
 
-  test('writes "default" theme name to localStorage', () => {
-    applyTheme('default');
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('default');
-  });
-
-  test('sets the documented CSS custom properties for the "default" theme', () => {
-    applyTheme('default');
+  test('applies light mode to the document root', () => {
+    applyTheme('light');
     const root = document.documentElement;
-    expect(root.style.getPropertyValue('--color-primary')).toBe(THEMES.default['--color-primary']);
-    expect(root.style.getPropertyValue('--color-primary-hover')).toBe(
-      THEMES.default['--color-primary-hover'],
-    );
+    expect(root.classList.contains('dark')).toBe(false);
+    expect(root.dataset.theme).toBe('light');
+    expect(root.style.colorScheme).toBe('light');
   });
 
-  test('sets the documented CSS custom properties for the "tempo" theme', () => {
-    applyTheme('tempo');
+  test('applies dark mode to the document root', () => {
+    applyTheme('dark');
     const root = document.documentElement;
-    expect(root.style.getPropertyValue('--color-primary')).toBe(THEMES.tempo['--color-primary']);
-    expect(root.style.getPropertyValue('--color-primary-hover')).toBe(
-      THEMES.tempo['--color-primary-hover'],
-    );
+    expect(root.classList.contains('dark')).toBe(true);
+    expect(root.dataset.theme).toBe('dark');
+    expect(root.style.colorScheme).toBe('dark');
   });
 
-  test('switching themes overwrites the previously applied custom properties', () => {
-    applyTheme('default');
-    applyTheme('tempo');
-    const root = document.documentElement;
-    expect(root.style.getPropertyValue('--color-primary')).toBe(THEMES.tempo['--color-primary']);
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('tempo');
+  test('auto resolves to the browser theme', () => {
+    setBrowserDarkMode(true);
+    applyTheme('auto');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  test('auto follows browser theme changes after it is applied', () => {
+    const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
+      triggerChange: (nextMatches: boolean) => void;
+    };
+
+    applyTheme('auto');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    mediaQuery.triggerChange(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  test('switching to a fixed theme stops following browser theme changes', () => {
+    const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
+      triggerChange: (nextMatches: boolean) => void;
+    };
+
+    applyTheme('auto');
+    applyTheme('light');
+
+    mediaQuery.triggerChange(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
   });
 
   test('round-trips with getTheme', () => {
-    applyTheme('tempo');
-    expect(getTheme()).toBe('tempo');
-    applyTheme('default');
-    expect(getTheme()).toBe('default');
+    for (const theme of THEMES as readonly Theme[]) {
+      applyTheme(theme);
+      expect(getTheme()).toBe(theme);
+    }
   });
 });

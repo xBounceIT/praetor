@@ -1,28 +1,65 @@
-export type Theme = 'default' | 'tempo';
+export const THEMES = ['light', 'dark', 'auto'] as const;
 
-export const THEMES: Record<Theme, Record<string, string>> = {
-  default: {
-    '--color-primary': '#20293F',
-    '--color-primary-hover': '#2d3a55',
-  },
-  tempo: {
-    '--color-primary': '#4F46E5', // Indigo-600
-    '--color-primary-hover': '#4338ca', // Indigo-700
-  },
+export type Theme = (typeof THEMES)[number];
+export type ResolvedTheme = Exclude<Theme, 'auto'>;
+
+const STORAGE_KEY = 'praetor_theme';
+const DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
+
+export const THEME_STORAGE_KEY = STORAGE_KEY;
+export const THEME_MEDIA_QUERY = DARK_MODE_QUERY;
+
+let removeAutoThemeListener: (() => void) | undefined;
+
+const isTheme = (value: string | null): value is Theme => {
+  return value === 'light' || value === 'dark' || value === 'auto';
 };
 
 export const getTheme = (): Theme => {
-  const saved = localStorage.getItem('praetor_theme');
-  return saved === 'tempo' || saved === 'default' ? saved : 'default';
+  const saved = localStorage.getItem(STORAGE_KEY);
+  return isTheme(saved) ? saved : 'auto';
+};
+
+export const getBrowserTheme = (): ResolvedTheme => {
+  if (typeof window.matchMedia !== 'function') return 'light';
+  return window.matchMedia(DARK_MODE_QUERY).matches ? 'dark' : 'light';
+};
+
+const resolveTheme = (theme: Theme): ResolvedTheme => {
+  return theme === 'auto' ? getBrowserTheme() : theme;
+};
+
+const applyResolvedTheme = (theme: ResolvedTheme) => {
+  const root = document.documentElement;
+  root.classList.toggle('dark', theme === 'dark');
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
+};
+
+const unsubscribeAutoTheme = () => {
+  removeAutoThemeListener?.();
+  removeAutoThemeListener = undefined;
+};
+
+const subscribeAutoTheme = () => {
+  if (typeof window.matchMedia !== 'function') return;
+
+  const mediaQuery = window.matchMedia(DARK_MODE_QUERY);
+  const handleChange = () => applyResolvedTheme(resolveTheme('auto'));
+
+  if (typeof mediaQuery.addEventListener === 'function') {
+    mediaQuery.addEventListener('change', handleChange);
+    removeAutoThemeListener = () => mediaQuery.removeEventListener('change', handleChange);
+    return;
+  }
+
+  mediaQuery.addListener(handleChange);
+  removeAutoThemeListener = () => mediaQuery.removeListener(handleChange);
 };
 
 export const applyTheme = (theme: Theme) => {
-  const colors = THEMES[theme];
-  const root = document.documentElement;
-
-  Object.entries(colors).forEach(([property, value]) => {
-    root.style.setProperty(property, value);
-  });
-
-  localStorage.setItem('praetor_theme', theme);
+  unsubscribeAutoTheme();
+  applyResolvedTheme(resolveTheme(theme));
+  if (theme === 'auto') subscribeAutoTheme();
+  localStorage.setItem(STORAGE_KEY, theme);
 };
