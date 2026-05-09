@@ -16,6 +16,7 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
 });
 
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
+const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
 type Row = { id: string; name: string; age: number };
 
@@ -299,6 +300,7 @@ describe('<StandardTable />', () => {
     const sortIcon = sortButton.querySelector('i.fa-arrow-up-arrow-down');
 
     expect(sortButton.className).toContain('rounded-md');
+    expect(sortButton.className).toContain('font-semibold');
     expect(sortButton.className).toContain('hover:bg-accent');
     expect(sortButton.className).toContain('hover:text-accent-foreground');
     expect(sortIcon?.className).toContain('transition-colors');
@@ -311,12 +313,16 @@ describe('<StandardTable />', () => {
     const headerLabel = headerCell.querySelector(
       '[data-column-header-label="name"]',
     ) as HTMLElement;
+    const ageHeaderLabel = screen
+      .getByText('Age')
+      .closest('[data-column-header-label="age"]') as HTMLElement;
     const resizeHandle = headerCell.querySelector(
       '[data-column-resize-handle="name"]',
     ) as HTMLElement;
     const resizeLine = headerCell.querySelector('[data-column-resize-line="name"]') as HTMLElement;
 
     Object.defineProperty(headerLabel, 'scrollWidth', { configurable: true, value: 96 });
+    Object.defineProperty(ageHeaderLabel, 'scrollWidth', { configurable: true, value: 24 });
     Object.defineProperty(headerCell, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({
@@ -356,6 +362,28 @@ describe('<StandardTable />', () => {
     act(() => {
       fireEvent.mouseUp(document);
     });
+  });
+
+  test('fixed table fallback widths use measured full header text', async () => {
+    localStorage.setItem('praetor_table_colwidths_measured_headers', JSON.stringify({ name: 160 }));
+    const columns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      { header: 'Very Long Header', accessorKey: 'age' as const, id: 'age' },
+    ];
+
+    render(<StandardTable<Row> title="Measured Headers" data={sampleRows} columns={columns} />);
+
+    const longHeaderCell = screen.getByText('Very Long Header').closest('th') as HTMLElement;
+    const longHeaderLabel = longHeaderCell.querySelector(
+      '[data-column-header-label="age"]',
+    ) as HTMLElement;
+    Object.defineProperty(longHeaderLabel, 'scrollWidth', { configurable: true, value: 136 });
+
+    act(() => {
+      fireEvent.resize(window);
+    });
+
+    await waitFor(() => expect(longHeaderCell.style.minWidth).toBe('200px'));
   });
 
   test('stale stored column widths do not force fixed table layout', () => {
@@ -468,7 +496,7 @@ describe('<StandardTable />', () => {
   // ---------------------------------------------------------------------------
   // Sticky-right action column: classes on header and body cells
   // ---------------------------------------------------------------------------
-  test('sticky-right action header is sticky but visually empty', () => {
+  test('sticky-right action header is sticky and keeps its label without sort controls', () => {
     const cols = [
       ...sampleColumns,
       {
@@ -484,10 +512,37 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-card');
-    expect(actionsHeader.style.minWidth).toBe('48px');
+    expect(actionsHeader.style.minWidth).toBe('80px');
     expect(actionsHeader.className).not.toContain('bg-background');
-    expect(actionsHeader.textContent?.trim()).toBe('');
-    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    expect(actionsHeader.textContent?.trim()).toBe('Actions');
+    expect(within(actionsHeader).queryByRole('button')).not.toBeInTheDocument();
+    expect(actionsHeader.querySelector('i.fa-arrow-up-arrow-down')).toBeNull();
+  });
+
+  test('value cells reset custom value styling while preserving status badges', () => {
+    const cols = [
+      {
+        header: 'Name',
+        accessorKey: 'name' as const,
+        id: 'name',
+        cell: ({ row }: { row: Row }) => (
+          <span className="rounded-lg bg-red-500 px-2 font-bold text-red-900">{row.name}</span>
+        ),
+      },
+      {
+        header: 'Status',
+        accessorKey: 'age' as const,
+        id: 'status',
+        cell: () => <StatusBadge type="active" label="Active" />,
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 1)} columns={cols} />);
+
+    expect(screen.getByText('Alice').closest('td')?.className).toContain(
+      'standard-table-value-cell',
+    );
+    expect(screen.getByText('Active')).toHaveAttribute('data-status-badge');
   });
 
   test('sticky-right data columns stay inline instead of becoming row actions', () => {
@@ -522,7 +577,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
-    expect(firstActionCell?.style.minWidth).toBe('48px');
+    expect(firstActionCell?.style.minWidth).toBe('80px');
     expect(firstActionCell?.className).not.toContain('bg-background');
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
@@ -668,6 +723,8 @@ describe('<StandardTable />', () => {
     );
     const trigger = screen.getByRole('combobox');
     expect(trigger.textContent).toContain('5');
+    expect(trigger.className).toContain('h-7');
+    expect(trigger.className).toContain('text-foreground');
     await user.click(trigger);
     await user.click(screen.getByRole('option', { name: '20' }));
 
@@ -732,7 +789,7 @@ describe('<StandardTable />', () => {
 
     const previousButton = screen.getByRole('button', { name: 'buttons.previous' });
     expect(previousButton).toBeDisabled();
-    expect(previousButton.getAttribute('data-size')).toBe('sm');
+    expect(previousButton.getAttribute('data-size')).toBe('xs');
     expect(previousButton.className).toContain('border-border');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
@@ -761,10 +818,10 @@ describe('<StandardTable />', () => {
     const increaseFontButton = screen.getByRole('button', { name: 'table.increaseFont' });
     const columnsButton = screen.getByRole('button', { name: 'table.columnSettings' });
 
-    expect(exportButton.getAttribute('data-size')).toBe('sm');
-    expect(columnsButton.getAttribute('data-size')).toBe('sm');
-    expect(decreaseFontButton.getAttribute('data-size')).toBe('icon-sm');
-    expect(increaseFontButton.getAttribute('data-size')).toBe('icon-sm');
+    expect(exportButton.getAttribute('data-size')).toBe('xs');
+    expect(columnsButton.getAttribute('data-size')).toBe('xs');
+    expect(decreaseFontButton.getAttribute('data-size')).toBe('icon-xs');
+    expect(increaseFontButton.getAttribute('data-size')).toBe('icon-xs');
 
     for (const button of [exportButton, decreaseFontButton, increaseFontButton, columnsButton]) {
       expect(button.className).toContain('border-border');

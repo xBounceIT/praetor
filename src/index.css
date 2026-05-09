@@ -347,3 +347,23 @@ input[type="number"] {
 .sidebar-entry-content[data-state="closed"] {
   animation: sidebar-entry-up 100ms ease-in;
 }
+
+.standard-table-value-cell :where(:not([data-status-badge], [data-status-badge] *)) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  letter-spacing: normal !important;
+  padding: 0 !important;
+  text-transform: none !important;
+}
+
+.standard-table-value-cell i {
+  display: none !important;
+}
+
+.standard-table-value-cell [data-status-badge] i {
+  display: inline-block !important;
+}

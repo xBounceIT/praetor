@@ -96,8 +96,7 @@ const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
-const ACTION_COLUMN_WIDTH = 48;
-const HEADER_CHAR_WIDTH = 8;
+const ACTION_COLUMN_WIDTH = 80;
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -177,6 +176,7 @@ const StandardTable = <T extends object>({
   const [gearOpen, setGearOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
   const [actionColumnOverlaps, setActionColumnOverlaps] = useState(false);
+  const [headerMinWidths, setHeaderMinWidths] = useState<Record<string, number>>({});
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
@@ -297,6 +297,43 @@ const StandardTable = <T extends object>({
       }) ?? [],
     [columns, hiddenColIds, getColId],
   );
+  const updateHeaderMinWidths = useCallback(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const next: Record<string, number> = {};
+    for (const col of visibleColumns) {
+      const colId = getColId(col);
+      if (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null) {
+        next[colId] = ACTION_COLUMN_WIDTH;
+        continue;
+      }
+
+      const headerLabel = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-column-header-label]'),
+      ).find((element) => element.getAttribute('data-column-header-label') === colId);
+      const labelWidth = Math.max(
+        headerLabel?.scrollWidth ?? 0,
+        headerLabel?.getBoundingClientRect().width ?? 0,
+      );
+      next[colId] = Math.max(
+        DEFAULT_MIN_COL_WIDTH,
+        Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
+      );
+    }
+
+    setHeaderMinWidths((prev) => {
+      const prevEntries = Object.entries(prev);
+      const nextEntries = Object.entries(next);
+      if (
+        prevEntries.length === nextEntries.length &&
+        nextEntries.every(([id, width]) => prev[id] === width)
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [getColId, visibleColumns]);
   const validColumnWidths = useMemo(() => {
     const validIds = new Set((columns ?? []).map((col) => getColId(col)));
     return sanitizeColumnWidths(columnWidths, validIds);
@@ -407,9 +444,12 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     const container = tableContainerRef.current;
     if (!container) return;
-    const handleLayoutChange = () => updateActionColumnOverlap();
+    const handleLayoutChange = () => {
+      updateHeaderMinWidths();
+      updateActionColumnOverlap();
+    };
 
-    updateActionColumnOverlap();
+    handleLayoutChange();
     container.addEventListener('scroll', handleLayoutChange, { passive: true });
     window.addEventListener('resize', handleLayoutChange);
 
@@ -424,9 +464,10 @@ const StandardTable = <T extends object>({
       window.removeEventListener('resize', handleLayoutChange);
       resizeObserver?.disconnect();
     };
-  }, [updateActionColumnOverlap]);
+  }, [updateActionColumnOverlap, updateHeaderMinWidths]);
 
   useEffect(() => {
+    updateHeaderMinWidths();
     updateActionColumnOverlap();
   });
 
@@ -665,10 +706,7 @@ const StandardTable = <T extends object>({
   const getHeaderMinWidth = (col: Column<T>) =>
     isRowActionColumn(col)
       ? ACTION_COLUMN_WIDTH
-      : Math.max(
-          DEFAULT_MIN_COL_WIDTH,
-          Math.ceil(col.header.length * HEADER_CHAR_WIDTH + HEADER_RESIZE_EXTRA_WIDTH),
-        );
+      : (headerMinWidths[getColId(col)] ?? DEFAULT_MIN_COL_WIDTH);
 
   const getElementLike = (node: ReactNode) => {
     if (isValidElement(node))
@@ -1013,7 +1051,7 @@ const StandardTable = <T extends object>({
             ref={buttonRef}
             aria-label={label}
             variant={active ? 'secondary' : 'outline'}
-            size={text ? 'sm' : 'icon-sm'}
+            size={text ? 'xs' : 'icon-xs'}
             onClick={(e) => {
               e.stopPropagation();
               onClick();
@@ -1157,7 +1195,7 @@ const StandardTable = <T extends object>({
               table.setPageSize(newValue);
             }}
           >
-            <SelectTrigger size="sm" className="h-8 w-[76px] text-xs">
+            <SelectTrigger size="sm" className="h-7 w-[68px] text-xs text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1174,7 +1212,7 @@ const StandardTable = <T extends object>({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={(e) => {
               e.stopPropagation();
               table.previousPage();
@@ -1189,7 +1227,7 @@ const StandardTable = <T extends object>({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={(e) => {
               e.stopPropagation();
               table.nextPage();
@@ -1244,7 +1282,7 @@ const StandardTable = <T extends object>({
                     type="button"
                     aria-label={t('table.columnSettings')}
                     variant="outline"
-                    size="sm"
+                    size="xs"
                     className="data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0"
                   >
                     {t('table.columns')}
@@ -1556,7 +1594,20 @@ const StandardTable = <T extends object>({
                         aria-label={isActionColumn ? col.header : undefined}
                         className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                       >
-                        {!isActionColumn && (
+                        {isActionColumn ? (
+                          <div
+                            className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
+                          >
+                            <span
+                              className="truncate text-sm font-semibold text-muted-foreground"
+                              data-column-header-label={colId}
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(header.column.columnDef.header, header.getContext())}
+                            </span>
+                          </div>
+                        ) : (
                           <div
                             className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
                           >
@@ -1564,25 +1615,23 @@ const StandardTable = <T extends object>({
                               type="button"
                               disabled={!header.column.getCanSort()}
                               onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
                               <span className="truncate" data-column-header-label={colId}>
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
                               </span>
-                              {header.column.getCanSort() && (
-                                <i
-                                  className={`fa-solid ${
-                                    sorted === 'asc'
-                                      ? 'fa-arrow-up'
-                                      : sorted === 'desc'
-                                        ? 'fa-arrow-down'
-                                        : 'fa-arrow-up-arrow-down'
-                                  } shrink-0 text-[10px] transition-colors`}
-                                  aria-hidden="true"
-                                ></i>
-                              )}
+                              <i
+                                className={`fa-solid ${
+                                  sorted === 'asc'
+                                    ? 'fa-arrow-up'
+                                    : sorted === 'desc'
+                                      ? 'fa-arrow-down'
+                                      : 'fa-arrow-up-arrow-down'
+                                } shrink-0 text-[10px] transition-colors`}
+                                aria-hidden="true"
+                              ></i>
                             </button>
                             {renderHeaderFilter(header.column, col)}
                           </div>
@@ -1672,7 +1721,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell font-normal' : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>
