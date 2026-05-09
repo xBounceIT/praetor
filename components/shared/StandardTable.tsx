@@ -1068,6 +1068,7 @@ const StandardTable = <T extends object>({
             table.previousPage();
           }}
           disabled={!table.getCanPreviousPage()}
+          className="h-8 px-3 text-sm font-medium text-foreground disabled:opacity-100"
         >
           {t('buttons.previous')}
         </Button>
@@ -1083,6 +1084,7 @@ const StandardTable = <T extends object>({
             table.nextPage();
           }}
           disabled={!table.getCanNextPage()}
+          className="h-8 px-3 text-sm font-medium text-foreground disabled:opacity-100"
         >
           {t('buttons.next')}
         </Button>

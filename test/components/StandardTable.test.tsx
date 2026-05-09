@@ -562,7 +562,10 @@ describe('<StandardTable />', () => {
     );
     expect(screen.getByText(/pagination\.showing/)).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'buttons.previous' })).toBeDisabled();
+    const previousButton = screen.getByRole('button', { name: 'buttons.previous' });
+    expect(previousButton).toBeDisabled();
+    expect(previousButton.className).toContain('text-foreground');
+    expect(previousButton.className).toContain('disabled:opacity-100');
   });
 
   // ---------------------------------------------------------------------------
