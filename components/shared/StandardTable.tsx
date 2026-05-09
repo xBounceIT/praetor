@@ -45,8 +45,23 @@ type FontSize = (typeof FONT_SIZES)[number];
 const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
+const FILTER_POPUP_WIDTH_PX = 224;
+const FILTER_POPUP_VIEWPORT_MARGIN_PX = 8;
 
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
+
+const getFilterPopupPosition = (rect: DOMRect) => {
+  const scrollX = window.scrollX;
+  const minLeft = scrollX + FILTER_POPUP_VIEWPORT_MARGIN_PX;
+  const maxLeft =
+    scrollX + window.innerWidth - FILTER_POPUP_VIEWPORT_MARGIN_PX - FILTER_POPUP_WIDTH_PX;
+  const preferredLeft = rect.left + scrollX;
+
+  return {
+    top: rect.bottom + window.scrollY + 4,
+    left: Math.max(minLeft, Math.min(preferredLeft, maxLeft)),
+  };
+};
 
 const ViewActionButton = ({
   icon,
@@ -1246,10 +1261,7 @@ const StandardTable = <T extends object>({
                                   setActiveFilterCol(null);
                                 } else {
                                   const rect = e.currentTarget.getBoundingClientRect();
-                                  setFilterPos({
-                                    top: rect.bottom + window.scrollY + 4,
-                                    left: rect.left + window.scrollX,
-                                  });
+                                  setFilterPos(getFilterPopupPosition(rect));
                                   setActiveFilterCol(colId);
                                 }
                               }}
