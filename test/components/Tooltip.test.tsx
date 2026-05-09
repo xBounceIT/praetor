@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 
 const Tooltip = (await import('../../components/shared/Tooltip')).default;
 
@@ -138,5 +139,36 @@ describe('<Tooltip />', () => {
     expect(screen.getByText('Tip text')).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByTestId('outside'));
     expect(screen.queryByText('Tip text')).toBeNull();
+  });
+
+  test('disabling a visible tooltip clears it before re-enabling', () => {
+    const Harness = () => {
+      const [disabled, setDisabled] = useState(false);
+      return (
+        <div>
+          <div data-testid="outside" onMouseDown={() => setDisabled(false)}>
+            outside
+          </div>
+          <Tooltip label="Gear tip" disabled={disabled}>
+            {() => (
+              <button type="button" onClick={() => setDisabled(true)}>
+                gear
+              </button>
+            )}
+          </Tooltip>
+        </div>
+      );
+    };
+
+    const { container } = render(<Harness />);
+    const wrapper = container.querySelector('span') as HTMLElement;
+    fireEvent.mouseEnter(wrapper);
+    expect(screen.getByText('Gear tip')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'gear' }));
+    expect(screen.queryByText('Gear tip')).toBeNull();
+
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    expect(screen.queryByText('Gear tip')).toBeNull();
   });
 });
