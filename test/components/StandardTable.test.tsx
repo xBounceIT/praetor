@@ -391,7 +391,7 @@ describe('<StandardTable />', () => {
         header: 'Actions',
         sticky: 'right' as const,
         cell: ({ row }: { row: Row }) => (
-          <button type="button" data-testid={`action-${row.id}`}>
+          <button type="button" aria-label={`Edit ${row.name}`} data-testid={`action-${row.id}`}>
             X
           </button>
         ),
@@ -402,6 +402,7 @@ describe('<StandardTable />', () => {
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
+    expect(screen.getByText('Edit Alice')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------

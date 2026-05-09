@@ -343,7 +343,7 @@ const Layout: React.FC<LayoutProps> = ({
         onSwitchRole={onSwitchRole}
         className="z-50"
       />
-      <SidebarInset className="h-screen overflow-y-auto">
+      <SidebarInset data-shadcn-theme-scope className="h-screen overflow-y-auto">
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
           <div className="flex min-w-0 items-center gap-2">
             <SidebarTrigger className="-ml-1" />

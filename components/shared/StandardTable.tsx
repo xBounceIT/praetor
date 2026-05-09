@@ -14,7 +14,17 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { type ReactNode, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Children,
+  isValidElement,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import { downloadCsv } from '../../utils/csv';
@@ -592,6 +602,134 @@ const StandardTable = <T extends object>({
   const isRowActionColumn = (col: Column<T>) =>
     col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null;
 
+  const getElementLike = (node: ReactNode) => {
+    if (isValidElement(node))
+      return { type: node.type, props: node.props as Record<string, unknown> };
+    if (typeof node === 'object' && node !== null && 'props' in node) {
+      return node as { type?: unknown; props: Record<string, unknown> };
+    }
+    return null;
+  };
+
+  const getNodeText = (node: ReactNode): string => {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(getNodeText).join(' ').trim();
+    const element = getElementLike(node);
+    if (element) return getNodeText(element.props.children as ReactNode);
+    return '';
+  };
+
+  const collectClassNames = (node: ReactNode): string => {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (Array.isArray(node)) return node.map(collectClassNames).join(' ');
+    const element = getElementLike(node);
+    if (!element) return '';
+    const props = element.props as { className?: unknown; children?: ReactNode };
+    return [
+      typeof props.className === 'string' ? props.className : '',
+      collectClassNames(props.children),
+    ]
+      .filter(Boolean)
+      .join(' ');
+  };
+
+  const getActionIconClassName = (node: ReactNode) => {
+    const classNames = collectClassNames(node);
+    if (classNames.includes('fa-trash')) return 'text-destructive';
+    if (classNames.includes('fa-ban')) return 'text-amber-600';
+    if (classNames.includes('fa-rotate-left')) return 'text-primary';
+    if (classNames.includes('fa-pen')) return 'text-blue-500';
+    return 'text-muted-foreground';
+  };
+
+  const renderActionMenuButton = (node: ReactNode, label: ReactNode, key: number) => {
+    const labelText = getNodeText(label);
+    const element = getElementLike(node);
+    const isButtonElement =
+      element &&
+      ((typeof element.type === 'string' && element.type === 'button') ||
+        element.props.type === 'button' ||
+        typeof element.props.onClick === 'function');
+    if (!isButtonElement) {
+      return (
+        <div key={key} className="flex min-h-7 items-center gap-2 px-2 py-1 text-xs">
+          {node}
+          {labelText && <span className="truncate">{labelText}</span>}
+        </div>
+      );
+    }
+
+    const props = element.props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      children?: ReactNode;
+      'data-testid'?: string;
+    };
+    const explicitLabel = props['aria-label'] ?? props.title;
+    const testId = props['data-testid'];
+    const text =
+      labelText ||
+      (typeof explicitLabel === 'string' ? explicitLabel : getNodeText(explicitLabel)) ||
+      getNodeText(props.children);
+
+    return (
+      <button
+        key={key}
+        type="button"
+        aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
+        data-testid={testId}
+        disabled={props.disabled}
+        className="flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onClick?.(event);
+        }}
+      >
+        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(props.children)}`}>
+          {props.children}
+        </span>
+        {text && <span className="truncate">{text}</span>}
+      </button>
+    );
+  };
+
+  const renderActionMenuItems = (node: ReactNode) => {
+    const items: ReactNode[] = [];
+    const visit = (current: ReactNode) => {
+      if (current === null || current === undefined || typeof current === 'boolean') return;
+      if (typeof current === 'string' || typeof current === 'number') return;
+      if (Array.isArray(current)) {
+        current.forEach(visit);
+        return;
+      }
+      const element = getElementLike(current);
+      if (!element) return;
+
+      const props = element.props as {
+        children?: ReactNode | (() => ReactNode);
+        label?: ReactNode;
+      };
+
+      if (props.label !== undefined && typeof props.children === 'function') {
+        items.push(renderActionMenuButton(props.children(), props.label, items.length));
+        return;
+      }
+
+      if (
+        (typeof element.type === 'string' && element.type === 'button') ||
+        (props as { type?: unknown }).type === 'button' ||
+        typeof (props as { onClick?: unknown }).onClick === 'function'
+      ) {
+        items.push(renderActionMenuButton(current, undefined, items.length));
+        return;
+      }
+
+      Children.toArray(props.children as ReactNode).forEach(visit);
+    };
+
+    visit(node);
+    return items.length > 0 ? items : node;
+  };
+
   const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
@@ -798,16 +936,16 @@ const StandardTable = <T extends object>({
             ref={buttonRef}
             aria-label={label}
             variant={active ? 'secondary' : 'outline'}
-            size={text ? 'sm' : 'icon-sm'}
+            size="sm"
             onClick={(e) => {
               e.stopPropagation();
               onClick();
             }}
             disabled={disabled}
-            className={text ? 'h-8 px-2 text-xs' : 'size-8'}
+            className={text ? 'h-8 px-3 text-sm font-medium' : 'size-8'}
           >
-            <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
-            {text && <span className="text-[10px] font-bold">{text}</span>}
+            <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>
+            {text && <span>{text}</span>}
           </Button>
         )}
       </Tooltip>
@@ -994,9 +1132,10 @@ const StandardTable = <T extends object>({
                     aria-label={t('table.columnSettings')}
                     variant={gearOpen ? 'secondary' : 'outline'}
                     size="sm"
+                    className="h-8 px-3 text-sm font-medium"
                   >
                     {t('table.columns')}
-                    <i className="fa-solid fa-chevron-down text-[10px]" aria-hidden="true"></i>
+                    <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
@@ -1358,10 +1497,21 @@ const StandardTable = <T extends object>({
                             ? 'right'
                             : col.align;
                         const colWidth = columnWidths[colId];
+                        const rawValue = cell.getValue() as
+                          | T[keyof T]
+                          | string
+                          | number
+                          | boolean
+                          | null
+                          | undefined;
                         const cellContent = flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext(),
                         );
+                        const actionCellContent =
+                          isActionColumn && col.cell
+                            ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                            : cellContent;
                         return (
                           <TableCell
                             key={cell.id}
@@ -1396,12 +1546,12 @@ const StandardTable = <T extends object>({
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
                                   align="end"
-                                  className="w-auto min-w-10 p-1"
+                                  className="w-36 p-1"
                                   onClick={(event) => event.stopPropagation()}
                                   onDoubleClick={(event) => event.stopPropagation()}
                                 >
-                                  <div className="flex items-center justify-end gap-1">
-                                    {cellContent}
+                                  <div className="flex flex-col gap-0.5">
+                                    {renderActionMenuItems(actionCellContent)}
                                   </div>
                                 </DropdownMenuContent>
                               </DropdownMenu>

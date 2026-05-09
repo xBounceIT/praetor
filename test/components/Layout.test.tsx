@@ -85,6 +85,15 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
   });
 
+  test('main content is scoped to the selected shadcn theme', async () => {
+    localStorage.setItem('praetor_theme', 'dark');
+    const { container } = renderLayout();
+
+    const main = container.querySelector('[data-slot="sidebar-inset"]');
+    expect(main?.hasAttribute('data-shadcn-theme-scope')).toBe(true);
+    await waitFor(() => expect(main?.getAttribute('data-shadcn-theme')).toBe('dark'));
+  });
+
   test('sidebar navigation text uses shadcn sidebar color tokens', () => {
     const { container } = renderLayout();
 
