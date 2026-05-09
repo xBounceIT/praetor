@@ -99,12 +99,15 @@ describe('<Layout />', () => {
   test('sidebar navigation text uses shadcn sidebar color tokens', () => {
     const { container } = renderLayout();
 
+    const sidebarContainer = container.querySelector('[data-slot="sidebar-container"]');
     const activeButton = container.querySelector(
       '[data-sidebar="menu-button"][data-active="true"]',
     );
     const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
     const brandSubtitle = screen.getByText('roles.manager workspace');
 
+    expect(sidebarContainer?.className).toContain('border-sidebar-border');
+    expect(sidebarContainer?.className).not.toContain('border-zinc-200');
     expect(activeButton?.className).toContain('text-sidebar-foreground');
     expect(activeButton?.className).toContain('data-[active=true]:text-sidebar-accent-foreground');
     expect(activeButton?.className).not.toContain('text-black');

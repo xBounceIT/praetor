@@ -1426,7 +1426,7 @@ const StandardTable = <T extends object>({
                               : undefined
                         }
                         aria-label={isActionColumn ? col.header : undefined}
-                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-background' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-card' : ''} ${col.headerClassName || ''}`}
                       >
                         {!isActionColumn && (
                           <div
@@ -1528,7 +1528,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${isStickyRightColumn ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-background transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${isStickyRightColumn ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-card transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>

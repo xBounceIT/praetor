@@ -379,6 +379,8 @@ describe('<StandardTable />', () => {
     const actionsHeader = within(headerRow).getAllByRole('columnheader')[2];
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
+    expect(actionsHeader.className).toContain('bg-card');
+    expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('');
     expect(screen.queryByText('Actions')).not.toBeInTheDocument();
   });
@@ -412,6 +414,9 @@ describe('<StandardTable />', () => {
     ];
     render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
+    const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
+    expect(firstActionCell?.className).toContain('bg-card');
+    expect(firstActionCell?.className).not.toContain('bg-background');
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
