@@ -382,7 +382,14 @@ describe('<StandardTable />', () => {
     expect(search).toHaveAttribute('placeholder', 'table.search');
     await user.type(search, 'ali');
 
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Alice' })).toBeInTheDocument();
+    const aliceOption = screen.getByRole('menuitemcheckbox', { name: 'Alice' });
+    const checkboxIndicator = aliceOption.querySelector(
+      '[data-slot="dropdown-menu-checkbox-indicator"]',
+    );
+
+    expect(aliceOption).toBeInTheDocument();
+    expect(checkboxIndicator?.className).toContain('border-input');
+    expect(checkboxIndicator?.className).toContain('group-data-[state=checked]:bg-primary');
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Bob' })).toBeNull();
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Charlie' })).toBeNull();
   });
