@@ -605,6 +605,22 @@ describe('<StandardTable />', () => {
     expect(activeId).toBe(parsed[0].id);
   });
 
+  test('custom view add and import actions render side by side', async () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    await openCustomViews();
+
+    const addItem = screen.getByText('buttons.add').closest('[role="menuitem"]') as HTMLElement;
+    const importItem = screen
+      .getByText('buttons.import')
+      .closest('[role="menuitem"]') as HTMLElement;
+    const actionsRow = addItem.parentElement as HTMLElement;
+
+    expect(actionsRow.className).toContain('flex');
+    expect(actionsRow.className).not.toContain('grid');
+    expect(addItem.className).toContain('flex-1');
+    expect(importItem.className).toContain('flex-1');
+  });
+
   test('loading a stored view at mount applies sortState to the table', () => {
     const stored = [
       {

@@ -1349,14 +1349,14 @@ const StandardTable = <T extends object>({
                         </div>
                       )}
                       <DropdownMenuSeparator />
-                      <div className="grid gap-1 p-1">
+                      <div className="flex gap-1 p-1">
                         <DropdownMenuItem
                           onSelect={(e) => {
                             e.preventDefault();
                             setModalState({ kind: 'create' });
                             setGearOpen(false);
                           }}
-                          className="text-xs"
+                          className="flex-1 justify-center text-xs"
                         >
                           <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
                           <span>{t('buttons.add')}</span>
@@ -1366,7 +1366,7 @@ const StandardTable = <T extends object>({
                             e.preventDefault();
                             void importView();
                           }}
-                          className="text-xs"
+                          className="flex-1 justify-center text-xs"
                         >
                           <i className="fa-solid fa-file-import text-[10px]" aria-hidden="true"></i>
                           <span>{t('buttons.import')}</span>
