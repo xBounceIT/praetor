@@ -75,17 +75,25 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
           >
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip={item.title} isActive={item.isActive}>
+                <SidebarMenuButton
+                  tooltip={item.title}
+                  isActive={item.isActive}
+                  className="font-bold text-black hover:text-black data-[active=true]:text-black [&>svg]:text-black/70"
+                >
                   <item.icon />
                   <span>{item.title}</span>
                   <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
+              <CollapsibleContent className="sidebar-entry-content">
+                <SidebarMenuSub className="py-1">
                   {item.items.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.view}>
-                      <SidebarMenuSubButton asChild isActive={subItem.isActive}>
+                      <SidebarMenuSubButton
+                        asChild
+                        isActive={subItem.isActive}
+                        className="font-bold text-black hover:text-black data-[active=true]:text-black [&>svg]:text-black/70"
+                      >
                         <button
                           type="button"
                           onClick={() => {
