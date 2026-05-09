@@ -55,6 +55,45 @@ jobs:
           fi
         working-directory: server
 
+
+  react-doctor:
+    name: React Doctor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed frontend files
+        id: frontend-changes
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            changed_files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          else
+            git fetch origin main
+            changed_files=$(git diff --name-only origin/main...HEAD)
+          fi
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(App|index|i18n|types)\.tsx?$|^(components|hooks|locales|public|services|src|utils)/|^(package|bun\.lock|vite\.config|tsconfig).*'; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No frontend source changes detected; skipping React Doctor."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run React Doctor
+        if: steps.frontend-changes.outputs.has_changes == 'true'
+        uses: millionco/react-doctor@main
+        with:
+          diff: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     name: Tests
     runs-on: ubuntu-latest
