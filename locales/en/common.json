@@ -249,6 +249,7 @@
     "columnSettings": "Column settings",
     "columns": "Columns",
     "filters": "Filters",
+    "rowActions": "Row actions",
     "resetColumns": "Reset columns",
     "export": "Export",
     "exportToCsv": "Export to CSV",

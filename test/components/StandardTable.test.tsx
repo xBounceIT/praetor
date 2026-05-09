@@ -32,25 +32,22 @@ const sampleColumns = [
 
 const clickSortHeader = (headerText: string) => {
   const headerCell = screen.getByText(headerText).closest('th') as HTMLTableCellElement;
-  const btn = within(headerCell).getByRole('button');
+  const btn = within(headerCell)
+    .getAllByRole('button')
+    .find((button) => button.textContent?.trim().startsWith(headerText)) as HTMLButtonElement;
   act(() => {
     fireEvent.click(btn);
   });
 };
 
-const openFiltersMenu = async () => {
+const openHeaderFilter = async (columnHeader: string) => {
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: /table\.filters/ }));
+  await user.click(screen.getByRole('button', { name: `table.filters ${columnHeader}` }));
   return user;
 };
 
 const selectFilterValue = async (columnHeader: string, value: string) => {
-  const user = await openFiltersMenu();
-  const columnItem = screen
-    .getAllByText(columnHeader)
-    .find((element) => element.closest('[role="menuitem"]'));
-  expect(columnItem).toBeDefined();
-  await user.click(columnItem as HTMLElement);
+  const user = await openHeaderFilter(columnHeader);
   act(() => {
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: value }));
   });
@@ -292,7 +289,7 @@ describe('<StandardTable />', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Filters: toolbar input and shadcn dropdown bound to TanStack column filters
+  // Filters: shadcn header dropdowns bound to TanStack column filters
   // ---------------------------------------------------------------------------
   test('selecting a single filter value narrows the visible rows', async () => {
     const { container } = render(
@@ -340,32 +337,21 @@ describe('<StandardTable />', () => {
     );
     const tbody = container.querySelector('tbody') as HTMLElement;
     expect(tbody.textContent).not.toContain('Bob');
-    const user = await openFiltersMenu();
-    const nameItem = screen
-      .getAllByText('Name')
-      .find((element) => element.closest('[role="menuitem"]'));
-    expect(nameItem).toBeDefined();
-    await user.click(nameItem as HTMLElement);
+    await openHeaderFilter('Name');
     clickMenuItemByText('table.clearFilter');
     expect(tbody.textContent).toContain('Bob');
     expect(tbody.textContent).toContain('Charlie');
   });
 
-  test('toolbar search input filters the primary column', () => {
+  test('does not render the unsolicited toolbar search input', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-    const search = screen.getByPlaceholderText('table.search Name');
-    act(() => {
-      fireEvent.change(search, { target: { value: 'Ali' } });
-    });
-    expect(screen.getByText('Alice')).toBeInTheDocument();
-    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
-    expect(screen.queryByText('Charlie')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('table.search Name')).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
   // Sticky-right action column: classes on header and body cells
   // ---------------------------------------------------------------------------
-  test('sticky-right header has sticky positioning classes', () => {
+  test('sticky-right action header is sticky but visually empty', () => {
     const cols = [
       ...sampleColumns,
       {
@@ -376,12 +362,16 @@ describe('<StandardTable />', () => {
       },
     ];
     render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
-    const actionsHeader = screen.getByText('Actions').closest('th') as HTMLTableCellElement;
+    const headerRow = screen.getAllByRole('row')[0];
+    const actionsHeader = within(headerRow).getAllByRole('columnheader')[2];
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
+    expect(actionsHeader.textContent?.trim()).toBe('');
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
   });
 
-  test('sticky-right body cell wraps content in a flex container', () => {
+  test('sticky-right body cell collapses actions behind an ellipsis menu', async () => {
+    const user = userEvent.setup();
     const cols = [
       ...sampleColumns,
       {
@@ -396,16 +386,17 @@ describe('<StandardTable />', () => {
       },
     ];
     render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
-    const actionBtn = screen.getByTestId('action-1');
-    const wrapper = actionBtn.parentElement as HTMLElement;
-    expect(wrapper.className).toContain('flex');
-    expect(wrapper.className).toContain('justify-end');
+    expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByLabelText('table.rowActions')[0]);
+    expect(screen.getByTestId('action-1')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
   // Row-action menu: click handler + stopPropagation prevents row click
   // ---------------------------------------------------------------------------
-  test('row action button fires its handler without bubbling to row click', () => {
+  test('row action menu item fires its handler without bubbling to row click', async () => {
+    const user = userEvent.setup();
     const onAction = mock(() => {});
     const onRowClick = mock(() => {});
     const cols = [
@@ -436,9 +427,8 @@ describe('<StandardTable />', () => {
         onRowClick={onRowClick}
       />,
     );
-    act(() => {
-      fireEvent.click(screen.getByTestId('row-action-2'));
-    });
+    await user.click(screen.getAllByLabelText('table.rowActions')[1]);
+    await user.click(screen.getByTestId('row-action-2'));
     expect(onAction).toHaveBeenCalledTimes(1);
     // stopPropagation in the action button keeps the row's onClick silent.
     expect(onRowClick).not.toHaveBeenCalled();

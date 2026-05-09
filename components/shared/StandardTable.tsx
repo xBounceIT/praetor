@@ -9,6 +9,7 @@ import {
   getSortedRowModel,
   type PaginationState,
   type SortingState,
+  type Column as TanStackColumn,
   type Updater,
   useReactTable,
   type VisibilityState,
@@ -31,7 +32,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
-import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import CustomViewModal from './CustomViewModal';
@@ -146,7 +146,6 @@ const StandardTable = <T extends object>({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
@@ -556,21 +555,6 @@ const StandardTable = <T extends object>({
   const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedRows = data ? table.getRowModel().rows : [];
-  const filterableTableColumns = table
-    .getAllLeafColumns()
-    .filter((column) => column.getCanFilter() && colsById.has(column.id));
-  const primaryFilterColumn =
-    filterableTableColumns.find((column) => column.getIsVisible()) ?? filterableTableColumns[0];
-  const primaryFilterSourceColumn = primaryFilterColumn
-    ? colsById.get(primaryFilterColumn.id)
-    : undefined;
-  const primaryFilterValue = primaryFilterColumn?.getFilterValue();
-  const primaryFilterText = Array.isArray(primaryFilterValue)
-    ? primaryFilterValue.join(', ')
-    : typeof primaryFilterValue === 'string'
-      ? primaryFilterValue
-      : '';
-  const hasActiveFilters = table.getState().columnFilters.length > 0;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -597,6 +581,13 @@ const StandardTable = <T extends object>({
   }, [data, columns, getValue, formatForFilter, getColId]);
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
+
+  const getSelectedFilterValues = (column: TanStackColumn<T, unknown>) => {
+    const filterValue = column.getFilterValue();
+    if (Array.isArray(filterValue)) return filterValue as string[];
+    if (typeof filterValue === 'string') return [filterValue];
+    return [];
+  };
 
   const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
@@ -820,6 +811,79 @@ const StandardTable = <T extends object>({
     );
   };
 
+  const renderHeaderFilter = (column: TanStackColumn<T, unknown>, sourceColumn: Column<T>) => {
+    if (!column.getCanFilter()) return null;
+    const selectedValues = getSelectedFilterValues(column);
+    const hasFilter = selectedValues.length > 0;
+    const options = getFilterOptions(column.id);
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant={hasFilter ? 'secondary' : 'ghost'}
+            size="icon-xs"
+            aria-label={`${t('table.filters')} ${sourceColumn.header}`}
+            onClick={(event) => event.stopPropagation()}
+            className="size-6"
+          >
+            <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
+            {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-64"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DropdownMenuLabel className="text-xs">{sourceColumn.header}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="max-h-64 overflow-y-auto">
+            {options.length > 0 ? (
+              options.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option || '__empty__'}
+                  checked={selectedValues.includes(option)}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    const next = selectedValues.includes(option)
+                      ? selectedValues.filter((value) => value !== option)
+                      : [...selectedValues, option];
+                    column.setFilterValue(next.length > 0 ? next : undefined);
+                    table.setPageIndex(0);
+                  }}
+                  className="text-xs"
+                >
+                  <span className="truncate">{option || t('table.empty')}</span>
+                </DropdownMenuCheckboxItem>
+              ))
+            ) : (
+              <DropdownMenuItem disabled className="text-xs">
+                {t('table.noResults')}
+              </DropdownMenuItem>
+            )}
+          </div>
+          {hasFilter && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  column.setFilterValue(undefined);
+                  table.setPageIndex(0);
+                }}
+                className="text-xs"
+              >
+                {t('table.clearFilter')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -886,136 +950,21 @@ const StandardTable = <T extends object>({
   );
 
   return (
-    <div
-      className={`rounded-md border border-border bg-card shadow-sm ${containerClassName ?? ''}`.trim()}
-    >
-      <div className="space-y-4 border-b border-border bg-card p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
-            {typeof totalItems === 'number' && (
-              <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {totalItems} {totalLabel || t('table.total')}
-              </span>
-            )}
-          </div>
-          {(headerExtras || headerAction) && (
-            <div className="flex items-center gap-3">
-              {headerExtras}
-              {headerAction}
-            </div>
+    <div className={`w-full space-y-3 ${containerClassName ?? ''}`.trim()}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+          {typeof totalItems === 'number' && (
+            <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {totalItems} {totalLabel || t('table.total')}
+            </span>
           )}
         </div>
-        {data != null && columns != null && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Input
-              placeholder={
-                primaryFilterSourceColumn
-                  ? `${t('table.search')} ${primaryFilterSourceColumn.header}`
-                  : t('table.search')
-              }
-              value={primaryFilterText}
-              onChange={(event) => {
-                primaryFilterColumn?.setFilterValue(event.target.value || undefined);
-                table.setPageIndex(0);
-              }}
-              disabled={!primaryFilterColumn}
-              className="h-8 max-w-sm"
-            />
-            <div className="flex items-center gap-2">
-              <DropdownMenu open={filtersOpen} onOpenChange={setFiltersOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={hasActiveFilters ? 'secondary' : 'outline'}
-                    size="sm"
-                  >
-                    <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
-                    {t('table.filters')}
-                    <i className="fa-solid fa-chevron-down text-[10px]" aria-hidden="true"></i>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel className="text-xs">{t('table.filters')}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {filterableTableColumns.map((column) => {
-                    const sourceColumn = colsById.get(column.id);
-                    if (!sourceColumn) return null;
-                    const selectedValues = Array.isArray(column.getFilterValue())
-                      ? (column.getFilterValue() as string[])
-                      : typeof column.getFilterValue() === 'string'
-                        ? [column.getFilterValue() as string]
-                        : [];
-                    return (
-                      <DropdownMenuSub key={column.id}>
-                        <DropdownMenuSubTrigger className="text-xs">
-                          <span className="truncate">{sourceColumn.header}</span>
-                          {selectedValues.length > 0 && (
-                            <span className="ml-auto text-xs text-muted-foreground">
-                              {selectedValues.length}
-                            </span>
-                          )}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-64">
-                          <DropdownMenuLabel className="text-xs">
-                            {sourceColumn.header}
-                          </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <div className="max-h-64 overflow-y-auto">
-                            {getFilterOptions(column.id).map((option) => (
-                              <DropdownMenuCheckboxItem
-                                key={option || '__empty__'}
-                                checked={selectedValues.includes(option)}
-                                onSelect={(event) => {
-                                  event.preventDefault();
-                                  const next = selectedValues.includes(option)
-                                    ? selectedValues.filter((value) => value !== option)
-                                    : [...selectedValues, option];
-                                  column.setFilterValue(next.length > 0 ? next : undefined);
-                                  table.setPageIndex(0);
-                                }}
-                                className="text-xs"
-                              >
-                                <span className="truncate">{option || t('table.empty')}</span>
-                              </DropdownMenuCheckboxItem>
-                            ))}
-                          </div>
-                          {selectedValues.length > 0 && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onSelect={(event) => {
-                                  event.preventDefault();
-                                  column.setFilterValue(undefined);
-                                  table.setPageIndex(0);
-                                }}
-                                className="text-xs"
-                              >
-                                {t('table.clearFilter')}
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    );
-                  })}
-                  {hasActiveFilters && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          table.resetColumnFilters();
-                          table.setPageIndex(0);
-                        }}
-                        className="text-xs"
-                      >
-                        {t('filters.clearFilters')}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {headerExtras}
+          {headerAction}
+          {data != null && columns != null && (
+            <>
               {renderToolbarButton({
                 tooltipKey: 'table.exportToCsv',
                 iconClass: 'fa-file-export',
@@ -1291,23 +1240,24 @@ const StandardTable = <T extends object>({
                   </DropdownMenuSub>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <div
-        className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
+        className={`rounded-md border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
           <Table className="w-full text-left">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                <TableRow key={headerGroup.id} className="border-border hover:bg-transparent">
                   {headerGroup.headers.map((header, colIdx) => {
                     const col = colsById.get(header.column.id);
                     if (!col) return null;
                     const colId = getColId(col);
+                    const isActionColumn = col.sticky === 'right';
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === headerGroup.headers.length - 1;
                     const isStretchColumn = colIdx === stretchColumnIdx;
@@ -1326,39 +1276,51 @@ const StandardTable = <T extends object>({
                         style={
                           colWidth
                             ? { width: colWidth, minWidth: colWidth }
-                            : col.sticky === 'right'
+                            : isActionColumn
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group h-10 ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-card border-l border-border z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        aria-label={isActionColumn ? col.header : undefined}
+                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : isActionColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isActionColumn ? 'sticky right-0 z-20 border-l border-border bg-background' : ''} ${col.headerClassName || ''}`}
                       >
-                        <button
-                          type="button"
-                          disabled={!header.column.getCanSort()}
-                          onClick={header.column.getToggleSortingHandler()}
-                          className={`inline-flex items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
-                          {header.column.getCanSort() && (
-                            <i
-                              className={`fa-solid ${
-                                sorted === 'asc'
-                                  ? 'fa-arrow-up'
-                                  : sorted === 'desc'
-                                    ? 'fa-arrow-down'
-                                    : 'fa-arrow-up-arrow-down'
-                              } text-[10px]`}
-                              aria-hidden="true"
-                            ></i>
-                          )}
-                        </button>
+                        {!isActionColumn && (
+                          <div
+                            className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
+                          >
+                            <button
+                              type="button"
+                              disabled={!header.column.getCanSort()}
+                              onClick={header.column.getToggleSortingHandler()}
+                              className="inline-flex min-w-0 items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                            >
+                              <span className="truncate">
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                              </span>
+                              {header.column.getCanSort() && (
+                                <i
+                                  className={`fa-solid ${
+                                    sorted === 'asc'
+                                      ? 'fa-arrow-up'
+                                      : sorted === 'desc'
+                                        ? 'fa-arrow-down'
+                                        : 'fa-arrow-up-arrow-down'
+                                  } text-[10px]`}
+                                  aria-hidden="true"
+                                ></i>
+                              )}
+                            </button>
+                            {renderHeaderFilter(header.column, col)}
+                          </div>
+                        )}
 
-                        <div
-                          className={`absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize opacity-0 hover:bg-primary/30 group-hover:opacity-100 ${resizingColId === colId ? 'bg-primary/50 opacity-100' : ''}`}
-                          onMouseDown={(e) => handleResizeStart(e, colId)}
-                        />
+                        {!isActionColumn && (
+                          <div
+                            className={`absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize opacity-0 hover:bg-primary/30 group-hover:opacity-100 ${resizingColId === colId ? 'bg-primary/50 opacity-100' : ''}`}
+                            onMouseDown={(e) => handleResizeStart(e, colId)}
+                          />
+                        )}
                       </TableHead>
                     );
                   })}
@@ -1374,12 +1336,13 @@ const StandardTable = <T extends object>({
                     <TableRow
                       key={tableRow.id}
                       onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
+                      className={`group border-border transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
                     >
                       {visibleCells.map((cell, colIdx) => {
                         const colId = cell.column.id;
                         const col = colsById.get(colId);
                         if (!col) return null;
+                        const isActionColumn = col.sticky === 'right';
                         const isFirstColumn = colIdx === 0;
                         const isLastColumn = colIdx === visibleCells.length - 1;
                         const isStretchColumn = colIdx === stretchColumnIdx;
@@ -1390,6 +1353,10 @@ const StandardTable = <T extends object>({
                             ? 'right'
                             : col.align;
                         const colWidth = columnWidths[colId];
+                        const cellContent = flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        );
                         return (
                           <TableCell
                             key={cell.id}
@@ -1400,18 +1367,41 @@ const StandardTable = <T extends object>({
                             style={
                               colWidth
                                 ? { width: colWidth, minWidth: colWidth }
-                                : col.sticky === 'right'
+                                : isActionColumn
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${col.sticky === 'right' ? 'sticky right-0 bg-card group-hover:bg-muted/50 transition-colors border-l border-border z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${isActionColumn ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isActionColumn ? 'sticky right-0 z-20 border-l border-border bg-background transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
                           >
-                            {col.sticky === 'right' ? (
-                              <div className="flex justify-end items-center size-full">
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                              </div>
+                            {isActionColumn ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    aria-label={t('table.rowActions')}
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <i
+                                      className="fa-solid fa-ellipsis text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="w-auto min-w-10 p-1"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDoubleClick={(event) => event.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-end gap-1">
+                                    {cellContent}
+                                  </div>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             ) : (
-                              flexRender(cell.column.columnDef.cell, cell.getContext())
+                              cellContent
                             )}
                           </TableCell>
                         );
@@ -1420,7 +1410,7 @@ const StandardTable = <T extends object>({
                   );
                 })
               ) : (
-                <TableRow>
+                <TableRow className="border-border">
                   <TableCell
                     colSpan={Math.max(visibleColumns.length, 1)}
                     className="p-12 text-center text-sm font-medium text-muted-foreground"
@@ -1438,7 +1428,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-muted/50 border-t border-border rounded-b-md ${
+          className={`py-1 ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
