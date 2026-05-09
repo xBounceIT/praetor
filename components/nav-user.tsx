@@ -36,9 +36,12 @@ interface NavUserProps {
 interface UserIdentityBlockProps {
   user: User;
   roleLabel: string;
+  context?: 'sidebar' | 'popover';
 }
 
-function UserIdentityBlock({ user, roleLabel }: UserIdentityBlockProps) {
+function UserIdentityBlock({ user, roleLabel, context = 'sidebar' }: UserIdentityBlockProps) {
+  const isPopover = context === 'popover';
+
   return (
     <>
       <Avatar className="h-8 w-8 rounded-lg">
@@ -46,9 +49,21 @@ function UserIdentityBlock({ user, roleLabel }: UserIdentityBlockProps) {
           {user.avatarInitials}
         </AvatarFallback>
       </Avatar>
-      <div className="grid flex-1 text-left text-sm leading-tight text-sidebar-foreground group-data-[state=open]/menu-button:text-sidebar-accent-foreground">
+      <div
+        className={`grid flex-1 text-left text-sm leading-tight ${
+          isPopover
+            ? 'text-popover-foreground'
+            : 'text-sidebar-foreground group-data-[state=open]/menu-button:text-sidebar-accent-foreground'
+        }`}
+      >
         <span className="truncate font-medium">{user.name}</span>
-        <span className="truncate text-xs text-sidebar-foreground/80 group-data-[state=open]/menu-button:text-sidebar-accent-foreground/80">
+        <span
+          className={`truncate text-xs ${
+            isPopover
+              ? 'text-muted-foreground'
+              : 'text-sidebar-foreground/80 group-data-[state=open]/menu-button:text-sidebar-accent-foreground/80'
+          }`}
+        >
           {roleLabel}
         </span>
       </div>
@@ -88,14 +103,14 @@ export function NavUser({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg border border-zinc-200 outline-none"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg border outline-none"
             side={isMobile ? 'bottom' : 'right'}
             align="end"
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <UserIdentityBlock user={user} roleLabel={roleLabel} />
+                <UserIdentityBlock user={user} roleLabel={roleLabel} context="popover" />
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

@@ -103,10 +103,15 @@ describe('<Layout />', () => {
     fireEvent.pointerDown(trigger);
 
     const dropdownContent = document.body.querySelector('[data-slot="dropdown-menu-content"]');
+    const dropdownIdentity = dropdownContent?.querySelector('.text-popover-foreground');
+    const dropdownRole = dropdownContent?.querySelector('.text-muted-foreground');
 
     expect(trigger.className).toContain('text-sidebar-foreground');
     expect(dropdownContent?.className).toContain('dark');
+    expect(dropdownContent?.className).not.toContain('border-zinc-200');
     expect(dropdownContent?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(dropdownIdentity).not.toBeNull();
+    expect(dropdownRole).not.toBeNull();
     expect(container.ownerDocument.documentElement.classList.contains('dark')).toBe(false);
   });
 
