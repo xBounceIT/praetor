@@ -92,6 +92,7 @@ describe('<Layout />', () => {
     const main = container.querySelector('[data-slot="sidebar-inset"]');
     expect(main?.hasAttribute('data-shadcn-theme-scope')).toBe(true);
     expect(main?.className).toContain('shadcn-theme-bridge');
+    expect(main?.className).toContain('text-foreground');
     await waitFor(() => expect(main?.getAttribute('data-shadcn-theme')).toBe('dark'));
   });
 
