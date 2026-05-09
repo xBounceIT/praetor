@@ -750,12 +750,12 @@ const StandardTable = <T extends object>({
               onClick();
             }}
             disabled={disabled}
-            className={`h-8 ${text ? 'px-2.5 gap-1.5' : 'w-8 justify-center'} flex items-center rounded-lg border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               active ? 'bg-slate-100 text-praetor' : 'bg-white text-slate-500 hover:bg-slate-100'
             }`}
           >
-            <i className={`fa-solid ${iconClass} text-[11px]`} aria-hidden="true"></i>
-            {text && <span className="text-[11px] font-bold">{text}</span>}
+            <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
+            {text && <span className="text-[10px] font-bold">{text}</span>}
           </button>
         )}
       </Tooltip>
