@@ -303,6 +303,51 @@ describe('<StandardTable />', () => {
     expect(sortIcon?.className).toContain('transition-colors');
   });
 
+  test('column resize clamps to the measured header label width', async () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    const headerCell = screen.getByText('Name').closest('th') as HTMLTableCellElement;
+    const headerLabel = headerCell.querySelector(
+      '[data-column-header-label="name"]',
+    ) as HTMLElement;
+    const resizeHandle = headerCell.querySelector(
+      '[data-column-resize-handle="name"]',
+    ) as HTMLElement;
+
+    Object.defineProperty(headerLabel, 'scrollWidth', { configurable: true, value: 96 });
+    Object.defineProperty(headerCell, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 0,
+        height: 40,
+        left: 0,
+        right: 220,
+        top: 0,
+        width: 220,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+
+    act(() => {
+      fireEvent.mouseDown(resizeHandle, { clientX: 220 });
+    });
+
+    await waitFor(() => expect(document.body.style.cursor).toBe('col-resize'));
+
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 0 });
+    });
+
+    await waitFor(() => expect(headerCell.style.width).toBe('160px'));
+    expect(headerCell.style.minWidth).toBe('160px');
+
+    act(() => {
+      fireEvent.mouseUp(document);
+    });
+  });
+
   test('sorting descending by age reorders numerically (largest first)', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     clickSortHeader('Age');
@@ -641,6 +686,7 @@ describe('<StandardTable />', () => {
 
     for (const button of [exportButton, decreaseFontButton, increaseFontButton, columnsButton]) {
       expect(button.className).toContain('border-border');
+      expect(button.className).not.toContain('focus-visible:border-ring');
     }
   });
 

@@ -82,6 +82,8 @@ type FontSize = (typeof FONT_SIZES)[number];
 
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
+const DEFAULT_MIN_COL_WIDTH = 40;
+const HEADER_RESIZE_EXTRA_WIDTH = 64;
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -149,6 +151,7 @@ const StandardTable = <T extends object>({
   const { t } = useTranslation('common');
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
+  const resizeMinWidthRef = useRef(DEFAULT_MIN_COL_WIDTH);
 
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
@@ -345,7 +348,7 @@ const StandardTable = <T extends object>({
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartXRef.current;
-      const newWidth = Math.max(40, resizeStartWidthRef.current + delta);
+      const newWidth = Math.max(resizeMinWidthRef.current, resizeStartWidthRef.current + delta);
       setColumnWidths((prev) => {
         if (prev[resizingColId] === newWidth) return prev;
         return { ...prev, [resizingColId]: newWidth };
@@ -905,8 +908,17 @@ const StandardTable = <T extends object>({
     e.preventDefault();
     e.stopPropagation();
     const th = e.currentTarget.parentElement as HTMLTableCellElement;
+    const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
+    const headerTextWidth = Math.max(
+      headerLabel?.scrollWidth ?? 0,
+      headerLabel?.getBoundingClientRect().width ?? 0,
+    );
     resizeStartXRef.current = e.clientX;
     resizeStartWidthRef.current = th.getBoundingClientRect().width;
+    resizeMinWidthRef.current = Math.max(
+      DEFAULT_MIN_COL_WIDTH,
+      Math.ceil(headerTextWidth + HEADER_RESIZE_EXTRA_WIDTH),
+    );
     setResizingColId(colId);
   };
 
@@ -1469,7 +1481,7 @@ const StandardTable = <T extends object>({
                               onClick={header.column.getToggleSortingHandler()}
                               className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
-                              <span className="truncate">
+                              <span className="truncate" data-column-header-label={colId}>
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
@@ -1494,6 +1506,7 @@ const StandardTable = <T extends object>({
                         {!isActionColumn && (
                           <div
                             className={`absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize opacity-0 hover:bg-primary/30 group-hover:opacity-100 ${resizingColId === colId ? 'bg-primary/50 opacity-100' : ''}`}
+                            data-column-resize-handle={colId}
                             onMouseDown={(e) => handleResizeStart(e, colId)}
                           />
                         )}
