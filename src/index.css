@@ -14,6 +14,7 @@
 }
 
 @theme {
+  --font-sans: "Satoshi", sans-serif;
   --color-praetor: var(--color-primary);
   --color-secondary: var(--color-secondary);
   --color-accent: var(--color-accent);
@@ -52,6 +53,11 @@
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+html,
+body {
+  font-family: "Satoshi", sans-serif;
 }
 
 /* Chrome, Safari, Edge, Opera */
