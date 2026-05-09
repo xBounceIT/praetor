@@ -141,4 +141,20 @@ describe('<Layout />', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     isMobileViewport = false;
   });
+
+  test('mobile user menu settings closes the sidebar sheet', () => {
+    isMobileViewport = true;
+    const onViewChange = mock(() => {});
+    renderLayout({ onViewChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'menu.settings' }));
+
+    expect(onViewChange).toHaveBeenCalledWith('settings');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    isMobileViewport = false;
+  });
 });

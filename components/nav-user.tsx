@@ -65,9 +65,12 @@ export function NavUser({
   onLogout,
   onSwitchRole,
 }: NavUserProps) {
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
   const availableRoles = user.availableRoles ?? roles;
   const canSwitchRole = availableRoles.length > 1;
+  const closeMobileSidebar = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
     <SidebarMenu>
@@ -83,7 +86,7 @@ export function NavUser({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="profile-menu-content w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="profile-menu-content w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg border border-zinc-200"
             side={isMobile ? 'bottom' : 'right'}
             align="end"
             sideOffset={4}
@@ -109,7 +112,9 @@ export function NavUser({
                           key={role.id}
                           disabled={isActive}
                           onSelect={() => {
-                            if (!isActive) onSwitchRole(role.id);
+                            if (isActive) return;
+                            onSwitchRole(role.id);
+                            closeMobileSidebar();
                           }}
                         >
                           <span className="truncate">{role.name}</span>
@@ -120,13 +125,24 @@ export function NavUser({
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
-              <DropdownMenuItem onSelect={onSettings}>
+              <DropdownMenuItem
+                onSelect={() => {
+                  onSettings();
+                  closeMobileSidebar();
+                }}
+              >
                 <Settings />
                 <span>{settingsLabel}</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={onLogout}>
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => {
+                onLogout();
+                closeMobileSidebar();
+              }}
+            >
               <LogOut />
               <span>{logoutLabel}</span>
             </DropdownMenuItem>
