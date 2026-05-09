@@ -16,7 +16,7 @@ const humanizeToken = (value: string) =>
     .trim()
     .toLowerCase();
 
-const tableToolbarButtonClassName = '!h-7 !px-2 !gap-1.5 !rounded-lg !text-[10px] !font-bold';
+const tableToolbarButtonClassName = '!h-8 !px-2.5 !gap-1.5 !rounded-lg !text-[11px] !font-bold';
 
 type TimeRange =
   | 'today'
@@ -345,7 +345,7 @@ const LogsView: React.FC = () => {
         className={`${tableToolbarButtonClassName} inline-flex items-center border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
       >
         <i
-          className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'} text-[10px]`}
+          className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'} text-[11px]`}
         />
         {t('common:buttons.refresh')}
       </button>
