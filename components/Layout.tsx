@@ -1,43 +1,66 @@
+import {
+  BarChart3,
+  Box,
+  Building,
+  Calculator,
+  ClipboardList,
+  Clock,
+  FileSignature,
+  FileText,
+  Folder,
+  FolderTree,
+  GitFork,
+  Handshake,
+  ListChecks,
+  ListTodo,
+  type LucideIcon,
+  Mail,
+  PackageOpen,
+  Receipt,
+  Repeat,
+  Settings,
+  Shield,
+  ShieldCheck,
+  ShoppingCart,
+  SlidersHorizontal,
+  Sparkles,
+  Truck,
+  User,
+  UserCheck,
+  UserCog,
+  Users,
+} from 'lucide-react';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Notification, Role, User, View } from '../types';
+import { AppSidebar } from '@/components/app-sidebar';
+import type { SidebarModuleItem, SidebarRouteItem } from '@/components/nav-main';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import type { Notification, User as PraetorUser, Role, View } from '../types';
 import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 import NotificationBell from './shared/NotificationBell';
-import Tooltip from './shared/Tooltip';
 
 interface Module {
   id: string;
   name: string;
-  icon: string;
-  active: boolean;
+  icon: LucideIcon;
+  routes: RouteConfig[];
 }
 
-const moduleRoutes: Record<string, View[]> = {
-  timesheets: ['timesheets/tracker', 'timesheets/recurring'],
-  crm: ['crm/clients', 'crm/suppliers'],
-  sales: ['sales/client-quotes', 'sales/client-offers', 'sales/supplier-quotes'],
-  catalog: ['catalog/internal-listing'],
-  projects: ['projects/manage', 'projects/tasks'],
-  accounting: [
-    'accounting/clients-orders',
-    'accounting/clients-invoices',
-    'accounting/supplier-orders',
-    'accounting/supplier-invoices',
-  ],
-  hr: ['hr/internal', 'hr/external', 'hr/work-units'],
-  reports: ['reports/ai-reporting'],
-  administration: [
-    'administration/authentication',
-    'administration/general',
-    'administration/user-management',
-    'administration/roles',
-    'administration/email',
-    'administration/logs',
-  ],
-};
+interface RouteConfig {
+  view: View;
+  label: string;
+  icon: LucideIcon;
+  title?: string;
+}
 
-// Get module from route
+const fallbackRouteTitleKey = (view: View) =>
+  `routes.${view
+    .split('/')
+    .pop()
+    ?.replace(/-([a-z])/g, (match) => match[1].toUpperCase())}`;
+
 const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
@@ -48,14 +71,14 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('accounting/')) return 'accounting';
   if (route.startsWith('reports/')) return 'reports';
   if (route.startsWith('administration/')) return 'administration';
-  return 'timesheets'; // default
+  return 'timesheets';
 };
 
 export interface LayoutProps {
   children: React.ReactNode;
   activeView: View;
   onViewChange: (view: View) => void;
-  currentUser: User;
+  currentUser: PraetorUser;
   onLogout: () => void;
   onSwitchRole: (roleId: string) => void;
   roles: Role[];
@@ -85,40 +108,157 @@ const Layout: React.FC<LayoutProps> = ({
   onDeleteNotification,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isRoleSubmenuOpen, setIsRoleSubmenuOpen] = useState(false);
-  const roleSubmenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isCollapsedPinned, setIsCollapsedPinned] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const isCollapsed = isCollapsedPinned && !isHovered;
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  /* Removed module switcher state and refs */
-  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Create modules array with localized names - custom order as requested
   const modules: Module[] = useMemo(
     () => [
-      { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
-      { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
-      { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
-      { id: 'sales', name: t('modules.sales'), icon: 'fa-file-invoice-dollar', active: false },
-      { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
-      { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
-      { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
-      { id: 'reports', name: t('modules.reports'), icon: 'fa-chart-simple', active: false },
-      { id: 'administration', name: t('modules.administration'), icon: 'fa-gears', active: false },
+      {
+        id: 'hr',
+        name: t('modules.hr'),
+        icon: Users,
+        routes: [
+          {
+            view: 'hr/internal',
+            label: t('routes.internalEmployees'),
+            icon: UserCheck,
+            title: t('titles.internalEmployees'),
+          },
+          {
+            view: 'hr/external',
+            label: t('routes.externalEmployees'),
+            icon: User,
+            title: t('titles.externalEmployees'),
+          },
+          { view: 'hr/work-units', label: t('routes.workUnits'), icon: GitFork },
+        ],
+      },
+      {
+        id: 'crm',
+        name: t('modules.crm'),
+        icon: Handshake,
+        routes: [
+          { view: 'crm/clients', label: t('routes.clients'), icon: Building },
+          { view: 'crm/suppliers', label: t('routes.suppliers'), icon: Truck },
+        ],
+      },
+      {
+        id: 'catalog',
+        name: t('modules.catalog'),
+        icon: PackageOpen,
+        routes: [
+          { view: 'catalog/internal-listing', label: t('routes.internalListing'), icon: Box },
+        ],
+      },
+      {
+        id: 'sales',
+        name: t('modules.sales'),
+        icon: FileText,
+        routes: [
+          { view: 'sales/client-quotes', label: t('routes.clientQuotes'), icon: FileText },
+          { view: 'sales/client-offers', label: t('routes.clientOffers'), icon: FileSignature },
+          { view: 'sales/supplier-quotes', label: t('routes.supplierQuotes'), icon: FileText },
+        ],
+      },
+      {
+        id: 'accounting',
+        name: t('modules.accounting'),
+        icon: Calculator,
+        routes: [
+          {
+            view: 'accounting/clients-orders',
+            label: t('routes.clientsOrders'),
+            icon: ShoppingCart,
+          },
+          {
+            view: 'accounting/clients-invoices',
+            label: t('routes.clientsInvoices'),
+            icon: Receipt,
+          },
+          {
+            view: 'accounting/supplier-orders',
+            label: t('routes.supplierOrders'),
+            icon: ShoppingCart,
+          },
+          {
+            view: 'accounting/supplier-invoices',
+            label: t('routes.supplierInvoices'),
+            icon: Receipt,
+          },
+        ],
+      },
+      {
+        id: 'projects',
+        name: t('modules.projects'),
+        icon: FolderTree,
+        routes: [
+          {
+            view: 'projects/manage',
+            label: t('routes.projects'),
+            icon: Folder,
+            title: t('titles.projects'),
+          },
+          {
+            view: 'projects/tasks',
+            label: t('routes.tasks'),
+            icon: ListTodo,
+            title: t('titles.tasks'),
+          },
+        ],
+      },
+      {
+        id: 'timesheets',
+        name: t('modules.timesheets'),
+        icon: Clock,
+        routes: [
+          { view: 'timesheets/tracker', label: t('routes.timeTracker'), icon: ListChecks },
+          { view: 'timesheets/recurring', label: t('routes.recurringTasks'), icon: Repeat },
+        ],
+      },
+      {
+        id: 'reports',
+        name: t('modules.reports'),
+        icon: BarChart3,
+        routes: [{ view: 'reports/ai-reporting', label: t('routes.aiReporting'), icon: Sparkles }],
+      },
+      {
+        id: 'administration',
+        name: t('modules.administration'),
+        icon: Settings,
+        routes: [
+          {
+            view: 'administration/authentication',
+            label: t('routes.authentication'),
+            icon: Shield,
+            title: t('titles.authSettings'),
+          },
+          {
+            view: 'administration/general',
+            label: t('routes.general'),
+            icon: SlidersHorizontal,
+            title: t('titles.generalAdmin'),
+          },
+          {
+            view: 'administration/user-management',
+            label: t('routes.userManagement'),
+            icon: UserCog,
+          },
+          {
+            view: 'administration/roles',
+            label: t('routes.roles'),
+            icon: ShieldCheck,
+            title: t('titles.roles'),
+          },
+          { view: 'administration/email', label: t('routes.email'), icon: Mail },
+          {
+            view: 'administration/logs',
+            label: t('routes.logs'),
+            icon: ClipboardList,
+            title: t('titles.logs'),
+          },
+        ],
+      },
     ],
     [t],
   );
-
-  const canAccessView = (view: View) => {
-    if (view === 'reports/ai-reporting' && !isAiReportingEnabled) {
-      return false;
-    }
-
-    const permission = VIEW_PERMISSION_MAP[view];
-    return permission ? hasPermission(currentUser.permissions, permission) : false;
-  };
 
   const roleLabel = useMemo(() => {
     const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
@@ -129,599 +269,83 @@ const Layout: React.FC<LayoutProps> = ({
     );
   }, [currentUser.availableRoles, currentUser.role, roles, t]);
 
+  const activeModuleId = getModuleFromRoute(activeView);
+
+  const { activeRoute, navItems } = useMemo(() => {
+    let matchedRoute: RouteConfig | undefined;
+    const items: SidebarModuleItem[] = [];
+
+    for (const module of modules) {
+      const routes: SidebarRouteItem[] = [];
+
+      for (const route of module.routes) {
+        if (route.view === activeView) matchedRoute = route;
+        if (route.view === 'reports/ai-reporting' && !isAiReportingEnabled) continue;
+
+        const permission = VIEW_PERMISSION_MAP[route.view];
+        if (!permission || !hasPermission(currentUser.permissions, permission)) continue;
+
+        routes.push({
+          title: route.label,
+          view: route.view,
+          icon: route.icon,
+          isActive: activeView === route.view,
+        });
+      }
+
+      if (routes.length > 0) {
+        items.push({
+          title: module.name,
+          icon: module.icon,
+          isActive: module.id === activeModuleId,
+          items: routes,
+        });
+      }
+    }
+
+    return { activeRoute: matchedRoute, navItems: items };
+  }, [activeModuleId, activeView, currentUser.permissions, isAiReportingEnabled, modules]);
+
   const canViewNotifications = hasPermission(
     currentUser.permissions,
     buildPermission('notifications', 'view'),
   );
 
-  // Compute active module from current route
-  const activeModule = modules.find((m) => m.id === getModuleFromRoute(activeView)) || modules[0];
-
-  const accessibleModules = modules.filter((m) => {
-    const routes = moduleRoutes[m.id] || [];
-    return routes.some((route) => canAccessView(route));
-  });
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsProfileMenuOpen(false);
-        setIsRoleSubmenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(new Set());
-  const [prevActiveModuleId, setPrevActiveModuleId] = useState<string | null>(null);
-
-  // Sync expanded modules when active module changes (navigation) - close old active
-  if (activeModule.id !== prevActiveModuleId) {
-    const oldActiveId = prevActiveModuleId;
-    setPrevActiveModuleId(activeModule.id);
-    setExpandedModuleIds((prev) => {
-      const next = new Set(prev);
-      if (oldActiveId) next.delete(oldActiveId);
-      next.add(activeModule.id);
-      return next;
-    });
-  }
-
-  const handleModuleSwitch = (module: Module) => {
-    setExpandedModuleIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(module.id)) {
-        next.delete(module.id);
-      } else {
-        // Close any other non-active expanded module before expanding this one
-        for (const id of next) {
-          if (id !== activeModule.id) next.delete(id);
-        }
-        next.add(module.id);
-      }
-      return next;
-    });
-  };
-
-  const toggleSidebar = () => {
-    setIsCollapsedPinned(!isCollapsedPinned);
-    setIsHovered(false);
-  };
-  /* Removed module switcher state and refs */
-  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-
-  const renderModuleNavItems = (moduleId: string) => {
-    switch (moduleId) {
-      case 'timesheets':
-        return (
-          <>
-            {canAccessView('timesheets/tracker') && (
-              <NavItem
-                icon="fa-list-check"
-                label={t('routes.timeTracker')}
-                active={activeView === 'timesheets/tracker'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/tracker');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('timesheets/recurring') && (
-              <NavItem
-                icon="fa-repeat"
-                label={t('routes.recurringTasks')}
-                active={activeView === 'timesheets/recurring'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/recurring');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'crm':
-        return (
-          <>
-            {canAccessView('crm/clients') && (
-              <NavItem
-                icon="fa-building"
-                label={t('routes.clients')}
-                active={activeView === 'crm/clients'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('crm/clients');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('crm/suppliers') && (
-              <NavItem
-                icon="fa-truck"
-                label={t('routes.suppliers')}
-                active={activeView === 'crm/suppliers'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('crm/suppliers');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'sales':
-        return (
-          <>
-            {canAccessView('sales/client-quotes') && (
-              <NavItem
-                entityIcon="fa-user"
-                icon="fa-file-invoice"
-                label={t('routes.clientQuotes')}
-                active={activeView === 'sales/client-quotes'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('sales/client-quotes');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('sales/client-offers') && (
-              <NavItem
-                entityIcon="fa-user"
-                icon="fa-file-signature"
-                label={t('routes.clientOffers')}
-                active={activeView === 'sales/client-offers'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('sales/client-offers');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('sales/supplier-quotes') && (
-              <NavItem
-                entityIcon="fa-truck"
-                icon="fa-file-invoice"
-                label={t('routes.supplierQuotes')}
-                active={activeView === 'sales/supplier-quotes'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('sales/supplier-quotes');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'accounting':
-        return (
-          <>
-            {canAccessView('accounting/clients-orders') && (
-              <NavItem
-                entityIcon="fa-user"
-                icon="fa-cart-shopping"
-                label={t('routes.clientsOrders')}
-                active={activeView === 'accounting/clients-orders'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('accounting/clients-orders');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('accounting/clients-invoices') && (
-              <NavItem
-                entityIcon="fa-user"
-                icon="fa-file-invoice-dollar"
-                label={t('routes.clientsInvoices')}
-                active={activeView === 'accounting/clients-invoices'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('accounting/clients-invoices');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('accounting/supplier-orders') && (
-              <NavItem
-                entityIcon="fa-truck"
-                icon="fa-cart-shopping"
-                label={t('routes.supplierOrders')}
-                active={activeView === 'accounting/supplier-orders'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('accounting/supplier-orders');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('accounting/supplier-invoices') && (
-              <NavItem
-                entityIcon="fa-truck"
-                icon="fa-file-invoice-dollar"
-                label={t('routes.supplierInvoices')}
-                active={activeView === 'accounting/supplier-invoices'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('accounting/supplier-invoices');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'catalog':
-        return (
-          <>
-            {canAccessView('catalog/internal-listing') && (
-              <NavItem
-                icon="fa-box"
-                label={t('routes.internalListing')}
-                active={activeView === 'catalog/internal-listing'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('catalog/internal-listing');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'hr':
-        return (
-          <>
-            {canAccessView('hr/internal') && (
-              <NavItem
-                icon="fa-user-tie"
-                label={t('routes.internalEmployees')}
-                active={activeView === 'hr/internal'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('hr/internal');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('hr/external') && (
-              <NavItem
-                icon="fa-user-clock"
-                label={t('routes.externalEmployees')}
-                active={activeView === 'hr/external'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('hr/external');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('hr/work-units') && (
-              <NavItem
-                icon="fa-sitemap"
-                label={t('routes.workUnits')}
-                active={activeView === 'hr/work-units'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('hr/work-units');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'projects':
-        return (
-          <>
-            {canAccessView('projects/manage') && (
-              <NavItem
-                icon="fa-folder-tree"
-                label={t('routes.projects')}
-                active={activeView === 'projects/manage'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('projects/manage');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('projects/tasks') && (
-              <NavItem
-                icon="fa-tasks"
-                label={t('routes.tasks')}
-                active={activeView === 'projects/tasks'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('projects/tasks');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'administration':
-        return (
-          <>
-            {canAccessView('administration/authentication') && (
-              <NavItem
-                icon="fa-shield-halved"
-                label={t('routes.authentication')}
-                active={activeView === 'administration/authentication'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/authentication');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/general') && (
-              <NavItem
-                icon="fa-sliders"
-                label={t('routes.general')}
-                active={activeView === 'administration/general'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/general');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/user-management') && (
-              <NavItem
-                icon="fa-users"
-                label={t('routes.userManagement')}
-                active={activeView === 'administration/user-management'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/user-management');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/roles') && (
-              <NavItem
-                icon="fa-user-shield"
-                label={t('routes.roles')}
-                active={activeView === 'administration/roles'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/roles');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/email') && (
-              <NavItem
-                icon="fa-envelope"
-                label={t('routes.email')}
-                active={activeView === 'administration/email'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/email');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/logs') && (
-              <NavItem
-                icon="fa-clipboard-list"
-                label={t('routes.logs')}
-                active={activeView === 'administration/logs'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/logs');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'reports':
-        return (
-          <>
-            {canAccessView('reports/ai-reporting') && (
-              <NavItem
-                iconElement={
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="size-5"
-                    role="img"
-                    aria-label="AI sparkle"
-                  >
-                    <title>AI sparkle</title>
-                    <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5Z" />
-                    <path d="M19 14L19.75 16.25L22 17L19.75 17.75L19 20L18.25 17.75L16 17L18.25 16.25Z" />
-                    <path d="M5 2L5.5 3.5L7 4L5.5 4.5L5 6L4.5 4.5L3 4L4.5 3.5Z" />
-                    <path d="M6 18L6.5 19.5L8 20L6.5 20.5L6 22L5.5 20.5L4 20L5.5 19.5Z" />
-                  </svg>
-                }
-                label={t('routes.aiReporting')}
-                active={activeView === 'reports/ai-reporting'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('reports/ai-reporting');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      default:
-        return null;
-    }
-  };
+  const pageTitle = isNotFound
+    ? t('notFound')
+    : (activeRoute?.title ??
+      activeRoute?.label ??
+      t(fallbackRouteTitleKey(activeView), {
+        defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView,
+      }));
 
   return (
-    <div className="h-screen flex flex-col md:flex-row md:relative bg-zinc-50 overflow-hidden">
-      <div
-        aria-hidden="true"
-        className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:w-20' : 'md:w-64'}`}
+    <SidebarProvider>
+      <AppSidebar
+        navItems={navItems}
+        currentUser={currentUser}
+        roleLabel={roleLabel}
+        roles={roles}
+        navigationLabel={t('workspace')}
+        workspaceLabel={t('workspace')}
+        settingsLabel={t('menu.settings')}
+        logoutLabel={t('menu.logout')}
+        switchRoleLabel={t('menu.switchRole')}
+        version={import.meta.env.VITE_APP_VERSION ?? ''}
+        onViewChange={onViewChange}
+        onLogout={onLogout}
+        onSwitchRole={onSwitchRole}
+        className="z-50"
       />
-      <nav
-        onMouseEnter={() => {
-          if (isCollapsedPinned) setIsHovered(true);
-        }}
-        onMouseLeave={() => {
-          if (isCollapsedPinned) setIsHovered(false);
-        }}
-        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-50 md:absolute md:inset-y-0 md:left-0
-          ${isCollapsed ? 'md:w-20' : 'md:w-64'}
-          ${isCollapsedPinned && isHovered ? 'md:shadow-2xl md:shadow-black/30' : ''}
-          w-full`}
-      >
-        <div
-          className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}
-        >
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="size-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-zinc-900/20">
-              <i className="fa-solid fa-clock text-praetor text-base"></i>
-            </div>
-            {!isCollapsed && (
-              <h1 className="text-xl font-semibold italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
-                PRAETOR
-              </h1>
-            )}
+      <SidebarInset className="h-screen overflow-y-auto">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
+          <div className="flex min-w-0 items-center gap-2">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+            <h2 className="truncate text-lg font-semibold capitalize text-zinc-800">{pageTitle}</h2>
           </div>
-
-          <button
-            onClick={toggleMobileMenu}
-            className="md:hidden p-2 text-white/70 hover:text-white"
-          >
-            <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-lg`}></i>
-          </button>
-
-          <button
-            onClick={toggleSidebar}
-            className={`hidden md:flex absolute -right-3 top-12 size-6 bg-praetor border border-white/20 rounded-full items-center justify-center text-white/70 hover:text-white hover:bg-praetor transition-all z-40
-              ${isCollapsedPinned ? 'rotate-180' : ''}`}
-          >
-            <i className="fa-solid fa-chevron-left text-[10px]"></i>
-          </button>
-        </div>
-
-        {!isCollapsed && (
-          <div className="px-6 mb-4 animate-in fade-in duration-300 hidden md:block">
-            <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">
-              {roleLabel} {t('workspace')}
-            </div>
-          </div>
-        )}
-
-        <div
-          className={`flex-1 px-3 space-y-1 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}
-        >
-          {accessibleModules.map((module) => (
-            <div key={module.id} className="space-y-1 mb-2">
-              <Tooltip
-                label={module.name}
-                position="right"
-                disabled={!isCollapsed}
-                wrapperClassName="w-full"
-              >
-                {() => (
-                  <button
-                    onClick={() => handleModuleSwitch(module)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200
-                      ${
-                        activeModule.id === module.id
-                          ? 'bg-white text-praetor shadow-lg shadow-black/10'
-                          : 'text-white/60 hover:bg-white/10 hover:text-white'
-                      }
-                      ${isCollapsed ? 'justify-center' : ''}`}
-                  >
-                    <div
-                      className={`flex items-center justify-center transition-colors ${activeModule.id === module.id ? 'text-praetor' : ''}`}
-                    >
-                      <i className={`fa-solid ${module.icon} text-base w-5 text-center`}></i>
-                    </div>
-
-                    {!isCollapsed && (
-                      <>
-                        <span className="font-bold text-xs tracking-wide flex-1 text-left uppercase">
-                          {module.name}
-                        </span>
-                        <i
-                          className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleIds.has(module.id) ? 'rotate-180' : ''}`}
-                        ></i>
-                      </>
-                    )}
-                  </button>
-                )}
-              </Tooltip>
-
-              {/* Module Sub-items */}
-              {!isCollapsed && (
-                <div
-                  className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
-                    expandedModuleIds.has(module.id) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  }`}
-                >
-                  <div className="overflow-hidden min-h-0">
-                    <div className="space-y-1 mt-1 pb-2 bg-black/10 rounded-xl p-2">
-                      {renderModuleNavItems(module.id)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div
-          className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}
-        >
-          <div className="text-xs text-white/40 font-medium whitespace-nowrap">
-            Praetor v{import.meta.env.VITE_APP_VERSION}
-          </div>
-        </div>
-      </nav>
-
-      <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-200 px-8 py-4 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-zinc-800 capitalize flex items-center gap-3">
-            <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
-            {isNotFound
-              ? t('notFound')
-              : activeView === 'administration/authentication'
-                ? t('titles.authSettings')
-                : activeView === 'administration/general'
-                  ? t('titles.generalAdmin')
-                  : activeView === 'administration/roles'
-                    ? t('titles.roles')
-                    : activeView === 'administration/logs'
-                      ? t('titles.logs')
-                      : activeView === 'projects/manage'
-                        ? t('titles.projects')
-                        : activeView === 'projects/tasks'
-                          ? t('titles.tasks')
-                          : activeView === 'hr/internal'
-                            ? t('titles.internalEmployees')
-                            : activeView === 'hr/external'
-                              ? t('titles.externalEmployees')
-                              : t(
-                                  `routes.${activeView
-                                    .split('/')
-                                    .pop()
-                                    ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                  {
-                                    defaultValue:
-                                      activeView.split('/').pop()?.replace('-', ' ') || activeView,
-                                  },
-                                )}
-          </h2>
           <div className="flex items-center gap-6">
-            <span className="text-sm text-zinc-400 font-medium hidden lg:inline">
+            <span className="hidden text-sm font-medium text-zinc-400 lg:inline">
               {new Date().toLocaleDateString(i18n.language, {
                 weekday: 'long',
                 month: 'long',
@@ -729,7 +353,6 @@ const Layout: React.FC<LayoutProps> = ({
               })}
             </span>
 
-            {/* Notification Bell */}
             {canViewNotifications &&
               onMarkNotificationAsRead &&
               onMarkAllNotificationsAsRead &&
@@ -742,178 +365,11 @@ const Layout: React.FC<LayoutProps> = ({
                   onDelete={onDeleteNotification}
                 />
               )}
-
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => {
-                  setIsProfileMenuOpen(!isProfileMenuOpen);
-                  setIsRoleSubmenuOpen(false);
-                }}
-                className="group flex items-center gap-3 p-1 pr-3 rounded-full bg-zinc-50 border border-zinc-200 hover:border-zinc-300 hover:bg-white transition-all focus:outline-none"
-              >
-                <div className="size-8 rounded-full bg-praetor text-white flex items-center justify-center font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
-                  {currentUser.avatarInitials}
-                </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-[10px] font-black text-zinc-400 uppercase leading-none mb-0.5">
-                    {roleLabel}
-                  </p>
-                  <p className="text-xs font-bold text-zinc-700 leading-none">{currentUser.name}</p>
-                </div>
-                <i
-                  className={`fa-solid fa-chevron-down text-[10px] text-zinc-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}
-                ></i>
-              </button>
-
-              {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <div className="px-4 py-3 border-b border-zinc-100 mb-1 sm:hidden">
-                    <p className="text-sm font-bold text-zinc-800">{currentUser.name}</p>
-                    <p className="text-xs text-zinc-500 capitalize">{roleLabel}</p>
-                  </div>
-
-                  {!!currentUser.availableRoles && currentUser.availableRoles.length > 1 && (
-                    <div
-                      className="relative"
-                      onMouseEnter={() => {
-                        if (roleSubmenuTimeout.current) clearTimeout(roleSubmenuTimeout.current);
-                        setIsRoleSubmenuOpen(true);
-                      }}
-                      onMouseLeave={() => {
-                        roleSubmenuTimeout.current = setTimeout(
-                          () => setIsRoleSubmenuOpen(false),
-                          150,
-                        );
-                      }}
-                    >
-                      <button
-                        className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${isRoleSubmenuOpen ? 'bg-zinc-50' : 'text-zinc-700 hover:bg-zinc-50'}`}
-                      >
-                        <i className="fa-solid fa-id-badge w-4 text-center"></i>
-                        <span className="flex-1">{t('menu.switchRole')}</span>
-                        <i className="fa-solid fa-chevron-left text-[10px] text-zinc-400"></i>
-                      </button>
-                      {isRoleSubmenuOpen && (
-                        <div className="absolute right-full top-0 mr-2 w-48 bg-white rounded-2xl shadow-xl border border-zinc-200 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                          {currentUser.availableRoles.map((r) => {
-                            const isActive = r.id === currentUser.role;
-                            return (
-                              <button
-                                key={r.id}
-                                onClick={() => {
-                                  if (isActive) return;
-                                  setIsRoleSubmenuOpen(false);
-                                  setIsProfileMenuOpen(false);
-                                  onSwitchRole(r.id);
-                                }}
-                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-colors ${
-                                  isActive
-                                    ? 'bg-zinc-100 text-praetor'
-                                    : 'text-zinc-700 hover:bg-zinc-50 cursor-pointer'
-                                }`}
-                                disabled={isActive}
-                              >
-                                <span className="font-semibold truncate">{r.name}</span>
-                                {isActive && (
-                                  <i className="fa-solid fa-check text-[12px] text-praetor"></i>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      onViewChange('settings');
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'}`}
-                  >
-                    <i className="fa-solid fa-gear w-4 text-center"></i>
-                    {t('menu.settings')}
-                  </button>
-
-                  <div className="border-t border-zinc-100 mt-1 pt-1">
-                    <button
-                      onClick={onLogout}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                    >
-                      <i className="fa-solid fa-right-from-bracket w-4 text-center"></i>
-                      {t('menu.logout')}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </header>
         <div className="p-4 md:p-8">{children}</div>
-      </main>
-    </div>
-  );
-};
-
-interface NavItemProps {
-  icon?: string;
-  entityIcon?: string;
-  iconElement?: React.ReactNode;
-  label: string;
-  active: boolean;
-  isCollapsed: boolean;
-  onClick: () => void;
-  suffix?: React.ReactNode;
-}
-
-const NavItem: React.FC<NavItemProps> = ({
-  icon,
-  entityIcon,
-  iconElement,
-  label,
-  active,
-  isCollapsed,
-  onClick,
-  suffix,
-}) => {
-  const colorClass = active ? 'text-white' : 'text-white/60 group-hover:text-white';
-  return (
-    <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
-      {() => (
-        <button
-          onClick={onClick}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-            active
-              ? 'bg-white/20 text-white shadow-lg shadow-black/10'
-              : 'text-white/60 hover:bg-white/10 hover:text-white'
-          } ${isCollapsed ? 'justify-center' : ''}`}
-        >
-          {iconElement ? (
-            <span
-              className={`w-4 text-center text-base flex items-center justify-center ${colorClass}`}
-            >
-              {iconElement}
-            </span>
-          ) : entityIcon ? (
-            <span className={`flex items-center gap-1 ${colorClass}`}>
-              <i className={`fa-solid ${entityIcon} text-xs`}></i>
-              <i className={`fa-solid ${icon} text-sm`}></i>
-            </span>
-          ) : (
-            <i className={`fa-solid ${icon} w-4 text-center text-base ${colorClass}`}></i>
-          )}
-          {!isCollapsed && (
-            <>
-              <span className="font-semibold text-xs whitespace-nowrap overflow-hidden">
-                {label}
-              </span>
-              {suffix}
-            </>
-          )}
-        </button>
-      )}
-    </Tooltip>
+      </SidebarInset>
+    </SidebarProvider>
   );
 };
 
