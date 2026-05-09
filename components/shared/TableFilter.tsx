@@ -149,7 +149,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
           onClick={() => {
             onFilterChange([]);
           }}
-          className="w-full px-3 py-1.5 text-[11px] font-semibold text-white hover:text-white bg-zinc-50 hover:bg-red-500 rounded-lg transition-all flex items-center justify-center gap-1.5"
+          className="w-full px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-red-500 rounded-lg transition-all flex items-center justify-center gap-1.5"
         >
           <i className="fa-solid fa-filter-circle-xmark"></i>
           <span>{t('table.clearFilter')}</span>
