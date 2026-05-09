@@ -77,6 +77,18 @@ const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
 const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suffix}_${slugify(t)}`;
 
+const sanitizeColumnWidths = (
+  value: unknown,
+  validIds?: ReadonlySet<string>,
+): Record<string, number> => {
+  if (typeof value !== 'object' || value === null) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([id, width]) => (!validIds || validIds.has(id)) && typeof width === 'number' && width > 0,
+    ),
+  );
+};
+
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
@@ -152,6 +164,7 @@ const StandardTable = <T extends object>({
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
   const resizeMinWidthRef = useRef(DEFAULT_MIN_COL_WIDTH);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
@@ -161,6 +174,7 @@ const StandardTable = <T extends object>({
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
+  const [actionColumnOverlaps, setActionColumnOverlaps] = useState(false);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
@@ -190,8 +204,7 @@ const StandardTable = <T extends object>({
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed === 'object' && parsed !== null) return parsed as Record<string, number>;
+        return sanitizeColumnWidths(JSON.parse(saved));
       } catch {}
     }
     return {};
@@ -252,6 +265,13 @@ const StandardTable = <T extends object>({
     [title],
   );
 
+  const updateActionColumnOverlap = useCallback(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    setActionColumnOverlaps(maxScrollLeft > 1 && container.scrollLeft < maxScrollLeft - 1);
+  }, []);
+
   useEffect(() => {
     const next = initialFilterState ?? {};
     if (filterStatesEqual(filterStateRef.current, next)) return;
@@ -275,6 +295,10 @@ const StandardTable = <T extends object>({
       }) ?? [],
     [columns, hiddenColIds, getColId],
   );
+  const validColumnWidths = useMemo(() => {
+    const validIds = new Set((columns ?? []).map((col) => getColId(col)));
+    return sanitizeColumnWidths(columnWidths, validIds);
+  }, [columns, columnWidths, getColId]);
 
   // Rightmost non-sticky column absorbs leftover width. When the last column is
   // sticky-right, this prevents that sticky column from expanding to fill space.
@@ -284,7 +308,7 @@ const StandardTable = <T extends object>({
     }
     return -1;
   }, [visibleColumns]);
-  const usesFixedTableLayout = resizingColId !== null || Object.keys(columnWidths).length > 0;
+  const usesFixedTableLayout = resizingColId !== null || Object.keys(validColumnWidths).length > 0;
 
   // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
@@ -360,8 +384,10 @@ const StandardTable = <T extends object>({
       setResizingColId(null);
       document.body.style.cursor = '';
       setColumnWidths((prev) => {
-        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(prev));
-        return prev;
+        const validIds = new Set((columns ?? []).map((col) => getColId(col)));
+        const next = sanitizeColumnWidths(prev, validIds);
+        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(next));
+        return next;
       });
     };
 
@@ -374,7 +400,33 @@ const StandardTable = <T extends object>({
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
     };
-  }, [resizingColId, title]);
+  }, [columns, getColId, resizingColId, title]);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+    const handleLayoutChange = () => updateActionColumnOverlap();
+
+    updateActionColumnOverlap();
+    container.addEventListener('scroll', handleLayoutChange, { passive: true });
+    window.addEventListener('resize', handleLayoutChange);
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(handleLayoutChange) : null;
+    resizeObserver?.observe(container);
+    const tableElement = container.querySelector('table');
+    if (tableElement) resizeObserver?.observe(tableElement);
+
+    return () => {
+      container.removeEventListener('scroll', handleLayoutChange);
+      window.removeEventListener('resize', handleLayoutChange);
+      resizeObserver?.disconnect();
+    };
+  }, [updateActionColumnOverlap]);
+
+  useEffect(() => {
+    updateActionColumnOverlap();
+  });
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
@@ -1439,6 +1491,7 @@ const StandardTable = <T extends object>({
       </div>
 
       <div
+        ref={tableContainerRef}
         className={`rounded-md border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
@@ -1461,8 +1514,12 @@ const StandardTable = <T extends object>({
                       : isLastColumn
                         ? 'right'
                         : col.align;
-                    const colWidth = columnWidths[colId];
+                    const colWidth = validColumnWidths[colId];
                     const sorted = header.column.getIsSorted();
+                    const stickyBorderClass =
+                      isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
+                        ? 'border-l border-border'
+                        : '';
 
                     return (
                       <TableHead
@@ -1475,7 +1532,7 @@ const StandardTable = <T extends object>({
                               : undefined
                         }
                         aria-label={isActionColumn ? col.header : undefined}
-                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-card' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                       >
                         {!isActionColumn && (
                           <div
@@ -1557,7 +1614,13 @@ const StandardTable = <T extends object>({
                           : isLastColumn
                             ? 'right'
                             : col.align;
-                        const colWidth = columnWidths[colId];
+                        const colWidth = validColumnWidths[colId];
+                        const stickyBorderClass =
+                          isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
+                            ? 'border-l border-border'
+                            : '';
+                        const stickyHoverClass =
+                          isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
                         const rawValue = cell.getValue() as
                           | T[keyof T]
                           | string
@@ -1565,14 +1628,10 @@ const StandardTable = <T extends object>({
                           | boolean
                           | null
                           | undefined;
-                        const cellContent = flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        );
-                        const actionCellContent =
+                        const cellContent =
                           isActionColumn && col.cell
                             ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                            : cellContent;
+                            : flexRender(cell.column.columnDef.cell, cell.getContext());
                         return (
                           <TableCell
                             key={cell.id}
@@ -1587,7 +1646,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? 'sticky right-0 z-20 border-l border-border bg-card transition-colors group-hover:bg-muted/50' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>
@@ -1612,7 +1671,7 @@ const StandardTable = <T extends object>({
                                   onDoubleClick={(event) => event.stopPropagation()}
                                 >
                                   <div className="flex flex-col gap-0.5">
-                                    {renderActionMenuItems(actionCellContent)}
+                                    {renderActionMenuItems(cellContent)}
                                   </div>
                                 </DropdownMenuContent>
                               </DropdownMenu>

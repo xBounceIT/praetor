@@ -357,6 +357,15 @@ describe('<StandardTable />', () => {
     });
   });
 
+  test('stale stored column widths do not force fixed table layout', () => {
+    localStorage.setItem('praetor_table_colwidths_stale_widths', JSON.stringify({ missing: 160 }));
+
+    render(<StandardTable<Row> title="Stale Widths" data={sampleRows} columns={sampleColumns} />);
+
+    expect(screen.getByRole('table').className).not.toContain('table-fixed');
+    expect(screen.getByText('Alice').closest('td')?.className).not.toContain('overflow-hidden');
+  });
+
   test('sorting descending by age reorders numerically (largest first)', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     clickSortHeader('Age');
@@ -493,17 +502,18 @@ describe('<StandardTable />', () => {
 
   test('sticky-right body cell collapses actions behind an ellipsis menu', async () => {
     const user = userEvent.setup();
+    const actionCell = mock(({ row }: { row: Row }) => (
+      <button type="button" aria-label={`Edit ${row.name}`} data-testid={`action-${row.id}`}>
+        X
+      </button>
+    ));
     const cols = [
       ...sampleColumns,
       {
         id: 'actions',
         header: 'Actions',
         sticky: 'right' as const,
-        cell: ({ row }: { row: Row }) => (
-          <button type="button" aria-label={`Edit ${row.name}`} data-testid={`action-${row.id}`}>
-            X
-          </button>
-        ),
+        cell: actionCell,
       },
     ];
     render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
@@ -511,10 +521,53 @@ describe('<StandardTable />', () => {
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
     expect(firstActionCell?.className).not.toContain('bg-background');
+    expect(firstActionCell?.className).not.toContain('border-l');
+    expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
     expect(screen.getByText('Edit Alice')).toBeInTheDocument();
+  });
+
+  test('action column border appears only while the sticky column overlaps content', async () => {
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <button type="button">Edit</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+
+    const tableContainer = screen.getByRole('table').parentElement as HTMLDivElement;
+    const headerRow = screen.getAllByRole('row')[0];
+    const actionHeader = within(headerRow).getAllByRole('columnheader')[2];
+    const actionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td') as HTMLElement;
+
+    Object.defineProperty(tableContainer, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(tableContainer, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(tableContainer, 'scrollLeft', {
+      configurable: true,
+      value: 0,
+      writable: true,
+    });
+
+    act(() => {
+      fireEvent.scroll(tableContainer);
+    });
+
+    await waitFor(() => expect(actionHeader.className).toContain('border-l'));
+    expect(actionCell.className).toContain('border-l');
+
+    tableContainer.scrollLeft = 300;
+    act(() => {
+      fireEvent.scroll(tableContainer);
+    });
+
+    await waitFor(() => expect(actionHeader.className).not.toContain('border-l'));
+    expect(actionCell.className).not.toContain('border-l');
   });
 
   // ---------------------------------------------------------------------------
