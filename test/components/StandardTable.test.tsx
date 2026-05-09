@@ -314,6 +314,7 @@ describe('<StandardTable />', () => {
     const resizeHandle = headerCell.querySelector(
       '[data-column-resize-handle="name"]',
     ) as HTMLElement;
+    const resizeLine = headerCell.querySelector('[data-column-resize-line="name"]') as HTMLElement;
 
     Object.defineProperty(headerLabel, 'scrollWidth', { configurable: true, value: 96 });
     Object.defineProperty(headerCell, 'getBoundingClientRect', {
@@ -330,6 +331,10 @@ describe('<StandardTable />', () => {
         toJSON: () => ({}),
       }),
     });
+
+    expect(resizeHandle.className).toContain('w-2');
+    expect(resizeLine.className).toContain('w-px');
+    expect(resizeLine.className).toContain('bg-border');
 
     act(() => {
       fireEvent.mouseDown(resizeHandle, { clientX: 220 });
@@ -434,8 +439,10 @@ describe('<StandardTable />', () => {
     );
 
     expect(aliceOption).toBeInTheDocument();
-    expect(checkboxIndicator?.className).toContain('border-input');
-    expect(checkboxIndicator?.className).toContain('group-data-[state=checked]:bg-primary');
+    expect(checkboxIndicator?.className).toContain('right-2');
+    expect(checkboxIndicator?.className).toContain('text-foreground');
+    expect(checkboxIndicator?.className).not.toContain('border-input');
+    expect(checkboxIndicator?.className).not.toContain('bg-primary');
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Bob' })).toBeNull();
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Charlie' })).toBeNull();
   });
@@ -668,11 +675,26 @@ describe('<StandardTable />', () => {
     expect(previousButton).toBeDisabled();
     expect(previousButton.getAttribute('data-size')).toBe('sm');
     expect(previousButton.className).toContain('border-border');
-    expect(previousButton.className).toContain('text-foreground');
-    expect(previousButton.className).toContain('disabled:opacity-100');
+    expect(previousButton.className).toContain('disabled:opacity-50');
+    expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
 
-  test('toolbar outline buttons use the same shadcn border token as pagination', () => {
+  test('pagination uses native disabled states when there is only one page', () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    const previousButton = screen.getByRole('button', { name: 'buttons.previous' });
+    const nextButton = screen.getByRole('button', { name: 'buttons.next' });
+
+    expect(previousButton).toBeDisabled();
+    expect(nextButton).toBeDisabled();
+    expect(previousButton.className).toContain('disabled:opacity-50');
+    expect(nextButton.className).toContain('disabled:opacity-50');
+    expect(previousButton.className).not.toContain('disabled:opacity-100');
+    expect(nextButton.className).not.toContain('disabled:opacity-100');
+  });
+
+  test('toolbar outline buttons use the same shadcn border token as pagination', async () => {
+    const user = userEvent.setup();
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
 
     const exportButton = screen.getByRole('button', { name: 'table.exportToCsv' });
@@ -689,6 +711,14 @@ describe('<StandardTable />', () => {
       expect(button.className).toContain('border-border');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
+
+    expect(columnsButton.getAttribute('data-variant')).toBe('outline');
+    await user.click(columnsButton);
+    await waitFor(() => expect(columnsButton.getAttribute('data-state')).toBe('open'));
+    expect(columnsButton.getAttribute('data-variant')).toBe('outline');
+    expect(columnsButton.className).toContain('data-[state=open]:border-border');
+    expect(columnsButton.className).toContain('data-[state=open]:bg-accent');
+    expect(columnsButton.className).toContain('focus-visible:ring-0');
   });
 
   // ---------------------------------------------------------------------------

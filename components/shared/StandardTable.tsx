@@ -1069,72 +1069,76 @@ const StandardTable = <T extends object>({
     );
   };
 
-  const renderInternalFooter = () => (
-    <>
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <span>
-          {t('pagination.showing')
-            .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
-            .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
-            .replace('{{total}}', String(totalItems))}
-        </span>
-        <span className="text-xs font-medium text-muted-foreground">
-          {t('pagination.rowsPerPage')}
-        </span>
-        <Select
-          value={rowsPerPage.toString()}
-          onValueChange={(val) => {
-            const newValue = Number(val);
-            table.setPageIndex(0);
-            table.setPageSize(newValue);
-          }}
-        >
-          <SelectTrigger size="sm" className="h-8 w-[76px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[5, 10, 20, 50].map((value) => (
-              <SelectItem key={value} value={String(value)}>
-                {value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+  const renderInternalFooter = () => {
+    const isSinglePage = Math.max(totalPages, 1) <= 1;
+    const canPreviousPage = !isSinglePage && table.getCanPreviousPage();
+    const canNextPage = !isSinglePage && table.getCanNextPage();
 
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            table.previousPage();
-          }}
-          disabled={!table.getCanPreviousPage()}
-          className="text-foreground disabled:opacity-100"
-        >
-          {t('buttons.previous')}
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          {currentPage} / {Math.max(totalPages, 1)}
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            table.nextPage();
-          }}
-          disabled={!table.getCanNextPage()}
-          className="text-foreground disabled:opacity-100"
-        >
-          {t('buttons.next')}
-        </Button>
-      </div>
-    </>
-  );
+    return (
+      <>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span>
+            {t('pagination.showing')
+              .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
+              .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
+              .replace('{{total}}', String(totalItems))}
+          </span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t('pagination.rowsPerPage')}
+          </span>
+          <Select
+            value={rowsPerPage.toString()}
+            onValueChange={(val) => {
+              const newValue = Number(val);
+              table.setPageIndex(0);
+              table.setPageSize(newValue);
+            }}
+          >
+            <SelectTrigger size="sm" className="h-8 w-[76px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[5, 10, 20, 50].map((value) => (
+                <SelectItem key={value} value={String(value)}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              table.previousPage();
+            }}
+            disabled={!canPreviousPage}
+          >
+            {t('buttons.previous')}
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {currentPage} / {Math.max(totalPages, 1)}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              table.nextPage();
+            }}
+            disabled={!canNextPage}
+          >
+            {t('buttons.next')}
+          </Button>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className={`w-full space-y-3 ${containerClassName ?? ''}`.trim()}>
@@ -1176,8 +1180,9 @@ const StandardTable = <T extends object>({
                   <Button
                     type="button"
                     aria-label={t('table.columnSettings')}
-                    variant={gearOpen ? 'secondary' : 'outline'}
+                    variant="outline"
                     size="sm"
+                    className="data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0"
                   >
                     {t('table.columns')}
                     <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
@@ -1505,10 +1510,19 @@ const StandardTable = <T extends object>({
 
                         {!isActionColumn && (
                           <div
-                            className={`absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize opacity-0 hover:bg-primary/30 group-hover:opacity-100 ${resizingColId === colId ? 'bg-primary/50 opacity-100' : ''}`}
+                            className="absolute top-0 -right-1 z-10 flex h-full w-2 cursor-col-resize items-center justify-center"
                             data-column-resize-handle={colId}
                             onMouseDown={(e) => handleResizeStart(e, colId)}
-                          />
+                          >
+                            <span
+                              data-column-resize-line={colId}
+                              className={`h-5 w-px rounded-full transition-colors ${
+                                resizingColId === colId
+                                  ? 'bg-primary'
+                                  : 'bg-border group-hover:bg-primary/40'
+                              }`}
+                            />
+                          </div>
                         )}
                       </TableHead>
                     );
