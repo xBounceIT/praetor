@@ -248,6 +248,7 @@
     "decreaseFont": "Decrease font size",
     "columnSettings": "Column settings",
     "columns": "Columns",
+    "filters": "Filters",
     "resetColumns": "Reset columns",
     "export": "Export",
     "exportToCsv": "Export to CSV",

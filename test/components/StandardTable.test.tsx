@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -29,22 +30,52 @@ const sampleColumns = [
   { header: 'Age', accessorKey: 'age' as const, id: 'age' },
 ];
 
-// Each header's filter trigger is an icon-only button with no accessible name,
-// so scope the lookup to the matching <th> and grab its single button.
-const openFilterFor = (headerText: string) => {
+const clickSortHeader = (headerText: string) => {
   const headerCell = screen.getByText(headerText).closest('th') as HTMLTableCellElement;
-  const btn = headerCell.querySelector('button') as HTMLButtonElement;
+  const btn = within(headerCell).getByRole('button');
   act(() => {
     fireEvent.click(btn);
   });
 };
 
-const findPositionedFilterPopup = () => {
-  let el = screen.getByText('table.sortAsc').parentElement;
-  while (el && el.style.position !== 'absolute') {
-    el = el.parentElement;
-  }
-  return el as HTMLDivElement | null;
+const openFiltersMenu = async () => {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: /table\.filters/ }));
+  return user;
+};
+
+const selectFilterValue = async (columnHeader: string, value: string) => {
+  const user = await openFiltersMenu();
+  const columnItem = screen
+    .getAllByText(columnHeader)
+    .find((element) => element.closest('[role="menuitem"]'));
+  expect(columnItem).toBeDefined();
+  await user.click(columnItem as HTMLElement);
+  act(() => {
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: value }));
+  });
+  return user;
+};
+
+const openColumnSettings = async () => {
+  const user = userEvent.setup();
+  await user.click(screen.getByLabelText('table.columnSettings'));
+  return user;
+};
+
+const openCustomViews = async () => {
+  const user = await openColumnSettings();
+  await user.click(screen.getByText('table.customViews'));
+  return user;
+};
+
+const clickMenuItemByText = (text: string) => {
+  const item = screen.getByText(text).closest('[role="menuitem"]') as HTMLElement;
+  act(() => fireEvent.click(item));
+};
+
+const clickMenuAction = (element: HTMLElement) => {
+  act(() => fireEvent.click(element.closest('[role="menuitem"]') ?? element));
 };
 
 describe('<StandardTable />', () => {
@@ -120,18 +151,19 @@ describe('<StandardTable />', () => {
     expect(onRowClick).toHaveBeenCalledWith(sampleRows[1]);
   });
 
-  test('rowsPerPage persists to localStorage', () => {
+  test('rowsPerPage persists to localStorage', async () => {
+    const user = userEvent.setup();
     const { unmount } = render(
       <StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />,
     );
 
-    // The rows-per-page CustomSelect's trigger shows the current value (default 10).
-    const triggers = screen.getAllByRole('button').filter((b) => b.textContent === '10');
-    expect(triggers.length).toBeGreaterThan(0);
-    fireEvent.click(triggers[0]);
+    // The rows-per-page shadcn Select trigger shows the current value (default 10).
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.textContent).toContain('10');
+    await user.click(trigger);
 
     // Pick "20" from the dropdown - fail loudly if the option isn't rendered.
-    fireEvent.click(screen.getByText('20'));
+    await user.click(screen.getByRole('option', { name: '20' }));
     unmount();
 
     // localStorage should hold the newly-selected value, not just any value.
@@ -226,7 +258,7 @@ describe('<StandardTable />', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Sorting (ascending / descending via the per-column filter popup)
+  // Sorting (via TanStack header sort handlers)
   // ---------------------------------------------------------------------------
   test('sorting ascending by name reorders the rendered rows', () => {
     // Render with intentionally unsorted data so a no-op sort would fail.
@@ -236,10 +268,7 @@ describe('<StandardTable />', () => {
       { id: '2', name: 'Bob', age: 25 },
     ];
     render(<StandardTable<Row> title="People" data={unsortedRows} columns={sampleColumns} />);
-    openFilterFor('Name');
-    act(() => {
-      fireEvent.click(screen.getByText('table.sortAsc'));
-    });
+    clickSortHeader('Name');
     const rows = screen
       .getAllByRole('row')
       .slice(1)
@@ -251,10 +280,7 @@ describe('<StandardTable />', () => {
 
   test('sorting descending by age reorders numerically (largest first)', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-    openFilterFor('Age');
-    act(() => {
-      fireEvent.click(screen.getByText('table.sortDesc'));
-    });
+    clickSortHeader('Age');
     const rows = screen
       .getAllByRole('row')
       .slice(1)
@@ -266,24 +292,20 @@ describe('<StandardTable />', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Filters: dropdown filter (the only filter UI on the per-column popup)
+  // Filters: toolbar input and shadcn dropdown bound to TanStack column filters
   // ---------------------------------------------------------------------------
-  test('selecting a single filter value narrows the visible rows', () => {
+  test('selecting a single filter value narrows the visible rows', async () => {
     const { container } = render(
       <StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />,
     );
-    openFilterFor('Name');
-    // Click the "Alice" filter option (under a <label>; table cells aren't).
-    act(() => {
-      const aliceLabels = screen.getAllByText('Alice');
-      const optionLabel = aliceLabels.find((el) => el.closest('label'));
-      fireEvent.click(optionLabel ?? aliceLabels[0]);
-    });
+    await selectFilterValue('Name', 'Alice');
     const tbody = container.querySelector('tbody') as HTMLElement;
-    const bodyText = tbody.textContent ?? '';
-    expect(bodyText).toContain('Alice');
-    expect(bodyText).not.toContain('Bob');
-    expect(bodyText).not.toContain('Charlie');
+    await waitFor(() => {
+      const bodyText = tbody.textContent ?? '';
+      expect(bodyText).toContain('Alice');
+      expect(bodyText).not.toContain('Bob');
+      expect(bodyText).not.toContain('Charlie');
+    });
   });
 
   test('multi-column filters intersect (Name + Age)', () => {
@@ -307,7 +329,7 @@ describe('<StandardTable />', () => {
     expect(bodyRows[0].textContent).toContain('30');
   });
 
-  test('clearing a filter via the popup restores all rows', () => {
+  test('clearing a filter via the dropdown restores all rows', async () => {
     const { container } = render(
       <StandardTable<Row>
         title="People"
@@ -318,51 +340,26 @@ describe('<StandardTable />', () => {
     );
     const tbody = container.querySelector('tbody') as HTMLElement;
     expect(tbody.textContent).not.toContain('Bob');
-    openFilterFor('Name');
-    act(() => {
-      fireEvent.click(screen.getByText('table.clearFilter'));
-    });
+    const user = await openFiltersMenu();
+    const nameItem = screen
+      .getAllByText('Name')
+      .find((element) => element.closest('[role="menuitem"]'));
+    expect(nameItem).toBeDefined();
+    await user.click(nameItem as HTMLElement);
+    clickMenuItemByText('table.clearFilter');
     expect(tbody.textContent).toContain('Bob');
     expect(tbody.textContent).toContain('Charlie');
   });
 
-  test('filter popup stays within the viewport near the right edge', () => {
-    const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 400,
+  test('toolbar search input filters the primary column', () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    const search = screen.getByPlaceholderText('table.search Name');
+    act(() => {
+      fireEvent.change(search, { target: { value: 'Ali' } });
     });
-    try {
-      render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-
-      const ageHeader = screen.getByText('Age').closest('th') as HTMLTableCellElement;
-      const filterButton = ageHeader.querySelector('button') as HTMLButtonElement;
-      filterButton.getBoundingClientRect = () =>
-        ({
-          bottom: 20,
-          height: 16,
-          left: 380,
-          right: 396,
-          top: 4,
-          width: 16,
-          x: 380,
-          y: 4,
-          toJSON: () => ({}),
-        }) as DOMRect;
-
-      act(() => {
-        fireEvent.click(filterButton);
-      });
-
-      const popup = findPositionedFilterPopup();
-      expect(popup).not.toBeNull();
-      expect(popup?.style.left).toBe('168px');
-    } finally {
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        value: originalInnerWidth,
-      });
-    }
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+    expect(screen.queryByText('Charlie')).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -450,7 +447,7 @@ describe('<StandardTable />', () => {
   // ---------------------------------------------------------------------------
   // Pagination
   // ---------------------------------------------------------------------------
-  test('pagination renders multiple pages and navigates with the page buttons', () => {
+  test('pagination navigates with the shadcn previous and next buttons', () => {
     const many: Row[] = Array.from({ length: 12 }, (_, i) => ({
       id: String(i + 1),
       name: `User${i + 1}`,
@@ -469,16 +466,22 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('User5')).toBeInTheDocument();
     expect(screen.queryByText('User6')).not.toBeInTheDocument();
 
-    // Click page button "2".
+    // Click next to move to page 2.
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '2' }));
+      fireEvent.click(screen.getByRole('button', { name: 'buttons.next' }));
     });
     expect(screen.queryByText('User1')).not.toBeInTheDocument();
     expect(screen.getByText('User6')).toBeInTheDocument();
     expect(screen.getByText('User10')).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'buttons.previous' }));
+    });
+    expect(screen.getByText('User1')).toBeInTheDocument();
   });
 
-  test('changing rowsPerPage produces the new slice on page 1', () => {
+  test('changing rowsPerPage produces the new slice on page 1', async () => {
+    const user = userEvent.setup();
     const many: Row[] = Array.from({ length: 30 }, (_, i) => ({
       id: String(i + 1),
       name: `User${i + 1}`,
@@ -492,10 +495,10 @@ describe('<StandardTable />', () => {
         defaultRowsPerPage={5}
       />,
     );
-    const triggers = screen.getAllByRole('button').filter((b) => b.textContent === '5');
-    expect(triggers.length).toBeGreaterThan(0);
-    act(() => fireEvent.click(triggers[0]));
-    act(() => fireEvent.click(screen.getByText('20')));
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.textContent).toContain('5');
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: '20' }));
 
     // Now 20 rows fit on page 1. Count rows directly to avoid substring
     // collisions like "User21" matching "User2107".
@@ -520,7 +523,10 @@ describe('<StandardTable />', () => {
     );
 
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '3' }));
+      fireEvent.click(screen.getByRole('button', { name: 'buttons.next' }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'buttons.next' }));
     });
     expect(screen.getByText('User11')).toBeInTheDocument();
 
@@ -543,7 +549,7 @@ describe('<StandardTable />', () => {
       name: `User${i + 1}`,
       age: 100 + i,
     }));
-    const { container } = render(
+    render(
       <StandardTable<Row>
         title="ShowingTest"
         data={many}
@@ -553,42 +559,31 @@ describe('<StandardTable />', () => {
     );
     expect(screen.getByText(/pagination\.showing/)).toBeInTheDocument();
 
-    // The chevron-left button should be disabled on page 1.
-    const prevBtn = container.querySelector('.fa-chevron-left')
-      ?.parentElement as HTMLButtonElement | null;
-    expect(prevBtn?.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'buttons.previous' })).toBeDisabled();
   });
 
   // ---------------------------------------------------------------------------
   // Custom views: gear menu, column visibility, save / load / delete / export
   // ---------------------------------------------------------------------------
-  test('gear menu opens, toggles a column, and reset restores all', () => {
+  test('gear menu opens, toggles a column, and reset restores all', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-    const gearBtn = screen.getByLabelText('table.columnSettings');
-    act(() => fireEvent.click(gearBtn));
+    const user = await openColumnSettings();
 
     expect(screen.getAllByText('Name').length).toBeGreaterThan(0);
 
-    // Click the Age row inside the popup. There are multiple "Age" texts on
-    // screen (header + popup); pick the popup entry by its select-none class.
-    const ageEntries = screen.getAllByText('Age');
-    const popupAge = ageEntries.find((el) => el.className.includes('select-none'));
-    expect(popupAge).toBeDefined();
-    act(() => fireEvent.click(popupAge as HTMLElement));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Age' }));
 
     const remainingAge = screen.queryAllByText('Age');
     expect(remainingAge.length).toBe(1);
 
-    act(() => fireEvent.click(screen.getByText('table.resetColumns')));
+    await user.click(screen.getByText('table.resetColumns'));
     expect(screen.getAllByText('Age').length).toBe(2);
   });
 
-  test('saving a custom view persists it to localStorage and marks it active', () => {
+  test('saving a custom view persists it to localStorage and marks it active', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-    act(() => fireEvent.click(screen.getByLabelText('table.columnSettings')));
-    const viewsBtn = screen.getByText('table.customViews').closest('button') as HTMLElement;
-    act(() => fireEvent.click(viewsBtn));
-    act(() => fireEvent.click(screen.getByText('buttons.add')));
+    await openCustomViews();
+    clickMenuItemByText('buttons.add');
 
     const input = screen.getByPlaceholderText('table.viewNamePlaceholder') as HTMLInputElement;
     act(() => fireEvent.change(input, { target: { value: 'My View' } }));
@@ -627,7 +622,7 @@ describe('<StandardTable />', () => {
     expect(rows[2]).toContain('Bob');
   });
 
-  test('deleting a saved view removes it from localStorage', () => {
+  test('deleting a saved view removes it from localStorage', async () => {
     const seeded = [
       { id: 'v1', name: 'View 1', hiddenColIds: [], sortState: null, filterState: {} },
       { id: 'v2', name: 'View 2', hiddenColIds: [], sortState: null, filterState: {} },
@@ -637,13 +632,11 @@ describe('<StandardTable />', () => {
 
     render(<StandardTable<Row> title="DelTest" data={sampleRows} columns={sampleColumns} />);
 
-    act(() => fireEvent.click(screen.getByLabelText('table.columnSettings')));
-    const viewsBtn = screen.getByText('table.customViews').closest('button') as HTMLElement;
-    act(() => fireEvent.click(viewsBtn));
+    await openCustomViews();
 
     const deleteBtns = screen.getAllByLabelText('table.deleteView');
     expect(deleteBtns.length).toBe(2);
-    act(() => fireEvent.click(deleteBtns[1]));
+    clickMenuAction(deleteBtns[1]);
 
     const stored = JSON.parse(localStorage.getItem('praetor_table_customviews_deltest') as string);
     expect(stored.length).toBe(1);
@@ -664,13 +657,11 @@ describe('<StandardTable />', () => {
     localStorage.setItem('praetor_table_customviews_exporttest', JSON.stringify(seeded));
 
     render(<StandardTable<Row> title="ExportTest" data={sampleRows} columns={sampleColumns} />);
-    act(() => fireEvent.click(screen.getByLabelText('table.columnSettings')));
-    const viewsBtn = screen.getByText('table.customViews').closest('button') as HTMLElement;
-    act(() => fireEvent.click(viewsBtn));
+    await openCustomViews();
 
     const exportBtns = screen.getAllByLabelText('table.exportView');
     await act(async () => {
-      fireEvent.click(exportBtns[0]);
+      fireEvent.click(exportBtns[0].closest('[role="menuitem"]') ?? exportBtns[0]);
       await Promise.resolve();
     });
     expect(writeClipboardSpy).toHaveBeenCalled();
@@ -683,13 +674,13 @@ describe('<StandardTable />', () => {
 
   test('importing via paste modal adds a new view to localStorage', async () => {
     render(<StandardTable<Row> title="ImportTest" data={sampleRows} columns={sampleColumns} />);
-    act(() => fireEvent.click(screen.getByLabelText('table.columnSettings')));
-    const viewsBtn = screen.getByText('table.customViews').closest('button') as HTMLElement;
-    act(() => fireEvent.click(viewsBtn));
+    await openCustomViews();
 
     // Clipboard read returns 'unavailable' → the paste modal opens.
     await act(async () => {
-      fireEvent.click(screen.getByText('buttons.import'));
+      fireEvent.click(
+        screen.getByText('buttons.import').closest('[role="menuitem"]') as HTMLElement,
+      );
       await Promise.resolve();
     });
     const textarea = screen.getByPlaceholderText(
@@ -713,12 +704,12 @@ describe('<StandardTable />', () => {
 
   test('paste import surfaces an error for invalid JSON', async () => {
     render(<StandardTable<Row> title="BadImport" data={sampleRows} columns={sampleColumns} />);
-    act(() => fireEvent.click(screen.getByLabelText('table.columnSettings')));
-    const viewsBtn = screen.getByText('table.customViews').closest('button') as HTMLElement;
-    act(() => fireEvent.click(viewsBtn));
+    await openCustomViews();
 
     await act(async () => {
-      fireEvent.click(screen.getByText('buttons.import'));
+      fireEvent.click(
+        screen.getByText('buttons.import').closest('[role="menuitem"]') as HTMLElement,
+      );
       await Promise.resolve();
     });
     const textarea = screen.getByPlaceholderText(

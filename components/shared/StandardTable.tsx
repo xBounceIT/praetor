@@ -1,11 +1,39 @@
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  flexRender,
+  functionalUpdate,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type PaginationState,
+  type SortingState,
+  type Updater,
+  useReactTable,
+  type VisibilityState,
+} from '@tanstack/react-table';
 import { type ReactNode, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
-import Checkbox from './Checkbox';
-import CustomSelect from './CustomSelect';
+import { Button } from '../ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
@@ -23,7 +51,6 @@ import {
   type SortState,
 } from './customViewHelpers';
 import Modal from './Modal';
-import TableFilter from './TableFilter';
 import Tooltip from './Tooltip';
 
 const STORAGE_SUFFIX = {
@@ -42,48 +69,9 @@ const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suf
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
-const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
-const FILTER_POPUP_WIDTH_PX = 224;
-const FILTER_POPUP_VIEWPORT_MARGIN_PX = 8;
-
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
-
-const getFilterPopupPosition = (rect: DOMRect) => {
-  const scrollX = window.scrollX;
-  const minLeft = scrollX + FILTER_POPUP_VIEWPORT_MARGIN_PX;
-  const maxLeft =
-    scrollX + window.innerWidth - FILTER_POPUP_VIEWPORT_MARGIN_PX - FILTER_POPUP_WIDTH_PX;
-  const preferredLeft = rect.left + scrollX;
-
-  return {
-    top: rect.bottom + window.scrollY + 4,
-    left: Math.max(minLeft, Math.min(preferredLeft, maxLeft)),
-  };
-};
-
-const ViewActionButton = ({
-  icon,
-  title,
-  onClick,
-  className = 'hover:bg-zinc-200 text-zinc-500',
-}: {
-  icon: string;
-  title: string;
-  onClick: (e: React.MouseEvent) => void;
-  className?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={title}
-    aria-label={title}
-    className={`size-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
-  >
-    <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
-  </button>
-);
 
 export type Column<T> = {
   header: string;
@@ -148,10 +136,6 @@ const StandardTable = <T extends object>({
   initialFilterState,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
-  const filterRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const gearButtonRef = useRef<HTMLButtonElement>(null);
-  const gearPopupRef = useRef<HTMLDivElement>(null);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
 
@@ -160,10 +144,9 @@ const StandardTable = <T extends object>({
   const filterStateRef = useRef(filterState);
   filterStateRef.current = filterState;
 
-  const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
-  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
@@ -218,7 +201,6 @@ const StandardTable = <T extends object>({
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState<string | null>(null);
-  const viewsHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
@@ -333,7 +315,6 @@ const StandardTable = <T extends object>({
 
   useEffect(
     () => () => {
-      if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
       if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
       if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
     },
@@ -347,47 +328,6 @@ const StandardTable = <T extends object>({
   };
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
-
-  // Close filter popup when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        filterRef.current &&
-        !filterRef.current.contains(event.target as Node) &&
-        popupRef.current &&
-        !popupRef.current.contains(event.target as Node)
-      ) {
-        setActiveFilterCol(null);
-      }
-    };
-
-    if (activeFilterCol) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeFilterCol]);
-
-  // Close gear popup when clicking outside. Suspended while the create/rename
-  // modal is open: the modal portals to document.body (outside gearPopupRef),
-  // so a Save click would otherwise close the gear popup as a side effect.
-  useEffect(() => {
-    if (!gearOpen || modalState !== null) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        gearButtonRef.current &&
-        !gearButtonRef.current.contains(event.target as Node) &&
-        gearPopupRef.current &&
-        !gearPopupRef.current.contains(event.target as Node)
-      ) {
-        setGearOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [gearOpen, modalState]);
 
   useEffect(() => {
     if (!resizingColId) return;
@@ -445,46 +385,192 @@ const StandardTable = <T extends object>({
     return m;
   }, [columns, getColId]);
 
-  const processedData = useMemo(() => {
-    if (!data || !columns) return [];
-    let result = [...data];
+  const tanStackColumns = useMemo<ColumnDef<T, unknown>[]>(
+    () =>
+      (columns ?? []).map((col) => {
+        const colId = getColId(col);
+        return {
+          id: colId,
+          accessorFn: (row) => getValue(row, col),
+          header: col.header,
+          cell: (info) => {
+            const row = info.row.original;
+            const value = info.getValue() as
+              | T[keyof T]
+              | string
+              | number
+              | boolean
+              | null
+              | undefined;
+            return col.cell
+              ? col.cell({ getValue: () => value, row, value })
+              : (value as ReactNode);
+          },
+          enableSorting: !col.disableSorting,
+          enableColumnFilter: !col.disableFiltering,
+          enableHiding: !col.hidden,
+          sortingFn: (rowA, rowB) => {
+            const valA = rowA.getValue(colId);
+            const valB = rowB.getValue(colId);
+            if (typeof valA === 'number' && typeof valB === 'number') {
+              return valA - valB;
+            }
+            const strA = String(valA || '').toLowerCase();
+            const strB = String(valB || '').toLowerCase();
+            if (strA < strB) return -1;
+            if (strA > strB) return 1;
+            return 0;
+          },
+          filterFn: (row, columnId, selectedValues) => {
+            const selected =
+              typeof selectedValues === 'string'
+                ? [selectedValues]
+                : Array.isArray(selectedValues)
+                  ? selectedValues
+                  : [];
+            if (selected.length === 0) return true;
+            const formatted = formatForFilter(row.getValue(columnId), col);
+            return selected.some((value) => formatted.toLowerCase().includes(value.toLowerCase()));
+          },
+        } satisfies ColumnDef<T, unknown>;
+      }),
+    [columns, getColId, getValue, formatForFilter],
+  );
 
-    Object.keys(filterState).forEach((filterColId) => {
-      const selectedValues = filterState[filterColId];
-      if (!selectedValues || selectedValues.length === 0) return;
-      const col = colsById.get(filterColId);
-      if (!col) return;
-      result = result.filter((row) => {
-        const val = formatForFilter(getValue(row, col), col);
-        return selectedValues.includes(val);
-      });
-    });
+  const sorting = useMemo<SortingState>(
+    () => (sortState ? [{ id: sortState.colId, desc: sortState.px === 'desc' }] : []),
+    [sortState],
+  );
 
-    if (sortState) {
-      const col = colsById.get(sortState.colId);
-      if (col) {
-        result.sort((a, b) => {
-          const valA = getValue(a, col);
-          const valB = getValue(b, col);
-          if (typeof valA === 'number' && typeof valB === 'number') {
-            return sortState.px === 'asc' ? valA - valB : valB - valA;
-          }
-          const strA = String(valA || '').toLowerCase();
-          const strB = String(valB || '').toLowerCase();
-          if (strA < strB) return sortState.px === 'asc' ? -1 : 1;
-          if (strA > strB) return sortState.px === 'asc' ? 1 : -1;
-          return 0;
-        });
+  const columnFilters = useMemo<ColumnFiltersState>(
+    () => Object.entries(filterState).map(([id, value]) => ({ id, value })),
+    [filterState],
+  );
+
+  const pagination = useMemo<PaginationState>(
+    () => ({ pageIndex: currentPage - 1, pageSize: rowsPerPage }),
+    [currentPage, rowsPerPage],
+  );
+
+  const columnVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        (columns ?? []).map((col) => {
+          const colId = getColId(col);
+          return [colId, !col.hidden && !hiddenColIds.has(colId)];
+        }),
+      ) as VisibilityState,
+    [columns, getColId, hiddenColIds],
+  );
+
+  const onSortingChange = useCallback(
+    (updater: Updater<SortingState>) => {
+      const next = functionalUpdate(updater, sorting);
+      const firstSort = next[0];
+      setSortState(firstSort ? { colId: firstSort.id, px: firstSort.desc ? 'desc' : 'asc' } : null);
+      updateActiveViewId(null);
+    },
+    [sorting, updateActiveViewId],
+  );
+
+  const onColumnFiltersChange = useCallback(
+    (updater: Updater<ColumnFiltersState>) => {
+      const next = functionalUpdate(updater, columnFilters);
+      const nextFilterState: FilterState = {};
+      for (const filter of next) {
+        if (Array.isArray(filter.value)) {
+          if (filter.value.length > 0) nextFilterState[filter.id] = filter.value;
+        } else if (typeof filter.value === 'string' && filter.value.trim().length > 0) {
+          nextFilterState[filter.id] = [filter.value];
+        }
       }
-    }
+      setFilterState(nextFilterState);
+      setCurrentPage(1);
+      updateActiveViewId(null);
+    },
+    [columnFilters, updateActiveViewId],
+  );
 
-    return result;
-  }, [data, columns, filterState, sortState, getValue, colsById, formatForFilter]);
+  const onPaginationChange = useCallback(
+    (updater: Updater<PaginationState>) => {
+      const next = functionalUpdate(updater, pagination);
+      setCurrentPage(next.pageIndex + 1);
+      if (next.pageSize !== rowsPerPage) {
+        setRowsPerPage(next.pageSize);
+        if (storageKey) {
+          localStorage.setItem(storageKey, String(next.pageSize));
+        }
+      }
+    },
+    [pagination, rowsPerPage, storageKey],
+  );
 
-  const totalItems = data ? processedData.length : externalTotalCount || 0;
-  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  const onColumnVisibilityChange = useCallback(
+    (updater: Updater<VisibilityState>) => {
+      const next = functionalUpdate(updater, columnVisibility);
+      const nextHiddenColIds = new Set<string>();
+      for (const col of gearColumns) {
+        const colId = getColId(col);
+        if (next[colId] === false) nextHiddenColIds.add(colId);
+      }
+
+      setHiddenColIds(nextHiddenColIds);
+      if (sortState && nextHiddenColIds.has(sortState.colId)) setSortState(null);
+      setFilterState((prev) => {
+        let changed = false;
+        const nextFilters = { ...prev };
+        for (const colId of nextHiddenColIds) {
+          if (nextFilters[colId]) {
+            delete nextFilters[colId];
+            changed = true;
+          }
+        }
+        return changed ? nextFilters : prev;
+      });
+      updateActiveViewId(null);
+    },
+    [columnVisibility, gearColumns, getColId, sortState, updateActiveViewId],
+  );
+
+  const table = useReactTable({
+    data: data ?? [],
+    columns: tanStackColumns,
+    onSortingChange,
+    onColumnFiltersChange,
+    onPaginationChange,
+    onColumnVisibilityChange,
+    state: {
+      sorting,
+      columnFilters,
+      pagination,
+      columnVisibility,
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const processedRows = data ? table.getPrePaginationRowModel().rows : [];
+  const totalItems = data ? processedRows.length : externalTotalCount || 0;
+  const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
+  const paginatedRows = data ? table.getRowModel().rows : [];
+  const filterableTableColumns = table
+    .getAllLeafColumns()
+    .filter((column) => column.getCanFilter() && colsById.has(column.id));
+  const primaryFilterColumn =
+    filterableTableColumns.find((column) => column.getIsVisible()) ?? filterableTableColumns[0];
+  const primaryFilterSourceColumn = primaryFilterColumn
+    ? colsById.get(primaryFilterColumn.id)
+    : undefined;
+  const primaryFilterValue = primaryFilterColumn?.getFilterValue();
+  const primaryFilterText = Array.isArray(primaryFilterValue)
+    ? primaryFilterValue.join(', ')
+    : typeof primaryFilterValue === 'string'
+      ? primaryFilterValue
+      : '';
+  const hasActiveFilters = table.getState().columnFilters.length > 0;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -512,23 +598,6 @@ const StandardTable = <T extends object>({
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
-  const handleSort = (colId: string, dir: 'asc' | 'desc' | null) => {
-    if (!dir) setSortState(null);
-    else setSortState({ colId, px: dir });
-    updateActiveViewId(null);
-  };
-
-  const handleFilter = (colId: string, selected: string[]) => {
-    setFilterState((prev) => {
-      const next = { ...prev };
-      if (selected.length === 0) delete next[colId];
-      else next[colId] = selected;
-      return next;
-    });
-    setCurrentPage(1); // Reset to page 1 on filter
-    updateActiveViewId(null);
-  };
-
   const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
@@ -550,36 +619,15 @@ const StandardTable = <T extends object>({
     );
     const rows = [
       exportColumns.map((c) => c.header),
-      ...processedData.map((row) =>
-        exportColumns.map((col) => formatForFilter(getValue(row, col), col)),
+      ...processedRows.map((row) =>
+        exportColumns.map((col) => formatForFilter(getValue(row.original, col), col)),
       ),
     ];
     downloadCsv(rows, `${slugify(title)}_${getLocalDateString()}.csv`);
   };
 
-  const toggleColumnVisibility = (colId: string) => {
-    setHiddenColIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(colId)) {
-        next.delete(colId);
-      } else {
-        next.add(colId);
-        if (sortState?.colId === colId) setSortState(null);
-        setFilterState((fs) => {
-          if (!fs[colId]) return fs;
-          const nextFs = { ...fs };
-          delete nextFs[colId];
-          return nextFs;
-        });
-      }
-      return next;
-    });
-    updateActiveViewId(null);
-  };
-
   const resetColumnVisibility = () => {
-    setHiddenColIds(new Set<string>());
-    updateActiveViewId(null);
+    table.setColumnVisibility({});
   };
 
   const applyView = (view: CustomView) => {
@@ -719,19 +767,6 @@ const StandardTable = <T extends object>({
     setPasteError(null);
   };
 
-  const handleViewsMouseEnter = () => {
-    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
-    setViewsSubmenuOpen(true);
-  };
-
-  const handleViewsMouseLeave = () => {
-    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
-    viewsHoverTimeoutRef.current = setTimeout(
-      () => setViewsSubmenuOpen(false),
-      VIEWS_HOVER_CLOSE_DELAY_MS,
-    );
-  };
-
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -764,22 +799,22 @@ const StandardTable = <T extends object>({
     return (
       <Tooltip label={label} position="bottom" disabled={tooltipDisabled}>
         {() => (
-          <button
+          <Button
             type="button"
             ref={buttonRef}
             aria-label={label}
+            variant={active ? 'secondary' : 'outline'}
+            size={text ? 'sm' : 'icon-sm'}
             onClick={(e) => {
               e.stopPropagation();
               onClick();
             }}
             disabled={disabled}
-            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              active ? 'bg-zinc-100 text-praetor' : 'bg-white text-zinc-500 hover:bg-zinc-100'
-            }`}
+            className={text ? 'h-8 px-2 text-xs' : 'size-8'}
           >
             <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
             {text && <span className="text-[10px] font-bold">{text}</span>}
-          </button>
+          </Button>
         )}
       </Tooltip>
     );
@@ -787,446 +822,494 @@ const StandardTable = <T extends object>({
 
   const renderInternalFooter = () => (
     <>
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-bold text-zinc-500">{t('pagination.rowsPerPage')}</span>
-        <CustomSelect
-          options={[
-            { id: '5', name: '5' },
-            { id: '10', name: '10' },
-            { id: '20', name: '20' },
-            { id: '50', name: '50' },
-          ]}
-          value={rowsPerPage.toString()}
-          onChange={(val) => {
-            const newValue = Number(val);
-            setRowsPerPage(newValue);
-            setCurrentPage(1);
-            if (storageKey) {
-              localStorage.setItem(storageKey, String(newValue));
-            }
-          }}
-          className="w-20"
-          buttonClassName="px-2 py-1 bg-white border border-zinc-200 text-xs font-bold text-zinc-700 rounded-lg"
-          searchable={false}
-        />
-        <span className="text-xs font-bold text-zinc-400 ml-2">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <span>
           {t('pagination.showing')
             .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
             .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
             .replace('{{total}}', String(totalItems))}
         </span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {t('pagination.rowsPerPage')}
+        </span>
+        <Select
+          value={rowsPerPage.toString()}
+          onValueChange={(val) => {
+            const newValue = Number(val);
+            table.setPageIndex(0);
+            table.setPageSize(newValue);
+          }}
+        >
+          <SelectTrigger size="sm" className="h-8 w-[76px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[5, 10, 20, 50].map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex items-center gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
-            setCurrentPage((prev) => Math.max(1, prev - 1));
+            table.previousPage();
           }}
-          disabled={currentPage === 1}
-          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
+          disabled={!table.getCanPreviousPage()}
         >
-          <i className="fa-solid fa-chevron-left text-xs"></i>
-        </button>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(
-              (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
-            )
-            .map((page, i, arr) => (
-              <div key={page} className="flex items-center">
-                {i > 0 && page - arr[i - 1] > 1 && <span className="text-zinc-400 mx-1">...</span>}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentPage(page);
-                  }}
-                  className={`size-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                    currentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-zinc-200'
-                      : 'text-zinc-500 hover:bg-zinc-100'
-                  }`}
-                >
-                  {page}
-                </button>
-              </div>
-            ))}
-        </div>
-        <button
+          {t('buttons.previous')}
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {currentPage} / {Math.max(totalPages, 1)}
+        </span>
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
-            setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+            table.nextPage();
           }}
-          disabled={currentPage === totalPages || totalPages === 0}
-          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
+          disabled={!table.getCanNextPage()}
         >
-          <i className="fa-solid fa-chevron-right text-xs"></i>
-        </button>
+          {t('buttons.next')}
+        </Button>
       </div>
     </>
   );
 
   return (
     <div
-      className={`bg-white rounded-3xl border border-zinc-200 shadow-sm ${containerClassName ?? ''}`.trim()}
+      className={`rounded-md border border-border bg-card shadow-sm ${containerClassName ?? ''}`.trim()}
     >
-      <div className="p-3 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center rounded-t-3xl">
-        <div className="flex items-center gap-3">
-          <h4 className="font-semibold text-zinc-400 uppercase text-[10px] tracking-widest">
-            {title}
-          </h4>
-          {typeof totalItems === 'number' && (
-            <span className="bg-zinc-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
-              {totalItems} {totalLabel || t('table.total')}
-            </span>
+      <div className="space-y-4 border-b border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+            {typeof totalItems === 'number' && (
+              <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {totalItems} {totalLabel || t('table.total')}
+              </span>
+            )}
+          </div>
+          {(headerExtras || headerAction) && (
+            <div className="flex items-center gap-3">
+              {headerExtras}
+              {headerAction}
+            </div>
           )}
         </div>
-        {(data != null && columns != null) || headerExtras != null || headerAction != null ? (
-          <div className="flex items-center gap-3">
-            {data != null && columns != null && (
-              <div className="flex items-center gap-1">
-                {renderToolbarButton({
-                  tooltipKey: 'table.exportToCsv',
-                  iconClass: 'fa-file-export',
-                  onClick: handleExportToCsv,
-                  disabled: processedData.length === 0,
-                  text: t('table.export'),
-                })}
-                {renderToolbarButton({
-                  tooltipKey: 'table.decreaseFont',
-                  iconClass: 'fa-minus',
-                  onClick: () => stepFontSize(-1),
-                  disabled: fontSize === 'xs',
-                })}
-                {renderToolbarButton({
-                  tooltipKey: 'table.increaseFont',
-                  iconClass: 'fa-plus',
-                  onClick: () => stepFontSize(1),
-                  disabled: fontSize === 'base',
-                })}
-                <div className="relative">
-                  {renderToolbarButton({
-                    tooltipKey: 'table.columnSettings',
-                    iconClass: 'fa-gear',
-                    onClick: () => setGearOpen((prev) => !prev),
-                    active: gearOpen,
-                    buttonRef: gearButtonRef,
-                    tooltipDisabled: gearOpen,
+        {data != null && columns != null && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Input
+              placeholder={
+                primaryFilterSourceColumn
+                  ? `${t('table.search')} ${primaryFilterSourceColumn.header}`
+                  : t('table.search')
+              }
+              value={primaryFilterText}
+              onChange={(event) => {
+                primaryFilterColumn?.setFilterValue(event.target.value || undefined);
+                table.setPageIndex(0);
+              }}
+              disabled={!primaryFilterColumn}
+              className="h-8 max-w-sm"
+            />
+            <div className="flex items-center gap-2">
+              <DropdownMenu open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={hasActiveFilters ? 'secondary' : 'outline'}
+                    size="sm"
+                  >
+                    <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
+                    {t('table.filters')}
+                    <i className="fa-solid fa-chevron-down text-[10px]" aria-hidden="true"></i>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="text-xs">{t('table.filters')}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {filterableTableColumns.map((column) => {
+                    const sourceColumn = colsById.get(column.id);
+                    if (!sourceColumn) return null;
+                    const selectedValues = Array.isArray(column.getFilterValue())
+                      ? (column.getFilterValue() as string[])
+                      : typeof column.getFilterValue() === 'string'
+                        ? [column.getFilterValue() as string]
+                        : [];
+                    return (
+                      <DropdownMenuSub key={column.id}>
+                        <DropdownMenuSubTrigger className="text-xs">
+                          <span className="truncate">{sourceColumn.header}</span>
+                          {selectedValues.length > 0 && (
+                            <span className="ml-auto text-xs text-muted-foreground">
+                              {selectedValues.length}
+                            </span>
+                          )}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-64">
+                          <DropdownMenuLabel className="text-xs">
+                            {sourceColumn.header}
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <div className="max-h-64 overflow-y-auto">
+                            {getFilterOptions(column.id).map((option) => (
+                              <DropdownMenuCheckboxItem
+                                key={option || '__empty__'}
+                                checked={selectedValues.includes(option)}
+                                onSelect={(event) => {
+                                  event.preventDefault();
+                                  const next = selectedValues.includes(option)
+                                    ? selectedValues.filter((value) => value !== option)
+                                    : [...selectedValues, option];
+                                  column.setFilterValue(next.length > 0 ? next : undefined);
+                                  table.setPageIndex(0);
+                                }}
+                                className="text-xs"
+                              >
+                                <span className="truncate">{option || t('table.empty')}</span>
+                              </DropdownMenuCheckboxItem>
+                            ))}
+                          </div>
+                          {selectedValues.length > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onSelect={(event) => {
+                                  event.preventDefault();
+                                  column.setFilterValue(undefined);
+                                  table.setPageIndex(0);
+                                }}
+                                className="text-xs"
+                              >
+                                {t('table.clearFilter')}
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    );
                   })}
-                  {gearOpen && (
-                    <div
-                      ref={gearPopupRef}
-                      className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
-                    >
-                      <div className="px-3 py-2 border-b border-zinc-100 flex items-center justify-between gap-2">
-                        <span
-                          className="text-[10px] font-black text-zinc-400 uppercase tracking-wider truncate"
-                          title={activeView ? activeView.name : undefined}
-                        >
-                          {activeView
-                            ? `${t('table.columns')} · ${activeView.name}`
-                            : t('table.columns')}
+                  {hasActiveFilters && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          table.resetColumnFilters();
+                          table.setPageIndex(0);
+                        }}
+                        className="text-xs"
+                      >
+                        {t('filters.clearFilters')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {renderToolbarButton({
+                tooltipKey: 'table.exportToCsv',
+                iconClass: 'fa-file-export',
+                onClick: handleExportToCsv,
+                disabled: processedRows.length === 0,
+                text: t('table.export'),
+              })}
+              {renderToolbarButton({
+                tooltipKey: 'table.decreaseFont',
+                iconClass: 'fa-minus',
+                onClick: () => stepFontSize(-1),
+                disabled: fontSize === 'xs',
+              })}
+              {renderToolbarButton({
+                tooltipKey: 'table.increaseFont',
+                iconClass: 'fa-plus',
+                onClick: () => stepFontSize(1),
+                disabled: fontSize === 'base',
+              })}
+              <DropdownMenu open={gearOpen} onOpenChange={setGearOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    aria-label={t('table.columnSettings')}
+                    variant={gearOpen ? 'secondary' : 'outline'}
+                    size="sm"
+                  >
+                    {t('table.columns')}
+                    <i className="fa-solid fa-chevron-down text-[10px]" aria-hidden="true"></i>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel
+                    className="truncate text-xs"
+                    title={activeView ? activeView.name : undefined}
+                  >
+                    {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-64 overflow-y-auto">
+                    {table
+                      .getAllColumns()
+                      .filter((column) => column.getCanHide() && colsById.has(column.id))
+                      .map((column) => {
+                        const sourceColumn = colsById.get(column.id);
+                        const isVisible = column.getIsVisible();
+                        const isLastVisible =
+                          table
+                            .getVisibleLeafColumns()
+                            .filter((visibleColumn) => visibleColumn.getCanHide()).length === 1 &&
+                          isVisible;
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={column.id}
+                            checked={isVisible}
+                            disabled={isLastVisible}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              if (!isLastVisible) column.toggleVisibility(!isVisible);
+                            }}
+                            className="text-xs"
+                          >
+                            <span className="truncate">{sourceColumn?.header ?? column.id}</span>
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      resetColumnVisibility();
+                    }}
+                    className="text-xs"
+                  >
+                    <i className="fa-solid fa-rotate-left text-[10px]" aria-hidden="true"></i>
+                    <span>{t('table.resetColumns')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSub open={viewsSubmenuOpen} onOpenChange={setViewsSubmenuOpen}>
+                    <DropdownMenuSubTrigger className="text-xs">
+                      <i className="fa-solid fa-layer-group text-[10px]" aria-hidden="true"></i>
+                      <span>{t('table.customViews')}</span>
+                      {customViews.length > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {customViews.length}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-72">
+                      <DropdownMenuLabel className="text-xs">
+                        {t('table.customViews')}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {customViews.length > 0 && (
+                        <div className="max-h-64 overflow-y-auto p-1">
+                          {customViews.map((view) => {
+                            const isActive = view.id === activeViewId;
+                            const isCopied = copiedViewId === view.id;
+                            const isDragOver =
+                              dragOverViewId === view.id && draggingViewId !== view.id;
+                            return (
+                              <div
+                                key={view.id}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  // Firefox aborts the drag unless setData is called.
+                                  e.dataTransfer.setData('text/plain', view.name);
+                                  setDraggingViewId(view.id);
+                                }}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (
+                                    draggingViewId &&
+                                    draggingViewId !== view.id &&
+                                    dragOverViewId !== view.id
+                                  ) {
+                                    setDragOverViewId(view.id);
+                                  }
+                                }}
+                                onDragLeave={(e) => {
+                                  e.stopPropagation();
+                                  if (dragOverViewId === view.id) setDragOverViewId(null);
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (draggingViewId) {
+                                    reorderViews(draggingViewId, view.id);
+                                  }
+                                  setDraggingViewId(null);
+                                  setDragOverViewId(null);
+                                }}
+                                onDragEnd={() => {
+                                  setDraggingViewId(null);
+                                  setDragOverViewId(null);
+                                }}
+                                className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
+                                  isActive
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'hover:bg-accent hover:text-accent-foreground'
+                                } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
+                                  draggingViewId === view.id ? 'opacity-40' : ''
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  title={t('table.reorderViewHandle')}
+                                  aria-label={t('table.reorderViewHandle')}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveViewByDelta(view.id, -1);
+                                    } else if (e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveViewByDelta(view.id, 1);
+                                    }
+                                  }}
+                                  className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                >
+                                  <i
+                                    className="fa-solid fa-grip-vertical text-[10px]"
+                                    aria-hidden="true"
+                                  ></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    applyView(view);
+                                    setGearOpen(false);
+                                  }}
+                                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                  title={view.name}
+                                >
+                                  {isActive && (
+                                    <i
+                                      className="fa-solid fa-check shrink-0 text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  )}
+                                  <span className="truncate text-xs font-medium">{view.name}</span>
+                                </button>
+                                <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                  <DropdownMenuItem
+                                    aria-label={t('table.renameView')}
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setModalState({ kind: 'edit', view });
+                                      setGearOpen(false);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className="fa-solid fa-pen text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    aria-label={
+                                      isCopied ? t('table.viewCopied') : t('table.exportView')
+                                    }
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      void exportView(view);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    aria-label={t('table.deleteView')}
+                                    variant="destructive"
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      deleteView(view.id);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className="fa-solid fa-trash text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <DropdownMenuSeparator />
+                      <div className="grid gap-1 p-1">
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setModalState({ kind: 'create' });
                             setGearOpen(false);
                           }}
-                          className="text-zinc-400 hover:text-zinc-600 transition-colors flex-shrink-0"
+                          className="text-xs"
                         >
-                          <i className="fa-solid fa-xmark text-xs"></i>
-                        </button>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
-                        {gearColumns.map((col) => {
-                          const colId = getColId(col);
-                          const isVisible = !hiddenColIds.has(colId);
-                          const isLastVisible = visibleColumns.length === 1 && isVisible;
-                          // Checkbox onChange owns the toggle; the row's
-                          // onClick handles clicks on the text label only.
-                          // Clicks inside the inner <label> bubble twice (the
-                          // visible click + a UA-synthesised click on the
-                          // hidden input), so we ignore those here to avoid a
-                          // double-toggle that cancels itself.
-                          return (
-                            <div
-                              key={colId}
-                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-zinc-50 rounded cursor-pointer"
-                              onClick={(e) => {
-                                if (isLastVisible) return;
-                                if ((e.target as HTMLElement).closest('label')) return;
-                                toggleColumnVisibility(colId);
-                              }}
-                            >
-                              <Checkbox
-                                size="sm"
-                                checked={isVisible}
-                                disabled={isLastVisible}
-                                onChange={() => toggleColumnVisibility(colId)}
-                              />
-                              <span className="text-[11px] text-zinc-600 select-none">
-                                {col.header}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="p-2 border-t border-zinc-100">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            resetColumnVisibility();
+                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                          <span>{t('buttons.add')}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            void importView();
                           }}
-                          className="w-full px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                          className="text-xs"
                         >
-                          <i className="fa-solid fa-rotate-left text-[10px]"></i>
-                          <span>{t('table.resetColumns')}</span>
-                        </button>
+                          <i className="fa-solid fa-file-import text-[10px]" aria-hidden="true"></i>
+                          <span>{t('buttons.import')}</span>
+                        </DropdownMenuItem>
                       </div>
-                      <div
-                        className="relative border-t border-zinc-100 p-2"
-                        onMouseEnter={handleViewsMouseEnter}
-                        onMouseLeave={handleViewsMouseLeave}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewsSubmenuOpen(true);
-                          }}
-                          onFocus={() => setViewsSubmenuOpen(true)}
-                          className={`w-full px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-between ${
-                            viewsSubmenuOpen
-                              ? 'bg-zinc-100 text-praetor'
-                              : 'text-zinc-600 hover:bg-zinc-50'
-                          }`}
+                      {viewError && (
+                        <div
+                          role="alert"
+                          className="px-2 pb-2 text-center text-xs text-destructive"
                         >
-                          <span className="flex items-center gap-1.5">
-                            <i className="fa-solid fa-layer-group text-[10px]"></i>
-                            {t('table.customViews')}
-                            {customViews.length > 0 && (
-                              <span className="text-[9px] font-bold text-zinc-400">
-                                ({customViews.length})
-                              </span>
-                            )}
-                          </span>
-                          <i className="fa-solid fa-chevron-right text-[9px]"></i>
-                        </button>
-                        {viewsSubmenuOpen && (
-                          <div
-                            className="absolute right-full top-0 mr-2 w-64 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
-                            onMouseEnter={handleViewsMouseEnter}
-                            onMouseLeave={handleViewsMouseLeave}
-                          >
-                            <div className="px-3 py-2 border-b border-zinc-100">
-                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                {t('table.customViews')}
-                              </span>
-                            </div>
-                            {customViews.length > 0 && (
-                              <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
-                                {customViews.map((view) => {
-                                  const isActive = view.id === activeViewId;
-                                  const isCopied = copiedViewId === view.id;
-                                  const isDragOver =
-                                    dragOverViewId === view.id && draggingViewId !== view.id;
-                                  return (
-                                    <div
-                                      key={view.id}
-                                      draggable
-                                      onDragStart={(e) => {
-                                        e.stopPropagation();
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        // Firefox aborts the drag unless setData is called.
-                                        e.dataTransfer.setData('text/plain', view.name);
-                                        setDraggingViewId(view.id);
-                                      }}
-                                      onDragOver={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        e.dataTransfer.dropEffect = 'move';
-                                        if (
-                                          draggingViewId &&
-                                          draggingViewId !== view.id &&
-                                          dragOverViewId !== view.id
-                                        ) {
-                                          setDragOverViewId(view.id);
-                                        }
-                                      }}
-                                      onDragLeave={(e) => {
-                                        e.stopPropagation();
-                                        if (dragOverViewId === view.id) setDragOverViewId(null);
-                                      }}
-                                      onDrop={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (draggingViewId) {
-                                          reorderViews(draggingViewId, view.id);
-                                        }
-                                        setDraggingViewId(null);
-                                        setDragOverViewId(null);
-                                      }}
-                                      onDragEnd={() => {
-                                        setDraggingViewId(null);
-                                        setDragOverViewId(null);
-                                      }}
-                                      className={`group flex items-center gap-1 px-1.5 py-1 rounded transition-colors border-t-2 ${
-                                        isActive ? 'bg-zinc-100' : 'hover:bg-zinc-50'
-                                      } ${isDragOver ? 'border-praetor' : 'border-transparent'} ${
-                                        draggingViewId === view.id ? 'opacity-40' : ''
-                                      }`}
-                                    >
-                                      <button
-                                        type="button"
-                                        title={t('table.reorderViewHandle')}
-                                        aria-label={t('table.reorderViewHandle')}
-                                        onClick={(e) => e.stopPropagation()}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'ArrowUp') {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            moveViewByDelta(view.id, -1);
-                                          } else if (e.key === 'ArrowDown') {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            moveViewByDelta(view.id, 1);
-                                          }
-                                        }}
-                                        className="text-zinc-300 group-hover:text-zinc-400 hover:text-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
-                                      >
-                                        <i
-                                          className="fa-solid fa-grip-vertical text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          applyView(view);
-                                        }}
-                                        className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
-                                        title={view.name}
-                                      >
-                                        {isActive && (
-                                          <i className="fa-solid fa-check text-[10px] text-praetor flex-shrink-0"></i>
-                                        )}
-                                        <span
-                                          className={`text-[11px] truncate ${
-                                            isActive
-                                              ? 'text-praetor font-bold'
-                                              : 'text-zinc-600 font-semibold'
-                                          }`}
-                                        >
-                                          {view.name}
-                                        </span>
-                                      </button>
-                                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
-                                        <ViewActionButton
-                                          icon="fa-pen"
-                                          title={t('table.renameView')}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setModalState({ kind: 'edit', view });
-                                            setViewsSubmenuOpen(false);
-                                          }}
-                                        />
-                                        <ViewActionButton
-                                          icon={isCopied ? 'fa-check' : 'fa-copy'}
-                                          title={
-                                            isCopied ? t('table.viewCopied') : t('table.exportView')
-                                          }
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            void exportView(view);
-                                          }}
-                                          className={`hover:bg-zinc-200 ${isCopied ? 'text-praetor' : 'text-zinc-500'}`}
-                                        />
-                                        <ViewActionButton
-                                          icon="fa-trash"
-                                          title={t('table.deleteView')}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteView(view.id);
-                                          }}
-                                          className="hover:bg-red-100 hover:text-red-600 text-red-600"
-                                        />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                            <div className="p-2 border-t border-zinc-100 space-y-1">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setModalState({ kind: 'create' });
-                                    setViewsSubmenuOpen(false);
-                                  }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
-                                >
-                                  <i className="fa-solid fa-plus text-[10px]"></i>
-                                  <span>{t('buttons.add')}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void importView();
-                                  }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                                >
-                                  <i className="fa-solid fa-file-import text-[10px]"></i>
-                                  <span>{t('buttons.import')}</span>
-                                </button>
-                              </div>
-                              {viewError && (
-                                <div
-                                  role="alert"
-                                  className="text-[10px] text-red-500 text-center px-1 pt-1"
-                                >
-                                  {viewError}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {headerExtras}
-            {headerAction}
+                          {viewError}
+                        </div>
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        ) : null}
+        )}
       </div>
 
       <div
         className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
-          <table className="w-full text-left border-separate border-spacing-0">
-            {(paginatedData.length > 0 ||
-              Object.keys(filterState).length > 0 ||
-              sortState !== null) && (
-              <thead className="bg-zinc-50">
-                <tr>
-                  {visibleColumns.map((col, colIdx) => {
+          <Table className="w-full text-left">
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                  {headerGroup.headers.map((header, colIdx) => {
+                    const col = colsById.get(header.column.id);
+                    if (!col) return null;
                     const colId = getColId(col);
-                    const isFiltered = filterState[colId] && filterState[colId].length > 0;
-                    const isSorted = sortState?.colId === colId;
                     const isFirstColumn = colIdx === 0;
-                    const isLastColumn = colIdx === visibleColumns.length - 1;
+                    const isLastColumn = colIdx === headerGroup.headers.length - 1;
                     const isStretchColumn = colIdx === stretchColumnIdx;
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
@@ -1235,10 +1318,11 @@ const StandardTable = <T extends object>({
                         ? 'right'
                         : col.align;
                     const colWidth = columnWidths[colId];
+                    const sorted = header.column.getIsSorted();
 
                     return (
-                      <th
-                        key={colId}
+                      <TableHead
+                        key={header.id}
                         style={
                           colWidth
                             ? { width: colWidth, minWidth: colWidth }
@@ -1246,86 +1330,58 @@ const StandardTable = <T extends object>({
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-zinc-400 uppercase tracking-widest whitespace-nowrap border-b border-zinc-100 ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-zinc-50 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group h-10 ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-card border-l border-border z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
-                        <span className="inline-flex items-center gap-1">
-                          <span>{col.header}</span>
-
-                          {!col.disableFiltering && (
-                            <button
-                              type="button"
-                              ref={activeFilterCol === colId ? filterRef : undefined}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (activeFilterCol === colId) {
-                                  setActiveFilterCol(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setFilterPos(getFilterPopupPosition(rect));
-                                  setActiveFilterCol(colId);
-                                }
-                              }}
-                              className={`p-1 rounded hover:bg-zinc-200 transition-colors ${
-                                isFiltered || isSorted || activeFilterCol === colId
-                                  ? 'text-praetor'
-                                  : 'text-zinc-400'
-                              }`}
-                            >
-                              <i className="fa-solid fa-filter"></i>
-                            </button>
+                        <button
+                          type="button"
+                          disabled={!header.column.getCanSort()}
+                          onClick={header.column.getToggleSortingHandler()}
+                          className={`inline-flex items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && (
+                            <i
+                              className={`fa-solid ${
+                                sorted === 'asc'
+                                  ? 'fa-arrow-up'
+                                  : sorted === 'desc'
+                                    ? 'fa-arrow-down'
+                                    : 'fa-arrow-up-arrow-down'
+                              } text-[10px]`}
+                              aria-hidden="true"
+                            ></i>
                           )}
-                        </span>
+                        </button>
 
                         <div
-                          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 opacity-0 group-hover:opacity-100 hover:bg-praetor/30 ${resizingColId === colId ? 'opacity-100 bg-praetor/50' : ''}`}
+                          className={`absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize opacity-0 hover:bg-primary/30 group-hover:opacity-100 ${resizingColId === colId ? 'bg-primary/50 opacity-100' : ''}`}
                           onMouseDown={(e) => handleResizeStart(e, colId)}
                         />
-
-                        {activeFilterCol === colId &&
-                          filterPos &&
-                          createPortal(
-                            <div
-                              ref={popupRef}
-                              style={{
-                                top: filterPos.top,
-                                left: filterPos.left,
-                                position: 'absolute',
-                                zIndex: 9999,
-                              }}
-                            >
-                              <TableFilter
-                                title={col.header}
-                                options={getFilterOptions(colId)}
-                                selectedValues={filterState[colId] || []}
-                                onFilterChange={(selected) => handleFilter(colId, selected)}
-                                sortDirection={sortState?.colId === colId ? sortState.px : null}
-                                onSortChange={(dir) => handleSort(colId, dir)}
-                                onClose={() => setActiveFilterCol(null)}
-                              />
-                            </div>,
-                            document.body,
-                          )}
-                      </th>
+                      </TableHead>
                     );
                   })}
-                </tr>
-              </thead>
-            )}
-            <tbody>
-              {paginatedData.length > 0 ? (
-                paginatedData.map((row, idx) => {
-                  const isLastRow = idx === paginatedData.length - 1;
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.length > 0 ? (
+                paginatedRows.map((tableRow) => {
+                  const row = tableRow.original;
+                  const visibleCells = tableRow.getVisibleCells();
                   return (
-                    <tr
-                      key={idx}
+                    <TableRow
+                      key={tableRow.id}
                       onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-zinc-300 text-zinc-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-zinc-50/50'}`}`}
+                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
                     >
-                      {visibleColumns.map((col, colIdx) => {
-                        const colId = getColId(col);
-                        const val = getValue(row, col);
+                      {visibleCells.map((cell, colIdx) => {
+                        const colId = cell.column.id;
+                        const col = colsById.get(colId);
+                        if (!col) return null;
                         const isFirstColumn = colIdx === 0;
-                        const isLastColumn = colIdx === visibleColumns.length - 1;
+                        const isLastColumn = colIdx === visibleCells.length - 1;
                         const isStretchColumn = colIdx === stretchColumnIdx;
                         // Force alignment: first column left, last column right, otherwise use col.align
                         const effectiveAlign = isFirstColumn
@@ -1335,8 +1391,8 @@ const StandardTable = <T extends object>({
                             : col.align;
                         const colWidth = columnWidths[colId];
                         return (
-                          <td
-                            key={colId}
+                          <TableCell
+                            key={cell.id}
                             onDoubleClick={(e) => {
                               e.stopPropagation();
                               col.onCellDoubleClick?.(row);
@@ -1348,37 +1404,33 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${!isLastRow ? 'border-b border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-zinc-50 transition-all duration-500 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${col.sticky === 'right' ? 'sticky right-0 bg-card group-hover:bg-muted/50 transition-colors border-l border-border z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                           >
                             {col.sticky === 'right' ? (
                               <div className="flex justify-end items-center size-full">
-                                {col.cell
-                                  ? col.cell({ getValue: () => val, row, value: val })
-                                  : (val as ReactNode)}
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
                               </div>
-                            ) : col.cell ? (
-                              col.cell({ getValue: () => val, row, value: val })
                             ) : (
-                              (val as ReactNode)
+                              flexRender(cell.column.columnDef.cell, cell.getContext())
                             )}
-                          </td>
+                          </TableCell>
                         );
                       })}
-                    </tr>
+                    </TableRow>
                   );
                 })
               ) : (
-                <tr>
-                  <td
+                <TableRow>
+                  <TableCell
                     colSpan={Math.max(visibleColumns.length, 1)}
-                    className="p-12 text-center text-zinc-400 text-sm font-bold"
+                    className="p-12 text-center text-sm font-medium text-muted-foreground"
                   >
                     {emptyState ?? t('table.noResults')}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ) : (
           children
         )}
@@ -1386,7 +1438,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-zinc-50 border-t border-zinc-200 rounded-b-3xl ${
+          className={`px-3 py-2 bg-muted/50 border-t border-border rounded-b-md ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
@@ -1414,22 +1466,22 @@ const StandardTable = <T extends object>({
 
       {data && columns && pasteModalOpen && (
         <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 rounded-t-2xl flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
-                <i className="fa-solid fa-file-import text-praetor"></i>
+          <div className="w-full max-w-md rounded-md border border-border bg-card shadow-lg animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <h3 className="flex items-center gap-2 text-lg font-semibold">
+                <i className="fa-solid fa-file-import text-primary"></i>
                 {t('table.pasteViewTitle')}
               </h3>
               <button
                 type="button"
                 onClick={closePasteModal}
-                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
             <div className="px-6 py-5 space-y-3">
-              <p className="text-xs text-zinc-500">{t('table.pasteViewDescription')}</p>
+              <p className="text-xs text-muted-foreground">{t('table.pasteViewDescription')}</p>
               <textarea
                 value={pasteText}
                 onChange={(e) => {
@@ -1438,7 +1490,7 @@ const StandardTable = <T extends object>({
                 }}
                 placeholder={t('table.pasteViewPlaceholder')}
                 rows={6}
-                className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
+                className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
               {pasteError && (
                 <div role="alert" className="text-[11px] text-red-500">
@@ -1446,22 +1498,18 @@ const StandardTable = <T extends object>({
                 </div>
               )}
             </div>
-            <div className="px-6 py-3 border-t border-zinc-100 bg-zinc-50/50 rounded-b-2xl flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closePasteModal}
-                className="px-4 py-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-              >
+            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
+              <Button type="button" variant="ghost" size="sm" onClick={closePasteModal}>
                 {t('table.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
                 onClick={submitPasteImport}
                 disabled={pasteText.trim().length === 0}
-                className="px-4 py-2 text-xs font-bold text-white bg-praetor hover:bg-praetor/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {t('table.importView')}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
