@@ -167,6 +167,19 @@ describe('<StandardTable />', () => {
     expect(localStorage.getItem('praetor_table_rows_people')).toBe('20');
   });
 
+  test('rows-per-page select menu uses the scoped shadcn dark theme', async () => {
+    localStorage.setItem('praetor_theme', 'dark');
+    const user = userEvent.setup();
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    await user.click(screen.getByRole('combobox'));
+
+    const content = document.body.querySelector('[data-slot="select-content"]');
+    expect(content?.hasAttribute('data-shadcn-theme-scope')).toBe(true);
+    expect(content?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(content?.className).toContain('dark');
+  });
+
   test('CSV export click invokes downloadCsv with rows and filename', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     const exportButton = screen.getByText('table.export');
