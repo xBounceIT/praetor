@@ -92,7 +92,45 @@ jobs:
         uses: millionco/react-doctor@main
         with:
           diff: main
+
+      - name: Post React Doctor comment
+        if: steps.frontend-changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = process.env.REACT_DOCTOR_OUTPUT_FILE;
+            if (!path || !fs.existsSync(path)) return;
+
+            const output = fs.readFileSync(path, 'utf8').trim();
+            if (!output) return;
+
+            const scoreMatches = [...output.matchAll(/\b([0-9]{1,3})\s*\/\s*100\b/g)];
+            const score = scoreMatches.at(-1)?.[1];
+            const scoreLine = score ? `**Score:** \`${score}\` / 100\n\n` : '';
+            const marker = '<!-- react-doctor -->';
+            const fence = '````';
+            const body = `${marker}\n## React Doctor\n\n${scoreLine}${fence}\n${output}\n${fence}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number,
+            });
+            const prev = comments.find((comment) => comment.body?.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: prev.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
   test:
     name: Tests
