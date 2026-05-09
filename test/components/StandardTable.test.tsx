@@ -178,6 +178,7 @@ describe('<StandardTable />', () => {
     expect(content?.hasAttribute('data-shadcn-theme-scope')).toBe(true);
     expect(content?.getAttribute('data-shadcn-theme')).toBe('dark');
     expect(content?.className).toContain('dark');
+    expect(content?.className).toContain('border-border');
   });
 
   test('CSV export click invokes downloadCsv with rows and filename', () => {
