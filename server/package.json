@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:generate:custom": "drizzle-kit generate --custom",
     "db:migrate": "bun run scripts/run-migrations.ts",
+    "db:ready": "bun run scripts/check-db-ready.ts",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio"
   },

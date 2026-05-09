@@ -6,6 +6,7 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
 import { runDrizzleMigrations } from './db/migrationsRunner.ts';
+import { verifyDbReadiness } from './db/readiness.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
   INSECURE_DEFAULT_ADMIN_PASSWORDS,
@@ -19,15 +20,6 @@ const logger = createChildLogger({ module: 'startup' });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const schemaPath = join(__dirname, 'db', 'schema.sql');
-const REQUIRED_BOOTSTRAP_TABLES = [
-  'roles',
-  'users',
-  'user_roles',
-  'settings',
-  'user_clients',
-  'user_projects',
-  'user_tasks',
-] as const;
 
 const fastify = await buildApp();
 
@@ -50,35 +42,14 @@ const assertSecureRuntimeConfig = () => {
   }
 };
 
-const bootstrapDatabase = async () => {
+const applyHistoricalSchemaBootstrap = async () => {
   if (!existsSync(schemaPath)) {
     throw new Error(`Schema file not found at ${schemaPath}`);
   }
 
   const schemaSql = readFileSync(schemaPath, 'utf8');
   await query(schemaSql);
-
-  const tableCheck = await query(
-    `
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-        AND table_name = ANY($1::text[])
-      ORDER BY table_name
-    `,
-    [REQUIRED_BOOTSTRAP_TABLES],
-  );
-
-  const foundTables = tableCheck.rows.map((row) => String(row.table_name));
-  const missingTables = REQUIRED_BOOTSTRAP_TABLES.filter(
-    (tableName) => !foundTables.includes(tableName),
-  );
-
-  logger.info({ foundTables }, 'Database schema verified');
-
-  if (missingTables.length > 0) {
-    throw new Error(`Database bootstrap incomplete. Missing tables: ${missingTables.join(', ')}`);
-  }
+  logger.info('Historical schema bootstrap applied');
 };
 
 const shutdown = async (signal: string) => {
@@ -118,8 +89,17 @@ try {
   }
   if (dbReady) logger.info('PostgreSQL ready');
 
-  await bootstrapDatabase();
+  await applyHistoricalSchemaBootstrap();
   await runDrizzleMigrations();
+  const readiness = await verifyDbReadiness();
+  logger.info(
+    {
+      appliedMigrations: readiness.appliedMigrations,
+      expectedMigrations: readiness.expectedMigrations,
+      probedTableCount: readiness.probedTables.length,
+    },
+    'Database schema verified',
+  );
 
   // Ensure required bootstrap user data always exists.
   await ensureBootstrapAdmin();
