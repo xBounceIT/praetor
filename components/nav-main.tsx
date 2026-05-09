@@ -78,7 +78,7 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                 <SidebarMenuButton
                   tooltip={item.title}
                   isActive={item.isActive}
-                  className="font-normal! text-black hover:text-black data-[active=true]:font-normal! data-[active=true]:text-black [&_span]:font-normal! [&>svg]:text-black/70"
+                  className="font-normal! text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-normal! data-[active=true]:text-sidebar-accent-foreground [&_span]:font-normal! [&>svg]:text-sidebar-foreground/70"
                 >
                   <item.icon />
                   <span>{item.title}</span>
@@ -92,7 +92,7 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                       <SidebarMenuSubButton
                         asChild
                         isActive={subItem.isActive}
-                        className="font-normal! text-black hover:text-black data-[active=true]:font-normal! data-[active=true]:text-black [&_span]:font-normal! [&>svg]:text-black/70"
+                        className="font-normal! text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-normal! data-[active=true]:text-sidebar-accent-foreground [&_span]:font-normal! [&>svg]:text-sidebar-foreground/70"
                       >
                         <button
                           type="button"

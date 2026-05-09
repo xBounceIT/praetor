@@ -31,7 +31,7 @@ import {
   Users,
 } from 'lucide-react';
 import type React from 'react';
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppSidebar } from '@/components/app-sidebar';
 import type { SidebarModuleItem, SidebarRouteItem } from '@/components/nav-main';
@@ -39,6 +39,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import type { Notification, User as PraetorUser, Role, View } from '../types';
 import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
+import { applyTheme, getTheme } from '../utils/theme';
 import NotificationBell from './shared/NotificationBell';
 
 interface Module {
@@ -108,6 +109,10 @@ const Layout: React.FC<LayoutProps> = ({
   onDeleteNotification,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
+
+  useLayoutEffect(() => {
+    applyTheme(getTheme());
+  }, []);
 
   const modules: Module[] = useMemo(
     () => [
@@ -322,6 +327,7 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <SidebarProvider>
       <AppSidebar
+        data-shadcn-theme-scope
         navItems={navItems}
         currentUser={currentUser}
         roleLabel={roleLabel}

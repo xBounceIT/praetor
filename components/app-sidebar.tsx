@@ -52,13 +52,16 @@ export function AppSidebar({
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent">
+            <SidebarMenuButton
+              size="lg"
+              className="cursor-default text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
+            >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-praetor text-white">
                 <Clock className="size-4" />
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight text-sidebar-foreground">
                 <span className="truncate font-semibold italic">PRAETOR</span>
-                <span className="truncate text-xs">
+                <span className="truncate text-xs text-sidebar-foreground/80">
                   {roleLabel} {workspaceLabel}
                 </span>
               </div>

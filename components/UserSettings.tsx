@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
-import { applyTheme, getTheme, type Theme } from '../utils/theme';
+import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
 
 export interface UserSettingsProps {
   settings: Settings;
@@ -11,6 +11,41 @@ export interface UserSettingsProps {
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
+
+type LanguagePreference = NonNullable<Settings['language']>;
+
+const THEME_OPTION_META: Record<
+  Theme,
+  {
+    activeClassName: string;
+    inactiveClassName: string;
+    swatchClassName: string;
+    inactiveIconClassName: string;
+    activeIconClassName?: string;
+  }
+> = {
+  light: {
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
+    swatchClassName:
+      'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
+    inactiveIconClassName: 'fa-solid fa-sun text-sm',
+  },
+  dark: {
+    activeClassName: 'border-praetor bg-praetor/5',
+    inactiveClassName: 'border-zinc-100 hover:border-praetor/20',
+    swatchClassName: 'bg-zinc-900 shrink-0 shadow-sm flex items-center justify-center text-white',
+    inactiveIconClassName: 'fa-solid fa-moon text-sm',
+  },
+  auto: {
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
+    swatchClassName:
+      'bg-gradient-to-br from-white from-50% to-zinc-900 to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
+    inactiveIconClassName: 'fa-solid fa-circle-half-stroke text-sm bg-white rounded-full p-1',
+    activeIconClassName: 'fa-solid fa-check text-xs bg-white rounded-full p-1',
+  },
+};
 
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
@@ -46,6 +81,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   }, [settings]);
 
   const handleThemeChange = (theme: Theme) => {
+    if (theme === currentTheme) return;
     setCurrentTheme(theme);
     applyTheme(theme);
   };
@@ -68,7 +104,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
-  const handleLanguageChange = async (lang: 'en' | 'it' | 'auto') => {
+  const handleLanguageChange = async (lang: LanguagePreference) => {
     applyLanguagePreference(lang);
     setLanguage(lang);
     try {
@@ -248,38 +284,39 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <button
-                onClick={() => handleThemeChange('default')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'default' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-[#20293F] shrink-0 shadow-sm flex items-center justify-center text-white">
-                  {currentTheme === 'default' && <i className="fa-solid fa-check text-xs"></i>}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">
-                    {t('appearance.default.name')}
-                  </h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('appearance.default.description')}
-                  </p>
-                </div>
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {THEMES.map((theme) => {
+                const isSelected = currentTheme === theme;
+                const option = THEME_OPTION_META[theme];
 
-              <button
-                onClick={() => handleThemeChange('tempo')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'tempo' ? 'border-praetor bg-praetor/5' : 'border-zinc-100 hover:border-praetor/20'}`}
-              >
-                <div className="size-10 rounded-full bg-[#4F46E5] shrink-0 shadow-sm flex items-center justify-center text-white">
-                  {currentTheme === 'tempo' && <i className="fa-solid fa-check text-xs"></i>}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('appearance.tempo.name')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('appearance.tempo.description')}
-                  </p>
-                </div>
-              </button>
+                return (
+                  <button
+                    key={theme}
+                    onClick={() => handleThemeChange(theme)}
+                    className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${
+                      isSelected ? option.activeClassName : option.inactiveClassName
+                    }`}
+                  >
+                    <div className={`size-10 rounded-full ${option.swatchClassName}`}>
+                      <i
+                        className={
+                          isSelected
+                            ? (option.activeIconClassName ?? 'fa-solid fa-check text-xs')
+                            : option.inactiveIconClassName
+                        }
+                      ></i>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-zinc-800 mb-1">
+                        {t(`appearance.${theme}.name`)}
+                      </h4>
+                      <p className="text-xs text-zinc-500 leading-relaxed">
+                        {t(`appearance.${theme}.description`)}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>

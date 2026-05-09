@@ -18,13 +18,17 @@
   },
   "appearance": {
     "title": "Appearance",
-    "default": {
-      "name": "Default",
-      "description": "The classic Praetor experience with slate blue branding. Professional and distinct."
+    "light": {
+      "name": "Light",
+      "description": "Use light mode for shadcn components."
     },
-    "tempo": {
-      "name": "Tempo",
-      "description": "A vibrant indigo theme. Modern, energetic, and clean."
+    "dark": {
+      "name": "Dark",
+      "description": "Use dark mode for shadcn components."
+    },
+    "auto": {
+      "name": "Auto",
+      "description": "Match your browser or operating system color scheme automatically."
     }
   },
   "password": {

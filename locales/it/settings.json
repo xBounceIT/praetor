@@ -18,13 +18,17 @@
   },
   "appearance": {
     "title": "Aspetto",
-    "default": {
-      "name": "Default",
-      "description": "L'esperienza classica di Praetor con branding blu ardesia. Professionale e distinta."
+    "light": {
+      "name": "Chiaro",
+      "description": "Usa la modalita chiara per i componenti shadcn."
     },
-    "tempo": {
-      "name": "Tempo",
-      "description": "Un tema indaco vibrante. Moderno, energico e pulito."
+    "dark": {
+      "name": "Scuro",
+      "description": "Usa la modalita scura per i componenti shadcn."
+    },
+    "auto": {
+      "name": "Automatico",
+      "description": "Segue automaticamente il tema del browser o del sistema operativo."
     }
   },
   "password": {
