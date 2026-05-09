@@ -683,13 +683,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
     return {
       roleBadgeClass: isAdminRole
-        ? 'bg-slate-800 text-white border-slate-700'
+        ? 'bg-zinc-800 text-white border-zinc-700'
         : isTopManagerRole
           ? 'bg-amber-50 text-amber-700 border-amber-200'
           : isManagerRole
             ? 'bg-blue-50 text-blue-700 border-blue-200'
             : role?.isSystem
-              ? 'bg-slate-100 text-slate-600 border-slate-200'
+              ? 'bg-zinc-100 text-zinc-600 border-zinc-200'
               : 'bg-emerald-50 text-emerald-700 border-emerald-200',
       roleIcon: isAdminRole
         ? 'fa-shield-halved'
@@ -708,10 +708,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
       accessorKey: 'name',
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">
+          <div className="size-8 rounded-full bg-zinc-100 text-praetor flex items-center justify-center text-xs font-bold">
             {row.avatarInitials}
           </div>
-          <span className="font-bold text-slate-800">{row.name}</span>
+          <span className="font-bold text-zinc-800">{row.name}</span>
           {row.id === currentUserId && (
             <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
               {t('hr:workforce.you')}
@@ -723,16 +723,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
     {
       header: t('hr:workforce.username'),
       accessorKey: 'username',
-      cell: ({ row }) => <span className="text-sm text-slate-600 font-mono">{row.username}</span>,
+      cell: ({ row }) => <span className="text-sm text-zinc-600 font-mono">{row.username}</span>,
     },
     {
       header: t('common:labels.email'),
       accessorFn: (user) => user.email || emptyEmailLabel,
       cell: ({ row }) =>
         row.email ? (
-          <span className="text-sm font-medium text-slate-600 break-all">{row.email}</span>
+          <span className="text-sm font-medium text-zinc-600 break-all">{row.email}</span>
         ) : (
-          <span className="text-sm font-medium text-slate-400">{emptyEmailLabel}</span>
+          <span className="text-sm font-medium text-zinc-400">{emptyEmailLabel}</span>
         ),
     },
     {
@@ -782,7 +782,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       e.stopPropagation();
                       openAssignments(row.id);
                     }}
-                    className="text-slate-400 hover:text-praetor transition-colors p-2"
+                    className="text-zinc-400 hover:text-praetor transition-colors p-2"
                   >
                     <i className="fa-solid fa-link"></i>
                   </button>
@@ -799,7 +799,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         e.stopPropagation();
                         handleEdit(row);
                       }}
-                      className="text-slate-400 hover:text-praetor transition-colors p-2"
+                      className="text-zinc-400 hover:text-praetor transition-colors p-2"
                     >
                       <i className="fa-solid fa-user-pen"></i>
                     </button>
@@ -814,7 +814,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           e.stopPropagation();
                           onUpdateUser(row.id, { isDisabled: false });
                         }}
-                        className="text-slate-400 hover:text-praetor transition-colors p-2 rounded-lg"
+                        className="text-zinc-400 hover:text-praetor transition-colors p-2 rounded-lg"
                       >
                         <i className="fa-solid fa-rotate-left"></i>
                       </button>
@@ -830,7 +830,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           onUpdateUser(row.id, { isDisabled: true });
                         }}
                         disabled={row.id === currentUserId}
-                        className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
+                        className="text-amber-700 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
                       >
                         <i className="fa-solid fa-ban"></i>
                       </button>
@@ -849,7 +849,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       confirmDelete(row);
                     }}
                     disabled={row.id === currentUserId}
-                    className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                    className="text-zinc-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>
@@ -868,19 +868,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.deleteUser')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <h3 className="text-lg font-semibold text-zinc-800">
+                {t('hr:workforce.deleteUser')}
+              </h3>
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -900,16 +902,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+              <div className="size-10 bg-zinc-100 rounded-full flex items-center justify-center">
                 <i className="fa-solid fa-user-pen text-praetor"></i>
               </div>
-              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.editUser')}</h3>
+              <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workforce.editUser')}</h3>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.name')}
                   </label>
                   <input
@@ -921,8 +923,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
                       }
                     }}
-                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.firstName ? 'border-red-400' : 'border-slate-200'
+                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.firstName ? 'border-red-400' : 'border-zinc-200'
                     }`}
                   />
                   {editFormErrors.firstName && (
@@ -930,7 +932,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.surname')}
                   </label>
                   <input
@@ -942,8 +944,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, surname: '' }));
                       }
                     }}
-                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.surname ? 'border-red-400' : 'border-slate-200'
+                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.surname ? 'border-red-400' : 'border-zinc-200'
                     }`}
                   />
                   {editFormErrors.surname && (
@@ -953,7 +955,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                   {t('common:labels.email')}
                 </label>
                 <input
@@ -966,8 +968,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
-                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                    editFormErrors.email ? 'border-red-400' : 'border-slate-200'
+                  className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                    editFormErrors.email ? 'border-red-400' : 'border-zinc-200'
                   }`}
                 />
                 {editFormErrors.email && (
@@ -980,10 +982,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   {canEditAssignedRoles ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                           {t('hr:workforce.assignedRoles')}
                         </label>
-                        <div className="max-h-36 overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl p-2 space-y-1">
+                        <div className="max-h-36 overflow-y-auto bg-zinc-50 border border-zinc-200 rounded-xl p-2 space-y-1">
                           {roles
                             .slice()
                             .sort((a, b) => a.name.localeCompare(b.name))
@@ -1011,12 +1013,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                         });
                                       }}
                                     />
-                                    <span className="text-sm font-semibold text-slate-700 truncate">
+                                    <span className="text-sm font-semibold text-zinc-700 truncate">
                                       {r.name}
                                     </span>
                                   </div>
                                   {isPrimary && (
-                                    <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded">
                                       {t('hr:workforce.primary')}
                                     </span>
                                   )}
@@ -1024,7 +1026,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               );
                             })}
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-[10px] text-zinc-400 mt-1">
                           {t('hr:workforce.primaryRoleHelp')}
                         </p>
                       </div>
@@ -1042,7 +1044,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       />
 
                       {isLoadingEditRoles && (
-                        <p className="text-[10px] text-slate-400 font-bold">
+                        <p className="text-[10px] text-zinc-400 font-bold">
                           {t('hr:workforce.loadingRoles')}
                         </p>
                       )}
@@ -1061,7 +1063,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         disabled={isEditingSelf}
                       />
                       {isEditingSelf && (
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-[10px] text-zinc-400 mt-1">
                           {t('hr:workforce.cannotChangeOwnRole')}
                         </p>
                       )}
@@ -1072,11 +1074,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
               {canViewCosts && canUpdateUsers && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
                   </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                    <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
+                  <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                    <div className="w-16 flex items-center justify-center text-zinc-400 text-sm font-bold border-r border-zinc-200 py-2 bg-zinc-100/30">
                       {currency}
                     </div>
                     <ValidatedNumberInput
@@ -1090,9 +1092,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
               )}
 
               {editingUser?.id !== currentUserId && (
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                   <div>
-                    <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
+                    <p className="text-sm font-bold text-zinc-700">{t('hr:workforce.disabled')}</p>
                   </div>
                   <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} color="red" />
                 </div>
@@ -1102,14 +1104,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <div className="flex gap-3 pt-2">
               <button
                 onClick={closeEditModal}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={saveEdit}
                 disabled={!hasEditChanges}
-                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-zinc-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'}`}
               >
                 {t('hr:workforce.saveChanges')}
               </button>
@@ -1121,16 +1123,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
       {canCreateUsers && (
         <Modal isOpen={isCreateModalOpen} onClose={closeCreateModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+              <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+                <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                   <i className="fa-solid fa-user-plus"></i>
                 </div>
                 {t('hr:workforce.createNewUser')}
               </h3>
               <button
                 onClick={closeCreateModal}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -1138,7 +1140,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                     {t('hr:workforce.name')}
                   </label>
                   <input
@@ -1153,18 +1155,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.firstName || formErrors.general) {
-                        setFormErrors({ ...formErrors, firstName: '', general: '' });
+                        setFormErrors((prev) => ({ ...prev, firstName: '', general: '' }));
                       }
                     }}
                     placeholder="e.g. Alice"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                   />
                   {formErrors.firstName && (
                     <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.firstName}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                     {t('hr:workforce.surname')}
                   </label>
                   <input
@@ -1179,11 +1181,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.surname || formErrors.general) {
-                        setFormErrors({ ...formErrors, surname: '', general: '' });
+                        setFormErrors((prev) => ({ ...prev, surname: '', general: '' }));
                       }
                     }}
                     placeholder="e.g. Smith"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                   />
                   {formErrors.surname && (
                     <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
@@ -1191,7 +1193,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('common:labels.email')}
                 </label>
                 <input
@@ -1200,18 +1202,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   onChange={(e) => {
                     setNewEmail(e.target.value);
                     if (formErrors.email || formErrors.general) {
-                      setFormErrors({ ...formErrors, email: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, email: '', general: '' }));
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.email && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.email}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('hr:workforce.username')}
                 </label>
                 <input
@@ -1221,18 +1223,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     usernameManuallyEdited.current = true;
                     setNewUsername(e.target.value);
                     if (formErrors.username || formErrors.general) {
-                      setFormErrors({ ...formErrors, username: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, username: '', general: '' }));
                     }
                   }}
                   placeholder="e.g. alice.smith"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.username && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.username}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('hr:workforce.password')}
                 </label>
                 <input
@@ -1241,11 +1243,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   onChange={(e) => {
                     setNewPassword(e.target.value);
                     if (formErrors.password || formErrors.general) {
-                      setFormErrors({ ...formErrors, password: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, password: '', general: '' }));
                     }
                   }}
                   placeholder="Password"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.password && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.password}</p>
@@ -1267,13 +1269,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                  className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
                 >
                   {t('common:buttons.cancel')}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-slate-800 transition-colors active:scale-95"
+                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-zinc-800 transition-colors active:scale-95"
                 >
                   {t('common:buttons.add')}
                 </button>
@@ -1286,19 +1288,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
       {/* Page header: search + add button */}
       <div className="flex justify-between items-center gap-4">
         <div className="relative flex-1">
-          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300 text-xs"></i>
           <input
             type="text"
             placeholder={t('hr:workforce.searchUsers')}
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
+            className="w-full pl-8 pr-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
           />
         </div>
         {canCreateUsers && (
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> {t('hr:workforce.addUser')}
           </button>
@@ -1313,8 +1315,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
         emptyState={noUsersFoundLabel}
         rowClassName={(user) =>
           user.isDisabled
-            ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-slate-50'
-            : 'hover:bg-slate-50'
+            ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-zinc-50'
+            : 'hover:bg-zinc-50'
         }
         onRowClick={canUpdateUsers ? handleEdit : undefined}
       />
@@ -1324,16 +1326,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
         isOpen={!!managingUserId}
         onClose={closeAssignments}
         zIndex={50}
-        backdropClass="bg-slate-900/50 backdrop-blur-sm"
+        backdropClass="bg-zinc-900/50 backdrop-blur-sm"
       >
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-            <h3 className="font-bold text-lg text-slate-800">
+          <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+            <h3 className="font-semibold text-lg text-zinc-800">
               {t('hr:workforce.manageAccess', { name: managingUser?.name })}
             </h3>
             <button
               onClick={closeAssignments}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-zinc-400 hover:text-zinc-600 transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -1353,7 +1355,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     onChange={(val) => setFilterClientId(val as string)}
                     placeholder={t('hr:workforce.filterByClient')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                   />
                   <CustomSelect
                     options={projectFilterOptions}
@@ -1361,7 +1363,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     onChange={(val) => setFilterProjectId(val as string)}
                     placeholder={t('hr:workforce.filterByProject')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                     disabled={projectFilterOptions.length === 1}
                   />
                 </div>
@@ -1371,12 +1373,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 >
                   {/* Clients Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                           {t('hr:workforce.clients')}
                         </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                           {assignments.clientIds.length}
                         </span>
                       </div>
@@ -1385,7 +1387,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder={t('hr:workforce.searchClients')}
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1394,8 +1396,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={client.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.clientIds.includes(client.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-300'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -1405,21 +1407,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               onChange={() => toggleAssignment('client', client.id)}
                               className="sr-only peer"
                             />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                               <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                className={`size-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
                             </div>
                           </div>
                           <span
-                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                           >
                             {client.name}
                           </span>
                         </label>
                       ))}
                       {clients.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
+                        <p className="text-xs text-zinc-400 italic">
                           {t('hr:workforce.noClientsFound')}
                         </p>
                       )}
@@ -1428,12 +1430,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {/* Projects Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                           Projects
                         </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                           {assignments.projectIds.length}
                         </span>
                       </div>
@@ -1442,7 +1444,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder="Search projects..."
                         value={projectSearch}
                         onChange={(e) => setProjectSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1451,8 +1453,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={project.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.projectIds.includes(project.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-300'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -1462,19 +1464,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               onChange={() => toggleAssignment('project', project.id)}
                               className="sr-only peer"
                             />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                               <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                className={`size-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
                             </div>
                           </div>
                           <div className="flex flex-col">
                             <span
-                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                             >
                               {project.name}
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-zinc-400">
                               {clients.find((c) => c.id === project.clientId)?.name ||
                                 t('hr:workforce.unknownClient')}
                             </span>
@@ -1482,7 +1484,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         </label>
                       ))}
                       {projects.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
+                        <p className="text-xs text-zinc-400 italic">
                           {t('hr:workforce.noProjectsFound')}
                         </p>
                       )}
@@ -1491,12 +1493,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {canManageAssignments && (
                     <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                          <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                             Tasks
                           </h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                          <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                             {assignments.taskIds.length}
                           </span>
                         </div>
@@ -1505,7 +1507,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           placeholder="Search tasks..."
                           value={taskSearch}
                           onChange={(e) => setTaskSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1516,8 +1518,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               key={task.id}
                               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                                 assignments.taskIds.includes(task.id)
-                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                                  ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                                  : 'bg-white border-zinc-200 hover:border-zinc-300'
                               }`}
                             >
                               <div className="relative flex items-center justify-center shrink-0">
@@ -1527,19 +1529,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                   onChange={() => toggleAssignment('task', task.id)}
                                   className="sr-only peer"
                                 />
-                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                                   <div
-                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                    className={`size-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                                   ></div>
                                 </div>
                               </div>
                               <div className="flex flex-col">
                                 <span
-                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                                 >
                                   {task.name}
                                 </span>
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[10px] text-zinc-400">
                                   {project?.name || t('hr:workforce.unknownProject')}
                                 </span>
                               </div>
@@ -1547,7 +1549,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           );
                         })}
                         {tasks.length === 0 && (
-                          <p className="text-xs text-slate-400 italic">
+                          <p className="text-xs text-zinc-400 italic">
                             {t('hr:workforce.noTasksFound')}
                           </p>
                         )}
@@ -1559,17 +1561,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
             )}
           </div>
 
-          <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+          <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
             <button
               onClick={closeAssignments}
-              className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
+              className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
               onClick={saveAssignments}
               disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
+              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200' : 'bg-praetor text-white hover:bg-zinc-800'}`}
             >
               {t('hr:workforce.saveAssignments')}
             </button>

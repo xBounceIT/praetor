@@ -417,7 +417,7 @@ describe('getTasksSection', () => {
   // so a future regression that drops one branch (e.g. only matching FK and losing legacy entries
   // whose `task_id` is NULL) would fail loudly here rather than at a customer reporting bug.
   // `extractTasksJoinOn` (test/helpers/sqlAssertions.ts) constrains the assertions to the actual
-  // ON-clause body, not the whole SQL — so a future change that moved one branch into a CTE or
+  // ON-clause body, not the whole SQL - so a future change that moved one branch into a CTE or
   // WHERE filter would not satisfy these tests.
   describe('timeEntriesTasksJoin coverage in scoped task hours queries', () => {
     test('matched-FK branch sits inside the JOIN ON clause', async () => {

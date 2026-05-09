@@ -426,7 +426,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => setTaskFieldValue(row.id, 'name', e.target.value)}
           onBlur={() => commitTaskField(row, 'name', (v) => v.trim() || row.name)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
         />
       ),
     },
@@ -448,7 +448,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           }}
           onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
           onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
         />
       ),
     },
@@ -467,7 +467,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           placeholder="0.00"
           onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
           onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
         />
       ),
     },
@@ -480,10 +480,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         <input
           disabled={!canUpdateTasks}
           value={getTaskFieldValue(row.id, 'notes', row.notes ?? '')}
-          placeholder="—"
+          placeholder="-"
           onChange={(e) => setTaskFieldValue(row.id, 'notes', e.target.value)}
           onBlur={() => commitTaskField(row, 'notes', (v) => v.trim())}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
         />
       ),
     },
@@ -492,17 +492,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       id: 'progress',
       disableFiltering: true,
       cell: ({ row }) => {
-        if (hoursLoadState === 'loading') return <span className="text-slate-400 text-xs">…</span>;
-        if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+        if (hoursLoadState === 'loading') return <span className="text-zinc-400 text-xs">...</span>;
+        if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">-</span>;
         const logged = projectTaskHours[row.name] ?? 0;
         const expected = row.expectedEffort ?? 0;
         const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
         const overBudget = expected > 0 && logged > expected;
         return (
           <span
-            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
           >
-            {expected > 0 ? `${pct}%` : '—'}
+            {expected > 0 ? `${pct}%` : '-'}
           </span>
         );
       },
@@ -523,7 +523,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     e.stopPropagation();
                     promptDeleteTask(row);
                   }}
-                  className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                  className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
                 >
                   <i className="fa-solid fa-trash-can text-xs"></i>
                 </button>
@@ -541,7 +541,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     .filter((o) => o.status === 'confirmed')
     .map((o) => ({
       id: o.id,
-      name: `${o.clientName} — ${formatOrderId(o.id)}`,
+      name: `${o.clientName} - ${formatOrderId(o.id)}`,
     }));
 
   const selectedOrder = orders.find((o) => o.id === orderId);
@@ -563,7 +563,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           required
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => updateDraftTask(row._id, 'name', e.target.value)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
         />
       ),
     },
@@ -584,7 +584,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
           }}
           onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
         />
       ),
     },
@@ -602,7 +602,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           value={row.revenue}
           placeholder="0.00"
           onChange={(e) => updateDraftTask(row._id, 'revenue', e.target.value)}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
         />
       ),
     },
@@ -614,9 +614,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       cell: ({ row }) => (
         <input
           value={row.notes}
-          placeholder="—"
+          placeholder="-"
           onChange={(e) => updateDraftTask(row._id, 'notes', e.target.value)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
         />
       ),
     },
@@ -630,7 +630,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           <button
             type="button"
             onClick={() => removeDraftTask(row._id)}
-            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+            className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
           >
             <i className="fa-solid fa-trash-can text-xs"></i>
           </button>
@@ -644,9 +644,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                 <i
                   className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
                 ></i>
@@ -657,7 +657,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </h3>
             <button
               onClick={closeModal}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -665,13 +665,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6">
             {editingProject?.orderId && (
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                  <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                     <i className="fa-solid fa-link"></i>
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-slate-900">
+                    <div className="text-sm font-bold text-zinc-900">
                       {t('projects:projects.linkedOrder')}
                     </div>
                     <div className="text-xs text-praetor">
@@ -683,7 +683,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onViewOrder(editingProject?.orderId ?? '')}
-                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                    className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                   >
                     {t('projects:projects.viewOrder')}
                   </button>
@@ -695,7 +695,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               {editingProject ? (
                 <div className="flex gap-4">
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.client')}
                     </label>
                     <CustomSelect
@@ -703,19 +703,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={clientId}
                       onChange={(val) => {
                         setClientId(val as string);
-                        if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                        if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
                       }}
                       placeholder={t('projects:projects.selectClient')}
                       searchable={true}
                       className={errors.clientId ? 'border-red-300' : ''}
-                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-zinc-200'}`}
                     />
                     {errors.clientId && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
                     )}
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.name')}
                     </label>
                     <input
@@ -723,11 +723,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
-                        if (errors.name) setErrors({ ...errors, name: '' });
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                       }}
                       placeholder={t('projects:projects.projectNamePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                       }`}
                     />
                     {errors.name && (
@@ -738,7 +738,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               ) : (
                 <div className="flex gap-4">
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.order')}
                     </label>
                     <CustomSelect
@@ -746,30 +746,30 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={orderId}
                       onChange={(val) => {
                         setOrderId(val as string);
-                        if (errors.orderId) setErrors({ ...errors, orderId: '' });
+                        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
                       }}
                       placeholder={t('projects:projects.selectOrder')}
                       searchable={true}
                       className={errors.orderId ? 'border-red-300' : ''}
-                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-zinc-200'}`}
                     />
                     {errors.orderId && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.orderId}</p>
                     )}
                     {selectedOrder && (
-                      <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-                        <i className="fa-solid fa-building text-slate-400 text-xs"></i>
-                        <span className="text-xs text-slate-500">
+                      <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl">
+                        <i className="fa-solid fa-building text-zinc-400 text-xs"></i>
+                        <span className="text-xs text-zinc-500">
                           {t('projects:projects.inheritedClientLabel')}:
                         </span>
-                        <span className="text-xs font-bold text-slate-700">
+                        <span className="text-xs font-bold text-zinc-700">
                           {selectedOrder.clientName}
                         </span>
                       </div>
                     )}
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.name')}
                     </label>
                     <input
@@ -777,11 +777,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={name}
                       onChange={(e) => {
                         setName(e.target.value);
-                        if (errors.name) setErrors({ ...errors, name: '' });
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                       }}
                       placeholder={t('projects:projects.projectNamePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                       }`}
                     />
                     {errors.name && (
@@ -792,7 +792,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
+                <label className="text-xs font-bold text-zinc-500 ml-1">
                   {t('projects:projects.description')}
                 </label>
                 <textarea
@@ -800,7 +800,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t('projects:projects.descriptionPlaceholder')}
                   rows={3}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                  className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                 />
               </div>
 
@@ -813,7 +813,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     columns={draftTaskColumns}
                     defaultRowsPerPage={5}
                     emptyState={
-                      <span className="text-slate-400 text-xs italic">
+                      <span className="text-zinc-400 text-xs italic">
                         {t('projects:projects.noTasksAdded')}
                       </span>
                     }
@@ -821,7 +821,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       <button
                         type="button"
                         onClick={addDraftTask}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-zinc-700 transition-colors"
                       >
                         <i className="fa-solid fa-plus text-[10px]"></i>
                         {t('projects:projects.addTaskRow')}
@@ -840,7 +840,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     columns={existingTaskColumns}
                     defaultRowsPerPage={5}
                     emptyState={
-                      <span className="text-slate-400 text-xs italic">
+                      <span className="text-zinc-400 text-xs italic">
                         {t('projects:projects.noTasksAdded')}
                       </span>
                     }
@@ -849,7 +849,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <button
                           type="button"
                           onClick={handleAddExistingTask}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-zinc-700 transition-colors"
                         >
                           <i className="fa-solid fa-plus text-[10px]"></i>
                           {t('projects:projects.addTaskRow')}
@@ -861,10 +861,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
+                <label className="text-xs font-bold text-zinc-500 ml-1">
                   {t('projects:projects.color')}
                 </label>
-                <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
                   {COLORS.map((c) => (
                     <Tooltip key={c} label={c}>
                       {() => (
@@ -874,13 +874,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             setColor(c);
                             setHexInput(c);
                           }}
-                          className={`w-8 h-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
+                          className={`size-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
                           style={{ backgroundColor: c }}
                         />
                       )}
                     </Tooltip>
                   ))}
-                  <div className="flex items-center gap-2 ml-1 pl-3 border-l border-slate-300">
+                  <div className="flex items-center gap-2 ml-1 pl-3 border-l border-zinc-300">
                     <input
                       type="color"
                       value={color}
@@ -892,7 +892,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         setColor(e.target.value);
                         setHexInput(e.target.value);
                       }}
-                      className="w-8 h-8 rounded-lg cursor-pointer border-2 border-slate-200 p-0.5 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-none"
+                      className="size-8 rounded-lg cursor-pointer border-2 border-zinc-200 p-0.5 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-none"
                     />
                     <input
                       type="text"
@@ -912,7 +912,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         }
                       }}
                       placeholder="#000000"
-                      className="w-[90px] text-xs px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none font-mono tabular-nums"
+                      className="w-[90px] text-xs px-2 py-1.5 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none font-mono tabular-nums"
                     />
                   </div>
                 </div>
@@ -926,10 +926,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
 
                     return (
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                      <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
                         <div>
                           <p
-                            className={`text-sm font-bold ${isClientDisabled ? 'text-slate-400' : 'text-slate-700'}`}
+                            className={`text-sm font-bold ${isClientDisabled ? 'text-zinc-400' : 'text-zinc-700'}`}
                           >
                             {t('projects:projects.projectDisabled')}
                           </p>
@@ -959,11 +959,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               )}
             </div>
 
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100 gap-4">
+            <div className="flex justify-between items-center pt-4 border-t border-zinc-100 gap-4">
               <button
                 type="button"
                 onClick={closeModal}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -972,8 +972,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 disabled={!canSubmit}
                 className={`px-8 py-2.5 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
                   canSubmit
-                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                    : 'bg-slate-300 shadow-none cursor-not-allowed'
+                    ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
+                    : 'bg-zinc-300 shadow-none cursor-not-allowed'
                 }`}
               >
                 {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
@@ -1015,14 +1015,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('projects:projects.title')}</h2>
-            <p className="text-slate-500 text-sm">{t('projects:projects.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-zinc-800">{t('projects:projects.title')}</h2>
+            <p className="text-zinc-500 text-sm">{t('projects:projects.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
             {canCreateProjects && (
               <button
                 onClick={openAddModal}
-                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
               >
                 <i className="fa-solid fa-plus"></i> {t('projects:projects.addProject')}
               </button>
@@ -1053,15 +1053,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       isClientDisabled
                         ? 'text-amber-500'
                         : row.isDisabled
-                          ? 'text-slate-400'
-                          : 'text-slate-700'
+                          ? 'text-zinc-400'
+                          : 'text-zinc-700'
                     }`}
                   >
                     {client.name}
                     {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
                   </span>
                 ) : (
-                  <span className="text-xs text-slate-400 italic">—</span>
+                  <span className="text-xs text-zinc-400 italic">-</span>
                 );
               },
             },
@@ -1070,8 +1070,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               id: 'createdAt',
               accessorFn: (row) => row.createdAt ?? 0,
               cell: ({ row }) => (
-                <span className="text-xs text-slate-500 whitespace-nowrap">
-                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+                <span className="text-xs text-zinc-500 whitespace-nowrap">
+                  {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
                 </span>
               ),
             },
@@ -1080,15 +1080,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               accessorKey: 'name',
               cell: ({ row }) => (
                 <div className="flex items-center gap-2">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: row.color }}
-                  />
+                  <div className="size-2.5 rounded-full" style={{ backgroundColor: row.color }} />
                   <span
                     className={`text-sm font-bold ${
                       row.isDisabled
-                        ? 'text-slate-600 line-through decoration-slate-300'
-                        : 'text-slate-800'
+                        ? 'text-zinc-600 line-through decoration-zinc-300'
+                        : 'text-zinc-800'
                     }`}
                   >
                     {row.name}
@@ -1102,7 +1099,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               cell: ({ row }) => (
                 <p
                   className={`text-xs max-w-md italic line-clamp-1 ${
-                    row.isDisabled ? 'text-slate-400' : 'text-slate-500'
+                    row.isDisabled ? 'text-zinc-400' : 'text-zinc-500'
                   }`}
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
@@ -1117,25 +1114,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               cell: ({ row }) => {
                 if (allProjectHours === null) {
                   return (
-                    <span className="text-slate-400 text-xs">
+                    <span className="text-zinc-400 text-xs">
                       <i className="fa-solid fa-spinner fa-spin"></i>
                     </span>
                   );
                 }
                 const median = projectMedianProgress[row.id];
-                if (median === null) return <span className="text-slate-400 text-xs">—</span>;
+                if (median === null) return <span className="text-zinc-400 text-xs">-</span>;
                 const pct = Math.round(median);
                 const overBudget = median > 100;
                 return (
                   <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
                     <span
-                      className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+                      className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
                     >
                       {pct}%
                     </span>
@@ -1189,7 +1186,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                               e.stopPropagation();
                               openAssignments(row.id);
                             }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                            className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                           >
                             <i className="fa-solid fa-users"></i>
                           </button>
@@ -1205,7 +1202,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                                 e.stopPropagation();
                                 openEditModal(row);
                               }}
-                              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                              className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                             >
                               <i className="fa-solid fa-pen-to-square"></i>
                             </button>
@@ -1219,7 +1216,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                                   e.stopPropagation();
                                   onUpdateProject(row.id, { isDisabled: false });
                                 }}
-                                className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                                className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                               >
                                 <i className="fa-solid fa-rotate-left"></i>
                               </button>
@@ -1233,7 +1230,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                                   e.stopPropagation();
                                   onUpdateProject(row.id, { isDisabled: true });
                                 }}
-                                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                               >
                                 <i className="fa-solid fa-ban"></i>
                               </button>
@@ -1250,7 +1247,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                               e.stopPropagation();
                               promptDelete(row);
                             }}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                           >
                             <i className="fa-solid fa-trash-can"></i>
                           </button>

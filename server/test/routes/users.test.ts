@@ -275,7 +275,7 @@ const managerAuth = () => ({ authorization: `Bearer ${signToken({ userId: MANAGE
 const userAuth = () => ({ authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` });
 
 // =========================================================================
-// GET /api/users — list users
+// GET /api/users - list users
 // =========================================================================
 
 describe('GET /api/users', () => {
@@ -358,7 +358,7 @@ describe('GET /api/users', () => {
 });
 
 // =========================================================================
-// POST /api/users — create user
+// POST /api/users - create user
 // =========================================================================
 
 describe('POST /api/users', () => {
@@ -603,7 +603,7 @@ describe('DELETE /api/users/:id', () => {
 });
 
 // =========================================================================
-// PUT /api/users/:id — update + disable/enable + role change
+// PUT /api/users/:id - update + disable/enable + role change
 // =========================================================================
 
 describe('PUT /api/users/:id', () => {
@@ -909,7 +909,7 @@ describe('GET /api/users/:id/roles', () => {
 });
 
 // =========================================================================
-// PUT /api/users/:id/roles — role assignment
+// PUT /api/users/:id/roles - role assignment
 // =========================================================================
 
 describe('PUT /api/users/:id/roles', () => {

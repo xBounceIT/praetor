@@ -21,7 +21,7 @@ const Toggle: React.FC<ToggleProps> = ({
       : 'bg-praetor'
     : partial
       ? 'bg-praetor/40'
-      : 'bg-slate-200';
+      : 'bg-zinc-200';
 
   return (
     <button
@@ -31,7 +31,7 @@ const Toggle: React.FC<ToggleProps> = ({
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${bgColor} ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
-        className={`pointer-events-none h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
+        className={`pointer-events-none size-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
           checked || partial ? 'translate-x-5' : 'translate-x-0'
         }`}
       >

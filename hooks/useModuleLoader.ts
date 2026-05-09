@@ -22,7 +22,7 @@ export function useModuleLoader() {
   const [moduleLoadErrors, setModuleLoadErrors] = useState<ModuleLoadErrors>({});
 
   const loadDatasets = useCallback(
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous array — each request's T is internally consistent.
+    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous array - each request's T is internally consistent.
     async (moduleName: string, requests: DatasetRequest<any>[]): Promise<string[]> => {
       const activeRequests = requests.filter((request) => request.enabled);
       if (activeRequests.length === 0) return [];

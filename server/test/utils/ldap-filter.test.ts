@@ -8,7 +8,7 @@ import {
   validateUserFilterTemplate,
 } from '../../utils/ldap-filter.ts';
 
-// Built at runtime so the source file stays free of a literal NUL byte —
+// Built at runtime so the source file stays free of a literal NUL byte -
 // otherwise git classifies the file as binary and skips CRLF→LF normalization.
 const NUL = String.fromCharCode(0);
 

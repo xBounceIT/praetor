@@ -5,7 +5,7 @@ import { createChildLogger, logger, loggerOptions, serializeError } from '../../
 //   logger.ts reads NODE_ENV / LOG_LEVEL / LOG_PRETTY at module top-level. Once Bun loads
 //   the module, those are baked in. Bun's coverage tool aggregates by source-mapped path,
 //   so re-importing the module with a cache-bust query string evaluates a SECOND copy
-//   under a different specifier — that copy is treated as a separate file by the coverage
+//   under a different specifier - that copy is treated as a separate file by the coverage
 //   collector and so does NOT add to utils/logger.ts coverage. We therefore exercise the
 //   public surface of the *cached* module here, and validate the env-dependent shape of
 //   `loggerOptions` against whatever NODE_ENV happened to be active during import.

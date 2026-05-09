@@ -865,7 +865,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
 
       // Re-check gates inside the tx so the read happens against the same DB connection
-      // as the write — narrows (but does not eliminate) the TOCTOU window vs. reading
+      // as the write - narrows (but does not eliminate) the TOCTOU window vs. reading
       // outside the tx. A sale insert that commits between this read and this tx's commit
       // can still slip through, since the offer row isn't locked here. Closing that fully
       // would need SELECT ... FOR UPDATE here AND matching locking in the sale-create path.

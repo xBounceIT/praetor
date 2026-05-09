@@ -118,7 +118,7 @@ describe('updateSessionTitleAndTouch', () => {
     expect(exec.calls[0].params).toEqual([repo.DEFAULT_CHAT_TITLE, 'New Title', 's1', 'user-1']);
   });
 
-  test('only overwrites title when blank or default — keeps the CASE expression', async () => {
+  test('only overwrites title when blank or default - keeps the CASE expression', async () => {
     exec.enqueue({ rows: [] });
     await repo.updateSessionTitleAndTouch('s1', 'user-1', 'New', testDb);
     expect(exec.calls[0].sql).toContain('CASE');
@@ -235,7 +235,7 @@ describe('insertAssistantMessage', () => {
         id: 'm1',
         sessionId: 's1',
         content: 'ok',
-        thoughtContent: 'thinking…',
+        thoughtContent: 'thinking...',
         createdAt: when,
       },
       testDb,
@@ -245,7 +245,7 @@ describe('insertAssistantMessage', () => {
       's1',
       'assistant',
       'ok',
-      'thinking…',
+      'thinking...',
       when.toISOString(),
     ]);
   });

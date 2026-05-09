@@ -130,7 +130,7 @@ describe('<StandardTable />', () => {
     expect(triggers.length).toBeGreaterThan(0);
     fireEvent.click(triggers[0]);
 
-    // Pick "20" from the dropdown — fail loudly if the option isn't rendered.
+    // Pick "20" from the dropdown - fail loudly if the option isn't rendered.
     fireEvent.click(screen.getByText('20'));
     unmount();
 
@@ -193,7 +193,7 @@ describe('<StandardTable />', () => {
       />,
     );
     // Bob's row should be present but with the disabled visual treatment.
-    // We just confirm Bob's text still renders — the classNames are an implementation detail.
+    // We just confirm Bob's text still renders - the classNames are an implementation detail.
     expect(screen.getByText('Bob')).toBeInTheDocument();
   });
 
@@ -737,7 +737,7 @@ describe('<StandardTable />', () => {
   test('renders children (loading slot) when data is undefined', () => {
     render(
       <StandardTable<Row> title="Loading">
-        <div data-testid="loading-spinner">loading...</div>
+        <div data-testid="loading-spinner">loading…</div>
       </StandardTable>,
     );
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();

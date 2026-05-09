@@ -69,7 +69,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const handleDurationChange = (value: string) => {
     setDuration(value);
-    if (errors.hours) setErrors({ ...errors, hours: '' });
+    if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
   };
 
   // Sync internal date when calendar selection changes
@@ -207,7 +207,7 @@ const DailyView: React.FC<DailyViewProps> = ({
         setSelectedTaskId(task.id);
       }
     }
-    if (errors.task) setErrors({ ...errors, task: '' });
+    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
   };
 
   const isExceedingGoal = useMemo(() => {
@@ -231,18 +231,18 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+    <div className="bg-white rounded-3xl shadow-sm border border-zinc-200 p-5">
       <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 leading-none mb-1">
               {t('entry.loggingFor')}
             </span>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
               <span className="text-base sm:text-lg font-black text-praetor uppercase">
                 {new Date(date).toLocaleDateString(undefined, { weekday: 'long' })}
               </span>
-              <span className="text-sm sm:text-base font-medium text-slate-400">
+              <span className="text-sm sm:text-base font-medium text-zinc-400">
                 {new Date(date).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
@@ -263,7 +263,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               value={selectedClientId}
               onChange={(val) => {
                 setSelectedClientId(val as string);
-                if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
               }}
               searchable={true}
               className={errors.clientId ? 'border-red-300' : ''}
@@ -280,7 +280,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               value={selectedProjectId}
               onChange={(val) => {
                 setSelectedProjectId(val as string);
-                if (errors.projectId) setErrors({ ...errors, projectId: '' });
+                if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
               }}
               placeholder={
                 filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')
@@ -313,15 +313,14 @@ const DailyView: React.FC<DailyViewProps> = ({
             {selectedTaskName === 'custom' && canCreateCustomTask && (
               <input
                 type="text"
-                autoFocus
                 placeholder={t('entry.typeCustomTask')}
                 value={selectedTaskName === 'custom' ? '' : selectedTaskName}
                 onChange={(e) => {
                   setSelectedTaskName(e.target.value);
                   setSelectedTaskId('');
-                  if (errors.task) setErrors({ ...errors, task: '' });
+                  if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
                 }}
-                className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
+                className="mt-2 w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
               />
             )}
           </div>
@@ -341,14 +340,14 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </label>
             <ValidatedNumberInput
               value={duration}
               onValueChange={handleDurationChange}
               placeholder="0.0"
-              className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
+              className={`w-full px-3 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 focus:ring-praetor'}`}
             />
             {errors.hours && (
               <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">
@@ -360,7 +359,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
           <div className="min-w-0">
-            <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
               {t('entry.notesDescription')}
             </label>
             <input
@@ -368,14 +367,14 @@ const DailyView: React.FC<DailyViewProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+              className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
             />
           </div>
 
           <div className="min-w-0 flex items-end">
             <button
               type="submit"
-              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
+              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-zinc-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {t('entry.logTime')}
             </button>
@@ -393,13 +392,13 @@ const DailyView: React.FC<DailyViewProps> = ({
 
         {selectedTaskId && (
           <div
-            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}
+            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-zinc-50 border-zinc-200' : 'bg-transparent border-transparent'}`}
           >
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setMakeRecurring(!makeRecurring)}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50'}`}
               >
                 <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
                 {t('entry.repeatTask')}
@@ -407,7 +406,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
               {makeRecurring && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
+                  <div className="hidden sm:block h-4 w-px bg-zinc-200 mx-1 shrink-0"></div>
                   <CustomSelect
                     options={[
                       { id: 'daily', name: t('entry.recurrencePatterns.daily') },
@@ -424,9 +423,9 @@ const DailyView: React.FC<DailyViewProps> = ({
                     onChange={(val) => handleRecurrenceChange(val as string)}
                     className="text-xs min-w-[120px]"
                     placeholder="Pattern..."
-                    buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
+                    buttonClassName="bg-white border border-zinc-200 text-praetor font-medium p-2 text-xs whitespace-nowrap"
                   />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                     {t('entry.until')}
                   </span>
                   <input
@@ -434,9 +433,10 @@ const DailyView: React.FC<DailyViewProps> = ({
                     value={recurrenceEndDate}
                     onChange={(e) => {
                       setRecurrenceEndDate(e.target.value);
-                      if (errors.recurrenceEndDate) setErrors({ ...errors, recurrenceEndDate: '' });
+                      if (errors.recurrenceEndDate)
+                        setErrors((prev) => ({ ...prev, recurrenceEndDate: '' }));
                     }}
-                    className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
+                    className={`text-xs bg-white border rounded-md p-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 text-praetor focus:ring-praetor'} font-medium`}
                   />
                   {errors.recurrenceEndDate && (
                     <p className="text-red-500 text-[10px] font-bold">{errors.recurrenceEndDate}</p>

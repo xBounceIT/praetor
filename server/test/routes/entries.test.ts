@@ -143,7 +143,7 @@ const TRACKER_ALL_PERMS = [...TRACKER_PERMS, 'timesheets.tracker_all.view'];
 const SAMPLE_ENTRY = {
   id: 'te-1',
   userId: 'u1',
-  date: '2025-06-02', // Monday — not a weekend
+  date: '2025-06-02', // Monday - not a weekend
   clientId: 'c1',
   clientName: 'Client',
   projectId: 'p1',

@@ -59,25 +59,23 @@ const TableFilter: React.FC<TableFilterProps> = ({
     !isAllSelected && filteredOptions.some((opt) => selectedValues.includes(opt));
 
   return (
-    <div className="w-56 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
+    <div className="w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
       {/* Header */}
-      <div className="p-2 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+      <div className="p-2 border-b border-zinc-100 flex items-center justify-between">
+        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
           {title}
         </span>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xs">
+        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xs">
           <i className="fa-solid fa-xmark"></i>
         </button>
       </div>
 
       {/* Sort Options - Excel Style */}
-      <div className="border-b border-slate-100">
+      <div className="border-b border-zinc-100">
         <button
           onClick={() => onSortChange('asc')}
           className={`w-full px-3 py-2 text-left text-[11px] font-semibold transition-colors flex items-center gap-2 ${
-            sortDirection === 'asc'
-              ? 'bg-slate-100 text-praetor'
-              : 'text-slate-700 hover:bg-slate-50'
+            sortDirection === 'asc' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'
           }`}
         >
           <i className="fa-solid fa-arrow-down-a-z w-4"></i>
@@ -85,10 +83,8 @@ const TableFilter: React.FC<TableFilterProps> = ({
         </button>
         <button
           onClick={() => onSortChange('desc')}
-          className={`w-full px-3 py-2 text-left text-[11px] font-semibold transition-colors flex items-center gap-2 border-t border-slate-100 ${
-            sortDirection === 'desc'
-              ? 'bg-slate-100 text-praetor'
-              : 'text-slate-700 hover:bg-slate-50'
+          className={`w-full px-3 py-2 text-left text-[11px] font-semibold transition-colors flex items-center gap-2 border-t border-zinc-100 ${
+            sortDirection === 'desc' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'
           }`}
         >
           <i className="fa-solid fa-arrow-up-a-z w-4"></i>
@@ -97,30 +93,29 @@ const TableFilter: React.FC<TableFilterProps> = ({
       </div>
 
       {/* Search Bar */}
-      <div className="p-2 border-b border-slate-100">
+      <div className="p-2 border-b border-zinc-100">
         <div className="relative">
-          <i className="fa-solid fa-magnifying-glass absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
+          <i className="fa-solid fa-magnifying-glass absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-[10px]"></i>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={t('table.search')}
-            className="w-full pl-6 pr-2 py-1.5 bg-slate-50 border border-slate-200 focus:border-praetor rounded-lg text-[11px] outline-none transition-none"
-            autoFocus
+            className="w-full pl-6 pr-2 py-1.5 bg-zinc-50 border border-zinc-200 focus:border-praetor rounded-lg text-[11px] outline-none transition-none"
           />
         </div>
       </div>
 
       {/* Options List */}
       <div className="max-h-40 overflow-y-auto p-1.5 space-y-0.5">
-        <label className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer">
+        <label className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-zinc-50 rounded cursor-pointer">
           <Checkbox
             size="sm"
             checked={isAllSelected}
             indeterminate={isIndeterminate}
             onChange={handleSelectAll}
           />
-          <span className="text-[11px] text-slate-600 select-none font-semibold">
+          <span className="text-[11px] text-zinc-600 select-none font-semibold">
             ({t('table.selectAll')})
           </span>
         </label>
@@ -128,7 +123,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
           filteredOptions.map((opt) => (
             <label
               key={opt}
-              className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
+              className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-zinc-50 rounded cursor-pointer"
             >
               <Checkbox
                 size="sm"
@@ -137,7 +132,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
               />
               <Tooltip label={displayLabel(opt)}>
                 {() => (
-                  <span className="text-[11px] text-slate-600 truncate select-none">
+                  <span className="text-[11px] text-zinc-600 truncate select-none">
                     {displayLabel(opt)}
                   </span>
                 )}
@@ -145,16 +140,16 @@ const TableFilter: React.FC<TableFilterProps> = ({
             </label>
           ))
         ) : (
-          <div className="text-center py-3 text-[11px] text-slate-400">{t('table.noResults')}</div>
+          <div className="text-center py-3 text-[11px] text-zinc-400">{t('table.noResults')}</div>
         )}
       </div>
 
-      <div className="p-2 border-t border-slate-100">
+      <div className="p-2 border-t border-zinc-100">
         <button
           onClick={() => {
             onFilterChange([]);
           }}
-          className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-red-500 rounded-lg transition-all flex items-center justify-center gap-1.5"
+          className="w-full px-3 py-1.5 text-[11px] font-semibold text-white hover:text-white bg-zinc-50 hover:bg-red-500 rounded-lg transition-all flex items-center justify-center gap-1.5"
         >
           <i className="fa-solid fa-filter-circle-xmark"></i>
           <span>{t('table.clearFilter')}</span>

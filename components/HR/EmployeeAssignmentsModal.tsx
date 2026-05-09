@@ -332,17 +332,14 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       zIndex={50}
-      backdropClass="bg-slate-900/50 backdrop-blur-sm"
+      backdropClass="bg-zinc-900/50 backdrop-blur-sm"
     >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <h3 className="font-bold text-lg text-slate-800">
+        <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+          <h3 className="font-semibold text-lg text-zinc-800">
             {t('hr:workforce.manageAccess', { name: user.name })}
           </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 transition-colors">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
@@ -361,7 +358,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                   onChange={(value) => setFilterClientId(value as string)}
                   placeholder={t('hr:workforce.filterByClient')}
                   searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                 />
                 <CustomSelect
                   options={projectFilterOptions}
@@ -369,19 +366,19 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                   onChange={(value) => setFilterProjectId(value as string)}
                   placeholder={t('hr:workforce.filterByProject')}
                   searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                   disabled={projectFilterOptions.length === 1}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                         {t('hr:workforce.clients')}
                       </h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                         {assignments.clientIds.length}
                       </span>
                     </div>
@@ -390,7 +387,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchClients')}
                       value={clientSearch}
                       onChange={(event) => setClientSearch(event.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -399,8 +396,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         key={client.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                           assignments.clientIds.includes(client.id)
-                            ? 'bg-slate-50 border-slate-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                            : 'bg-white border-zinc-200 hover:border-zinc-300'
                         }`}
                       >
                         <div className="relative flex items-center justify-center shrink-0">
@@ -410,12 +407,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             onChange={() => toggleAssignment('client', client.id)}
                             className="sr-only peer"
                           />
-                          <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                          <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                             <div
-                              className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                              className={`size-2 rounded-full transition-all duration-200 ${
                                 assignments.clientIds.includes(client.id)
                                   ? 'bg-white scale-100 opacity-100'
-                                  : 'bg-slate-200 scale-0 opacity-0'
+                                  : 'bg-zinc-200 scale-0 opacity-0'
                               }`}
                             ></div>
                           </div>
@@ -423,8 +420,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         <span
                           className={`text-sm font-semibold ${
                             assignments.clientIds.includes(client.id)
-                              ? 'text-slate-900'
-                              : 'text-slate-600'
+                              ? 'text-zinc-900'
+                              : 'text-zinc-600'
                           }`}
                         >
                           {client.name}
@@ -432,7 +429,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       </label>
                     ))}
                     {clients.length === 0 && (
-                      <p className="text-xs text-slate-400 italic">
+                      <p className="text-xs text-zinc-400 italic">
                         {t('hr:workforce.noClientsFound')}
                       </p>
                     )}
@@ -440,12 +437,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                         {t('hr:workforce.projects')}
                       </h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                         {assignments.projectIds.length}
                       </span>
                     </div>
@@ -454,7 +451,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchProjects')}
                       value={projectSearch}
                       onChange={(event) => setProjectSearch(event.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -463,8 +460,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         key={project.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                           assignments.projectIds.includes(project.id)
-                            ? 'bg-slate-50 border-slate-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                            : 'bg-white border-zinc-200 hover:border-zinc-300'
                         }`}
                       >
                         <div className="relative flex items-center justify-center shrink-0">
@@ -474,12 +471,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             onChange={() => toggleAssignment('project', project.id)}
                             className="sr-only peer"
                           />
-                          <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                          <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                             <div
-                              className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                              className={`size-2 rounded-full transition-all duration-200 ${
                                 assignments.projectIds.includes(project.id)
                                   ? 'bg-white scale-100 opacity-100'
-                                  : 'bg-slate-200 scale-0 opacity-0'
+                                  : 'bg-zinc-200 scale-0 opacity-0'
                               }`}
                             ></div>
                           </div>
@@ -488,13 +485,13 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                           <span
                             className={`text-sm font-semibold ${
                               assignments.projectIds.includes(project.id)
-                                ? 'text-slate-900'
-                                : 'text-slate-600'
+                                ? 'text-zinc-900'
+                                : 'text-zinc-600'
                             }`}
                           >
                             {project.name}
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-[10px] text-zinc-400">
                             {clients.find((client) => client.id === project.clientId)?.name ||
                               t('hr:workforce.unknownClient')}
                           </span>
@@ -502,7 +499,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       </label>
                     ))}
                     {projects.length === 0 && (
-                      <p className="text-xs text-slate-400 italic">
+                      <p className="text-xs text-zinc-400 italic">
                         {t('hr:workforce.noProjectsFound')}
                       </p>
                     )}
@@ -510,12 +507,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                         {t('hr:workforce.tasks')}
                       </h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                         {assignments.taskIds.length}
                       </span>
                     </div>
@@ -524,7 +521,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchTasks')}
                       value={taskSearch}
                       onChange={(event) => setTaskSearch(event.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -535,8 +532,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                           key={task.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.taskIds.includes(task.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-300'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -546,12 +543,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                               onChange={() => toggleAssignment('task', task.id)}
                               className="sr-only peer"
                             />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                               <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                                className={`size-2 rounded-full transition-all duration-200 ${
                                   assignments.taskIds.includes(task.id)
                                     ? 'bg-white scale-100 opacity-100'
-                                    : 'bg-slate-200 scale-0 opacity-0'
+                                    : 'bg-zinc-200 scale-0 opacity-0'
                                 }`}
                               ></div>
                             </div>
@@ -560,13 +557,13 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             <span
                               className={`text-sm font-semibold ${
                                 assignments.taskIds.includes(task.id)
-                                  ? 'text-slate-900'
-                                  : 'text-slate-600'
+                                  ? 'text-zinc-900'
+                                  : 'text-zinc-600'
                               }`}
                             >
                               {task.name}
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-zinc-400">
                               {project?.name || t('hr:workforce.unknownProject')}
                             </span>
                           </div>
@@ -574,7 +571,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       );
                     })}
                     {tasks.length === 0 && (
-                      <p className="text-xs text-slate-400 italic">
+                      <p className="text-xs text-zinc-400 italic">
                         {t('hr:workforce.noTasksFound')}
                       </p>
                     )}
@@ -585,10 +582,10 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           )}
         </div>
 
-        <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+        <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
+            className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
           >
             {t('common:buttons.cancel')}
           </button>
@@ -597,8 +594,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
             disabled={!isDirty}
             className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
               !isDirty
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                : 'bg-praetor text-white hover:bg-slate-800'
+                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                : 'bg-praetor text-white hover:bg-zinc-800'
             }`}
           >
             {t('hr:workforce.saveAssignments')}

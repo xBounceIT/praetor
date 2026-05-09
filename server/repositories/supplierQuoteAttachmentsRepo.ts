@@ -78,7 +78,7 @@ export const insert = async (
 };
 
 // Scoped on BOTH attachmentId and quoteId so an attachment-id from another quote can't be
-// deleted via the wrong route — same defense-in-depth pattern as `supplierQuoteVersionsRepo.findById`.
+// deleted via the wrong route - same defense-in-depth pattern as `supplierQuoteVersionsRepo.findById`.
 export const deleteById = async (
   attachmentId: string,
   quoteId: string,

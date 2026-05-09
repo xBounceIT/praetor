@@ -596,26 +596,26 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorKey: 'fullName',
         disableFiltering: true,
         cell: ({ row }) => (
-          <span className="font-semibold text-slate-700">{row.fullName || '-'}</span>
+          <span className="font-semibold text-zinc-700">{row.fullName || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.role'),
         accessorKey: 'role',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.role || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.role || '-'}</span>,
       },
       {
         header: t('crm:clients.email'),
         accessorKey: 'email',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.email || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.email || '-'}</span>,
       },
       {
         header: t('crm:clients.phone'),
         accessorKey: 'phone',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.phone || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.phone || '-'}</span>,
       },
       {
         header: t('common:labels.actions'),
@@ -633,7 +633,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     e.stopPropagation();
                     editContact(row.contactIndex);
                   }}
-                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                 >
                   <i className="fa-solid fa-pen"></i>
                 </button>
@@ -647,7 +647,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     e.stopPropagation();
                     removeContact(row.contactIndex);
                   }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                 >
                   <i className="fa-solid fa-trash"></i>
                 </button>
@@ -673,7 +673,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.name'),
         accessorKey: 'name',
         cell: ({ row }) => (
-          <span className="font-semibold whitespace-nowrap text-slate-800">{row.name}</span>
+          <span className="font-semibold whitespace-nowrap text-zinc-800">{row.name}</span>
         ),
       },
       {
@@ -681,7 +681,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorKey: 'clientCode',
         cell: ({ row }) =>
           row.clientCode ? (
-            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
+            <span className="text-[10px] font-black bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">
               {row.clientCode}
             </span>
           ) : null,
@@ -692,10 +692,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorFn: (row: Client) => row.createdAt ?? 0,
         cell: ({ row }: { row: Client }) => {
           if (!row.createdAt) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt)}
             </span>
           );
@@ -727,69 +727,69 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.email || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.email || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.phone || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.phone || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
         accessorFn: (row: Client) => getPrimaryTaxId(row),
         cell: ({ row }: { row: Client }) => (
-          <span className="font-mono text-xs text-slate-400">{getPrimaryTaxId(row) || '-'}</span>
+          <span className="font-mono text-xs text-zinc-400">{getPrimaryTaxId(row) || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
         cell: ({ row }) => (
-          <span className="text-xs text-slate-600">{row.officeCountRange || '-'}</span>
+          <span className="text-xs text-zinc-600">{row.officeCountRange || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.sector'),
         accessorKey: 'sector',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.sector || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.sector || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.numberOfEmployees'),
         accessorKey: 'numberOfEmployees',
         cell: ({ row }) => (
-          <span className="text-xs text-slate-600">{row.numberOfEmployees || '-'}</span>
+          <span className="text-xs text-zinc-600">{row.numberOfEmployees || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.revenue'),
         accessorKey: 'revenue',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.revenue || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.revenue || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.contactName'),
         accessorKey: 'contactName',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.contactName || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.contactName || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.address'),
         accessorKey: 'address',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.address || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.address || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.description'),
         accessorKey: 'description',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.description || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.description || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.atecoCode'),
         accessorKey: 'atecoCode',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.atecoCode || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.atecoCode || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.website'),
         accessorKey: 'website',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.website || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.website || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.totalSentQuotes'),
@@ -798,10 +798,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }: { row: Client }) => {
           const value = row.totalSentQuotes;
           if (value == null || value === 0) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
-            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+            <span className="text-xs font-semibold text-zinc-700 whitespace-nowrap">
               {eurFormatter.format(value)}
             </span>
           );
@@ -814,7 +814,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }: { row: Client }) => {
           const value = row.totalAcceptedOrders;
           if (value == null || value === 0) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
             <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
@@ -852,7 +852,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       e.stopPropagation();
                       openEditModal(row);
                     }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-pen"></i>
                   </button>
@@ -872,8 +872,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   disabled={!canUpdateClients}
                   className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     row.isDisabled
-                      ? 'text-praetor hover:bg-slate-100'
-                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                      ? 'text-praetor hover:bg-zinc-100'
+                      : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
                   }`}
                 >
                   <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
@@ -888,7 +888,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       e.stopPropagation();
                       confirmDelete(row);
                     }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>
@@ -933,25 +933,25 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         zIndex={70}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+            <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-3">
+              <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                 <i className="fa-solid fa-gear"></i>
               </div>
               {t('crm:clients.manageValuesTitle', { field: manageCategoryLabels[manageCategory] })}
             </h3>
             <button
               onClick={() => setIsManageProfileOptionModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-zinc-400 hover:text-zinc-600"
             >
               <i className="fa-solid fa-xmark"></i>
             </button>
           </div>
 
           <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+            <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
+                <label className="text-xs font-bold text-zinc-500 ml-1">
                   {t('crm:clients.value')}
                 </label>
                 <input
@@ -959,7 +959,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   value={newProfileOptionValue}
                   onChange={(e) => setNewProfileOptionValue(e.target.value)}
                   placeholder={t('crm:clients.valuePlaceholder')}
-                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && void handleSaveProfileOption()}
                 />
               </div>
@@ -972,7 +972,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 {editingProfileOption && (
                   <button
                     onClick={handleCancelProfileOptionEdit}
-                    className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                    className="px-4 py-2 text-sm font-bold text-zinc-500 hover:bg-zinc-100 rounded-xl transition-colors"
                   >
                     {t('common:buttons.cancel')}
                   </button>
@@ -980,7 +980,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <button
                   onClick={() => void handleSaveProfileOption()}
                   disabled={isSavingProfileOption || !newProfileOptionValue.trim()}
-                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingProfileOption
                     ? t('common:buttons.saving')
@@ -1000,10 +1000,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 title={t('crm:clients.manageValues')}
                 data={profileOptions[manageCategory]}
                 defaultRowsPerPage={5}
-                containerClassName="shadow-none border-slate-200 rounded-2xl"
+                containerClassName="shadow-none border-zinc-200 rounded-2xl"
                 tableContainerClassName="max-h-[35vh] overflow-y-auto"
                 emptyState={
-                  <div className="text-center py-6 text-slate-500">
+                  <div className="text-center py-6 text-zinc-500">
                     <p>{t('crm:clients.noValues')}</p>
                   </div>
                 }
@@ -1012,9 +1012,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     header: t('crm:clients.value'),
                     accessorKey: 'value',
                     disableFiltering: true,
-                    cell: ({ row }) => (
-                      <span className="font-bold text-slate-700">{row.value}</span>
-                    ),
+                    cell: ({ row }) => <span className="font-bold text-zinc-700">{row.value}</span>,
                   },
                   {
                     header: t('crm:clients.usedByClients'),
@@ -1022,7 +1020,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     accessorFn: (row) => row.usageCount,
                     disableFiltering: true,
                     cell: ({ row }) => (
-                      <span className="text-xs text-slate-400">{row.usageCount}</span>
+                      <span className="text-xs text-zinc-400">{row.usageCount}</span>
                     ),
                   },
                   {
@@ -1038,7 +1036,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             {() => (
                               <button
                                 onClick={() => handleEditProfileOption(option)}
-                                className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                                className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                               >
                                 <i className="fa-solid fa-pen"></i>
                               </button>
@@ -1061,8 +1059,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                                 disabled={isDeleteBlocked}
                                 className={`p-1.5 rounded-lg transition-colors ${
                                   isDeleteBlocked
-                                    ? 'text-slate-300 cursor-not-allowed'
-                                    : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                    ? 'text-zinc-300 cursor-not-allowed'
+                                    : 'text-red-600 hover:text-red-600 hover:bg-red-50'
                                 }`}
                               >
                                 <i className="fa-solid fa-trash"></i>
@@ -1082,16 +1080,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
       <Modal isOpen={isModalOpen} onClose={handleModalClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                 <i className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
             </h3>
             <button
               onClick={handleModalClose}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -1099,25 +1097,25 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
             <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('crm:clients.identifyingData')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.clientCode')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.clientCode}
                     onChange={(e) => {
-                      setFormData({ ...formData, clientCode: e.target.value });
+                      setFormData((prev) => ({ ...prev, clientCode: e.target.value }));
                       if (errors.clientCode) setErrors((prev) => ({ ...prev, clientCode: '' }));
                     }}
                     placeholder={t('crm:clients.clientCodePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.clientCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                      errors.clientCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                     }`}
                   />
                   {errors.clientCode && (
@@ -1125,19 +1123,19 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.name')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
+                      setFormData((prev) => ({ ...prev, name: e.target.value }));
                       if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                     }}
                     placeholder={t('crm:clients.namePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                      errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                     }`}
                   />
                   {errors.name && (
@@ -1145,14 +1143,17 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.clientType')}
                   </label>
                   <CustomSelect
                     options={typeOptions}
                     value={formData.type || 'company'}
                     onChange={(val) =>
-                      setFormData({ ...formData, type: (val as Client['type']) || 'company' })
+                      setFormData((prev) => ({
+                        ...prev,
+                        type: (val as Client['type']) || 'company',
+                      }))
                     }
                     searchable={false}
                   />
@@ -1161,8 +1162,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('crm:clients.contacts')}
               </h4>
 
@@ -1174,89 +1175,99 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.website')}
                   </label>
                   <input
                     type="text"
                     value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
                     placeholder={t('crm:clients.websitePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.country')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressCountry}
-                    onChange={(e) => setFormData({ ...formData, addressCountry: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, addressCountry: e.target.value }))
+                    }
                     placeholder={t('crm:clients.countryPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.state')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressState}
-                    onChange={(e) => setFormData({ ...formData, addressState: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, addressState: e.target.value }))
+                    }
                     placeholder={t('crm:clients.statePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.cap')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressCap}
-                    onChange={(e) => setFormData({ ...formData, addressCap: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, addressCap: e.target.value }))
+                    }
                     placeholder={t('crm:clients.capPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.province')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressProvince}
-                    onChange={(e) => setFormData({ ...formData, addressProvince: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, addressProvince: e.target.value }))
+                    }
                     placeholder={t('crm:clients.provincePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.civicNumber')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressCivicNumber}
                     onChange={(e) =>
-                      setFormData({ ...formData, addressCivicNumber: e.target.value })
+                      setFormData((prev) => ({ ...prev, addressCivicNumber: e.target.value }))
                     }
                     placeholder={t('crm:clients.civicNumberPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
                 <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.address')}
                   </label>
                   <input
                     type="text"
                     value={formData.addressLine}
-                    onChange={(e) => setFormData({ ...formData, addressLine: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, addressLine: e.target.value }))
+                    }
                     placeholder={t('crm:clients.addressPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
               </div>
@@ -1266,7 +1277,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setContactsExpanded((prev) => !prev)}
-                    className="text-sm font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-2"
+                    className="text-sm font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-2"
                   >
                     <i
                       className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
@@ -1277,7 +1288,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   <button
                     type="button"
                     onClick={addContact}
-                    className="px-3 py-2 text-xs font-bold bg-slate-100 text-praetor rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2"
+                    className="px-3 py-2 text-xs font-bold bg-zinc-100 text-praetor rounded-lg hover:bg-zinc-200 transition-colors flex items-center gap-2"
                   >
                     <i className="fa-solid fa-plus"></i>
                     {t('crm:clients.addContact')}
@@ -1287,9 +1298,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 {contactsExpanded && (
                   <div className="space-y-4">
                     {contactDraft && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
+                          <label className="text-xs font-bold text-zinc-500 ml-1">
                             {t('crm:clients.fullName')} <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1298,12 +1309,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             onChange={(e) => updateContactDraft('fullName', e.target.value)}
                             placeholder={t('crm:clients.fullNamePlaceholder')}
                             className={`w-full text-sm px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                              contactDraftError ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                              contactDraftError ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                             }`}
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
+                          <label className="text-xs font-bold text-zinc-500 ml-1">
                             {t('crm:clients.role')}
                           </label>
                           <input
@@ -1311,11 +1322,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             value={contactDraft.role || ''}
                             onChange={(e) => updateContactDraft('role', e.target.value)}
                             placeholder={t('crm:clients.rolePlaceholder')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
+                          <label className="text-xs font-bold text-zinc-500 ml-1">
                             {t('crm:clients.email')}
                           </label>
                           <input
@@ -1323,11 +1334,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             value={contactDraft.email || ''}
                             onChange={(e) => updateContactDraft('email', e.target.value)}
                             placeholder={t('crm:clients.email')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
+                          <label className="text-xs font-bold text-zinc-500 ml-1">
                             {t('crm:clients.phone')}
                           </label>
                           <input
@@ -1335,7 +1346,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             value={contactDraft.phone || ''}
                             onChange={(e) => updateContactDraft('phone', e.target.value)}
                             placeholder={t('crm:clients.phone')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                           />
                         </div>
 
@@ -1351,14 +1362,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             <button
                               type="button"
                               onClick={cancelContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                              className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
                             >
                               {t('common:buttons.cancel')}
                             </button>
                             <button
                               type="button"
                               onClick={saveContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-praetor hover:bg-slate-700 rounded-lg transition-colors"
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-praetor hover:bg-zinc-700 rounded-lg transition-colors"
                             >
                               {editingContactIndex !== null
                                 ? t('common:buttons.update')
@@ -1374,7 +1385,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       data={contactTableRows}
                       columns={contactColumns}
                       defaultRowsPerPage={5}
-                      containerClassName="shadow-none border-slate-200 rounded-2xl"
+                      containerClassName="shadow-none border-zinc-200 rounded-2xl"
                       tableContainerClassName="max-h-[35vh] overflow-y-auto"
                     />
                   </div>
@@ -1383,25 +1394,25 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('crm:clients.adminFiscal')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.fiscalCode')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.fiscalCode}
                     onChange={(e) => {
-                      setFormData({ ...formData, fiscalCode: e.target.value });
+                      setFormData((prev) => ({ ...prev, fiscalCode: e.target.value }));
                       if (errors.fiscalCode) setErrors((prev) => ({ ...prev, fiscalCode: '' }));
                     }}
                     placeholder={t('crm:clients.fiscalCodePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                      errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
                     }`}
                   />
                   {errors.fiscalCode && (
@@ -1409,36 +1420,38 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.atecoCode')}
                   </label>
                   <input
                     type="text"
                     value={formData.atecoCode}
-                    onChange={(e) => setFormData({ ...formData, atecoCode: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, atecoCode: e.target.value }))
+                    }
                     placeholder={t('crm:clients.atecoCodePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('crm:clients.companyProfile')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
+                    <label className="text-xs font-bold text-zinc-500">
                       {t('crm:clients.sector')}
                     </label>
                     {canUpdateClients && (
                       <button
                         type="button"
                         onClick={() => openManageProfileOptions('sector')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                       </button>
@@ -1448,7 +1461,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={sectorOptions}
                     value={formData.sector || ''}
                     onChange={(val) =>
-                      setFormData({ ...formData, sector: (val as Client['sector']) || null })
+                      setFormData((prev) => ({
+                        ...prev,
+                        sector: (val as Client['sector']) || null,
+                      }))
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1457,14 +1473,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
+                    <label className="text-xs font-bold text-zinc-500">
                       {t('crm:clients.numberOfEmployees')}
                     </label>
                     {canUpdateClients && (
                       <button
                         type="button"
                         onClick={() => openManageProfileOptions('numberOfEmployees')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                       </button>
@@ -1474,10 +1490,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={numberOfEmployeesOptions}
                     value={formData.numberOfEmployees || ''}
                     onChange={(val) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         numberOfEmployees: (val as Client['numberOfEmployees']) || null,
-                      })
+                      }))
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1486,14 +1502,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
+                    <label className="text-xs font-bold text-zinc-500">
                       {t('crm:clients.revenue')}
                     </label>
                     {canUpdateClients && (
                       <button
                         type="button"
                         onClick={() => openManageProfileOptions('revenue')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                       </button>
@@ -1503,7 +1519,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={revenueOptions}
                     value={formData.revenue || ''}
                     onChange={(val) =>
-                      setFormData({ ...formData, revenue: (val as Client['revenue']) || null })
+                      setFormData((prev) => ({
+                        ...prev,
+                        revenue: (val as Client['revenue']) || null,
+                      }))
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1512,14 +1531,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
+                    <label className="text-xs font-bold text-zinc-500">
                       {t('crm:clients.officeCountRange')}
                     </label>
                     {canUpdateClients && (
                       <button
                         type="button"
                         onClick={() => openManageProfileOptions('officeCountRange')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                       </button>
@@ -1529,10 +1548,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={officeCountRangeOptions}
                     value={formData.officeCountRange || ''}
                     onChange={(val) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         officeCountRange: (val as Client['officeCountRange']) || null,
-                      })
+                      }))
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1540,15 +1559,17 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </div>
 
                 <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                  <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.description')}
                   </label>
                   <textarea
                     rows={3}
                     value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
                     placeholder={t('crm:clients.description')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                   />
                 </div>
               </div>
@@ -1561,11 +1582,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </div>
             )}
 
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+            <div className="flex justify-between items-center pt-4 border-t border-zinc-100">
               <button
                 type="button"
                 onClick={handleModalClose}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="px-8 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -1574,8 +1595,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 disabled={!canSubmit}
                 className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
                   canSubmit
-                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                    : 'bg-slate-300 shadow-none cursor-not-allowed'
+                    ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
+                    : 'bg-zinc-300 shadow-none cursor-not-allowed'
                 }`}
               >
                 {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
@@ -1588,12 +1609,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">{t('crm:clients.deleteClient')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <h3 className="text-lg font-semibold text-zinc-800">
+                {t('crm:clients.deleteClient')}
+              </h3>
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('common:messages.deleteConfirmNamed', { name: clientToDelete?.name })}
                 {t('crm:clients.deleteConfirm')}
               </p>
@@ -1601,7 +1624,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -1619,13 +1642,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('crm:clients.title')}</h2>
-            <p className="text-slate-500 text-sm">{t('crm:clients.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-zinc-800">{t('crm:clients.title')}</h2>
+            <p className="text-zinc-500 text-sm">{t('crm:clients.subtitle')}</p>
           </div>
           {canCreateClients && (
             <button
               onClick={openAddModal}
-              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
             >
               <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
             </button>

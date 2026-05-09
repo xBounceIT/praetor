@@ -134,7 +134,7 @@ export const update = async (
   exec: DbExecutor = db,
 ): Promise<Task | null> => {
   // Explicit null clears the column; undefined (key absent) leaves it unchanged. Don't
-  // collapse to `value != null` — that loses the clear-to-null semantic.
+  // collapse to `value != null` - that loses the clear-to-null semantic.
   const set: Record<string, unknown> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
@@ -151,7 +151,7 @@ export const update = async (
 
   if (Object.keys(set).length === 0) {
     // No fields to update. Routes rely on this branch to return the current row when called
-    // with an empty patch — `db.update(tasks).set({})` would emit invalid SQL.
+    // with an empty patch - `db.update(tasks).set({})` would emit invalid SQL.
     const rows = await exec.select().from(tasks).where(eq(tasks.id, id));
     return rows[0] ? mapRow(rows[0]) : null;
   }
@@ -215,15 +215,15 @@ export const addUserAssignments = async (
 
 // Aliased table references shared by the time-entries → tasks join and its callers.
 // Both the JOIN expression and the surrounding query MUST use these same aliases ("te"/"t")
-// — once a table is aliased, Postgres rejects column refs that name the unaliased table.
+// - once a table is aliased, Postgres rejects column refs that name the unaliased table.
 //
 // Caller is expected to write the FROM/JOIN keywords + table-with-alias as raw SQL
 // (`FROM time_entries te`); Drizzle's `${aliasedTable}` in raw templates renders only the
 // alias (`"te"`), not `"time_entries" "te"`, so it can't be used directly in FROM. Column
 // references via `timeEntriesTe.X` / `tasksT.X` correctly compile to `"te"."x"` / `"t"."x"`
-// — that's the part the aliases buy us.
+// - that's the part the aliases buy us.
 //
-// `timeEntriesTe` is module-private — the JOIN chunk and `sumHoursByProjects` are the only
+// `timeEntriesTe` is module-private - the JOIN chunk and `sumHoursByProjects` are the only
 // callers and they all live in this file. `tasksT` is exported because external consumers
 // (e.g. `reportsHoursRepo.getTasksSection`) need to reference `t` columns in their own
 // surrounding SELECT/JOIN/WHERE clauses (e.g. `JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`).

@@ -46,7 +46,7 @@ export const supplierQuotesApi = {
     const formData = new FormData();
     formData.append('file', file, file.name);
     // fetchApiStream avoids the auto Content-Type: application/json that fetchApi adds when a
-    // body is present — we need fetch to set the multipart boundary itself.
+    // body is present - we need fetch to set the multipart boundary itself.
     const response = await fetchApiStream(`/sales/supplier-quotes/${id}/attachments`, {
       method: 'POST',
       body: formData,

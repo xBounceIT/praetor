@@ -352,7 +352,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Atomic create: user row, primary user_roles entry, settings row, and (for top
         // managers) auto-assignment fan-out commit or roll back together. Mirrors the PUT
         // handler so a failed sync can't leave a user with TOP_MANAGER role but no
-        // auto-assignments — recovering from that requires re-saving the role manually.
+        // auto-assignments - recovering from that requires re-saving the role manually.
         await withDbTransaction(async (tx) => {
           await usersRepo.insertUser(
             {
@@ -618,7 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Settings upsert must complete before findById — findById LEFT JOINs settings to
+      // Settings upsert must complete before findById - findById LEFT JOINs settings to
       // populate `email`, and parallel reads on different pool connections can observe the
       // pre-update row under read-committed isolation, returning stale email in the response.
       if (fields.name !== undefined || validatedEmail !== undefined) {

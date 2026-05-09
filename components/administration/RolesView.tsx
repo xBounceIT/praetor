@@ -298,9 +298,9 @@ const RolesView: React.FC<RolesViewProps> = ({
     const currentActions = activeModuleTab ? getModuleActions(activeModuleTab) : [];
 
     return (
-      <div className="flex h-[60vh] border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/30">
+      <div className="flex h-[60vh] border border-zinc-200 rounded-2xl overflow-hidden bg-zinc-50/30">
         {/* Sidebar */}
-        <div className="w-56 shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto">
+        <div className="w-56 shrink-0 bg-zinc-50 border-r border-zinc-200 overflow-y-auto">
           {moduleOrder.map((module) => (
             <button
               key={module}
@@ -309,7 +309,7 @@ const RolesView: React.FC<RolesViewProps> = ({
               className={`w-full flex items-center gap-3 px-5 py-4 text-sm font-bold transition-all text-left ${
                 activeModuleTab === module
                   ? 'bg-white text-praetor border-l-4 border-l-praetor shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-100 border-l-4 border-l-transparent'
+                  : 'text-zinc-500 hover:bg-zinc-100 border-l-4 border-l-transparent'
               }`}
             >
               <i
@@ -324,25 +324,25 @@ const RolesView: React.FC<RolesViewProps> = ({
         <div className="flex-1 overflow-y-auto bg-white">
           {activeModuleTab && currentDefinitions.length > 0 && (
             <table className="w-full border-separate border-spacing-0">
-              <thead className="sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">
-                <tr className="border-b border-slate-200">
-                  <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <thead className="sticky top-0 bg-zinc-50/95 backdrop-blur-sm z-10">
+                <tr className="border-b border-zinc-200">
+                  <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider text-zinc-500 border-b border-zinc-200">
                     {t('common:labels.name')}
                   </th>
                   {currentActions.map((action) => (
                     <th
                       key={action}
-                      className="px-2 py-4 text-center text-xs font-black uppercase tracking-wider text-slate-500 w-20 border-b border-slate-200"
+                      className="px-2 py-4 text-center text-xs font-black uppercase tracking-wider text-zinc-500 w-20 border-b border-zinc-200"
                     >
                       {actionLabel(action)}
                     </th>
                   ))}
-                  <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider text-slate-500 w-28 border-b border-slate-200">
+                  <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider text-zinc-500 w-28 border-b border-zinc-200">
                     {t('common:table.selectAll')}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-zinc-100">
                 {currentDefinitions.map((definition) => {
                   const isAllSelected = isAllSelectedForDefinition(definition);
                   const selectedCount = definition.actions.filter((action) =>
@@ -351,10 +351,10 @@ const RolesView: React.FC<RolesViewProps> = ({
                   const hasPartial = selectedCount > 0 && !isAllSelected;
 
                   return (
-                    <tr key={definition.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={definition.id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-700">
+                          <span className="text-sm font-bold text-zinc-700">
                             {t(`administration:permissions.${definition.id}`, {
                               defaultValue: formatPermissionLabel(definition.id),
                             })}
@@ -381,7 +381,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                                 />
                               </div>
                             ) : (
-                              <span className="text-slate-200">—</span>
+                              <span className="text-zinc-200">-</span>
                             )}
                           </td>
                         );
@@ -410,15 +410,15 @@ const RolesView: React.FC<RolesViewProps> = ({
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+          <h2 className="text-2xl font-semibold text-zinc-800 tracking-tight">
             {t('administration:roles.title')}
           </h2>
-          <p className="text-slate-500 font-medium">{t('administration:roles.subtitle')}</p>
+          <p className="text-zinc-500 font-medium">{t('administration:roles.subtitle')}</p>
         </div>
         {canCreateRoles && (
           <button
             onClick={openCreateModal}
-            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> {t('common:buttons.create')}
           </button>
@@ -426,7 +426,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       </div>
 
       {sortedRoles.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-zinc-400">
           {t('common:emptyStates.noItems')}
         </div>
       ) : (
@@ -438,10 +438,10 @@ const RolesView: React.FC<RolesViewProps> = ({
             return (
               <div
                 key={role.id}
-                className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"
+                className="bg-white rounded-2xl p-6 border border-zinc-200 shadow-sm hover:shadow-md transition-shadow group"
               >
                 <div className="flex justify-between items-start mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 text-praetor flex items-center justify-center text-xl">
+                  <div className="size-12 rounded-xl bg-zinc-100 text-praetor flex items-center justify-center text-xl">
                     <i className="fa-solid fa-user-shield"></i>
                   </div>
                   {(canRenameRole || canEditPermissions || canRemoveRole) && (
@@ -451,7 +451,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                           {() => (
                             <button
                               onClick={() => openRenameModal(role)}
-                              className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                              className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
                             >
                               <i className="fa-solid fa-pen"></i>
                             </button>
@@ -463,7 +463,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                           {() => (
                             <button
                               onClick={() => openPermissionsModal(role)}
-                              className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                              className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
                             >
                               <i className="fa-solid fa-shield"></i>
                             </button>
@@ -475,7 +475,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                           {() => (
                             <button
                               onClick={() => openDeleteModal(role)}
-                              className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                              className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -486,10 +486,10 @@ const RolesView: React.FC<RolesViewProps> = ({
                   )}
                 </div>
 
-                <h3 className="text-lg font-bold text-slate-800 mb-2">{role.name}</h3>
+                <h3 className="text-lg font-semibold text-zinc-800 mb-2">{role.name}</h3>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {role.isSystem && (
-                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">
+                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-500">
                       {t('administration:roles.badges.system')}
                     </span>
                   )}
@@ -499,7 +499,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-zinc-500">
                   {t('administration:roles.permissionCount', {
                     count: role.permissions?.length || 0,
                   })}
@@ -513,19 +513,19 @@ const RolesView: React.FC<RolesViewProps> = ({
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
           <form onSubmit={handleCreate} className="flex flex-col flex-1 overflow-hidden">
-            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+            <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
               <div>
-                <h3 className="text-lg font-black text-slate-800">
+                <h3 className="text-lg font-semibold text-zinc-800">
                   {t('administration:roles.createRole')}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-zinc-500">
                   {t('administration:roles.createRoleSubtitle')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
@@ -533,7 +533,7 @@ const RolesView: React.FC<RolesViewProps> = ({
 
             <div className="p-8 space-y-6 overflow-y-auto flex-1">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
+                <label className="block text-sm font-bold text-zinc-700 mb-2">
                   {t('common:labels.name')}
                 </label>
                 <input
@@ -541,13 +541,13 @@ const RolesView: React.FC<RolesViewProps> = ({
                   value={roleName}
                   onChange={(event) => setRoleName(event.target.value)}
                   placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                 />
                 {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
               </div>
 
               <div className="space-y-4">
-                <h4 className="text-sm font-bold text-slate-700">
+                <h4 className="text-sm font-semibold text-zinc-700">
                   {t('administration:roles.permissions')}
                 </h4>
                 {renderPermissionTabs()}
@@ -555,17 +555,17 @@ const RolesView: React.FC<RolesViewProps> = ({
               {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
             </div>
 
-            <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+            <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
               >
                 {t('common:buttons.create')}
               </button>
@@ -577,26 +577,26 @@ const RolesView: React.FC<RolesViewProps> = ({
       <Modal isOpen={isRenameOpen && !!activeRole} onClose={() => setIsRenameOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <form onSubmit={handleRename}>
-            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-black text-slate-800">
+                <h3 className="text-lg font-semibold text-zinc-800">
                   {t('administration:roles.renameRole')}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-zinc-500">
                   {t('administration:roles.renameRoleSubtitle')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsRenameOpen(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
             <div className="p-8 space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
+                <label className="block text-sm font-bold text-zinc-700 mb-2">
                   {t('common:labels.name')}
                 </label>
                 <input
@@ -604,23 +604,23 @@ const RolesView: React.FC<RolesViewProps> = ({
                   value={roleName}
                   onChange={(event) => setRoleName(event.target.value)}
                   placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                 />
                 {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
               </div>
               {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
             </div>
-            <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setIsRenameOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
               >
                 {t('common:buttons.update')}
               </button>
@@ -631,17 +631,17 @@ const RolesView: React.FC<RolesViewProps> = ({
 
       <Modal isOpen={isPermissionsOpen} onClose={() => setIsPermissionsOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
-          <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+          <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('administration:roles.editPermissions')}
               </h3>
-              <p className="text-sm text-slate-500 font-bold text-praetor">{activeRole?.name}</p>
+              <p className="text-sm text-zinc-500 font-bold text-praetor">{activeRole?.name}</p>
             </div>
             <button
               type="button"
               onClick={() => setIsPermissionsOpen(false)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-zinc-400 hover:text-zinc-600 transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -650,18 +650,18 @@ const RolesView: React.FC<RolesViewProps> = ({
             {renderPermissionTabs()}
             {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
           </div>
-          <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+          <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
             <button
               type="button"
               onClick={() => setIsPermissionsOpen(false)}
-              className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+              className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
               type="button"
               onClick={handleUpdatePermissions}
-              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
             >
               {t('common:buttons.save')}
             </button>
@@ -675,14 +675,14 @@ const RolesView: React.FC<RolesViewProps> = ({
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-8 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('administration:roles.deleteRole')}
               </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('common:messages.deleteConfirmNamed', { name: activeRole?.name })}
               </p>
             </div>
@@ -690,7 +690,7 @@ const RolesView: React.FC<RolesViewProps> = ({
             <div className="flex gap-3 pt-4">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>

@@ -43,11 +43,11 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-check',
     },
     disabled: {
-      container: 'bg-slate-50 text-slate-400 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-400 border-zinc-100',
       icon: 'fa-ban',
     },
     inherited: {
-      container: 'bg-slate-50 text-slate-500 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-500 border-zinc-100',
       icon: 'fa-triangle-exclamation',
     },
     expired: {
@@ -87,7 +87,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-clock',
     },
     cancelled: {
-      container: 'bg-slate-50 text-slate-500 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-500 border-zinc-100',
       icon: 'fa-ban',
     },
     supply: {
@@ -147,7 +147,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-car',
     },
     recurrence: {
-      container: 'bg-slate-50 text-praetor border-slate-200',
+      container: 'bg-zinc-50 text-praetor border-zinc-200',
       icon: 'fa-repeat',
     },
   };

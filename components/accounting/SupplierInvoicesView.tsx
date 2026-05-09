@@ -194,7 +194,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'id',
         accessorFn: (row: SupplierInvoice) => row.id,
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-zinc-700">{row.id}</span>
         ),
       },
       {
@@ -205,7 +205,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           const isMuted = row.status === 'paid' || row.status === 'cancelled';
 
           return (
-            <span className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+            <span className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
               {row.supplierName}
             </span>
           );
@@ -216,7 +216,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'issueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
@@ -224,7 +224,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'dueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
       },
       {
@@ -232,7 +232,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'invoiceTotal',
         accessorFn: (row: SupplierInvoice) => Number(row.total),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-bold text-slate-700">
+          <span className="font-bold text-zinc-700">
             {Number(row.total).toFixed(2)} {currency}
           </span>
         ),
@@ -292,7 +292,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     event.stopPropagation();
                     openEditModal(row);
                   }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                  className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                 >
                   <i className="fa-solid fa-pen-to-square"></i>
                 </button>
@@ -305,7 +305,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     event.stopPropagation();
                     confirmDelete(row);
                   }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
                 >
                   <i className="fa-solid fa-trash-can"></i>
                 </button>
@@ -322,9 +322,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+          <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6">
+            <h3 className="flex items-center gap-3 text-xl font-semibold text-zinc-800">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-praetor">
                 <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingInvoice
@@ -333,7 +333,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+              className="flex size-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -341,13 +341,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:supplierInvoices.invoiceDetails')}
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierInvoices.supplier')}
                   </label>
                   <CustomSelect
@@ -366,7 +366,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierInvoices.invoiceNumber')}
                   </label>
                   <input
@@ -376,12 +376,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, id: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
                     placeholder="INV-XXXX"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierInvoices.issueDate')}
                   </label>
                   <input
@@ -391,11 +391,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierInvoices.dueDate')}
                   </label>
                   <input
@@ -405,13 +405,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierInvoices.status')}
                   </label>
                   <CustomSelect
@@ -431,15 +431,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('accounting:supplierInvoices.items')}
                 </h4>
               </div>
 
               {(formData.items || []).length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
                     <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
                     <div className="col-span-3">
                       {t('accounting:supplierInvoices.descriptionPlaceholder')}
@@ -465,7 +465,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                        className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-3"
                       >
                         <div className="lg:hidden space-y-2">
                           <CustomSelect
@@ -473,7 +473,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                             value={item.productId || ''}
                             onChange={(value) => updateItem(index, 'productId', value as string)}
                             searchable={true}
-                            buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                           />
                           <input
                             type="text"
@@ -482,11 +482,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                             onChange={(event) =>
                               updateItem(index, 'description', event.target.value)
                             }
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                           />
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                 {t('common:labels.quantity')}
                               </label>
                               <ValidatedNumberInput
@@ -494,11 +494,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'quantity', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                 {t('crm:internalListing.salePrice')}
                               </label>
                               <ValidatedNumberInput
@@ -507,11 +507,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                 {t('accounting:supplierOrders.discount')}
                               </label>
                               <ValidatedNumberInput
@@ -520,14 +520,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                 {t('common:labels.total')}
                               </label>
-                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
                                 {lineTotal.toFixed(2)} {currency}
                               </div>
                             </div>
@@ -536,7 +536,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                             <button
                               type="button"
                               onClick={() => removeItem(index)}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              className="size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -552,7 +552,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   updateItem(index, 'productId', value as string)
                                 }
                                 searchable={true}
-                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
                             <div className="lg:col-span-3">
@@ -562,7 +562,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onChange={(event) =>
                                   updateItem(index, 'description', event.target.value)
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
                             <div className="lg:col-span-1">
@@ -571,7 +571,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'quantity', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
                             <div className="lg:col-span-2">
@@ -581,7 +581,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
                             <div className="lg:col-span-1">
@@ -591,17 +591,17 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 onValueChange={(value) =>
                                   updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                 }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                             </div>
-                            <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                            <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
                               {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
-                            className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                            className="w-8 h-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
                           >
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
@@ -611,15 +611,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   })}
                 </div>
               ) : (
-                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400">
                   {t('accounting:supplierInvoices.noItems')}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+            <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
               <div className="md:w-2/3 space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
+                <label className="ml-1 text-xs font-bold text-zinc-500">
                   {t('accounting:supplierInvoices.notes')}
                 </label>
                 <textarea
@@ -628,7 +628,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
                   placeholder={t('accounting:supplierInvoices.notesPlaceholder')}
                 />
               </div>
@@ -670,13 +670,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95"
               >
                 {editingInvoice ? t('common:buttons.update') : t('common:buttons.save')}
               </button>
@@ -688,21 +688,21 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="space-y-4 p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('accounting:supplierInvoices.deleteTitle')}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
                 {invoiceToDelete?.supplierName} · {invoiceToDelete?.id}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 rounded-xl py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+                className="flex-1 rounded-xl py-3 text-sm font-bold text-zinc-500 transition-colors hover:bg-zinc-50"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -722,10 +722,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('accounting:supplierInvoices.title')}
             </h2>
-            <p className="text-sm text-slate-500">{t('accounting:supplierInvoices.subtitle')}</p>
+            <p className="text-sm text-zinc-500">{t('accounting:supplierInvoices.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -738,8 +738,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierInvoice) =>
           row.status === 'paid' || row.status === 'cancelled'
-            ? 'bg-slate-50 text-slate-400'
-            : 'hover:bg-slate-50/50'
+            ? 'bg-zinc-50 text-zinc-400'
+            : 'hover:bg-zinc-50/50'
         }
         onRowClick={(row: SupplierInvoice) => openEditModal(row)}
       />

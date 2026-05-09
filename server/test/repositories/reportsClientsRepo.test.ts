@@ -91,7 +91,7 @@ describe('getClientsSection', () => {
       },
       testDb,
     );
-    // only count + list — activity Promise.all is short-circuited because clientIds is empty
+    // only count + list - activity Promise.all is short-circuited because clientIds is empty
     expect(exec.calls).toHaveLength(2);
   });
 

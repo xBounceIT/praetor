@@ -414,7 +414,7 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
-    // Attacker uploads payload.exe but lies that it's a PDF — extension allowlist must
+    // Attacker uploads payload.exe but lies that it's a PDF - extension allowlist must
     // gate this regardless of the client-supplied MIME type.
     const { payload, contentType } = buildMultipartBody(
       'payload.exe',

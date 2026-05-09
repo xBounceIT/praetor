@@ -209,7 +209,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const removeItemRow = (index: number) => {
     const nextItems = [...(formData.items || [])];
     nextItems.splice(index, 1);
-    setFormData({ ...formData, items: nextItems });
+    setFormData((prev) => ({ ...prev, items: nextItems }));
   };
 
   const updateItemRow = (
@@ -325,7 +325,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-zinc-700">{row.id}</span>
         ),
       },
       {
@@ -333,7 +333,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-800">{row.clientName}</span>
+          <span className="font-bold text-zinc-800">{row.clientName}</span>
         ),
       },
       {
@@ -343,7 +343,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
@@ -353,7 +353,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
       },
       {
@@ -363,7 +363,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-700">
+          <span className="font-bold text-zinc-700">
             {(row.total ?? 0).toFixed(2)} {currency}
           </span>
         ),
@@ -425,7 +425,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     event.stopPropagation();
                     openEditModal(row);
                   }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                  className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                 >
                   <i className="fa-solid fa-pen-to-square"></i>
                 </button>
@@ -438,7 +438,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     event.stopPropagation();
                     confirmDelete(row);
                   }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
                 >
                   <i className="fa-solid fa-trash-can"></i>
                 </button>
@@ -455,9 +455,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+          <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6">
+            <h3 className="flex items-center gap-3 text-xl font-semibold text-zinc-800">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-praetor">
                 <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingInvoice
@@ -466,7 +466,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+              className="flex size-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -474,13 +474,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                <span className="size-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:clientsInvoices.invoiceDetails')}
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.client')}
                   </label>
                   <CustomSelect
@@ -499,15 +499,17 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.invoiceNumber')}
                   </label>
                   <input
                     type="text"
                     required
                     value={formData.id || ''}
-                    onChange={(event) => setFormData({ ...formData, id: event.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, id: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
                     placeholder="INV-YYYY-XXXX"
                   />
                   {errors.id && (
@@ -515,7 +517,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.issueDate')}
                   </label>
                   <input
@@ -523,24 +525,26 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     required
                     value={formData.issueDate}
                     onChange={(event) =>
-                      setFormData({ ...formData, issueDate: event.target.value })
+                      setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
                   />
                   {errors.issueDate && (
                     <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.dueDate')}
                   </label>
                   <input
                     type="date"
                     required
                     value={formData.dueDate}
-                    onChange={(event) => setFormData({ ...formData, dueDate: event.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
                   />
                   {errors.dueDate && (
                     <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
@@ -549,14 +553,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.status')}
                   </label>
                   <CustomSelect
                     options={statusOptions}
                     value={formData.status || 'draft'}
                     onChange={(value) =>
-                      setFormData({ ...formData, status: value as Invoice['status'] })
+                      setFormData((prev) => ({ ...prev, status: value as Invoice['status'] }))
                     }
                     searchable={false}
                   />
@@ -566,14 +570,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('accounting:clientsInvoices.items')}
                 </h4>
                 <button
                   type="button"
                   onClick={addItemRow}
-                  className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-slate-700"
+                  className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-zinc-700"
                 >
                   <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addItem')}
                 </button>
@@ -584,7 +588,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
                     <div className="col-span-3">{t('common:labels.product')}</div>
                     <div className="col-span-2">{t('common:labels.quantity')}</div>
                     <div className="col-span-2">
@@ -604,12 +608,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3"
                     >
                       <div className="flex items-start gap-2">
                         <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
                           <div className="space-y-1 lg:col-span-3 min-w-0">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.product')}
                             </label>
                             <CustomSelect
@@ -626,11 +630,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               }
                               placeholder={t('accounting:clientsInvoices.selectProductPlaceholder')}
                               searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
                           <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.quantity')}
                             </label>
                             <div className="flex items-center gap-1">
@@ -647,16 +651,16 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                     value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                   );
                                 }}
-                                className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                                className="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                               />
-                              <span className="shrink-0 text-xs font-semibold text-slate-400">
+                              <span className="shrink-0 text-xs font-semibold text-zinc-400">
                                 {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
                                   ?.name || t('accounting:clientsInvoices.unit')}
                               </span>
                             </div>
                           </div>
                           <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.price')} ({currency})
                             </label>
                             <ValidatedNumberInput
@@ -673,11 +677,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                 );
                               }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
                           <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.discount')}%
                             </label>
                             <ValidatedNumberInput
@@ -693,14 +697,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                 );
                               }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
                           <div className="space-y-1 lg:col-span-3">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.total')}
                             </label>
-                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
                               {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -708,14 +712,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         <button
                           type="button"
                           onClick={() => removeItemRow(index)}
-                          className="rounded-lg p-2 text-slate-400 transition-colors hover:text-red-600"
+                          className="rounded-lg p-2 text-zinc-400 transition-colors hover:text-red-600"
                         >
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-zinc-400">
                           {t('common:labels.description')}
                         </label>
                         <input
@@ -726,7 +730,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                           onChange={(event) =>
                             updateItemRow(index, 'description', event.target.value)
                           }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none"
                         />
                       </div>
                     </div>
@@ -734,23 +738,25 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                 })}
 
                 {(!formData.items || formData.items.length === 0) && (
-                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400">
                     {t('accounting:clientsInvoices.noItems')}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+            <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
               <div className="md:w-2/3 space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
+                <label className="ml-1 text-xs font-bold text-zinc-500">
                   {t('accounting:clientsInvoices.notes')}
                 </label>
                 <textarea
                   rows={4}
                   value={formData.notes || ''}
-                  onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
                   placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
                 />
               </div>
@@ -791,13 +797,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700"
               >
                 {t('common:buttons.save')}
               </button>
@@ -808,13 +814,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
           </div>
-          <h3 className="text-lg font-black text-slate-800">
+          <h3 className="text-lg font-semibold text-zinc-800">
             {t('accounting:clientsInvoices.deleteTitle')}
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-zinc-500">
             {t('accounting:clientsInvoices.deleteMessage', {
               invoiceNumber: invoiceToDelete?.id || '',
             })}
@@ -822,7 +828,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+              className="flex-1 rounded-xl py-3 font-bold text-zinc-500 hover:bg-zinc-50"
             >
               {t('common:buttons.cancel')}
             </button>
@@ -839,14 +845,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('accounting:clientsInvoices.title')}
             </h2>
-            <p className="text-sm text-slate-500">{t('accounting:clientsInvoices.subtitle')}</p>
+            <p className="text-sm text-zinc-500">{t('accounting:clientsInvoices.subtitle')}</p>
           </div>
           <button
             onClick={openAddModal}
-            className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+            className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95"
           >
             <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addInvoice')}
           </button>

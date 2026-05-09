@@ -209,11 +209,11 @@ const Tooltip: React.FC<TooltipProps> = ({
             <div
               ref={tooltipRef}
               style={{ top: coords.top, left: coords.left }}
-              className={`absolute ${positionClasses[effectivePosition]} px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded pointer-events-none transition-opacity whitespace-nowrap z-[70] shadow-xl border border-slate-700 ${tooltipClassName}`}
+              className={`absolute ${positionClasses[effectivePosition]} px-3 py-1 bg-zinc-800 text-white text-xs font-bold rounded pointer-events-none transition-opacity whitespace-nowrap z-[70] shadow-xl border border-zinc-700 ${tooltipClassName}`}
             >
               {label}
               <div
-                className={`absolute w-2 h-2 bg-slate-800 border-slate-700 rotate-45 ${arrowClasses[effectivePosition]}`}
+                className={`absolute size-2 bg-zinc-800 border-zinc-700 rotate-45 ${arrowClasses[effectivePosition]}`}
                 style={{ marginLeft: arrowOffset.x, marginTop: arrowOffset.y }}
               ></div>
             </div>,

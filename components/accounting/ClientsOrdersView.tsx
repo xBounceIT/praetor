@@ -54,7 +54,7 @@ export interface ClientsOrdersViewProps {
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
 const compactInputClass =
-  'w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
 
 const pillBadgeClass =
   'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
@@ -92,14 +92,14 @@ const PricingCell: React.FC<PricingCellProps> = ({
 }) => {
   if (dashOnZero && value <= 0) {
     return (
-      <span className={`text-sm font-semibold ${isHistory ? 'text-slate-300' : 'text-slate-400'}`}>
+      <span className={`text-sm font-semibold ${isHistory ? 'text-zinc-300' : 'text-zinc-400'}`}>
         -
       </span>
     );
   }
   return (
     <span
-      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-slate-400' : colorClass}`}
+      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-zinc-400' : colorClass}`}
     >
       {prefix}
       {value.toFixed(2)} {currency}
@@ -112,7 +112,7 @@ const computeDueDate = (
   paymentTerms: string | undefined | null,
   t: TFunction,
 ): string => {
-  if (!createdAt) return '—';
+  if (!createdAt) return '-';
   if (paymentTerms === 'immediate') return t('crm:paymentTerms.immediate');
   const baseDate = getLocalDateString(new Date(createdAt));
   const days = Number.parseInt(paymentTerms ?? '', 10);
@@ -302,10 +302,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       productMolPercentage: null,
       discount: 0,
     };
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       items: [...(formData.items || []), newItem as ClientsOrderItem],
-    });
+    }));
     if (errors.items) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -318,7 +318,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const removeProductRow = (index: number) => {
     const newItems = [...(formData.items || [])];
     newItems.splice(index, 1);
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const updateProductRow = (
@@ -341,7 +341,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       }
     }
 
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
@@ -357,7 +357,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       unitType: newType,
       unitPrice: adjustedPrice,
     };
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
@@ -403,7 +403,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-zinc-700">{row.id}</span>
         ),
       },
       {
@@ -412,9 +412,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => row.createdAt ?? 0,
         className: 'whitespace-nowrap',
         cell: ({ row }: { row: ClientsOrder }) => {
-          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
           return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt)}
             </span>
           );
@@ -431,11 +431,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${isHistoryRow(row.status) ? 'text-slate-400' : 'text-slate-800'}`}
+              className={`font-bold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-800'}`}
             >
               {row.clientName}
             </div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
               {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
             </div>
           </div>
@@ -452,7 +452,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const history = isHistoryRow(row.status);
           return (
             <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
             >
               {formatDiscountValue(row.discount, row.discountType, currency)}
             </span>
@@ -470,7 +470,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-slate-700"
+            colorClass="text-zinc-700"
             currency={currency}
           />
         ),
@@ -521,7 +521,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-slate-700"
+            colorClass="text-zinc-700"
             currency={currency}
           />
         ),
@@ -535,7 +535,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-slate-700"
+            colorClass="text-zinc-700"
             bold
             currency={currency}
           />
@@ -550,7 +550,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-slate-400' : 'text-slate-600'}`}
+            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-600'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -591,7 +591,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         e.stopPropagation();
                         onViewOffer(linkedOfferId);
                       }}
-                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -612,7 +612,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     e.stopPropagation();
                     openEditModal(row);
                   }}
-                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                 >
                   <i
                     className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
@@ -629,7 +629,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         e.stopPropagation();
                         onUpdateClientsOrder(row.id, { status: 'confirmed' });
                       }}
-                      className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                      className="p-2 text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-check"></i>
                     </button>
@@ -642,7 +642,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         e.stopPropagation();
                         onUpdateClientsOrder(row.id, { status: 'denied' });
                       }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
@@ -655,7 +655,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         e.stopPropagation();
                         confirmDelete(row);
                       }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
@@ -676,16 +676,16 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={closeEditModal}>
         <div className="flex items-start gap-4 max-w-full">
           <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-              <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+            <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6">
+              <h3 className="flex items-center gap-3 text-xl font-semibold text-zinc-800">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-praetor">
                   <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
                 </div>
                 {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
               </h3>
               <button
                 onClick={closeEditModal}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+                className="flex size-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -723,13 +723,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               )}
               {/* Linked Offer Info */}
               {formData.linkedOfferId && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                       <i className="fa-solid fa-link"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
+                      <div className="text-sm font-bold text-zinc-900">
                         {t('accounting:clientsOrders.linkedOffer', {
                           defaultValue: 'Linked Offer',
                         })}
@@ -740,7 +740,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           defaultValue: 'Offer #{{number}}',
                         })}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-zinc-400 mt-0.5">
                         {t('accounting:clientsOrders.offerDetailsReadOnly', {
                           defaultValue: '(Order details are read-only)',
                         })}
@@ -751,7 +751,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onViewOffer(formData.linkedOfferId as string)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                     >
                       {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
                     </button>
@@ -761,13 +761,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
               {/* Order Details */}
               <div className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('accounting:clientsOrders.orderDetails')}
                 </h4>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.client')}
                     </label>
                     <CustomSelect
@@ -784,37 +784,37 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' })}
                     </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
-                      {editingOrder?.id || '—'}
+                    <div className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 font-bold">
+                      {editingOrder?.id || '-'}
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.paymentTerms')}
                     </label>
                     <CustomSelect
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(val) =>
-                        setFormData({
-                          ...formData,
+                        setFormData((prev) => ({
+                          ...prev,
                           paymentTerms: val as ClientsOrder['paymentTerms'],
-                        })
+                        }))
                       }
                       searchable={false}
                       disabled={isReadOnly}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.paymentDueDate', {
                         defaultValue: 'Payment due date',
                       })}
                     </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
+                    <div className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 font-bold">
                       {computeDueDate(editingOrder?.createdAt, formData.paymentTerms, t)}
                     </div>
                   </div>
@@ -824,15 +824,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               {/* Products */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                    <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('sales:clientQuotes.productsServices')}
                   </h4>
                   <button
                     type="button"
                     onClick={addProductRow}
                     disabled={isReadOnly}
-                    className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                   </button>
@@ -843,7 +843,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
                 {formData.items && formData.items.length > 0 && (
                   <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
                       <div className="col-span-2">
                         {t('accounting:clientsOrders.supplierOrderColumn', {
                           defaultValue: 'Supplier Order',
@@ -899,23 +899,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       return (
                         <div
                           key={item.id}
-                          className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
+                          className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3"
                         >
                           <div className="flex items-start gap-2">
                             <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
                               <div className="space-y-1 lg:col-span-2 min-w-0">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('accounting:clientsOrders.supplierOrderColumn', {
                                     defaultValue: 'Supplier Order',
                                   })}
                                 </label>
-                                <div className="flex items-center min-h-[42px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                <div className="flex items-center min-h-[42px] px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg">
                                   {item.supplierSaleId ? (
-                                    <span className="text-xs font-semibold text-slate-700 truncate">
-                                      {item.supplierSaleSupplierName ?? '—'} · {item.supplierSaleId}
+                                    <span className="text-xs font-semibold text-zinc-700 truncate">
+                                      {item.supplierSaleSupplierName ?? '-'} · {item.supplierSaleId}
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-slate-400">
+                                    <span className="text-xs text-zinc-400">
                                       {t('accounting:clientsOrders.noSupplierOrder', {
                                         defaultValue: 'No supplier order',
                                       })}
@@ -924,7 +924,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-2 min-w-0">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.productsServices')}
                                 </label>
                                 <CustomSelect
@@ -936,11 +936,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   placeholder={t('sales:clientQuotes.selectProduct')}
                                   searchable={true}
                                   disabled={isReadOnly}
-                                  buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                  buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                                 />
                               </div>
                               <div className="space-y-1 lg:col-span-2">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.qty')}
                                 </label>
                                 <div className="flex items-center gap-1">
@@ -959,9 +959,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       );
                                     }}
                                     disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-slate-50 disabled:text-slate-400 flex-1"
+                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-zinc-50 disabled:text-zinc-400 flex-1"
                                   />
-                                  <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /
                                   </span>
                                   <UnitTypeSelector
@@ -975,7 +975,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('crm:internalListing.cost')}
                                 </label>
                                 <div className="flex flex-col items-center justify-center min-h-[42px] gap-1">
@@ -999,14 +999,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       disabled={isReadOnly}
                                       className={compactInputClass}
                                     />
-                                    <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                    <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                       {currency}
                                     </span>
                                   </div>
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                                 </label>
                                 <div className="flex items-center justify-center min-h-[42px] gap-1">
@@ -1017,25 +1017,25 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     disabled={isReadOnly}
                                     className={compactInputClass}
                                   />
-                                  <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                     %
                                   </span>
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.totalCost', {
                                     defaultValue: 'Total cost',
                                   })}
                                 </label>
                                 <div className="flex items-center justify-center min-h-[42px]">
-                                  <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                  <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                     {lineCost.toFixed(2)} {currency}
                                   </span>
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.marginLabel')}
                                 </label>
                                 <div className="flex items-center justify-center min-h-[42px]">
@@ -1045,11 +1045,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 </div>
                               </div>
                               <div className="space-y-1 lg:col-span-2">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('crm:internalListing.salePrice')}
                                 </label>
-                                <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                                  <span className="text-sm font-semibold text-slate-800">
+                                <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
+                                  <span className="text-sm font-semibold text-zinc-800">
                                     {lineSalePrice.toFixed(2)} {currency}
                                   </span>
                                 </div>
@@ -1059,7 +1059,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               type="button"
                               onClick={() => removeProductRow(index)}
                               disabled={isReadOnly}
-                              className="rounded-lg p-2 text-slate-400 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg p-2 text-zinc-400 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -1069,25 +1069,25 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400">
                     {t('sales:clientQuotes.noProductsAdded')}
                   </div>
                 )}
               </div>
 
               {/* Notes & Cost Summary */}
-              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
                 <div className="md:w-2/3 space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsOrders.notes')}
                   </label>
                   <textarea
                     rows={4}
                     value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                     placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-zinc-50 disabled:text-zinc-400 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1117,9 +1117,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           type: formData.discountType || 'percentage',
                           onChange: (value) => {
                             const parsed = parseNumberInputValue(value);
-                            setFormData({ ...formData, discount: parsed });
+                            setFormData((prev) => ({ ...prev, discount: parsed }));
                           },
-                          onTypeChange: (type) => setFormData({ ...formData, discountType: type }),
+                          onTypeChange: (type) =>
+                            setFormData((prev) => ({ ...prev, discountType: type })),
                           disabled: isReadOnly,
                         }}
                         discountRow={
@@ -1150,7 +1151,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                  className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
                 >
                   {t('common:buttons.cancel')}
                 </button>
@@ -1158,7 +1159,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   <button
                     type="submit"
                     disabled={isReadOnly}
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('accounting:clientsOrders.updateOrder')}
                   </button>
@@ -1182,13 +1183,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
           </div>
-          <h3 className="text-lg font-black text-slate-800">
+          <h3 className="text-lg font-semibold text-zinc-800">
             {t('accounting:clientsOrders.deleteOrderTitle')}
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-zinc-500">
             {t('accounting:clientsOrders.deleteOrderConfirm', {
               clientName: orderToDelete?.clientName,
             })}
@@ -1196,7 +1197,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+              className="flex-1 rounded-xl py-3 font-bold text-zinc-500 hover:bg-zinc-50"
             >
               {t('common:buttons.cancel')}
             </button>
@@ -1213,10 +1214,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('accounting:clientsOrders.title')}
             </h2>
-            <p className="text-sm text-slate-500">{t('accounting:clientsOrders.subtitle')}</p>
+            <p className="text-sm text-zinc-500">{t('accounting:clientsOrders.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -1230,7 +1231,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         initialFilterState={tableInitialFilterState}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
-          isHistoryRow(row.status) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'
+          isHistoryRow(row.status) ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
         }
         onRowClick={(row: ClientsOrder) => openEditModal(row)}
       />

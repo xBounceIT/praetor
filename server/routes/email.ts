@@ -18,7 +18,7 @@ const sharedConfigProperties = {
 } as const;
 
 // Response tolerates any smtpEncryption string so legacy DB values (older
-// versions accepted any string) still load — otherwise the admin UI can't
+// versions accepted any string) still load - otherwise the admin UI can't
 // reach the form to correct them. EmailService falls back to STARTTLS for
 // unknown values. Writes are still constrained by the body schema below.
 const emailConfigResponseProperties = {

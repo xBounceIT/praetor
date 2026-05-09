@@ -50,7 +50,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
           return project ? clientsById.get(project.clientId)?.name || '' : '';
         },
         cell: ({ value }) => (
-          <span className="font-bold text-slate-800">
+          <span className="font-bold text-zinc-800">
             {(value as string) || t('recurring.unknown')}
           </span>
         ),
@@ -62,9 +62,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         cell: ({ row: task }) => {
           const project = projectsById.get(task.projectId);
           return (
-            <span className="text-slate-600 inline-flex items-center gap-1.5">
+            <span className="text-zinc-600 inline-flex items-center gap-1.5">
               <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                className="size-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></span>
               {project?.name || t('recurring.unknown')}
@@ -76,7 +76,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         header: t('common:labels.task'),
         id: 'task',
         accessorFn: (task) => task.name,
-        cell: ({ value }) => <span className="text-slate-700">{value as string}</span>,
+        cell: ({ value }) => <span className="text-zinc-700">{value as string}</span>,
       },
       {
         header: t('recurring.pattern'),
@@ -90,9 +90,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceStart || '',
         cell: ({ row: task }) =>
           task.recurrenceStart ? (
-            <span className="text-slate-600">{formatDateOnlyForLocale(task.recurrenceStart)}</span>
+            <span className="text-zinc-600">{formatDateOnlyForLocale(task.recurrenceStart)}</span>
           ) : (
-            <span className="text-slate-400">—</span>
+            <span className="text-zinc-400">-</span>
           ),
       },
       {
@@ -101,9 +101,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => task.recurrenceEnd || '',
         cell: ({ row: task }) =>
           task.recurrenceEnd ? (
-            <span className="text-slate-600">{formatDateOnlyForLocale(task.recurrenceEnd)}</span>
+            <span className="text-zinc-600">{formatDateOnlyForLocale(task.recurrenceEnd)}</span>
           ) : (
-            <span className="text-slate-400 italic">{t('recurring.noExpiration')}</span>
+            <span className="text-zinc-400 italic">{t('recurring.noExpiration')}</span>
           ),
       },
       {
@@ -113,12 +113,12 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         align: 'right',
         cell: ({ row: task }) =>
           task.recurrenceDuration ? (
-            <span className="font-bold text-slate-700">
+            <span className="font-bold text-zinc-700">
               {task.recurrenceDuration}
               {t('recurring.hoursSuffix')}
             </span>
           ) : (
-            <span className="text-slate-400">—</span>
+            <span className="text-zinc-400">-</span>
           ),
       },
       {
@@ -143,7 +143,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                     e.stopPropagation();
                     setEditingTask(task);
                   }}
-                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                 >
                   <i className="fa-solid fa-pen text-xs"></i>
                 </button>
@@ -157,7 +157,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                     e.stopPropagation();
                     setDeletingTask(task);
                   }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                 >
                   <i className="fa-solid fa-trash-can text-xs"></i>
                 </button>
@@ -172,11 +172,11 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
 
   const emptyState = (
     <div className="flex flex-col items-center gap-3 py-8">
-      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-        <i className="fa-solid fa-repeat text-slate-300 text-2xl"></i>
+      <div className="size-16 bg-zinc-100 rounded-full flex items-center justify-center">
+        <i className="fa-solid fa-repeat text-zinc-300 text-2xl"></i>
       </div>
-      <p className="text-slate-500 font-medium">{t('recurring.noRecurringTasksConfigured')}</p>
-      <p className="text-xs text-slate-400">{t('recurring.setFromTracker')}</p>
+      <p className="text-zinc-500 font-medium">{t('recurring.noRecurringTasksConfigured')}</p>
+      <p className="text-xs text-zinc-400">{t('recurring.setFromTracker')}</p>
     </div>
   );
 

@@ -159,18 +159,18 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
         disabled={disabled}
         onClick={handleOpen}
         className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors ${buttonClassName}
-  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}
-  ${isOpen ? 'border-praetor ring-1 ring-praetor bg-white' : 'border-slate-200 bg-white text-slate-600'}`}
+  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-zinc-50'}
+  ${isOpen ? 'border-praetor ring-1 ring-praetor bg-white' : 'border-zinc-200 bg-white text-zinc-600'}`}
       >
         {value ? (
           <>
-            <i className="fa-solid fa-calendar-days text-slate-400" />
-            <span className="text-slate-800">{formatDisplayValue()}</span>
+            <i className="fa-solid fa-calendar-days text-zinc-400" />
+            <span className="text-zinc-800">{formatDisplayValue()}</span>
           </>
         ) : (
           <>
-            <i className="fa-solid fa-calendar-days text-slate-400" />
-            <span className="text-slate-500">{label}</span>
+            <i className="fa-solid fa-calendar-days text-zinc-400" />
+            <span className="text-zinc-500">{label}</span>
           </>
         )}
       </button>
@@ -200,7 +200,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-9 flex-1 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+                  className="h-9 flex-1 rounded-full border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
                 />
                 <button
                   type="button"

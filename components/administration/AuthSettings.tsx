@@ -158,7 +158,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const updateLdapMapping = (index: number, field: 'ldapGroup' | 'role', value: string) => {
     const roleMappings = [...ldapForm.roleMappings];
     roleMappings[index] = { ...roleMappings[index], [field]: value };
-    setLdapForm({ ...ldapForm, roleMappings });
+    setLdapForm((prev) => ({ ...prev, roleMappings }));
   };
 
   const validateLdap = (): boolean => {
@@ -353,7 +353,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     <button
       type="button"
       onClick={() => setActiveTab(tab)}
-      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === tab ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === tab ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
     >
       <i className={`fa-solid ${icon} mr-2`}></i>
       {label}
@@ -368,18 +368,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   );
 
   const renderProviderList = (protocol: SsoProtocol) => (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
         <i className={`fa-solid ${providerIcons[protocol]} text-praetor`}></i>
-        <h3 className="font-bold text-slate-800">
+        <h3 className="font-semibold text-zinc-800">
           {protocol === 'oidc'
             ? t('admin.sso.oidcProviders', 'OpenID Connect Providers')
             : t('admin.sso.samlProviders', 'SAML Providers')}
         </h3>
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-zinc-100">
         {providersByProtocol[protocol].length === 0 ? (
-          <p className="p-6 text-sm text-slate-400">
+          <p className="p-6 text-sm text-zinc-400">
             {t('admin.sso.noProviders', 'No providers configured.')}
           </p>
         ) : (
@@ -387,22 +387,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             <div key={provider.id} className="p-4 flex items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-800">{provider.name}</span>
+                  <span className="font-bold text-zinc-800">{provider.name}</span>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${provider.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${provider.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-emerald-700'}`}
                   >
                     {provider.enabled
                       ? t('admin.sso.enabled', 'Enabled')
                       : t('admin.sso.disabled', 'Disabled')}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-mono">{provider.slug}</p>
+                <p className="text-xs text-zinc-400 font-mono">{provider.slug}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => updateProviderDraft(protocol, provider)}
-                  className="text-slate-400 hover:text-praetor p-2"
+                  className="text-zinc-400 hover:text-praetor p-2"
                   title={t('admin.sso.editProvider', 'Edit provider')}
                 >
                   <i className="fa-solid fa-pen"></i>
@@ -410,7 +410,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 <button
                   type="button"
                   onClick={() => onDeleteSsoProvider(provider.id)}
-                  className="text-slate-400 hover:text-red-500 p-2"
+                  className="text-zinc-400 hover:text-red-500 p-2"
                   title={t('admin.sso.deleteProvider', 'Delete provider')}
                 >
                   <i className="fa-solid fa-trash-can"></i>
@@ -429,12 +429,12 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     return (
       <form
         onSubmit={(event) => handleSaveProvider(protocol, event)}
-        className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+        className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden"
       >
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <i className={`fa-solid ${draft.id ? 'fa-pen' : 'fa-plus'} text-praetor`}></i>
-            <h3 className="font-bold text-slate-800">
+            <h3 className="font-semibold text-zinc-800">
               {draft.id
                 ? t('admin.sso.editProvider', 'Edit provider')
                 : t('admin.sso.newProvider', 'New provider')}
@@ -445,7 +445,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
               checked={!!draft.enabled}
               onChange={(enabled) => updateProviderDraft(protocol, { enabled })}
             />
-            <span className="text-sm font-medium text-slate-600">
+            <span className="text-sm font-medium text-zinc-600">
               {t('admin.sso.enabled', 'Enabled')}
             </span>
           </div>
@@ -618,18 +618,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
           />
         </div>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between">
+        <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200 flex justify-between">
           <button
             type="button"
             onClick={() => updateProviderDraft(protocol, buildDefaultProvider(protocol))}
-            className="text-sm font-bold text-slate-400 hover:text-slate-600"
+            className="text-sm font-bold text-zinc-400 hover:text-zinc-600"
           >
             {t('admin.sso.clearForm', 'Clear')}
           </button>
           <button
             type="submit"
             disabled={savingProvider === protocol}
-            className="bg-praetor text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all disabled:opacity-50"
+            className="bg-praetor text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50"
           >
             {savingProvider === protocol ? (
               <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -646,8 +646,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">{t('admin.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('admin.subtitle')}</p>
+          <h2 className="text-2xl font-semibold text-zinc-800">{t('admin.title')}</h2>
+          <p className="text-sm text-zinc-500 mt-1">{t('admin.subtitle')}</p>
         </div>
         {isSaved && (
           <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md animate-in fade-in slide-in-from-right-4 flex items-center gap-2">
@@ -656,7 +656,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         )}
       </div>
 
-      <div className="flex border-b border-slate-200 gap-8">
+      <div className="flex border-b border-zinc-200 gap-8">
         {renderTabButton('ldap', 'fa-folder-tree', t('admin.tabs.ldap', 'LDAP / Active Directory'))}
         {renderTabButton('oidc', 'fa-key', t('admin.tabs.oidc', 'OpenID Connect'))}
         {renderTabButton('saml', 'fa-building-shield', t('admin.tabs.saml', 'SAML'))}
@@ -665,18 +665,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       {activeTab === 'ldap' && (
         <div className="space-y-8">
           <form onSubmit={handleSaveLdap} className="space-y-8">
-            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <i className="fa-solid fa-server text-praetor"></i>
-                  <h3 className="font-bold text-slate-800">{t('admin.ldap.serverConfig')}</h3>
+                  <h3 className="font-semibold text-zinc-800">{t('admin.ldap.serverConfig')}</h3>
                 </div>
                 <div className="flex items-center gap-3">
                   <Toggle
                     checked={ldapForm.enabled}
-                    onChange={(enabled) => setLdapForm({ ...ldapForm, enabled })}
+                    onChange={(enabled) => setLdapForm((prev) => ({ ...prev, enabled }))}
                   />
-                  <span className="text-sm font-medium text-slate-600">
+                  <span className="text-sm font-medium text-zinc-600">
                     {t('admin.ldap.enabled')}
                   </span>
                 </div>
@@ -688,28 +688,28 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.serverUrl}
                   error={errors.serverUrl}
                   monospace
-                  onChange={(serverUrl) => setLdapForm({ ...ldapForm, serverUrl })}
+                  onChange={(serverUrl) => setLdapForm((prev) => ({ ...prev, serverUrl }))}
                 />
                 <Field
                   label={t('admin.ldap.baseDnLabel')}
                   value={ldapForm.baseDn}
                   error={errors.baseDn}
                   monospace
-                  onChange={(baseDn) => setLdapForm({ ...ldapForm, baseDn })}
+                  onChange={(baseDn) => setLdapForm((prev) => ({ ...prev, baseDn }))}
                 />
                 <Field
                   label={t('admin.ldap.userSearchFilter')}
                   value={ldapForm.userFilter}
                   error={errors.userFilter}
                   monospace
-                  onChange={(userFilter) => setLdapForm({ ...ldapForm, userFilter })}
+                  onChange={(userFilter) => setLdapForm((prev) => ({ ...prev, userFilter }))}
                 />
                 <Field
                   label={t('admin.ldap.bindDnLabel')}
                   value={ldapForm.bindDn}
                   error={errors.bindCredentials}
                   monospace
-                  onChange={(bindDn) => setLdapForm({ ...ldapForm, bindDn })}
+                  onChange={(bindDn) => setLdapForm((prev) => ({ ...prev, bindDn }))}
                 />
                 <Field
                   label={t('admin.ldap.bindPasswordLabel')}
@@ -717,25 +717,25 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.bindPassword}
                   error={errors.bindCredentials}
                   monospace
-                  onChange={(bindPassword) => setLdapForm({ ...ldapForm, bindPassword })}
+                  onChange={(bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword }))}
                 />
                 <Field
                   label={t('admin.ldap.groupSearchBase')}
                   value={ldapForm.groupBaseDn}
                   error={errors.groupBaseDn}
                   monospace
-                  onChange={(groupBaseDn) => setLdapForm({ ...ldapForm, groupBaseDn })}
+                  onChange={(groupBaseDn) => setLdapForm((prev) => ({ ...prev, groupBaseDn }))}
                 />
                 <Field
                   label={t('admin.ldap.groupMemberFilter')}
                   value={ldapForm.groupFilter}
                   error={errors.groupFilter}
                   monospace
-                  onChange={(groupFilter) => setLdapForm({ ...ldapForm, groupFilter })}
+                  onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
                 />
               </div>
 
-              <div className="border-t border-slate-100 p-6">
+              <div className="border-t border-zinc-100 p-6">
                 <RoleMappings
                   mappings={ldapForm.roleMappings.map((mapping) => ({
                     externalGroup: mapping.ldapGroup,
@@ -749,19 +749,19 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
                   externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
                   onAdd={() =>
-                    setLdapForm({
-                      ...ldapForm,
+                    setLdapForm((prev) => ({
+                      ...prev,
                       roleMappings: [
                         ...ldapForm.roleMappings,
                         { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
                       ],
-                    })
+                    }))
                   }
                   onRemove={(index) =>
-                    setLdapForm({
-                      ...ldapForm,
+                    setLdapForm((prev) => ({
+                      ...prev,
                       roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
-                    })
+                    }))
                   }
                   onChange={(index, field, value) =>
                     updateLdapMapping(
@@ -775,21 +775,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
               </div>
             </section>
 
-            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+            <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
                 <i className="fa-solid fa-lock text-praetor"></i>
-                <h3 className="font-bold text-slate-800">
+                <h3 className="font-semibold text-zinc-800">
                   {t('admin.ldap.tls.title', 'TLS / Certificates')}
                 </h3>
               </div>
               <div className="p-6 space-y-3">
                 <label
                   htmlFor="ldap-tls-ca-textarea"
-                  className="block text-xs font-bold text-slate-400 uppercase tracking-wider"
+                  className="block text-xs font-bold text-zinc-400 uppercase tracking-wider"
                 >
                   {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
                 </label>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-500">
                   {t(
                     'admin.ldap.tls.caCertificateHelp',
                     'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
@@ -800,11 +800,12 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   rows={8}
                   value={ldapForm.tlsCaCertificate}
                   onChange={(event) => {
-                    setLdapForm({ ...ldapForm, tlsCaCertificate: event.target.value });
-                    if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                    setLdapForm((prev) => ({ ...prev, tlsCaCertificate: event.target.value }));
+                    if (errors.tlsCaCertificate)
+                      setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
                   }}
                   placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
-                  className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  className={`w-full px-4 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                   spellCheck={false}
                 />
                 {errors.tlsCaCertificate && (
@@ -814,7 +815,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   <button
                     type="button"
                     onClick={() => tlsCaFileInputRef.current?.click()}
-                    className="text-xs bg-slate-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors"
+                    className="text-xs bg-zinc-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-zinc-200 transition-colors"
                   >
                     <i className="fa-solid fa-file-arrow-up mr-1.5"></i>
                     {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
@@ -823,16 +824,17 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setLdapForm({ ...ldapForm, tlsCaCertificate: '' });
-                        if (errors.tlsCaCertificate) setErrors({ ...errors, tlsCaCertificate: '' });
+                        setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
+                        if (errors.tlsCaCertificate)
+                          setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
                       }}
-                      className="text-xs text-slate-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
+                      className="text-xs text-zinc-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
                     >
                       <i className="fa-solid fa-trash-can mr-1.5"></i>
                       {t('admin.ldap.tls.clear', 'Clear')}
                     </button>
                   )}
-                  <span className="text-[10px] text-slate-400 italic">
+                  <span className="text-[10px] text-zinc-400 italic">
                     {t(
                       'admin.ldap.tls.caClearedHint',
                       'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
@@ -852,21 +854,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all"
+                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all"
               >
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
               </button>
             </div>
           </form>
 
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+          <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
               <i className="fa-solid fa-vial text-praetor"></i>
-              <h3 className="font-bold text-slate-800">{t('admin.ldap.connectionTester')}</h3>
+              <h3 className="font-semibold text-zinc-800">{t('admin.ldap.connectionTester')}</h3>
             </div>
             <div className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
               <form onSubmit={handleTestLdap} className="space-y-4">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-500">
                   {t(
                     'admin.ldap.testDescription',
                     'Enter credentials to test authentication and group retrieval against the saved configuration.',
@@ -886,7 +888,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   error={testErrors.testUsername}
                   onChange={(value) => {
                     setTestUsername(value);
-                    if (testErrors.testUsername) setTestErrors({ ...testErrors, testUsername: '' });
+                    if (testErrors.testUsername)
+                      setTestErrors((prev) => ({ ...prev, testUsername: '' }));
                   }}
                 />
                 <Field
@@ -896,7 +899,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   error={testErrors.testPassword}
                   onChange={(value) => {
                     setTestPassword(value);
-                    if (testErrors.testPassword) setTestErrors({ ...testErrors, testPassword: '' });
+                    if (testErrors.testPassword)
+                      setTestErrors((prev) => ({ ...prev, testPassword: '' }));
                   }}
                 />
                 {testErrors.enabled && (
@@ -905,7 +909,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 <button
                   type="submit"
                   disabled={isTestingLdap || !ldapForm.enabled}
-                  className="w-full bg-praetor text-white py-2.5 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all disabled:opacity-50"
+                  className="w-full bg-praetor text-white py-2.5 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50"
                 >
                   {isTestingLdap ? (
                     <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -915,9 +919,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 </button>
               </form>
 
-              <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs overflow-y-auto min-h-64 border border-slate-800 shadow-inner">
+              <div className="bg-zinc-900 rounded-xl p-4 font-mono text-xs overflow-y-auto min-h-64 border border-zinc-800 shadow-inner">
                 {isTestingLdap ? (
-                  <div className="text-slate-400 animate-pulse">
+                  <div className="text-zinc-400 animate-pulse">
                     {t('admin.ldap.test.connecting', 'Connecting to LDAP server...')}
                   </div>
                 ) : testResult ? (
@@ -932,30 +936,30 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       ] {testResult.message}
                     </div>
                     {testResult.authenticated && (
-                      <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-slate-400">
+                      <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-zinc-400">
                         <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
-                        <span className="text-slate-200 break-all">{testResult.userDn || '-'}</span>
+                        <span className="text-zinc-200 break-all">{testResult.userDn || '-'}</span>
                         <span>{t('admin.ldap.test.roleIds', 'Mapped Roles')}</span>
-                        <span className="text-slate-200">
+                        <span className="text-zinc-200">
                           {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
                         </span>
                         <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
-                        <span className="text-slate-200">
+                        <span className="text-zinc-200">
                           {testResult.groups.length ? testResult.groups.join(', ') : '-'}
                         </span>
                       </div>
                     )}
-                    <div className="border-t border-slate-800 pt-3">
-                      <div className="text-slate-500 mb-2">
+                    <div className="border-t border-zinc-800 pt-3">
+                      <div className="text-zinc-500 mb-2">
                         {t('admin.ldap.test.serverResponse', 'Server Response')}
                       </div>
-                      <pre className="text-slate-300 whitespace-pre-wrap break-words">
+                      <pre className="text-zinc-300 whitespace-pre-wrap break-words">
                         {JSON.stringify(testResult, null, 2)}
                       </pre>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-slate-600 italic">
+                  <div className="text-zinc-600 italic">
                     {t('admin.ldap.test.waiting', 'Waiting for test execution...')}
                     <br />
                     <br />
@@ -998,14 +1002,14 @@ const Field: React.FC<FieldProps> = ({
   monospace,
 }) => (
   <div>
-    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
       {label}
     </label>
     <input
       type={type}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm ${monospace ? 'font-mono' : 'font-semibold text-slate-700'} ${error ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+      className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm ${monospace ? 'font-mono' : 'font-semibold text-zinc-700'} ${error ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
     />
     {error && <p className="text-red-500 text-[10px] font-bold mt-1">{error}</p>}
   </div>
@@ -1019,14 +1023,14 @@ type TextAreaProps = {
 
 const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => (
   <div>
-    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
       {label}
     </label>
     <textarea
       value={value}
       onChange={(event) => onChange(event.target.value)}
       rows={5}
-      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-mono"
+      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-mono"
     />
   </div>
 );
@@ -1039,14 +1043,14 @@ type ReadOnlyFieldProps = {
 
 const ReadOnlyField: React.FC<ReadOnlyFieldProps> = ({ label, value, monospace }) => (
   <div>
-    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
       {label}
     </label>
     <input
       type="text"
       readOnly
       value={value}
-      className={`w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 ${monospace ? 'font-mono' : 'font-semibold'}`}
+      className={`w-full px-4 py-2 bg-zinc-100 border border-zinc-200 rounded-lg text-sm text-zinc-500 ${monospace ? 'font-mono' : 'font-semibold'}`}
     />
   </div>
 );
@@ -1082,18 +1086,18 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
 }) => (
   <div>
     <div className="flex justify-between items-center mb-4">
-      <h4 className="text-sm font-bold text-slate-800">{heading}</h4>
+      <h4 className="text-sm font-semibold text-zinc-800">{heading}</h4>
       <button
         type="button"
         onClick={onAdd}
-        className="text-xs bg-slate-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors"
+        className="text-xs bg-zinc-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-zinc-200 transition-colors"
       >
         <i className="fa-solid fa-plus mr-1"></i> {addLabel}
       </button>
     </div>
     <div className="space-y-3">
       {mappings.length === 0 ? (
-        <p className="text-xs text-slate-400 italic">{noMappingsLabel}</p>
+        <p className="text-xs text-zinc-400 italic">{noMappingsLabel}</p>
       ) : (
         mappings.map((mapping, index) => (
           <div key={index} className="flex gap-4 items-start">
@@ -1103,7 +1107,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
                 value={mapping.externalGroup}
                 onChange={(event) => onChange(index, 'externalGroup', event.target.value)}
                 placeholder={externalPlaceholder}
-                className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`${errorPrefix}${index}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-slate-200'}`}
+                className={`w-full px-3 py-2 bg-zinc-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`${errorPrefix}${index}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-zinc-200'}`}
               />
               {errors[`${errorPrefix}${index}`] && (
                 <p className="text-red-500 text-[10px] font-bold mt-1">
@@ -1111,7 +1115,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
                 </p>
               )}
             </div>
-            <i className="fa-solid fa-arrow-right text-slate-300 text-xs mt-3"></i>
+            <i className="fa-solid fa-arrow-right text-zinc-300 text-xs mt-3"></i>
             <div className="w-44">
               {renderRoleSelect(mapping.role || roleOptions[0]?.id || 'user', (role) =>
                 onChange(index, 'role', role),
@@ -1120,7 +1124,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
             <button
               type="button"
               onClick={() => onRemove(index)}
-              className="text-slate-400 hover:text-red-500 p-2"
+              className="text-zinc-400 hover:text-red-500 p-2"
             >
               <i className="fa-solid fa-trash-can"></i>
             </button>

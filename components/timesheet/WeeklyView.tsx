@@ -379,16 +379,16 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm">
         <div className="flex items-center gap-4">
           <button
             onClick={() => handleWeekChange(-1)}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
           >
             <i className="fa-solid fa-chevron-left"></i>
           </button>
           <div className="text-center min-w-50">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+            <h3 className="text-sm font-semibold text-zinc-800 uppercase tracking-wider">
               {currentWeekStart.toLocaleDateString(i18n.language, {
                 month: 'short',
                 day: 'numeric',
@@ -406,7 +406,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           </div>
           <button
             onClick={() => handleWeekChange(1)}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
           >
             <i className="fa-solid fa-chevron-right"></i>
           </button>
@@ -439,59 +439,59 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       </div>
 
       {/* Grid */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-zinc-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-max text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-zinc-50 border-b border-zinc-200">
               <tr>
-                <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-28">
+                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
                   {t('weekly.client')}
                 </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-28">
+                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
                   {t('weekly.project')}
                 </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-28">
+                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
                   {t('weekly.task')}
                 </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter min-w-24">
+                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-24">
                   {t('weekly.location')}
                 </th>
                 {weekDays.map((day) => (
                   <th
                     key={day.dateStr}
-                    className={`w-28 px-2 py-2 text-center relative ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={`w-28 p-2 text-center relative ${day.isToday ? 'bg-zinc-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
                     <div
-                      className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
+                      className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-zinc-400'}`}
                     >
                       {day.dayName}
                       {day.holidayName && (
                         <Tooltip label={day.holidayName}>
                           {() => (
-                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse block"></span>
+                            <span className="size-1.5 bg-red-500 rounded-full animate-pulse block"></span>
                           )}
                         </Tooltip>
                       )}
                     </div>
                     <p
-                      className={`text-sm font-black leading-none ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-600' : 'text-slate-700'}`}
+                      className={`text-sm font-black leading-none ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-600' : 'text-zinc-700'}`}
                     >
                       {day.dayNum}
                     </p>
                   </th>
                 ))}
-                <th className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-20 text-center sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
+                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter w-20 text-center sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                   {t('weekly.total')}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-zinc-100">
               {rows.map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  className="group hover:bg-slate-50/30 transition-all duration-500"
+                  className="group hover:bg-zinc-50/30 transition-all duration-500"
                 >
-                  <td className="px-4 py-4">
+                  <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
@@ -508,7 +508,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       <div className="h-7 invisible">Spacer</div>
                     </div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={projects
@@ -530,7 +530,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       <div className="h-7 invisible">Spacer</div>
                     </div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={projectTasks
@@ -552,11 +552,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         placeholder={t('weekly.weekNote')}
                         value={row.weekNote}
                         onChange={(e) => handleRowInfoChange(rowIndex, 'weekNote', e.target.value)}
-                        className="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:border-praetor focus:ring-1 focus:ring-praetor text-slate-600 h-7"
+                        className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded px-2 py-1.5 focus:outline-none focus:border-praetor focus:ring-1 focus:ring-praetor text-zinc-600 h-7"
                       />
                     </div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
                       <CustomSelect
                         options={[
@@ -578,7 +578,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   {weekDays.map((day) => (
                     <td
                       key={day.dateStr}
-                      className={`w-28 px-2 py-4 transition-all duration-700 ${day.isToday ? 'bg-slate-50' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30' : ''} ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'bg-emerald-50' : ''}`}
+                      className={`w-28 px-2 py-4 transition-all duration-700 ${day.isToday ? 'bg-zinc-50' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30' : ''} ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'bg-emerald-50' : ''}`}
                     >
                       <div className="flex flex-col gap-2 items-center relative">
                         {showSuccess && row.days[day.dateStr]?.duration > 0 && (
@@ -591,7 +591,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           onValueChange={(value) =>
                             handleValueChange(rowIndex, day.dateStr, 'duration', value)
                           }
-                          className={`w-full text-center text-sm font-black transition-all duration-300 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-slate-700 bg-slate-50 border-slate-200'} ${day.isForbidden ? 'opacity-50 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50 border-red-100' : 'border-slate-200'} border rounded-lg py-2.5 focus:ring-2 focus:ring-praetor outline-none`}
+                          className={`w-full text-center text-sm font-black transition-all duration-300 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-zinc-700 bg-zinc-50 border-zinc-200'} ${day.isForbidden ? 'opacity-50 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50 border-red-100' : 'border-zinc-200'} border rounded-lg py-2.5 focus:ring-2 focus:ring-praetor outline-none`}
                         />
                         <input
                           type="text"
@@ -601,14 +601,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           onChange={(e) =>
                             handleValueChange(rowIndex, day.dateStr, 'note', e.target.value)
                           }
-                          className={`w-full text-xs border focus:border-praetor focus:ring-1 focus:ring-praetor rounded px-2 py-1.5 transition-colors h-7 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-600 bg-slate-50' : 'text-slate-500 focus:text-slate-700'} ${day.isForbidden ? 'opacity-30 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30 border-red-100' : 'bg-slate-50 border-slate-100'}`}
+                          className={`w-full text-xs border focus:border-praetor focus:ring-1 focus:ring-praetor rounded px-2 py-1.5 transition-colors h-7 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-600 bg-zinc-50' : 'text-red-600 focus:text-zinc-700'} ${day.isForbidden ? 'opacity-30 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30 border-red-100' : 'bg-zinc-50 border-zinc-100'}`}
                         />
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-center sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
+                  <td className="px-4 py-3 text-center sticky right-0 bg-white group-hover:bg-zinc-50 transition-all duration-500 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-center gap-2">
-                      <span className="text-sm font-black text-slate-800">
+                      <span className="text-sm font-black text-zinc-800">
                         {Object.values(row.days)
                           .reduce((sum, d) => sum + (d.duration || 0), 0)
                           .toFixed(1)}
@@ -617,7 +617,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         {() => (
                           <button
                             onClick={() => deleteRow(rowIndex)}
-                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
+                            className="p-1.5 text-red-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
                           >
                             <i className="fa-solid fa-trash-can text-sm"></i>
                           </button>
@@ -628,9 +628,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-slate-50/50 border-t border-slate-200">
+            <tfoot className="bg-zinc-50/50 border-t border-zinc-200">
               <tr>
-                <td colSpan={4} className="px-4 py-4">
+                <td colSpan={4} className="p-4">
                   <button
                     onClick={addRow}
                     className="text-xs font-bold text-praetor bg-transparent px-4 py-2 rounded-lg flex items-center gap-2 uppercase tracking-widest transition-all duration-300 ease-in-out"
@@ -641,7 +641,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 {weekDays.map((day) => (
                   <td
                     key={day.dateStr}
-                    className={`w-28 px-2 py-4 text-center ${day.isToday ? 'bg-slate-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={`w-28 px-2 py-4 text-center ${day.isToday ? 'bg-zinc-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
                   >
                     <p
                       className={`text-xs font-black ${(dayTotals[day.dateStr] as number) > 8 ? 'text-red-600' : 'text-praetor'}`}
@@ -650,8 +650,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </p>
                   </td>
                 ))}
-                <td className="px-4 py-4 text-center sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
-                  <p className="text-sm font-black text-slate-900">
+                <td className="p-4 text-center sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
+                  <p className="text-sm font-black text-zinc-900">
                     {(weekTotal as number).toFixed(1)}{' '}
                   </p>
                 </td>
@@ -666,7 +666,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         <button
           onClick={handleSubmit}
           disabled={isLoading || !hasChanges}
-          className={`bg-praetor text-white px-10 py-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-slate-200 font-bold text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:grayscale-[0.5] ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
+          className={`bg-praetor text-white px-10 py-3 rounded-xl hover:bg-zinc-800 transition-all shadow-lg hover:shadow-zinc-200 font-bold text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:grayscale-[0.5] ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
         >
           {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
         </button>

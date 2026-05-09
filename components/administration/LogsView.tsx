@@ -323,7 +323,7 @@ const LogsView: React.FC = () => {
         onClear={handleStartDateClear}
         buttonClassName={tableToolbarButtonClassName}
       />
-      <i className="fa-solid fa-arrow-right text-slate-300 text-sm" />
+      <i className="fa-solid fa-arrow-right text-zinc-300 text-sm" />
       <DatePickerButton
         label={t('logs.filters.endDate')}
         value={endDate}
@@ -342,7 +342,7 @@ const LogsView: React.FC = () => {
         type="button"
         onClick={handleRefreshLogs}
         disabled={loading || isRefreshing}
-        className={`${tableToolbarButtonClassName} inline-flex items-center border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+        className={`${tableToolbarButtonClassName} inline-flex items-center border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
       >
         <i
           className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'} text-[10px]`}
@@ -355,15 +355,15 @@ const LogsView: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-2xl font-bold text-slate-800">{t('logs.title')}</h2>
-        <p className="text-slate-500 mt-1">{t('logs.subtitle')}</p>
+        <h2 className="text-2xl font-semibold text-zinc-800">{t('logs.title')}</h2>
+        <p className="text-zinc-500 mt-1">{t('logs.subtitle')}</p>
       </div>
 
-      <div className="flex border-b border-slate-200 gap-8">
+      <div className="flex border-b border-zinc-200 gap-8">
         <button
           type="button"
           onClick={() => setActiveTab('audit')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'audit' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'audit' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-shield-halved mr-2"></i>
           {t('logs.tabs.audit')}
@@ -378,7 +378,7 @@ const LogsView: React.FC = () => {
           {error && <div className="text-sm font-medium text-red-600">{error}</div>}
 
           {loading ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-slate-500">
+            <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center text-zinc-500">
               <i className="fa-solid fa-circle-notch fa-spin mr-2" />
               {t('logs.loading')}
             </div>
@@ -389,7 +389,7 @@ const LogsView: React.FC = () => {
               columns={columns}
               headerAction={refreshButton}
               emptyState={
-                <div className="p-8 text-center text-slate-500 text-sm font-medium">
+                <div className="p-8 text-center text-zinc-500 text-sm font-medium">
                   {t('logs.empty')}
                 </div>
               }

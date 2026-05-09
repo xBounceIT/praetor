@@ -246,10 +246,10 @@ describe('hours aggregation', () => {
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].params).toContain('p-1');
 
-    // Both JOIN branches must sit inside the same `JOIN tasks t ON …` clause, OR-combined.
+    // Both JOIN branches must sit inside the same `JOIN tasks t ON ...` clause, OR-combined.
     // Asserting against the extracted ON clause (rather than the whole SQL) prevents a
     // regression that moves one branch into an unrelated CTE or WHERE filter from passing
-    // silently — both predicates have to live in the same join condition. Helper is shared
+    // silently - both predicates have to live in the same join condition. Helper is shared
     // with reportsHoursRepo.test.ts (test/helpers/sqlAssertions.ts).
     const onClause = extractTasksJoinOn(sql);
     expect(onClause).not.toBeNull();

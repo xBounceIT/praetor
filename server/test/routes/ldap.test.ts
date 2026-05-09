@@ -209,7 +209,7 @@ describe('GET /api/ldap/config', () => {
   });
 });
 
-describe('PUT /api/ldap/config — tlsCaCertificate', () => {
+describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('omitting tlsCaCertificate does not pass the key to ldapRepo.update', async () => {
     const response = await putConfig({ enabled: false });
     expect(response.statusCode).toBe(200);

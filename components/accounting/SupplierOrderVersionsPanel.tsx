@@ -72,7 +72,7 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
       await reload();
     } catch (e) {
       // Restore failures (409 linked-invoice / 409 non-draft / 409 missing snapshot ref / 404)
-      // carry actionable server messages — surface them instead of a generic load error.
+      // carry actionable server messages - surface them instead of a generic load error.
       setError(
         e instanceof Error && e.message ? e.message : t('supplierOrders.versionHistory.loadFailed'),
       );
@@ -84,18 +84,18 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
   return (
     <>
       <div className="hidden 2xl:flex w-72 max-h-[90vh] flex-col flex-shrink-0 rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-zinc-800 flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left text-praetor"></i>
             {t('supplierOrders.versionHistory.title')}
           </h4>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
             {rows.length}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {isLoading && (
-            <div className="p-6 text-xs text-slate-400 text-center">
+            <div className="p-6 text-xs text-zinc-400 text-center">
               <i className="fa-solid fa-spinner fa-spin"></i>
             </div>
           )}
@@ -105,12 +105,12 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
             </div>
           )}
           {!isLoading && !error && rows.length === 0 && (
-            <div className="p-6 text-xs text-slate-400 text-center leading-relaxed">
+            <div className="p-6 text-xs text-zinc-400 text-center leading-relaxed">
               {t('supplierOrders.versionHistory.empty')}
             </div>
           )}
           {!isLoading && !error && rows.length > 0 && (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-zinc-100">
               {rows.map((row) => {
                 const selected = row.id === selectedVersionId;
                 return (
@@ -118,16 +118,16 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSelect(row)}
-                      className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex flex-col gap-1 ${
+                      className={`w-full text-left px-4 py-3 hover:bg-zinc-50 transition-colors flex flex-col gap-1 ${
                         selected ? 'bg-praetor/5 border-l-4 border-praetor pl-3' : ''
                       }`}
                     >
-                      <span className="text-xs font-bold text-slate-700">
+                      <span className="text-xs font-bold text-zinc-700">
                         {formatInsertDateTime(row.createdAt, i18n.language)}
                       </span>
                       <span
                         className={`text-[9px] font-black uppercase tracking-wider ${
-                          row.reason === 'restore' ? 'text-amber-600' : 'text-slate-400'
+                          row.reason === 'restore' ? 'text-amber-600' : 'text-zinc-400'
                         }`}
                       >
                         {row.reason === 'restore'
@@ -142,11 +142,11 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
           )}
         </div>
         {selectedVersionId && (
-          <div className="border-t border-slate-100 p-3 space-y-2 bg-slate-50/50">
+          <div className="border-t border-zinc-100 p-3 space-y-2 bg-zinc-50/50">
             <button
               type="button"
               onClick={onClearPreview}
-              className="w-full py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+              className="w-full py-2 text-xs font-bold text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
             >
               <i className="fa-solid fa-arrow-left mr-1.5"></i>
               {t('supplierOrders.versionHistory.backToCurrent')}
@@ -155,7 +155,7 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
               type="button"
               disabled={Boolean(disabled) || restoreInFlight}
               onClick={() => setConfirmOpen(true)}
-              className="w-full py-2 bg-praetor text-white text-xs font-bold rounded-lg shadow-md shadow-slate-200 hover:bg-slate-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-2 bg-praetor text-white text-xs font-bold rounded-lg shadow-md shadow-zinc-200 hover:bg-zinc-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <i className="fa-solid fa-rotate-left mr-1.5"></i>
               {t('supplierOrders.versionHistory.restoreButton')}

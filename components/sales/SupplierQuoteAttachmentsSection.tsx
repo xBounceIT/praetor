@@ -186,9 +186,9 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   }, [pendingDelete, quoteId, t]);
 
   return (
-    <div className="space-y-3 border-t border-slate-100 pt-4">
-      <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-        <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+    <div className="space-y-3 border-t border-zinc-100 pt-4">
+      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+        <span className="size-1.5 rounded-full bg-praetor"></span>
         {t('sales:supplierQuotes.attachments.title', { defaultValue: 'Attachments' })}
         <FieldTooltip
           description={t('sales:fieldInfo.attachments', {
@@ -215,18 +215,18 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
           className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-all cursor-pointer ${
             isDragging
               ? 'border-praetor bg-praetor/5'
-              : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+              : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
           } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
         >
-          <i className="fa-solid fa-cloud-arrow-up text-2xl text-slate-400"></i>
-          <span className="font-bold text-slate-600">
+          <i className="fa-solid fa-cloud-arrow-up text-2xl text-zinc-400"></i>
+          <span className="font-bold text-zinc-600">
             {isUploading
               ? t('sales:supplierQuotes.attachments.uploading', { defaultValue: 'Uploading...' })
               : t('sales:supplierQuotes.attachments.dropHere', {
                   defaultValue: 'Drop a file here or click to upload',
                 })}
           </span>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-zinc-400">
             {t('sales:supplierQuotes.attachments.allowedTypes', {
               defaultValue: 'Allowed: xlsx, pdf, docx · max 10 MB',
             })}
@@ -248,23 +248,23 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       )}
 
       {isLoading ? (
-        <div className="text-center py-4 text-slate-400 text-sm">
+        <div className="text-center py-4 text-zinc-400 text-sm">
           <i className="fa-solid fa-spinner fa-spin"></i>
         </div>
       ) : attachments.length === 0 ? (
-        <div className="text-center py-4 text-slate-400 text-sm">
+        <div className="text-center py-4 text-zinc-400 text-sm">
           {t('sales:supplierQuotes.attachments.empty', { defaultValue: 'No attachments yet.' })}
         </div>
       ) : (
-        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+        <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
           {attachments.map((attachment) => (
             <li key={attachment.id} className="flex items-center gap-3 px-3 py-2.5">
-              <i className="fa-solid fa-file-lines text-slate-400"></i>
+              <i className="fa-solid fa-file-lines text-zinc-400"></i>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-slate-700 truncate">
+                <div className="text-sm font-bold text-zinc-700 truncate">
                   {attachment.fileName}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-zinc-400">
                   {formatFileSize(attachment.fileSize)}
                   {attachment.createdAt
                     ? ` · ${formatInsertDateTime(attachment.createdAt, i18n.language)}`
@@ -274,7 +274,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
               <button
                 type="button"
                 onClick={() => handleDownload(attachment)}
-                className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                 aria-label={t('sales:supplierQuotes.attachments.downloadAction', {
                   defaultValue: 'Download',
                 })}
@@ -285,7 +285,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
                 <button
                   type="button"
                   onClick={() => setPendingDelete(attachment)}
-                  className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                  className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                   aria-label={t('sales:supplierQuotes.attachments.deleteAction', {
                     defaultValue: 'Delete',
                   })}

@@ -161,16 +161,16 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">{t('general.pageTitle')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('general.pageSubtitle')}</p>
+          <h2 className="text-2xl font-semibold text-zinc-800">{t('general.pageTitle')}</h2>
+          <p className="text-sm text-zinc-500 mt-1">{t('general.pageSubtitle')}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-8">
+      <div className="flex border-b border-zinc-200 gap-8">
         <button
           onClick={() => setActiveTab('localization')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'localization' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'localization' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-globe mr-2"></i>
           {t('general.tabs.localization')}
@@ -180,7 +180,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         </button>
         <button
           onClick={() => setActiveTab('tracking')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'tracking' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'tracking' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-clock mr-2"></i>
           {t('general.tabs.tracking')}
@@ -190,7 +190,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         </button>
         <button
           onClick={() => setActiveTab('ai')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ai' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ai' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-wand-magic-sparkles mr-2"></i>
           {t('general.tabs.ai')}
@@ -202,15 +202,15 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
       <form onSubmit={handleSave} className="space-y-8">
         {activeTab === 'localization' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+          <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-globe text-praetor"></i>
-              <h3 className="font-bold text-slate-800">{t('general.localizationDisplay')}</h3>
+              <h3 className="font-semibold text-zinc-800">{t('general.localizationDisplay')}</h3>
             </div>
 
             <div className="p-6 space-y-6">
               <div className="max-w-xs">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                   {t('general.currencyLabel')}
                 </label>
                 <CustomSelect
@@ -220,7 +220,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   searchable={true}
                   placeholder={t('general.currencyLabel')}
                 />
-                <p className="mt-2 text-xs text-slate-500 italic">
+                <p className="mt-2 text-xs text-zinc-500 italic">
                   {t('general.currencyDescription')}
                 </p>
               </div>
@@ -229,16 +229,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         )}
 
         {activeTab === 'tracking' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+          <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-clock text-praetor"></i>
-              <h3 className="font-bold text-slate-800">{t('general.globalTrackingPreferences')}</h3>
+              <h3 className="font-semibold text-zinc-800">
+                {t('general.globalTrackingPreferences')}
+              </h3>
             </div>
 
             <div className="p-6 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('general.dailyHourLimit')}
                   </label>
                   <div className="flex items-center gap-3">
@@ -249,16 +251,16 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         const parsed = parseFloat(value);
                         setDailyLimit(value === '' || Number.isNaN(parsed) ? 0 : parsed);
                       }}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-bold"
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-bold"
                     />
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                  <p className="mt-2 text-[10px] text-zinc-500 italic leading-relaxed">
                     {t('general.dailyLimitDescription')}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('general.startOfWeek')}
                   </label>
                   <CustomSelect
@@ -269,13 +271,13 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     value={startOfWeek}
                     onChange={(val) => setStartOfWeek(val as 'Monday' | 'Sunday')}
                   />
-                  <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                  <p className="mt-2 text-[10px] text-zinc-500 italic leading-relaxed">
                     {t('general.startOfWeekDescription')}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('general.defaultLocationLabel')}
                   </label>
                   <CustomSelect
@@ -288,30 +290,30 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     value={defaultLocation}
                     onChange={(val) => setDefaultLocation(val as TimeEntryLocation)}
                   />
-                  <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                  <p className="mt-2 text-[10px] text-zinc-500 italic leading-relaxed">
                     {t('general.defaultLocationDescription')}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">
+                  <p className="text-sm font-bold text-zinc-800">
                     {t('general.treatSaturdayAsHolidayLabel')}
                   </p>
-                  <p className="text-xs text-slate-500 italic">
+                  <p className="text-xs text-zinc-500 italic">
                     {t('general.treatSaturdayAsHolidayDescription')}
                   </p>
                 </div>
                 <Toggle checked={treatSaturdayAsHoliday} onChange={setTreatSaturdayAsHoliday} />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">
+                  <p className="text-sm font-bold text-zinc-800">
                     {t('general.allowWeekendSelectionLabel')}
                   </p>
-                  <p className="text-xs text-slate-500 italic">
+                  <p className="text-xs text-zinc-500 italic">
                     {t('general.allowWeekendSelectionDescription')}
                   </p>
                 </div>
@@ -322,19 +324,19 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         )}
 
         {activeTab === 'ai' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+          <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-wand-magic-sparkles text-praetor"></i>
-              <h3 className="font-bold text-slate-800">{t('general.aiCapabilities')}</h3>
+              <h3 className="font-semibold text-zinc-800">{t('general.aiCapabilities')}</h3>
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200">
                 <div className="max-w-md">
-                  <p className="text-sm font-bold text-slate-800">
+                  <p className="text-sm font-bold text-zinc-800">
                     {t('general.enableAiReportingLabel')}
                   </p>
-                  <p className="text-xs text-slate-500 italic leading-relaxed">
+                  <p className="text-xs text-zinc-500 italic leading-relaxed">
                     {t('general.enableAiReportingDescription')}
                   </p>
                 </div>
@@ -342,10 +344,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
               </div>
 
               {isAnyAiEnabled && (
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
+                <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-200 animate-in fade-in slide-in-from-top-2">
                   {/* Provider */}
                   <div className="max-w-md">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                       {t('general.aiProviderLabel')}
                     </label>
                     <CustomSelect
@@ -356,14 +358,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         setModelCheck({ state: 'idle' });
                       }}
                     />
-                    <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                    <p className="mt-2 text-[10px] text-zinc-500 italic leading-relaxed">
                       {t('general.aiProviderDescription')}
                     </p>
                   </div>
 
                   {/* API Key */}
                   <div className="mt-6">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                       {aiProvider === 'gemini'
                         ? t('general.geminiApiKey')
                         : t('general.openrouterApiKey')}
@@ -388,10 +390,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         className={`w-full px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold pr-10 ${
                           isApiKeyMissing()
                             ? 'border-red-500 bg-red-50 focus:ring-red-200'
-                            : 'border-slate-200 focus:ring-praetor'
+                            : 'border-zinc-200 focus:ring-praetor'
                         }`}
                       />
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-zinc-400">
                         {aiProvider === 'gemini' ? (
                           <i className="fa-brands fa-google"></i>
                         ) : (
@@ -429,7 +431,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     )}
                     <p
                       className={`mt-2 text-[10px] italic leading-relaxed ${
-                        isApiKeyMissing() ? 'text-red-400' : 'text-slate-500'
+                        isApiKeyMissing() ? 'text-red-400' : 'text-zinc-500'
                       }`}
                     >
                       {aiProvider === 'gemini'
@@ -459,7 +461,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
                   {/* Model */}
                   <div className="mt-6">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                       {t('general.modelIdLabel')}
                     </label>
                     <div className="flex items-stretch gap-2">
@@ -484,7 +486,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                                 ? 'border-red-500 bg-red-50 focus:ring-red-200'
                                 : modelCheck.state === 'error'
                                   ? 'border-amber-500 bg-amber-50 focus:ring-amber-200'
-                                  : 'border-slate-200 focus:ring-praetor'
+                                  : 'border-zinc-200 focus:ring-praetor'
                         }`}
                       />
                       <button
@@ -499,8 +501,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                           modelCheck.state === 'checking' ||
                           !currentApiKey.trim() ||
                           !currentModelId.trim()
-                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                            : 'bg-white text-praetor border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                            ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                            : 'bg-white text-praetor border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
                         }`}
                       >
                         {modelCheck.state === 'checking'
@@ -528,7 +530,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         {t('general.modelCheckError')}
                       </p>
                     )}
-                    <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                    <p className="mt-2 text-[10px] text-zinc-500 italic leading-relaxed">
                       {t('general.modelIdDescription')}{' '}
                       <a
                         href={
@@ -569,8 +571,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     isModelMissing() ||
                     isModelNotFound ||
                     !hasChanges
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                  : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
+                  ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                  : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
             }`}
           >
             {isSaving ? (

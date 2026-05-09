@@ -9,7 +9,7 @@ const fetchMock = mock(
 );
 globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-// Load the real notifications module — it pulls the real client.ts which calls our fetch mock.
+// Load the real notifications module - it pulls the real client.ts which calls our fetch mock.
 const { notificationsApi } = await import('../../services/api/notifications');
 
 beforeEach(() => {

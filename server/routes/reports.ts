@@ -52,8 +52,8 @@ const incrementDatasetCounter = () => {
 // that re-attaches the logger to the tx).
 //
 // `schema` is required for the return type to satisfy `DbExecutor`
-// (`PgDatabase<…, typeof schema, …>`) — without it the inferred type is
-// `PgDatabase<…, Record<string, never>, …>` which isn't assignable. The query builder is
+// (`PgDatabase<..., typeof schema, ...>`) - without it the inferred type is
+// `PgDatabase<..., Record<string, never>, ...>` which isn't assignable. The query builder is
 // not used through this exec today (reports use raw `sql` template literals via `executeRows`),
 // so the schema isn't load-bearing at runtime.
 const datasetDb: DbExecutor = drizzle(pool, {

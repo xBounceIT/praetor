@@ -149,7 +149,7 @@ export const deleteById = async (
 };
 
 export const findUserIds = async (unitId: string, exec: DbExecutor = db): Promise<string[]> => {
-  // The JOIN filters out user_work_units rows pointing to deleted users — defensive even
+  // The JOIN filters out user_work_units rows pointing to deleted users - defensive even
   // though the FK has ON DELETE CASCADE.
   const rows = await executeRows<{ id: string }>(
     exec,

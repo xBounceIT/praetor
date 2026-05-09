@@ -170,7 +170,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => {
           const project = projects.find((p) => p.id === task.projectId);
           const client = clients.find((c) => c.id === project?.clientId);
-          return client?.name || '—';
+          return client?.name || '-';
         },
         cell: ({ row }) => {
           const project = projects.find((p) => p.id === row.projectId);
@@ -178,12 +178,12 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isClientDisabled = client?.isDisabled || false;
           return client ? (
             <span
-              className={`text-sm font-bold ${isClientDisabled ? 'text-amber-500' : 'text-slate-700'}`}
+              className={`text-sm font-bold ${isClientDisabled ? 'text-amber-500' : 'text-zinc-700'}`}
             >
               {client.name} {isClientDisabled && t('projects.disabledLabel')}
             </span>
           ) : (
-            <span className="text-xs text-slate-400 italic">—</span>
+            <span className="text-xs text-zinc-400 italic">-</span>
           );
         },
       },
@@ -192,8 +192,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         id: 'createdAt',
         accessorFn: (task) => task.createdAt ?? 0,
         cell: ({ row }) => (
-          <span className="text-xs text-slate-500 whitespace-nowrap">
-            {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+          <span className="text-xs text-zinc-500 whitespace-nowrap">
+            {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
           </span>
         ),
       },
@@ -209,14 +209,14 @@ const TasksView: React.FC<TasksViewProps> = ({
           return (
             <div className="flex items-center gap-2">
               <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
+                className="size-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
                 className={`text-sm font-bold ${
                   isProjectDisabled
-                    ? 'text-slate-600 line-through decoration-slate-300'
-                    : 'text-slate-800'
+                    ? 'text-zinc-600 line-through decoration-zinc-300'
+                    : 'text-zinc-800'
                 }`}
               >
                 {project?.name || t('projects.unknown')}
@@ -232,7 +232,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isDisabled = row.isDisabled || checkInheritedDisabled(row);
           return (
             <span
-              className={`text-sm font-bold ${isDisabled ? 'text-slate-600 line-through decoration-slate-300' : 'text-slate-800'}`}
+              className={`text-sm font-bold ${isDisabled ? 'text-zinc-600 line-through decoration-zinc-300' : 'text-zinc-800'}`}
             >
               {value}
             </span>
@@ -246,10 +246,10 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isDisabled = row.isDisabled || checkInheritedDisabled(row);
           return (
             <p
-              className={`text-xs truncate max-w-50 ${isDisabled ? 'text-slate-400 italic' : 'text-slate-500'}`}
+              className={`text-xs truncate max-w-50 ${isDisabled ? 'text-zinc-400 italic' : 'text-zinc-500'}`}
             >
               {value || (
-                <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
+                <span className="italic text-zinc-400">{t('projects.noDescriptionProvided')}</span>
               )}
             </p>
           );
@@ -261,8 +261,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => task.expectedEffort ?? 0,
         cell: ({ row }) => {
           const effort = row.expectedEffort;
-          if (!effort) return <span className="text-xs text-slate-400">—</span>;
-          return <span className="text-xs font-bold text-slate-600 tabular-nums">{effort}h</span>;
+          if (!effort) return <span className="text-xs text-zinc-400">-</span>;
+          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
         },
       },
       {
@@ -271,9 +271,9 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => task.revenue ?? 0,
         cell: ({ row }) => {
           const rev = row.revenue;
-          if (!rev) return <span className="text-xs text-slate-400">—</span>;
+          if (!rev) return <span className="text-xs text-zinc-400">-</span>;
           return (
-            <span className="text-xs font-bold text-slate-600 tabular-nums">
+            <span className="text-xs font-bold text-zinc-600 tabular-nums">
               {currency}
               {rev.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -291,28 +291,28 @@ const TasksView: React.FC<TasksViewProps> = ({
         cell: ({ row }) => {
           if (hoursLoadState === 'loading' || taskHours === null) {
             return (
-              <span className="text-slate-400 text-xs">
+              <span className="text-zinc-400 text-xs">
                 <i className="fa-solid fa-spinner fa-spin"></i>
               </span>
             );
           }
-          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">-</span>;
           const projectHours = taskHours[row.projectId] ?? {};
           const logged = projectHours[row.name] ?? 0;
           const expected = row.expectedEffort ?? 0;
-          if (!expected) return <span className="text-slate-400 text-xs">—</span>;
+          if (!expected) return <span className="text-zinc-400 text-xs">-</span>;
           const pct = Math.round((logged / expected) * 100);
           const overBudget = logged > expected;
           return (
             <div className="flex items-center gap-2">
-              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                   style={{ width: `${Math.min(pct, 100)}%` }}
                 />
               </div>
               <span
-                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
               >
                 {pct}%
               </span>
@@ -374,7 +374,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                           e.stopPropagation();
                           openAssignments(row.id);
                         }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                        className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-users"></i>
                       </button>
@@ -387,7 +387,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                           e.stopPropagation();
                           openEditModal(row);
                         }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                        className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-pen-to-square"></i>
                       </button>
@@ -405,8 +405,8 @@ const TasksView: React.FC<TasksViewProps> = ({
                           }}
                           className={`p-2 rounded-lg transition-all ${
                             isTaskDisabled
-                              ? 'text-praetor hover:bg-slate-100'
-                              : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                              ? 'text-praetor hover:bg-zinc-100'
+                              : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
                           }`}
                         >
                           <i
@@ -427,7 +427,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                         setEditingTask(row);
                         confirmDelete();
                       }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
@@ -513,7 +513,7 @@ const TasksView: React.FC<TasksViewProps> = ({
             i18nKey="tasks.deleteConfirmDesc"
             ns="projects"
             values={{ name: editingTask?.name }}
-            components={{ span: <span className="font-bold text-slate-800" /> }}
+            components={{ span: <span className="font-bold text-zinc-800" /> }}
           />
         }
       />
@@ -534,16 +534,16 @@ const TasksView: React.FC<TasksViewProps> = ({
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                 <i className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}></i>
               </div>
               {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
             </h3>
             <button
               onClick={closeModal}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -552,24 +552,25 @@ const TasksView: React.FC<TasksViewProps> = ({
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
             {(() => {
               const project = projects.find((p) => p.id === projectId);
-              return editingTask && project?.orderId ? (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+              const orderId = project?.orderId;
+              return editingTask && orderId ? (
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                       <i className="fa-solid fa-link"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
+                      <div className="text-sm font-bold text-zinc-900">
                         {t('projects:projects.linkedOrder')}
                       </div>
-                      <div className="text-xs text-praetor">{formatOrderId(project.orderId!)}</div>
+                      <div className="text-xs text-praetor">{formatOrderId(orderId)}</div>
                     </div>
                   </div>
                   {onViewOrder && (
                     <button
                       type="button"
-                      onClick={() => onViewOrder(project.orderId!)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                      onClick={() => onViewOrder(orderId)}
+                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                     >
                       {t('projects:projects.viewOrder')}
                     </button>
@@ -579,31 +580,30 @@ const TasksView: React.FC<TasksViewProps> = ({
             })()}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.project')}</label>
+              <label className="text-xs font-bold text-zinc-500 ml-1">{t('tasks.project')}</label>
               <CustomSelect
                 options={projectSelectOptions}
                 value={projectId}
                 onChange={(val) => setProjectId(val as string)}
                 placeholder={t('common:labels.selectOption')}
                 searchable={true}
-                buttonClassName="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
+                buttonClassName="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.name')}</label>
+              <label className="text-xs font-bold text-zinc-500 ml-1">{t('tasks.name')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('tasks.taskNamePlaceholder')}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
-                autoFocus
+                className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
+              <label className="text-xs font-bold text-zinc-500 ml-1">
                 {t('tasks.description')}
               </label>
               <textarea
@@ -611,7 +611,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t('tasks.taskDescriptionPlaceholder')}
                 rows={3}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
+                className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
               />
             </div>
 
@@ -630,12 +630,12 @@ const TasksView: React.FC<TasksViewProps> = ({
                     className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
                       isCurrentlyDisabled
                         ? 'bg-red-50 border-red-100'
-                        : 'bg-slate-50 border-slate-200'
+                        : 'bg-zinc-50 border-zinc-200'
                     }`}
                   >
                     <p
                       className={`text-sm font-black ${
-                        isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
+                        isCurrentlyDisabled ? 'text-red-700' : 'text-zinc-700'
                       }`}
                     >
                       {t('tasks.isDisabled')}
@@ -665,7 +665,7 @@ const TasksView: React.FC<TasksViewProps> = ({
               );
             })()}
 
-            <div className="pt-6 flex items-center justify-between gap-4 border-t border-slate-100 mt-2">
+            <div className="pt-6 flex items-center justify-between gap-4 border-t border-zinc-100 mt-2">
               {editingTask && canDeleteTasks && (
                 <button
                   type="button"
@@ -681,7 +681,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                  className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
                 >
                   {t('common:buttons.cancel')}
                 </button>
@@ -690,8 +690,8 @@ const TasksView: React.FC<TasksViewProps> = ({
                   disabled={!canSubmit}
                   className={`px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${
                     canSubmit
-                      ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                      : 'bg-slate-300 shadow-none cursor-not-allowed'
+                      ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
+                      : 'bg-zinc-300 shadow-none cursor-not-allowed'
                   }`}
                 >
                   {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
@@ -706,14 +706,14 @@ const TasksView: React.FC<TasksViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('tasks.title')}</h2>
-            <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-zinc-800">{t('tasks.title')}</h2>
+            <p className="text-zinc-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
             {canCreateTasks && (
               <button
                 onClick={openAddModal}
-                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
               >
                 <i className="fa-solid fa-plus"></i> {t('tasks.addTask')}
               </button>
@@ -738,7 +738,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         footer={
           <>
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-xs font-bold text-zinc-500">
                 {t('common:labels.rowsPerPage')}
               </span>
               <CustomSelect
@@ -751,10 +751,10 @@ const TasksView: React.FC<TasksViewProps> = ({
                 value={rowsPerPage.toString()}
                 onChange={(val) => handleRowsPerPageChange(val as string)}
                 className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                buttonClassName="px-2 py-1 bg-white border border-zinc-200 text-xs font-bold text-zinc-700 rounded-lg"
                 searchable={false}
               />
-              <span className="text-xs font-bold text-slate-400 ml-2">
+              <span className="text-xs font-bold text-zinc-400 ml-2">
                 {t('common:pagination.showing', {
                   start: paginatedTasks.length > 0 ? startIndex + 1 : 0,
                   end: Math.min(startIndex + rowsPerPage, tasks.length),
@@ -766,7 +766,7 @@ const TasksView: React.FC<TasksViewProps> = ({
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
               </button>
@@ -775,10 +775,10 @@ const TasksView: React.FC<TasksViewProps> = ({
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                    className={`size-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
                       currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
+                        ? 'bg-praetor text-white shadow-md shadow-zinc-200'
+                        : 'text-zinc-500 hover:bg-zinc-100'
                     }`}
                   >
                     {page}
@@ -788,7 +788,7 @@ const TasksView: React.FC<TasksViewProps> = ({
               <button
                 onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-right text-xs"></i>
               </button>
