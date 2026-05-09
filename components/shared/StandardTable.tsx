@@ -67,7 +67,7 @@ const ViewActionButton = ({
   icon,
   title,
   onClick,
-  className = 'hover:bg-slate-200 text-slate-500',
+  className = 'hover:bg-zinc-200 text-zinc-500',
 }: {
   icon: string;
   title: string;
@@ -79,7 +79,7 @@ const ViewActionButton = ({
     onClick={onClick}
     title={title}
     aria-label={title}
-    className={`w-5 h-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
+    className={`size-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
   >
     <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
   </button>
@@ -542,7 +542,7 @@ const StandardTable = <T extends object>({
 
   // Exports the currently visible columns and the post-filter/sort rows so the
   // CSV mirrors what the user sees (active view, manual filters, hidden cols).
-  // Skips columns without an accessor (Actions, etc.) — they render UI from
+  // Skips columns without an accessor (Actions, etc.) - they render UI from
   // `cell` and have no scalar value to serialize.
   const handleExportToCsv = () => {
     const exportColumns = visibleColumns.filter(
@@ -773,8 +773,8 @@ const StandardTable = <T extends object>({
               onClick();
             }}
             disabled={disabled}
-            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              active ? 'bg-slate-100 text-praetor' : 'bg-white text-slate-500 hover:bg-slate-100'
+            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              active ? 'bg-zinc-100 text-praetor' : 'bg-white text-zinc-500 hover:bg-zinc-100'
             }`}
           >
             <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
@@ -788,7 +788,7 @@ const StandardTable = <T extends object>({
   const renderInternalFooter = () => (
     <>
       <div className="flex items-center gap-3">
-        <span className="text-xs font-bold text-slate-500">{t('pagination.rowsPerPage')}</span>
+        <span className="text-xs font-bold text-zinc-500">{t('pagination.rowsPerPage')}</span>
         <CustomSelect
           options={[
             { id: '5', name: '5' },
@@ -806,10 +806,10 @@ const StandardTable = <T extends object>({
             }
           }}
           className="w-20"
-          buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+          buttonClassName="px-2 py-1 bg-white border border-zinc-200 text-xs font-bold text-zinc-700 rounded-lg"
           searchable={false}
         />
-        <span className="text-xs font-bold text-slate-400 ml-2">
+        <span className="text-xs font-bold text-zinc-400 ml-2">
           {t('pagination.showing')
             .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
             .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
@@ -825,7 +825,7 @@ const StandardTable = <T extends object>({
             setCurrentPage((prev) => Math.max(1, prev - 1));
           }}
           disabled={currentPage === 1}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
         >
           <i className="fa-solid fa-chevron-left text-xs"></i>
         </button>
@@ -836,17 +836,17 @@ const StandardTable = <T extends object>({
             )
             .map((page, i, arr) => (
               <div key={page} className="flex items-center">
-                {i > 0 && page - arr[i - 1] > 1 && <span className="text-slate-400 mx-1">...</span>}
+                {i > 0 && page - arr[i - 1] > 1 && <span className="text-zinc-400 mx-1">...</span>}
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setCurrentPage(page);
                   }}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                  className={`size-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
                     currentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                      : 'text-slate-500 hover:bg-slate-100'
+                      ? 'bg-praetor text-white shadow-md shadow-zinc-200'
+                      : 'text-zinc-500 hover:bg-zinc-100'
                   }`}
                 >
                   {page}
@@ -861,7 +861,7 @@ const StandardTable = <T extends object>({
             setCurrentPage((prev) => Math.min(totalPages, prev + 1));
           }}
           disabled={currentPage === totalPages || totalPages === 0}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
         >
           <i className="fa-solid fa-chevron-right text-xs"></i>
         </button>
@@ -871,15 +871,15 @@ const StandardTable = <T extends object>({
 
   return (
     <div
-      className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
+      className={`bg-white rounded-3xl border border-zinc-200 shadow-sm ${containerClassName ?? ''}`.trim()}
     >
-      <div className="px-3 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
+      <div className="p-3 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center rounded-t-3xl">
         <div className="flex items-center gap-3">
-          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
+          <h4 className="font-semibold text-zinc-400 uppercase text-[10px] tracking-widest">
             {title}
           </h4>
           {typeof totalItems === 'number' && (
-            <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
+            <span className="bg-zinc-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
               {totalItems} {totalLabel || t('table.total')}
             </span>
           )}
@@ -919,11 +919,11 @@ const StandardTable = <T extends object>({
                   {gearOpen && (
                     <div
                       ref={gearPopupRef}
-                      className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
+                      className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
                     >
-                      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
+                      <div className="px-3 py-2 border-b border-zinc-100 flex items-center justify-between gap-2">
                         <span
-                          className="text-[10px] font-black text-slate-400 uppercase tracking-wider truncate"
+                          className="text-[10px] font-black text-zinc-400 uppercase tracking-wider truncate"
                           title={activeView ? activeView.name : undefined}
                         >
                           {activeView
@@ -936,7 +936,7 @@ const StandardTable = <T extends object>({
                             e.stopPropagation();
                             setGearOpen(false);
                           }}
-                          className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
+                          className="text-zinc-400 hover:text-zinc-600 transition-colors flex-shrink-0"
                         >
                           <i className="fa-solid fa-xmark text-xs"></i>
                         </button>
@@ -955,7 +955,7 @@ const StandardTable = <T extends object>({
                           return (
                             <div
                               key={colId}
-                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
+                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-zinc-50 rounded cursor-pointer"
                               onClick={(e) => {
                                 if (isLastVisible) return;
                                 if ((e.target as HTMLElement).closest('label')) return;
@@ -968,28 +968,28 @@ const StandardTable = <T extends object>({
                                 disabled={isLastVisible}
                                 onChange={() => toggleColumnVisibility(colId)}
                               />
-                              <span className="text-[11px] text-slate-600 select-none">
+                              <span className="text-[11px] text-zinc-600 select-none">
                                 {col.header}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="p-2 border-t border-slate-100">
+                      <div className="p-2 border-t border-zinc-100">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             resetColumnVisibility();
                           }}
-                          className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                          className="w-full px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
                         >
                           <i className="fa-solid fa-rotate-left text-[10px]"></i>
                           <span>{t('table.resetColumns')}</span>
                         </button>
                       </div>
                       <div
-                        className="relative border-t border-slate-100 p-2"
+                        className="relative border-t border-zinc-100 p-2"
                         onMouseEnter={handleViewsMouseEnter}
                         onMouseLeave={handleViewsMouseLeave}
                       >
@@ -1002,15 +1002,15 @@ const StandardTable = <T extends object>({
                           onFocus={() => setViewsSubmenuOpen(true)}
                           className={`w-full px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-between ${
                             viewsSubmenuOpen
-                              ? 'bg-slate-100 text-praetor'
-                              : 'text-slate-600 hover:bg-slate-50'
+                              ? 'bg-zinc-100 text-praetor'
+                              : 'text-zinc-600 hover:bg-zinc-50'
                           }`}
                         >
                           <span className="flex items-center gap-1.5">
                             <i className="fa-solid fa-layer-group text-[10px]"></i>
                             {t('table.customViews')}
                             {customViews.length > 0 && (
-                              <span className="text-[9px] font-bold text-slate-400">
+                              <span className="text-[9px] font-bold text-zinc-400">
                                 ({customViews.length})
                               </span>
                             )}
@@ -1019,12 +1019,12 @@ const StandardTable = <T extends object>({
                         </button>
                         {viewsSubmenuOpen && (
                           <div
-                            className="absolute right-full top-0 mr-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+                            className="absolute right-full top-0 mr-2 w-64 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
                             onMouseEnter={handleViewsMouseEnter}
                             onMouseLeave={handleViewsMouseLeave}
                           >
-                            <div className="px-3 py-2 border-b border-slate-100">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="px-3 py-2 border-b border-zinc-100">
+                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('table.customViews')}
                               </span>
                             </div>
@@ -1076,7 +1076,7 @@ const StandardTable = <T extends object>({
                                         setDragOverViewId(null);
                                       }}
                                       className={`group flex items-center gap-1 px-1.5 py-1 rounded transition-colors border-t-2 ${
-                                        isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
+                                        isActive ? 'bg-zinc-100' : 'hover:bg-zinc-50'
                                       } ${isDragOver ? 'border-praetor' : 'border-transparent'} ${
                                         draggingViewId === view.id ? 'opacity-40' : ''
                                       }`}
@@ -1097,7 +1097,7 @@ const StandardTable = <T extends object>({
                                             moveViewByDelta(view.id, 1);
                                           }
                                         }}
-                                        className="text-slate-300 group-hover:text-slate-400 hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
+                                        className="text-zinc-300 group-hover:text-zinc-400 hover:text-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
                                       >
                                         <i
                                           className="fa-solid fa-grip-vertical text-[10px]"
@@ -1120,7 +1120,7 @@ const StandardTable = <T extends object>({
                                           className={`text-[11px] truncate ${
                                             isActive
                                               ? 'text-praetor font-bold'
-                                              : 'text-slate-600 font-semibold'
+                                              : 'text-zinc-600 font-semibold'
                                           }`}
                                         >
                                           {view.name}
@@ -1145,7 +1145,7 @@ const StandardTable = <T extends object>({
                                             e.stopPropagation();
                                             void exportView(view);
                                           }}
-                                          className={`hover:bg-slate-200 ${isCopied ? 'text-praetor' : 'text-slate-500'}`}
+                                          className={`hover:bg-zinc-200 ${isCopied ? 'text-praetor' : 'text-zinc-500'}`}
                                         />
                                         <ViewActionButton
                                           icon="fa-trash"
@@ -1154,7 +1154,7 @@ const StandardTable = <T extends object>({
                                             e.stopPropagation();
                                             deleteView(view.id);
                                           }}
-                                          className="hover:bg-red-100 hover:text-red-600 text-slate-500"
+                                          className="hover:bg-red-100 hover:text-red-600 text-red-600"
                                         />
                                       </div>
                                     </div>
@@ -1162,7 +1162,7 @@ const StandardTable = <T extends object>({
                                 })}
                               </div>
                             )}
-                            <div className="p-2 border-t border-slate-100 space-y-1">
+                            <div className="p-2 border-t border-zinc-100 space-y-1">
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
@@ -1171,7 +1171,7 @@ const StandardTable = <T extends object>({
                                     setModalState({ kind: 'create' });
                                     setViewsSubmenuOpen(false);
                                   }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
                                 >
                                   <i className="fa-solid fa-plus text-[10px]"></i>
                                   <span>{t('buttons.add')}</span>
@@ -1182,7 +1182,7 @@ const StandardTable = <T extends object>({
                                     e.stopPropagation();
                                     void importView();
                                   }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                                 >
                                   <i className="fa-solid fa-file-import text-[10px]"></i>
                                   <span>{t('buttons.import')}</span>
@@ -1219,7 +1219,7 @@ const StandardTable = <T extends object>({
             {(paginatedData.length > 0 ||
               Object.keys(filterState).length > 0 ||
               sortState !== null) && (
-              <thead className="bg-slate-50">
+              <thead className="bg-zinc-50">
                 <tr>
                   {visibleColumns.map((col, colIdx) => {
                     const colId = getColId(col);
@@ -1246,7 +1246,7 @@ const StandardTable = <T extends object>({
                               ? { minWidth: '40px', width: 'auto' }
                               : undefined
                         }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-slate-100 ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-zinc-400 uppercase tracking-widest whitespace-nowrap border-b border-zinc-100 ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-zinc-50 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         <span className="inline-flex items-center gap-1">
                           <span>{col.header}</span>
@@ -1265,10 +1265,10 @@ const StandardTable = <T extends object>({
                                   setActiveFilterCol(colId);
                                 }
                               }}
-                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                              className={`p-1 rounded hover:bg-zinc-200 transition-colors ${
                                 isFiltered || isSorted || activeFilterCol === colId
                                   ? 'text-praetor'
-                                  : 'text-slate-400'
+                                  : 'text-zinc-400'
                               }`}
                             >
                               <i className="fa-solid fa-filter"></i>
@@ -1319,7 +1319,7 @@ const StandardTable = <T extends object>({
                     <tr
                       key={idx}
                       onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
+                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-zinc-300 text-zinc-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-zinc-50/50'}`}`}
                     >
                       {visibleColumns.map((col, colIdx) => {
                         const colId = getColId(col);
@@ -1348,10 +1348,10 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${!isLastRow ? 'border-b border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${!isLastRow ? 'border-b border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-zinc-50 transition-all duration-500 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                           >
                             {col.sticky === 'right' ? (
-                              <div className="flex justify-end items-center w-full h-full">
+                              <div className="flex justify-end items-center size-full">
                                 {col.cell
                                   ? col.cell({ getValue: () => val, row, value: val })
                                   : (val as ReactNode)}
@@ -1371,7 +1371,7 @@ const StandardTable = <T extends object>({
                 <tr>
                   <td
                     colSpan={Math.max(visibleColumns.length, 1)}
-                    className="p-12 text-center text-slate-400 text-sm font-bold"
+                    className="p-12 text-center text-zinc-400 text-sm font-bold"
                   >
                     {emptyState ?? t('table.noResults')}
                   </td>
@@ -1386,7 +1386,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
+          className={`px-3 py-2 bg-zinc-50 border-t border-zinc-200 rounded-b-3xl ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
@@ -1415,21 +1415,21 @@ const StandardTable = <T extends object>({
       {data && columns && pasteModalOpen && (
         <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
                 <i className="fa-solid fa-file-import text-praetor"></i>
                 {t('table.pasteViewTitle')}
               </h3>
               <button
                 type="button"
                 onClick={closePasteModal}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
             <div className="px-6 py-5 space-y-3">
-              <p className="text-xs text-slate-500">{t('table.pasteViewDescription')}</p>
+              <p className="text-xs text-zinc-500">{t('table.pasteViewDescription')}</p>
               <textarea
                 value={pasteText}
                 onChange={(e) => {
@@ -1438,8 +1438,7 @@ const StandardTable = <T extends object>({
                 }}
                 placeholder={t('table.pasteViewPlaceholder')}
                 rows={6}
-                autoFocus
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
+                className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
               />
               {pasteError && (
                 <div role="alert" className="text-[11px] text-red-500">
@@ -1447,11 +1446,11 @@ const StandardTable = <T extends object>({
                 </div>
               )}
             </div>
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-end gap-2">
+            <div className="px-6 py-3 border-t border-zinc-100 bg-zinc-50/50 rounded-b-2xl flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={closePasteModal}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
               >
                 {t('table.cancel')}
               </button>

@@ -194,7 +194,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         editingQuote.status === 'denied' ||
         // Backend stores 'confirmed' for finalized quotes (PUT and restore both 409 it).
         // The Quote type doesn't include this status today, but rows from the API can
-        // have it — cast to compare without widening the union project-wide.
+        // have it - cast to compare without widening the union project-wide.
         (editingQuote.status as string) === 'confirmed'),
   );
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -518,10 +518,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       discount: 0,
       note: '',
     };
-    setFormData({
-      ...formData,
-      items: [...(formData.items || []), newItem as QuoteItem],
-    });
+    setFormData((prev) => ({ ...prev, items: [...(formData.items || []), newItem as QuoteItem] }));
     if (errors.items) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -535,7 +532,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (isReadOnly) return;
     const newItems = [...(formData.items || [])];
     newItems.splice(index, 1);
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const updateProductRow = (index: number, field: keyof QuoteItem, value: string | number) => {
@@ -590,7 +587,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         }
-        setFormData({ ...formData, items: newItems });
+        setFormData((prev) => ({ ...prev, items: newItems }));
         return;
       }
 
@@ -650,7 +647,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       }
     }
 
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
@@ -720,7 +717,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           type="text"
           readOnly
           value={item.productName || ''}
-          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600"
+          className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-600"
         />
       );
     }
@@ -751,7 +748,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitType: newType,
       unitPrice: adjustedPrice,
     };
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   // Column definitions for StandardTable
@@ -761,7 +758,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       accessorKey: 'id',
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
-      cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+      cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
     },
     {
       header: t('crm:clients.tableHeaders.insertDate'),
@@ -769,9 +766,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       accessorFn: (row) => row.createdAt ?? 0,
       className: 'whitespace-nowrap',
       cell: ({ row }) => {
-        if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+        if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
         return (
-          <span className="text-xs text-slate-500 whitespace-nowrap">
+          <span className="text-xs text-zinc-500 whitespace-nowrap">
             {formatInsertDate(row.createdAt)}
           </span>
         );
@@ -788,7 +785,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       cell: ({ row }) => {
         const history = isHistoryRow(row);
         return (
-          <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+          <div className={history ? 'font-bold text-zinc-400' : 'font-bold text-zinc-800'}>
             {row.clientName}
           </div>
         );
@@ -805,7 +802,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const history = isHistoryRow(row);
         return (
           <span
-            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-600'}`}
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
           >
             {formatDiscountValue(row.discount, row.discountType, currency)}
           </span>
@@ -830,7 +827,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const history = isHistoryRow(row);
         return (
           <span
-            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
             {subtotal.toFixed(2)} {currency}
           </span>
@@ -856,7 +853,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (discountAmount <= 0) {
           return (
             <span
-              className={`text-sm font-semibold ${history ? 'text-slate-300' : 'text-slate-400'}`}
+              className={`text-sm font-semibold ${history ? 'text-zinc-300' : 'text-zinc-400'}`}
             >
               -
             </span>
@@ -889,7 +886,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const history = isHistoryRow(row);
         return (
           <span
-            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-emerald-600'}`}
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
             {margin.toFixed(2)} {currency}
           </span>
@@ -914,7 +911,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const history = isHistoryRow(row);
         return (
           <span
-            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
             {total.toFixed(2)} {currency}
           </span>
@@ -929,9 +926,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       cell: ({ row }) => {
         const history = isHistoryRow(row);
         return (
-          <span
-            className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
-          >
+          <span className={`text-sm font-semibold ${history ? 'text-zinc-400' : 'text-zinc-600'}`}>
             {row.paymentTerms === 'immediate'
               ? t('sales:clientQuotes.immediatePayment')
               : row.paymentTerms}
@@ -950,7 +945,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         return (
           <div
             className={`text-sm ${
-              history ? 'text-slate-400' : expired ? 'text-red-600 font-bold' : 'text-slate-600'
+              history ? 'text-zinc-400' : expired ? 'text-red-600 font-bold' : 'text-zinc-600'
             }`}
           >
             {formatDateOnlyForLocale(row.expirationDate)}
@@ -1043,7 +1038,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     openEditModal(row);
                   }}
                   disabled={history}
-                  className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                  className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                 >
                   <i className="fa-solid fa-pen-to-square"></i>
                 </button>
@@ -1058,7 +1053,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
                       onViewOffer(row.linkedOfferId!);
                     }}
-                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                   >
                     <i className="fa-solid fa-link"></i>
                   </button>
@@ -1075,7 +1070,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onCreateOffer(row);
                     }}
                     disabled={isCreateOfferDisabled}
-                    className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                    className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                   >
                     <i className="fa-solid fa-file-signature"></i>
                   </button>
@@ -1100,7 +1095,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onUpdateQuote(row.id, { status: 'sent' });
                     }}
                     disabled={history}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                   >
                     <i className="fa-solid fa-paper-plane"></i>
                   </button>
@@ -1126,7 +1121,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onUpdateQuote(row.id, { status: 'accepted' });
                       }}
                       disabled={history}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
                     >
                       <i className="fa-solid fa-check"></i>
                     </button>
@@ -1149,7 +1144,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onUpdateQuote(row.id, { status: 'denied' });
                       }}
                       disabled={history}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
@@ -1167,7 +1162,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       confirmDelete(row);
                     }}
                     disabled={isDeleteDisabled}
-                    className={`p-2 text-slate-400 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                    className={`p-2 text-red-600 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>
@@ -1185,7 +1180,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onUpdateQuote(row.id, { status: 'draft', isExpired: false });
                       }}
                       disabled={!canRestore}
-                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
+                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}
                     >
                       <i className="fa-solid fa-rotate-left"></i>
                     </button>
@@ -1204,9 +1199,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="flex items-start gap-4 max-w-full">
           <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+              <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+                <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                   <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                 </div>
                 {isReadOnly
@@ -1217,7 +1212,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </h3>
               <button
                 onClick={closeModal}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -1258,13 +1253,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 </div>
               )}
               {editingQuote?.linkedOfferId && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                       <i className="fa-solid fa-link"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
+                      <div className="text-sm font-bold text-zinc-900">
                         {t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
                       </div>
                       <div className="text-xs text-praetor">
@@ -1273,7 +1268,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           defaultValue: 'Offer #{{number}}',
                         })}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-zinc-400 mt-0.5">
                         {t('sales:clientQuotes.offerDetailsReadOnly', {
                           defaultValue: '(Quote details are read-only)',
                         })}
@@ -1284,7 +1279,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onViewOffers(editingQuote.id)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                     >
                       {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
                     </button>
@@ -1293,8 +1288,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
               {/* Client Selection */}
               <div className="space-y-2">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.clientInformation')}
                   <FieldTooltip
                     description={t('sales:fieldInfo.clientInformation', {
@@ -1306,7 +1301,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.client')}
                     </label>
                     <CustomSelect
@@ -1323,14 +1318,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                     </label>
                     <input
                       type="text"
                       value={formData.id || ''}
                       onChange={(e) => {
-                        setFormData({ ...formData, id: e.target.value });
+                        setFormData((prev) => ({ ...prev, id: e.target.value }));
                         if (errors.id) {
                           setErrors((prev) => {
                             const next = { ...prev };
@@ -1342,48 +1337,53 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       placeholder="Q0000"
                       disabled={isReadOnly}
                       className={`w-full rounded-xl border ${
-                        errors.id ? 'border-red-300' : 'border-slate-200'
-                      } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
+                        errors.id ? 'border-red-300' : 'border-zinc-200'
+                      } bg-zinc-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
                     />
                     {errors.id && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.paymentTerms')}
                     </label>
                     <CustomSelect
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(val) =>
-                        setFormData({ ...formData, paymentTerms: val as Quote['paymentTerms'] })
+                        setFormData((prev) => ({
+                          ...prev,
+                          paymentTerms: val as Quote['paymentTerms'],
+                        }))
                       }
                       searchable={false}
                       disabled={isReadOnly}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.expirationDateLabel')}
                     </label>
                     <input
                       type="date"
                       required
                       value={formData.expirationDate}
-                      onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, expirationDate: e.target.value }))
+                      }
                       disabled={isReadOnly}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Products */}
-              <div className="space-y-2 border-t border-slate-100 pt-4">
+              <div className="space-y-2 border-t border-zinc-100 pt-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('sales:clientQuotes.productsServices')}
                     <FieldTooltip
                       description={t('sales:fieldInfo.productsServices', {
@@ -1397,7 +1397,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     type="button"
                     onClick={addProductRow}
                     disabled={isReadOnly}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs font-bold text-praetor hover:text-zinc-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                   </button>
@@ -1409,28 +1409,28 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {formData.items && formData.items.length > 0 && (
                   <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                     <div className="flex-1 min-w-0 grid grid-cols-13 gap-2">
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                         {t('sales:clientQuotes.supplierQuoteColumn')}
                       </div>
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                         {t('sales:clientQuotes.productsServices')}
                       </div>
-                      <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                         {t('sales:clientQuotes.qty')}
                       </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                         {t('crm:internalListing.cost')}
                       </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
+                      <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                         MOL
                       </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
+                      <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                         {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                       </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                         {t('sales:clientQuotes.marginLabel')}
                       </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                         {t('sales:clientQuotes.revenue')}
                       </div>
                     </div>
@@ -1475,12 +1475,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       return (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                          className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-3"
                         >
                           <div className="lg:hidden flex items-start gap-3">
                             <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                               <div className="min-w-0">
-                                <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                   {t('sales:clientQuotes.supplierQuoteColumn')}
                                   <FieldTooltip
                                     description={t('sales:fieldInfo.supplierQuote', {
@@ -1517,11 +1517,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   searchable={true}
                                   disabled={isReadOnly}
                                   className="min-w-0"
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                 />
                               </div>
                               <div className="min-w-0">
-                                <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                   {t('sales:clientQuotes.productsServices')}
                                   <FieldTooltip
                                     description={t('sales:fieldInfo.product', {
@@ -1535,7 +1535,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {renderProductSelectOrFallback(item, index, {
                                   className: 'min-w-0',
                                   buttonClassName:
-                                    'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                                    'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
                                 })}
                               </div>
                             </div>
@@ -1543,14 +1543,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               type="button"
                               onClick={() => removeProductRow(index)}
                               disabled={isReadOnly}
-                              className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="mt-5 size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
                           </div>
                           <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                             <div>
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                              <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('sales:clientQuotes.qty')}
                                 <FieldTooltip
                                   description={t('sales:fieldInfo.qty', {
@@ -1576,9 +1576,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     );
                                   }}
                                   disabled={isReadOnly || isLinkedToSupplierQuote}
-                                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                                  className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                                 />
-                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                   /
                                 </span>
                                 <UnitTypeSelector
@@ -1590,8 +1590,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 />
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                 {t('crm:internalListing.cost')}
                                 <FieldTooltip
                                   description={t('sales:fieldInfo.cost', {
@@ -1607,15 +1607,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   formatDecimals={2}
                                   onValueChange={handleCostChange}
                                   disabled={isReadOnly || isLinkedToSupplierQuote}
-                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                   {currency}
                                 </span>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                 MOL (%)
                                 <FieldTooltip
                                   description={t('sales:fieldInfo.mol', {
@@ -1631,34 +1631,34 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   formatDecimals={1}
                                   onValueChange={handleMolChange}
                                   disabled={isReadOnly}
-                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                   %
                                 </span>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                               </div>
-                              <div className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                              <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                 {lineCost.toFixed(2)} {currency}
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('sales:clientQuotes.marginLabel')}
                               </div>
                               <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
                                 {lineMargin.toFixed(2)} {currency}
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('sales:clientQuotes.revenue')}
                               </div>
-                              <div className="text-sm font-semibold whitespace-nowrap text-slate-800">
+                              <div className="text-sm font-semibold whitespace-nowrap text-zinc-800">
                                 {lineSalePrice.toFixed(2)} {currency}
                               </div>
                             </div>
@@ -1692,14 +1692,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   searchable={true}
                                   disabled={isReadOnly}
                                   className="min-w-0"
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                 />
                               </div>
                               <div className="col-span-3 min-w-0">
                                 {renderProductSelectOrFallback(item, index, {
                                   className: 'min-w-0',
                                   buttonClassName:
-                                    'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                                    'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
                                 })}
                               </div>
                               <div className="col-span-2">
@@ -1719,9 +1719,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       );
                                     }}
                                     disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
-                                  <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /
                                   </span>
                                   <UnitTypeSelector
@@ -1745,9 +1745,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     formatDecimals={2}
                                     onValueChange={handleCostChange}
                                     disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
-                                  <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                     {currency}
                                   </span>
                                 </div>
@@ -1758,14 +1758,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   formatDecimals={1}
                                   onValueChange={handleMolChange}
                                   disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                   %
                                 </span>
                               </div>
                               <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                   {lineCost.toFixed(2)} {currency}
                                 </span>
                               </div>
@@ -1775,7 +1775,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 </span>
                               </div>
                               <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-semibold whitespace-nowrap text-slate-800">
+                                <span className="text-xs font-semibold whitespace-nowrap text-zinc-800">
                                   {lineSalePrice.toFixed(2)} {currency}
                                 </span>
                               </div>
@@ -1784,7 +1784,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               type="button"
                               onClick={() => removeProductRow(index)}
                               disabled={isReadOnly}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -1796,7 +1796,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               value={item.note || ''}
                               onChange={(e) => updateProductRow(index, 'note', e.target.value)}
                               disabled={isReadOnly}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </div>
                         </div>
@@ -1804,17 +1804,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
+                  <div className="text-center py-8 text-zinc-400 text-sm">
                     {t('sales:clientQuotes.noProductsAdded')}
                   </div>
                 )}
               </div>
 
               {/* Notes & Cost Summary */}
-              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
                 <div className="w-full space-y-2 md:w-2/3">
-                  <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                    <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('sales:clientQuotes.notesLabel')}
                     <FieldTooltip
                       description={t('sales:fieldInfo.notes', {
@@ -1827,10 +1827,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <textarea
                     rows={4}
                     value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                     placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
                     disabled={isReadOnly}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1850,7 +1850,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       type: formData.discountType || 'percentage',
                       onChange: (value) => {
                         const parsed = parseNumberInputValue(value);
-                        setFormData({ ...formData, discount: parsed });
+                        setFormData((prev) => ({ ...prev, discount: parsed }));
                         if (errors.total) {
                           setErrors((prev) => {
                             const next = { ...prev };
@@ -1859,7 +1859,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           });
                         }
                       },
-                      onTypeChange: (type) => setFormData({ ...formData, discountType: type }),
+                      onTypeChange: (type) =>
+                        setFormData((prev) => ({ ...prev, discountType: type })),
                       disabled: isReadOnly,
                     }}
                     discountRow={
@@ -1888,7 +1889,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                  className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
                 >
                   {t('common:buttons.cancel')}
                 </button>
@@ -1896,7 +1897,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <button
                     type="submit"
                     disabled={isReadOnly}
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isReadOnly
                       ? t('sales:clientQuotes.statusQuote', {
@@ -1927,10 +1928,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-5">
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('sales:clientQuotes.clientChangeRepriceTitle')}
               </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('sales:clientQuotes.clientChangeRepriceMessage')}
               </p>
             </div>
@@ -1938,21 +1939,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <button
                 type="button"
                 onClick={handleClientChangeKeepSnapshots}
-                className="w-full py-3 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                className="w-full py-3 text-sm font-bold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors"
               >
                 {t('sales:clientQuotes.clientChangeKeepSnapshots')}
               </button>
               <button
                 type="button"
                 onClick={handleClientChangeReprice}
-                className="w-full py-3 text-sm font-bold text-white bg-praetor hover:bg-slate-700 rounded-xl transition-colors"
+                className="w-full py-3 text-sm font-bold text-white bg-praetor hover:bg-zinc-700 rounded-xl transition-colors"
               >
                 {t('sales:clientQuotes.clientChangeRepriceNow')}
               </button>
               <button
                 type="button"
                 onClick={() => setPendingClientChange(null)}
-                className="w-full py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="w-full py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
               >
                 {t('sales:clientQuotes.clientChangeRepriceCancel')}
               </button>
@@ -1964,19 +1965,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
           </div>
-          <h3 className="text-lg font-black text-slate-800">
+          <h3 className="text-lg font-semibold text-zinc-800">
             {t('sales:clientQuotes.deleteQuote')}?
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-zinc-500">
             {t('sales:clientQuotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
           </p>
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+              className="flex-1 rounded-xl py-3 font-bold text-zinc-500 hover:bg-zinc-50"
             >
               {t('common:buttons.cancel')}
             </button>
@@ -1993,14 +1994,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('sales:clientQuotes.quotesTitle')}
             </h2>
-            <p className="text-slate-500 text-sm">{t('sales:clientQuotes.quotesSubtitle')}</p>
+            <p className="text-zinc-500 text-sm">{t('sales:clientQuotes.quotesSubtitle')}</p>
           </div>
           <button
             onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.createNewQuote')}
           </button>
@@ -2031,10 +2032,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
           const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
-            ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
+            ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
             : expired
-              ? `hover:bg-slate-50/50 ${cursorClass} bg-red-50/30`
-              : `hover:bg-slate-50/50 ${cursorClass}`;
+              ? `hover:bg-zinc-50/50 ${cursorClass} bg-red-50/30`
+              : `hover:bg-zinc-50/50 ${cursorClass}`;
         }}
       />
     </div>

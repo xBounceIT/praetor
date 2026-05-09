@@ -12,7 +12,7 @@ beforeEach(() => {
 
 // Builder fixtures match the column order in db/schema/timeEntries.ts. Raw-SQL fixtures
 // are objects keyed by SELECT column name (snake_case + an extra `created_at_text` for
-// cursor pagination — see ENTRY_COLUMNS_SQL).
+// cursor pagination - see ENTRY_COLUMNS_SQL).
 const ENTRY_BASE: readonly unknown[] = [
   'e-1',
   'u-1',
@@ -119,7 +119,7 @@ describe('listForManagerView', () => {
   test('uses managerId for both own + managed subquery (Drizzle binds twice)', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listForManagerView('mgr', {}, testDb);
-    // Drizzle's `sql\`\`` template doesn't dedupe interpolations — the managerId is bound
+    // Drizzle's `sql\`\`` template doesn't dedupe interpolations - the managerId is bound
     // once for `user_id = $1` and once for the subquery's `wum.user_id = $2`.
     expect(exec.calls[0].params).toEqual(['mgr', 'mgr', 200]);
     const sql = exec.calls[0].sql;

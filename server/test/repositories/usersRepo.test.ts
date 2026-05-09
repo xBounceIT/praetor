@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 // Most user-management list functions (listAllForAdmin/listScopedForManager/findById) use
-// executeRows with raw SQL — rows come back with camelCase keys via SELECT aliases. Other
+// executeRows with raw SQL - rows come back with camelCase keys via SELECT aliases. Other
 // functions use the Drizzle query builder (rowMode: 'array' positional rows in projection
 // declaration order).
 

@@ -68,15 +68,15 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+        <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 rounded-t-2xl flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
             <i className="fa-solid fa-table-columns text-praetor"></i>
             {editingView ? t('table.editView') : t('table.addCustomView')}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-zinc-400 hover:text-zinc-600 transition-colors"
           >
             <i className="fa-solid fa-xmark"></i>
           </button>
@@ -86,7 +86,7 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
           <div className="space-y-1.5">
             <label
               htmlFor="custom-view-name"
-              className="text-[10px] font-black text-slate-400 uppercase tracking-widest"
+              className="text-[10px] font-black text-zinc-400 uppercase tracking-widest"
             >
               {t('table.viewName')}
             </label>
@@ -96,31 +96,30 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('table.viewNamePlaceholder')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor"
-              autoFocus
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor"
             />
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
                 {t('table.columns')}
               </span>
               <div className="flex items-center gap-3 text-[11px] font-semibold">
                 <button type="button" onClick={selectAll} className="text-praetor hover:underline">
                   {t('table.selectAllCols')}
                 </button>
-                <span className="text-slate-300">|</span>
+                <span className="text-zinc-300">|</span>
                 <button
                   type="button"
                   onClick={deselectAll}
-                  className="text-slate-500 hover:underline"
+                  className="text-zinc-500 hover:underline"
                 >
                   {t('table.deselectAllCols')}
                 </button>
               </div>
             </div>
-            <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-1.5 space-y-0.5">
+            <div className="max-h-64 overflow-y-auto border border-zinc-200 rounded-lg p-1.5 space-y-0.5">
               {columns.map((col) => {
                 const isVisible = !hiddenColIds.has(col.id);
                 // Checkbox onChange owns the toggle; the row's onClick handles
@@ -131,14 +130,14 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                 return (
                   <div
                     key={col.id}
-                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer"
+                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded cursor-pointer"
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest('label')) return;
                       toggleCol(col.id);
                     }}
                   >
                     <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
-                    <span className="text-xs text-slate-600 select-none">{col.header}</span>
+                    <span className="text-xs text-zinc-600 select-none">{col.header}</span>
                   </div>
                 );
               })}
@@ -146,11 +145,11 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
           </div>
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-end gap-2">
+        <div className="px-6 py-3 border-t border-zinc-100 bg-zinc-50/50 rounded-b-2xl flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className="px-4 py-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
           >
             {t('table.cancel')}
           </button>

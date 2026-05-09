@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SupplierQuoteAttachment } from '../../types';
 
-// Stable t/i18n references — components that put `t` in useEffect dep arrays would otherwise
+// Stable t/i18n references - components that put `t` in useEffect dep arrays would otherwise
 // loop forever in tests because every render produces a fresh `t` identity.
 const t = (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key;
 const i18n = { language: 'en', changeLanguage: () => {} };
@@ -138,7 +138,7 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
     expect(screen.queryByText('Drop a file here or click to upload')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument();
-    // Download stays visible — view-only users can still grab the file.
+    // Download stays visible - view-only users can still grab the file.
     expect(screen.getByLabelText('Download')).toBeInTheDocument();
   });
 

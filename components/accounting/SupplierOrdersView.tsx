@@ -266,7 +266,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-zinc-700">{row.id}</span>
         ),
       },
       {
@@ -278,10 +278,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
           return (
             <div>
-              <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+              <div className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
                 {row.supplierName}
               </div>
-              <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
+              <div className="font-mono text-[10px] font-black uppercase tracking-wider text-zinc-400">
                 {row.linkedQuoteId || t('accounting:supplierOrders.noQuoteLink')}
               </div>
             </div>
@@ -300,7 +300,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <span className={`text-sm font-bold ${isMuted ? 'text-slate-400' : 'text-slate-700'}`}>
+            <span className={`text-sm font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-700'}`}>
               {total.toFixed(2)} {currency}
             </span>
           );
@@ -318,7 +318,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
           return (
             <span
-              className={`text-sm font-semibold ${isMuted ? 'text-slate-400' : 'text-slate-600'}`}
+              className={`text-sm font-semibold ${isMuted ? 'text-zinc-400' : 'text-zinc-600'}`}
             >
               {getPaymentTermsLabel(row.paymentTerms, t)}
             </span>
@@ -364,7 +364,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         if (!linkedQuoteId) return;
                         onViewQuote(linkedQuoteId);
                       }}
-                      className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                      className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -384,7 +384,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       event.stopPropagation();
                       openEditModal(row);
                     }}
-                    className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                   >
                     <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                   </button>
@@ -399,7 +399,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         event.stopPropagation();
                         void onUpdateOrder(row.id, { status: 'sent' });
                       }}
-                      className="rounded-lg p-2 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-lg p-2 text-blue-700 transition-all hover:bg-blue-50 hover:text-blue-600"
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -415,7 +415,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         event.stopPropagation();
                         void onCreateInvoice(row);
                       }}
-                      className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                      className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                     >
                       <i className="fa-solid fa-file-invoice-dollar"></i>
                     </button>
@@ -431,7 +431,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         event.stopPropagation();
                         confirmDelete(row);
                       }}
-                      className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
@@ -460,16 +460,16 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={closeEditModal}>
         <div className="flex items-start gap-4">
           <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-              <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+            <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6">
+              <h3 className="flex items-center gap-3 text-xl font-semibold text-zinc-800">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-praetor">
                   <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
                 </div>
                 {t('accounting:supplierOrders.editOrder')}
               </h3>
               <button
                 onClick={closeEditModal}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+                className="flex size-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -503,13 +503,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
               {/* Linked Quote Info */}
               {formData.linkedQuoteId && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                       <i className="fa-solid fa-link"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
+                      <div className="text-sm font-bold text-zinc-900">
                         {t('accounting:supplierOrders.linkedQuote')}
                       </div>
                       <div className="text-xs text-praetor">
@@ -517,7 +517,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           number: formData.linkedQuoteId,
                         })}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-zinc-400 mt-0.5">
                         {t('accounting:supplierOrders.quoteDetailsReadOnly')}
                       </div>
                     </div>
@@ -530,7 +530,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         if (!linkedQuoteId) return;
                         onViewQuote(linkedQuoteId);
                       }}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                     >
                       {t('accounting:supplierOrders.viewQuote')}
                     </button>
@@ -539,13 +539,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               )}
 
               <div className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('accounting:supplierOrders.orderDetails')}
                 </h4>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:supplierOrders.supplier')}
                     </label>
                     <CustomSelect
@@ -564,15 +564,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:supplierOrders.orderNumber')}
                     </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
-                      {editingOrder?.id || '—'}
+                    <div className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 font-bold">
+                      {editingOrder?.id || '-'}
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-slate-500">
+                    <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:supplierOrders.paymentTerms')}
                     </label>
                     <CustomSelect
@@ -593,15 +593,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                    <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('accounting:supplierOrders.items')}
                   </h4>
                 </div>
 
                 {(formData.items || []).length > 0 && (
                   <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
                       <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
                       <div className="col-span-1">{t('common:labels.quantity')}</div>
                       <div className="col-span-2">
@@ -625,7 +625,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       return (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                          className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-3"
                         >
                           <div className="lg:hidden space-y-2">
                             <CustomSelect
@@ -634,11 +634,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                               onChange={(value) => updateItem(index, 'productId', value as string)}
                               searchable={true}
                               disabled={isReadOnly}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                             />
                             <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                   {t('common:labels.quantity')}
                                 </label>
                                 <ValidatedNumberInput
@@ -647,11 +647,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'quantity', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                   {t('crm:internalListing.salePrice')}
                                 </label>
                                 <ValidatedNumberInput
@@ -661,11 +661,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                   {t('accounting:supplierOrders.discount')}
                                 </label>
                                 <ValidatedNumberInput
@@ -675,14 +675,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none text-center disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
                                   {t('common:labels.total')}
                                 </label>
-                                <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
                                   {lineTotal.toFixed(2)} {currency}
                                 </div>
                               </div>
@@ -693,14 +693,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                               disabled={isReadOnly}
                               placeholder={t('accounting:supplierOrders.notes')}
                               onChange={(event) => updateItem(index, 'note', event.target.value)}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
                             />
                             <div className="flex justify-end">
                               <button
                                 type="button"
                                 onClick={() => removeItem(index)}
                                 disabled={isReadOnly}
-                                className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <i className="fa-solid fa-trash-can"></i>
                               </button>
@@ -717,7 +717,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   }
                                   searchable={true}
                                   disabled={isReadOnly}
-                                  buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                  buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
                                 />
                               </div>
                               <div className="lg:col-span-1">
@@ -727,7 +727,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'quantity', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="lg:col-span-2">
@@ -738,7 +738,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="lg:col-span-1">
@@ -749,7 +749,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onValueChange={(value) =>
                                     updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
                               <div className="lg:col-span-2">
@@ -760,10 +760,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                   onChange={(event) =>
                                     updateItem(index, 'note', event.target.value)
                                   }
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
                                 />
                               </div>
-                              <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                              <div className="lg:col-span-2 flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
                                 {lineTotal.toFixed(2)} {currency}
                               </div>
                             </div>
@@ -771,7 +771,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                               type="button"
                               onClick={() => removeItem(index)}
                               disabled={isReadOnly}
-                              className="w-8 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-8 h-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -781,15 +781,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400">
                     {t('accounting:supplierOrders.noItemsAdded')}
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
                 <div className="md:w-2/3 space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                  <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:supplierOrders.notes')}
                   </label>
                   <textarea
@@ -799,7 +799,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, notes: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-zinc-50 disabled:text-zinc-400 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -845,14 +845,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                  className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
                 >
                   {t('common:buttons.cancel')}
                 </button>
                 {!isReadOnly && (
                   <button
                     type="submit"
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95"
                   >
                     {t('common:buttons.update')}
                   </button>
@@ -876,21 +876,21 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="space-y-4 p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('accounting:supplierOrders.deleteTitle')}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
                 {orderToDelete?.supplierName} · {orderToDelete?.linkedQuoteId || orderToDelete?.id}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 rounded-xl py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+                className="flex-1 rounded-xl py-3 text-sm font-bold text-zinc-500 transition-colors hover:bg-zinc-50"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -910,10 +910,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('accounting:supplierOrders.title')}
             </h2>
-            <p className="text-sm text-slate-500">{t('accounting:supplierOrders.subtitle')}</p>
+            <p className="text-sm text-zinc-500">{t('accounting:supplierOrders.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -925,7 +925,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierSaleOrder) =>
-          row.status === 'sent' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'
+          row.status === 'sent' ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
         }
         onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
       />

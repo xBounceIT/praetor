@@ -51,7 +51,7 @@ export const ASSIGNMENT_SPECS = {
   tasks: { table: 'user_tasks', fkColumn: 'task_id', sourceTable: 'tasks' },
 } as const satisfies Record<'clients' | 'projects' | 'tasks', AssignmentSpec>;
 
-// Qualified `"<table>"."assignment_source"` reference for the raw-SQL helpers — `mergedSource`
+// Qualified `"<table>"."assignment_source"` reference for the raw-SQL helpers - `mergedSource`
 // expects this shape so it works the same as for the typed-builder path.
 const tableAssignmentSourceCol = (spec: AssignmentSpec): SQL =>
   sql`${sql.identifier(spec.table)}.assignment_source`;
@@ -286,7 +286,7 @@ export const syncTopManagerAssignmentsForUser = async (
         ),
     ]);
     // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
-    // modified — sequenced after the `await Promise.all(...)` so it sees the final state,
+    // modified - sequenced after the `await Promise.all(...)` so it sees the final state,
     // never an interleaved view.
     await applyProjectCascadeToClients(userId, exec);
     return;

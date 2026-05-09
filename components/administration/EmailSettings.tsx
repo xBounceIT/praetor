@@ -159,10 +159,10 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
+          <h2 className="text-2xl font-semibold text-zinc-800">
             {t('email.title', 'Email Settings')}
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-zinc-500 mt-1">
             {t('email.subtitle', 'Configure SMTP settings for email notifications')}
           </p>
         </div>
@@ -170,20 +170,20 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
 
       <form onSubmit={handleSave} className="space-y-8">
         {/* SMTP Server Configuration */}
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <i className="fa-solid fa-server text-praetor"></i>
-              <h3 className="font-bold text-slate-800">
+              <h3 className="font-semibold text-zinc-800">
                 {t('email.smtpServer', 'SMTP Server Configuration')}
               </h3>
             </div>
             <div className="flex items-center gap-3">
               <Toggle
                 checked={formData.enabled}
-                onChange={(checked) => setFormData({ ...formData, enabled: checked })}
+                onChange={(checked) => setFormData((prev) => ({ ...prev, enabled: checked }))}
               />
-              <span className="text-sm font-medium text-slate-600">
+              <span className="text-sm font-medium text-zinc-600">
                 {t('email.enabled', 'Enabled')}
               </span>
             </div>
@@ -193,18 +193,18 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             className={`p-6 grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.host', 'SMTP Host')}
               </label>
               <input
                 type="text"
                 value={formData.smtpHost}
                 onChange={(e) => {
-                  setFormData({ ...formData, smtpHost: e.target.value });
-                  if (errors.smtpHost) setErrors({ ...errors, smtpHost: '' });
+                  setFormData((prev) => ({ ...prev, smtpHost: e.target.value }));
+                  if (errors.smtpHost) setErrors((prev) => ({ ...prev, smtpHost: '' }));
                 }}
                 placeholder="smtp.example.com"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.smtpHost ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.smtpHost ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
               />
               {errors.smtpHost && (
                 <p className="text-red-500 text-[10px] font-bold mt-1">{errors.smtpHost}</p>
@@ -212,19 +212,22 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.port', 'Port')}
               </label>
               <input
                 type="number"
                 value={formData.smtpPort}
                 onChange={(e) => {
-                  setFormData({ ...formData, smtpPort: parseInt(e.target.value, 10) || 587 });
-                  if (errors.smtpPort) setErrors({ ...errors, smtpPort: '' });
+                  setFormData((prev) => ({
+                    ...prev,
+                    smtpPort: parseInt(e.target.value, 10) || 587,
+                  }));
+                  if (errors.smtpPort) setErrors((prev) => ({ ...prev, smtpPort: '' }));
                 }}
                 min={1}
                 max={65535}
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.smtpPort ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.smtpPort ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
               />
               {errors.smtpPort && (
                 <p className="text-red-500 text-[10px] font-bold mt-1">{errors.smtpPort}</p>
@@ -232,17 +235,17 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.encryptionLabel', 'Encryption')}
               </label>
               <CustomSelect
                 options={encryptionOptions}
                 value={formData.smtpEncryption}
                 onChange={(val) =>
-                  setFormData({ ...formData, smtpEncryption: val as SmtpEncryption })
+                  setFormData((prev) => ({ ...prev, smtpEncryption: val as SmtpEncryption }))
                 }
               />
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-[10px] text-zinc-400 mt-1">
                 {formData.smtpEncryption === 'ssl' &&
                   t('email.encryptionHint.ssl', 'Implicit SSL, typically port 465')}
                 {formData.smtpEncryption === 'tls' &&
@@ -253,27 +256,27 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.username', 'Username')}
               </label>
               <input
                 type="text"
                 value={formData.smtpUser}
-                onChange={(e) => setFormData({ ...formData, smtpUser: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, smtpUser: e.target.value }))}
                 placeholder="user@example.com"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.password', 'Password')}
               </label>
               <input
                 type="password"
                 value={formData.smtpPassword}
-                onChange={(e) => setFormData({ ...formData, smtpPassword: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+                onChange={(e) => setFormData((prev) => ({ ...prev, smtpPassword: e.target.value }))}
+                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
               />
             </div>
 
@@ -282,14 +285,14 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                 <Toggle
                   checked={formData.smtpRejectUnauthorized}
                   onChange={(checked) =>
-                    setFormData({ ...formData, smtpRejectUnauthorized: checked })
+                    setFormData((prev) => ({ ...prev, smtpRejectUnauthorized: checked }))
                   }
                 />
-                <span className="text-sm font-medium text-slate-600">
+                <span className="text-sm font-medium text-zinc-600">
                   {t('email.rejectUnauthorized', 'Reject unauthorized certificates')}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1 ml-14">
+              <p className="text-[10px] text-zinc-400 mt-1 ml-14">
                 {t('email.rejectUnauthorizedHint', 'Disable for self-signed certificates')}
               </p>
             </div>
@@ -298,27 +301,27 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
 
         {/* Sender Settings */}
         <section
-          className={`bg-white rounded-2xl border border-slate-200 shadow-sm transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
+          className={`bg-white rounded-2xl border border-zinc-200 shadow-sm transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-envelope text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('email.sender', 'Sender Settings')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('email.sender', 'Sender Settings')}</h3>
           </div>
 
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.fromEmail', 'From Email')}
               </label>
               <input
                 type="email"
                 value={formData.fromEmail}
                 onChange={(e) => {
-                  setFormData({ ...formData, fromEmail: e.target.value });
-                  if (errors.fromEmail) setErrors({ ...errors, fromEmail: '' });
+                  setFormData((prev) => ({ ...prev, fromEmail: e.target.value }));
+                  if (errors.fromEmail) setErrors((prev) => ({ ...prev, fromEmail: '' }));
                 }}
                 placeholder="noreply@example.com"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm ${errors.fromEmail ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm ${errors.fromEmail ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
               />
               {errors.fromEmail && (
                 <p className="text-red-500 text-[10px] font-bold mt-1">{errors.fromEmail}</p>
@@ -326,15 +329,15 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.fromName', 'From Name')}
               </label>
               <input
                 type="text"
                 value={formData.fromName}
-                onChange={(e) => setFormData({ ...formData, fromName: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fromName: e.target.value }))}
                 placeholder="Praetor"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
               />
             </div>
           </div>
@@ -347,7 +350,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all active:scale-95 disabled:opacity-50 ${
               isSaved
                 ? 'bg-emerald-500 text-white shadow-emerald-200'
-                : 'bg-praetor text-white shadow-slate-200 hover:bg-slate-800'
+                : 'bg-praetor text-white shadow-zinc-200 hover:bg-zinc-800'
             }`}
           >
             {isSaving ? (
@@ -366,15 +369,15 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
 
       {/* Test Email */}
       <section
-        className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-12 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
+        className={`bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden mt-12 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
       >
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+        <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
           <i className="fa-solid fa-vial text-praetor"></i>
-          <h3 className="font-bold text-slate-800">{t('email.testEmail', 'Test Email')}</h3>
+          <h3 className="font-semibold text-zinc-800">{t('email.testEmail', 'Test Email')}</h3>
         </div>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-4">
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-zinc-400 mb-4">
               {t(
                 'email.testDescription',
                 'Send a test email to verify your SMTP configuration is working correctly.',
@@ -382,7 +385,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </p>
             <form onSubmit={handleTest} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                   {t('email.recipientEmail', 'Recipient Email')}
                 </label>
                 <input
@@ -390,10 +393,10 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   value={testEmail}
                   onChange={(e) => {
                     setTestEmail(e.target.value);
-                    if (testErrors.testEmail) setTestErrors({ ...testErrors, testEmail: '' });
+                    if (testErrors.testEmail) setTestErrors((prev) => ({ ...prev, testEmail: '' }));
                   }}
                   placeholder="test@example.com"
-                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-slate-700 ${testErrors.testEmail ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-zinc-700 ${testErrors.testEmail ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 />
                 {testErrors.testEmail && (
                   <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testEmail}</p>
@@ -405,7 +408,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
               <button
                 type="submit"
                 disabled={isTestLoading || !formData.enabled}
-                className="w-full bg-praetor text-white py-2 rounded-lg font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-md shadow-slate-100"
+                className="w-full bg-praetor text-white py-2 rounded-lg font-bold hover:bg-zinc-800 transition-colors disabled:opacity-50 shadow-md shadow-zinc-100"
               >
                 {isTestLoading ? (
                   <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -416,9 +419,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </form>
           </div>
 
-          <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs overflow-y-auto h-64 border border-slate-800 shadow-inner">
+          <div className="bg-zinc-900 rounded-xl p-4 font-mono text-xs overflow-y-auto h-64 border border-zinc-800 shadow-inner">
             {isTestLoading ? (
-              <div className="text-slate-400 animate-pulse">
+              <div className="text-zinc-400 animate-pulse">
                 {t('email.sending', 'Sending test email...')}
               </div>
             ) : testResult ? (
@@ -433,13 +436,13 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   ] {getTranslatedMessage(testResult.code, testResult.params)}
                 </div>
                 {testResult.success && (
-                  <div className="text-slate-400 mt-2">
+                  <div className="text-zinc-400 mt-2">
                     {t('email.checkInbox', 'Check your inbox for the test email.')}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="text-slate-600 italic">
+              <div className="text-zinc-600 italic">
                 {t('email.waitingForTest', 'Waiting for test execution...')}
                 <br />
                 <br />

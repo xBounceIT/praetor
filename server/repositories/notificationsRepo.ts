@@ -6,7 +6,7 @@ import { notifications } from '../db/schema/notifications.ts';
 // agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
 // would parameterize the comparison and miss NULL. The partial index
 // `idx_notifications_user_unread` (predicate `is_read = false`) is not matched by this
-// predicate — the NULL-handling consistency is the tradeoff we want.
+// predicate - the NULL-handling consistency is the tradeoff we want.
 const isUnread = sql`${notifications.isRead} IS NOT TRUE`;
 
 export type Notification = {

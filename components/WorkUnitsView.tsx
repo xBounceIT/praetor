@@ -184,15 +184,15 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+          <h2 className="text-2xl font-semibold text-zinc-800 tracking-tight">
             {t('hr:workUnits.title')}
           </h2>
-          <p className="text-slate-500 font-medium">{t('hr:workUnits.subtitle')}</p>
+          <p className="text-zinc-500 font-medium">{t('hr:workUnits.subtitle')}</p>
         </div>
         {canCreateWorkUnits && (
           <button
             onClick={openCreateModal}
-            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> {t('hr:workUnits.newWorkUnit')}
           </button>
@@ -204,10 +204,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         {workUnits.map((unit) => (
           <div
             key={unit.id}
-            className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"
+            className="bg-white rounded-2xl p-6 border border-zinc-200 shadow-sm hover:shadow-md transition-shadow group"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="w-12 h-12 rounded-xl bg-slate-100 text-praetor flex items-center justify-center text-xl">
+              <div className="size-12 rounded-xl bg-zinc-100 text-praetor flex items-center justify-center text-xl">
                 <i className="fa-solid fa-sitemap"></i>
               </div>
               {(canUpdateWorkUnits || canDeleteWorkUnits) && (
@@ -217,7 +217,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       {() => (
                         <button
                           onClick={() => openEditModal(unit)}
-                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                          className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
                         >
                           <i className="fa-solid fa-pen"></i>
                         </button>
@@ -229,7 +229,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       {() => (
                         <button
                           onClick={() => confirmDelete(unit)}
-                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                          className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
                         >
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
@@ -240,18 +240,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               )}
             </div>
 
-            <h3 className="text-lg font-bold text-slate-800 mb-1">{unit.name}</h3>
+            <h3 className="text-lg font-semibold text-zinc-800 mb-1">{unit.name}</h3>
             {unit.description && (
-              <p className="text-sm text-slate-500 mb-4 line-clamp-2">{unit.description}</p>
+              <p className="text-sm text-zinc-500 mb-4 line-clamp-2">{unit.description}</p>
             )}
 
-            <div className="space-y-3 pt-4 border-t border-slate-100">
+            <div className="space-y-3 pt-4 border-t border-zinc-100">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold shrink-0">
+                <div className="size-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 text-xs font-bold shrink-0">
                   <i className="fa-solid fa-user-tie"></i>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
                     {t('hr:workUnits.managers')}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -259,13 +259,13 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       unit.managers.map((m) => (
                         <span
                           key={m.id}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-praetor"
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-praetor"
                         >
                           {m.name}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-slate-400 italic">
+                      <span className="text-sm text-zinc-400 italic">
                         {t('hr:workUnits.noManagersAssigned')}
                       </span>
                     )}
@@ -275,14 +275,14 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">
+                  <div className="size-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 text-xs font-bold">
                     <i className="fa-solid fa-users"></i>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
                       {t('hr:workUnits.members')}
                     </p>
-                    <p className="text-sm font-bold text-slate-700">
+                    <p className="text-sm font-bold text-zinc-700">
                       {unit.userCount || 0} {t('hr:workUnits.users')}
                     </p>
                   </div>
@@ -290,7 +290,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 {canManageMembers && (
                   <button
                     onClick={() => openAssignments(unit)}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-xs font-bold text-praetor hover:text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     {t('hr:workUnits.manageMembers')}
                   </button>
@@ -301,25 +301,25 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         ))}
 
         {workUnits.length === 0 && (
-          <div className="col-span-full py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center px-6">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 text-2xl mb-4">
+          <div className="col-span-full py-20 bg-white rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-center px-6">
+            <div className="size-16 bg-zinc-50 rounded-full flex items-center justify-center text-zinc-300 text-2xl mb-4">
               <i className="fa-solid fa-sitemap"></i>
             </div>
             {canCreateWorkUnits ? (
               <>
-                <h3 className="text-lg font-bold text-slate-800">
+                <h3 className="text-lg font-semibold text-zinc-800">
                   {t('hr:workUnits.noWorkUnitsCreated')}
                 </h3>
-                <p className="text-slate-500 max-w-sm mt-1">
+                <p className="text-zinc-500 max-w-sm mt-1">
                   {t('hr:workUnits.noWorkUnitsCreatedDescription')}
                 </p>
               </>
             ) : (
               <>
-                <h3 className="text-lg font-bold text-slate-800">
+                <h3 className="text-lg font-semibold text-zinc-800">
                   {t('hr:workUnits.noWorkUnitsAssigned')}
                 </h3>
-                <p className="text-slate-500 max-w-md mt-1">
+                <p className="text-zinc-500 max-w-md mt-1">
                   {t('hr:workUnits.noWorkUnitsAssignedDescription')}
                 </p>
               </>
@@ -331,18 +331,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       {/* Create Modal */}
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-800">{t('hr:workUnits.newWorkUnit')}</h3>
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workUnits.newWorkUnit')}</h3>
             <button
               onClick={() => setIsCreateModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-zinc-400 hover:text-zinc-600"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
           <form onSubmit={handleCreate} className="p-6 space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                 {t('hr:workUnits.unitName')}
               </label>
               <input
@@ -350,9 +350,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
-                  if (errors.name) setErrors({ ...errors, name: '' });
+                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                 }}
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-semibold text-slate-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 required
               />
               {errors.name && (
@@ -366,7 +366,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 value={selectedManagerIds}
                 onChange={(val) => {
                   setSelectedManagerIds(val as string[]);
-                  if (errors.managers) setErrors({ ...errors, managers: '' });
+                  if (errors.managers) setErrors((prev) => ({ ...prev, managers: '' }));
                 }}
                 isMulti={true}
                 searchable={true}
@@ -378,27 +378,27 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               )}
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                 {t('hr:workUnits.description')}
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-25"
+                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
               />
             </div>
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={selectedManagerIds.length === 0}
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
                 {t('hr:workUnits.createUnit')}
               </button>
@@ -410,18 +410,20 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       {/* Edit Modal */}
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-800">{t('hr:workUnits.editWorkUnit')}</h3>
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-zinc-800">
+              {t('hr:workUnits.editWorkUnit')}
+            </h3>
             <button
               onClick={() => setIsEditModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-zinc-400 hover:text-zinc-600"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
           <form onSubmit={handleUpdate} className="p-6 space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                 {t('hr:workUnits.unitName')}
               </label>
               <input
@@ -429,9 +431,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
-                  if (errors.name) setErrors({ ...errors, name: '' });
+                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                 }}
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-semibold text-slate-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 required
               />
               {errors.name && (
@@ -445,7 +447,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 value={selectedManagerIds}
                 onChange={(val) => {
                   setSelectedManagerIds(val as string[]);
-                  if (errors.managers) setErrors({ ...errors, managers: '' });
+                  if (errors.managers) setErrors((prev) => ({ ...prev, managers: '' }));
                 }}
                 isMulti={true}
                 searchable={true}
@@ -457,26 +459,26 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               )}
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                 {t('hr:workUnits.description')}
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-25"
+                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
               />
             </div>
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
               >
                 {t('hr:workUnits.saveChanges')}
               </button>
@@ -491,30 +493,30 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         onClose={() => setIsAssignmentModalOpen(false)}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
             <div>
-              <h3 className="text-lg font-bold text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('hr:workUnits.manageMembers')}
               </h3>
-              <p className="text-sm text-slate-500 font-medium">
+              <p className="text-sm text-zinc-500 font-medium">
                 {t('hr:workUnits.addRemoveUsers', { name: targetUnit?.name })}
               </p>
             </div>
             <button
               onClick={() => setIsAssignmentModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-zinc-400 hover:text-zinc-600"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
 
-          <div className="p-4 border-b border-slate-100 shrink-0">
+          <div className="p-4 border-b border-zinc-100 shrink-0">
             <input
               type="text"
               placeholder={t('hr:workUnits.searchUsers')}
               value={assignmentSearch}
               onChange={(e) => setAssignmentSearch(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+              className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
             />
           </div>
 
@@ -530,8 +532,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                     key={user.id}
                     className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                       assignedUserIds.includes(user.id)
-                        ? 'bg-slate-50 border-slate-300 shadow-sm'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
+                        ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                        : 'bg-white border-zinc-200 hover:border-zinc-300'
                     }`}
                   >
                     <Checkbox
@@ -539,22 +541,22 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       onChange={() => toggleUserAssignment(user.id)}
                     />
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">
+                      <div className="size-8 rounded-full bg-zinc-100 text-praetor flex items-center justify-center text-xs font-bold">
                         {user.avatarInitials}
                       </div>
                       <div>
                         <p
-                          className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-praetor' : 'text-slate-700'}`}
+                          className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-praetor' : 'text-zinc-700'}`}
                         >
                           {user.name}
                         </p>
-                        <p className="text-xs text-slate-500">{user.role}</p>
+                        <p className="text-xs text-zinc-500">{user.role}</p>
                       </div>
                     </div>
                   </label>
                 ))}
                 {filteredUsersForAssignment.length === 0 && (
-                  <p className="col-span-full text-center text-slate-400 py-8">
+                  <p className="col-span-full text-center text-zinc-400 py-8">
                     {t('hr:workUnits.noUsersFound')}
                   </p>
                 )}
@@ -562,17 +564,17 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             )}
           </div>
 
-          <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+          <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
             <button
               onClick={() => setIsAssignmentModalOpen(false)}
-              className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+              className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
               onClick={saveAssignments}
               disabled={isLoadingAssignments}
-              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50"
+              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50"
             >
               {t('hr:workUnits.saveAssignments')}
             </button>
@@ -587,21 +589,21 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('hr:workUnits.deleteWorkUnit')}
               </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('hr:workUnits.deleteConfirmMessage', { name: targetUnit?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>

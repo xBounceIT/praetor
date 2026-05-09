@@ -44,7 +44,7 @@ import type {
   User,
 } from '../../types';
 
-// Tests intentionally pass values that violate the static types — the normalizers
+// Tests intentionally pass values that violate the static types - the normalizers
 // exist precisely to harden the boundary against backends that send strings, nulls,
 // or missing keys. `Loose<T>` lets each test express "I don't care what the type
 // system thinks here, the runtime behavior is what's under test".

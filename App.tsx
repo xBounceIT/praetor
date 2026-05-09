@@ -246,13 +246,13 @@ const TrackerView: React.FC<{
         id: 'client',
         header: t('entry.client'),
         accessorKey: 'clientName',
-        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.clientName}</span>,
+        cell: ({ row }) => <span className="font-semibold text-zinc-800">{row.clientName}</span>,
       },
       {
         id: 'project',
         header: t('entry.project'),
         accessorKey: 'projectName',
-        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.projectName}</span>,
+        cell: ({ row }) => <span className="font-semibold text-zinc-800">{row.projectName}</span>,
       },
       {
         id: 'task',
@@ -260,10 +260,10 @@ const TrackerView: React.FC<{
         accessorKey: 'task',
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800">{row.task}</span>
+            <span className="font-semibold text-zinc-800">{row.task}</span>
             {row.isPlaceholder && (
               <Tooltip label={t('entry.recurringTask')}>
-                {() => <i className="fa-solid fa-repeat text-[10px] text-indigo-400" />}
+                {() => <i className="fa-solid fa-repeat text-[10px] text-praetor/70" />}
               </Tooltip>
             )}
           </div>
@@ -282,7 +282,7 @@ const TrackerView: React.FC<{
               )}
             />
           ) : (
-            <span className="text-slate-300 text-xs">-</span>
+            <span className="text-zinc-300 text-xs">-</span>
           ),
       },
       {
@@ -292,9 +292,9 @@ const TrackerView: React.FC<{
         className: 'whitespace-normal',
         cell: ({ row }) =>
           row.notes ? (
-            <div className="text-slate-500 text-xs italic leading-relaxed">{row.notes}</div>
+            <div className="text-zinc-500 text-xs italic leading-relaxed">{row.notes}</div>
           ) : (
-            <span className="text-slate-300 text-xs">-</span>
+            <span className="text-zinc-300 text-xs">-</span>
           ),
       },
       {
@@ -303,7 +303,7 @@ const TrackerView: React.FC<{
         accessorKey: 'duration',
         align: 'right',
         cell: ({ row }) => (
-          <span className="font-black text-slate-900">
+          <span className="font-black text-zinc-900">
             {row.isPlaceholder && row.duration === 0 ? '--' : row.duration.toFixed(2)}
           </span>
         ),
@@ -320,7 +320,7 @@ const TrackerView: React.FC<{
               e.stopPropagation();
               handleDeleteClick(row);
             }}
-            className="text-slate-200 hover:text-red-500 transition-colors p-1"
+            className="text-zinc-200 hover:text-red-500 transition-colors p-1"
           >
             <i className="fa-solid fa-trash-can text-xs" />
           </button>
@@ -334,7 +334,7 @@ const TrackerView: React.FC<{
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {/* Top Middle Toggle */}
       <div className="flex justify-center">
-        <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-60">
+        <div className="relative grid grid-cols-2 bg-zinc-200/50 p-1 rounded-full w-full max-w-60">
           <div
             className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
               trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
@@ -342,13 +342,13 @@ const TrackerView: React.FC<{
           ></div>
           <button
             onClick={() => setTrackerMode('daily')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
           >
             {t('tracker.mode.daily')}
           </button>
           <button
             onClick={() => setTrackerMode('weekly')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
           >
             {t('tracker.mode.weekly')}
           </button>
@@ -377,18 +377,18 @@ const TrackerView: React.FC<{
           {/* Manager Selection Header */}
           {availableUsers.length > 1 && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="bg-white rounded-3xl shadow-sm border border-zinc-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
+                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-100 text-amber-600'}`}
                   >
                     {viewingUser?.avatarInitials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                       {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
                     </p>
-                    <p className="text-sm font-bold text-slate-800 truncate">{viewingUser?.name}</p>
+                    <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
                 <div className="w-full sm:w-56 shrink-0">
@@ -447,7 +447,7 @@ const TrackerView: React.FC<{
               headerExtras={
                 selectedDate ? (
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">
                       {t('tracker.dayTotal')}
                     </p>
                     <p
@@ -461,11 +461,11 @@ const TrackerView: React.FC<{
               data={filteredEntries}
               columns={activityColumns}
               defaultRowsPerPage={10}
-              rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
+              rowClassName={(row) => (row.isPlaceholder ? 'bg-praetor/5 italic' : '')}
               emptyState={
                 <div className="px-6 py-20 text-center">
-                  <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
-                  <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+                  <i className="fa-solid fa-calendar-day text-4xl text-zinc-100 mb-4 block" />
+                  <p className="text-zinc-400 font-medium text-sm">{t('tracker.noEntries')}</p>
                 </div>
               }
             />
@@ -475,46 +475,46 @@ const TrackerView: React.FC<{
 
       {/* Recurring Delete Modal */}
       {pendingDeleteEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <div className="p-6 border-b border-zinc-100">
+              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
                 <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
                 {t('entry.stopRecurringTask')}
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-zinc-500 mt-1">
                 {t('entry.howHandleEntries')}{' '}
-                <strong className="text-slate-800">{pendingDeleteEntry.task}</strong>?
+                <strong className="text-zinc-800">{pendingDeleteEntry.task}</strong>?
               </p>
             </div>
 
             <div className="p-4 space-y-3">
               <button
                 onClick={() => handleRecurringDelete('stop')}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-indigo-700">
+                  <span className="font-bold text-zinc-800 group-hover:text-praetor">
                     {t('recurring.stopOnly')}
                   </span>
-                  <i className="fa-solid fa-pause text-slate-300 group-hover:text-indigo-500"></i>
+                  <i className="fa-solid fa-pause text-zinc-300 group-hover:text-praetor"></i>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-zinc-500 leading-relaxed">
                   {t('recurring.stopOnlyDesc')}
                 </p>
               </button>
 
               <button
                 onClick={() => handleRecurringDelete('delete_future')}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-red-700">
+                  <span className="font-bold text-zinc-800 group-hover:text-red-700">
                     {t('recurring.deleteFuture')}
                   </span>
-                  <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
+                  <i className="fa-solid fa-forward text-zinc-300 group-hover:text-red-500"></i>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-zinc-500 leading-relaxed">
                   {t('recurring.deleteFutureDesc')}
                 </p>
               </button>
@@ -533,10 +533,10 @@ const TrackerView: React.FC<{
               </button>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
+            <div className="p-4 bg-zinc-50 border-t border-zinc-100 text-right">
               <button
                 onClick={() => setPendingDeleteEntry(null)}
-                className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
               >
                 {t('entry.cancel')}
               </button>
@@ -1927,10 +1927,7 @@ const App: React.FC = () => {
   const handleUpdateUserSettings = async (updates: Partial<Settings>) => {
     try {
       const updated = await api.settings.update(updates);
-      setUserSettings({
-        ...userSettings,
-        ...updated,
-      });
+      setUserSettings((prev) => ({ ...prev, ...updated }));
     } catch (err) {
       console.error('Failed to update user settings:', err);
       alert('Failed to update settings');
@@ -2038,10 +2035,10 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
         <div className="text-center">
           <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
-          <p className="text-slate-600 font-medium">Loading...</p>
+          <p className="text-zinc-600 font-medium">Loading…</p>
         </div>
       </div>
     );
@@ -2549,7 +2546,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
-                      <p className="text-slate-700 font-medium">
+                      <p className="text-zinc-700 font-medium">
                         AI reporting settings failed to load.
                       </p>
                     </div>
@@ -2558,7 +2555,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                      <p className="text-slate-600 font-medium">Loading...</p>
+                      <p className="text-zinc-600 font-medium">Loading…</p>
                     </div>
                   </div>
                 )

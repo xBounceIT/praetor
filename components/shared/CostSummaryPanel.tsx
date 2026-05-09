@@ -50,10 +50,10 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
   margin,
 }) => {
   return (
-    <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+    <div className="bg-zinc-50 rounded-xl p-4 space-y-2">
       {globalDiscount && (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-slate-500 shrink-0">{globalDiscount.label}</span>
+          <span className="text-xs font-bold text-zinc-500 shrink-0">{globalDiscount.label}</span>
           <div className="flex items-center gap-1">
             <ValidatedNumberInput
               step="0.01"
@@ -63,7 +63,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
               formatDecimals={2}
               onValueChange={globalDiscount.onChange}
               disabled={globalDiscount.disabled}
-              className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-20 text-sm px-2 py-1.5 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <CustomSelect
               options={[
@@ -73,21 +73,21 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
               value={globalDiscount.type}
               onChange={(v) => globalDiscount.onTypeChange(v as DiscountType)}
               disabled={globalDiscount.disabled}
-              buttonClassName="h-[34px] min-w-[52px] text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold"
+              buttonClassName="h-[34px] min-w-[52px] text-sm px-2 py-1.5 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold"
             />
           </div>
         </div>
       )}
-      <div className={globalDiscount ? 'border-t border-slate-200 pt-2 space-y-2' : 'space-y-2'}>
+      <div className={globalDiscount ? 'border-t border-zinc-200 pt-2 space-y-2' : 'space-y-2'}>
         <div className="flex justify-between">
-          <span className="text-sm font-bold text-slate-500">{subtotalLabel}</span>
-          <span className="text-sm font-black text-slate-800">
+          <span className="text-sm font-bold text-zinc-500">{subtotalLabel}</span>
+          <span className="text-sm font-black text-zinc-800">
             {subtotal.toFixed(2)} {currency}
           </span>
         </div>
         {discountRow && discountRow.amount > 0 && (
           <div className="flex justify-between">
-            <span className="text-sm font-bold text-slate-500">{discountRow.label}</span>
+            <span className="text-sm font-bold text-zinc-500">{discountRow.label}</span>
             <span className="text-sm font-black text-amber-600">
               -{discountRow.amount.toFixed(2)} {currency}
             </span>
@@ -101,31 +101,31 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
             </span>
           </div>
         )}
-        <div className="flex justify-between border-t border-slate-200 pt-2">
-          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
+        <div className="flex justify-between border-t border-zinc-200 pt-2">
+          <span className="text-sm font-black text-zinc-700 uppercase tracking-widest">
             {totalLabel}
           </span>
           <span className="text-lg font-black text-praetor">
-            {total.toFixed(2)} <span className="text-sm text-slate-400 font-bold">{currency}</span>
+            {total.toFixed(2)} <span className="text-sm text-zinc-400 font-bold">{currency}</span>
           </span>
         </div>
         {amountPaid && (
-          <div className="flex justify-between items-center border-t border-slate-200 pt-2">
-            <span className="text-sm font-bold text-slate-500">{amountPaid.label}</span>
+          <div className="flex justify-between items-center border-t border-zinc-200 pt-2">
+            <span className="text-sm font-bold text-zinc-500">{amountPaid.label}</span>
             <div className="flex items-center gap-2">
               <ValidatedNumberInput
                 value={amountPaid.value}
                 formatDecimals={2}
                 onValueChange={amountPaid.onChange}
-                className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
+                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
               />
-              <span className="text-xs font-bold text-slate-400">{currency}</span>
+              <span className="text-xs font-bold text-zinc-400">{currency}</span>
             </div>
           </div>
         )}
         {balanceDue && (
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-slate-500">{balanceDue.label}</span>
+            <span className="font-bold text-zinc-500">{balanceDue.label}</span>
             <span className={`font-black ${balanceDue.colorClass || 'text-red-500'}`}>
               {balanceDue.amount.toFixed(2)} {currency}
             </span>

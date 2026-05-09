@@ -156,7 +156,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(new Set());
   const [prevActiveModuleId, setPrevActiveModuleId] = useState<string | null>(null);
 
-  // Sync expanded modules when active module changes (navigation) — close old active
+  // Sync expanded modules when active module changes (navigation) - close old active
   if (activeModule.id !== prevActiveModuleId) {
     const oldActiveId = prevActiveModuleId;
     setPrevActiveModuleId(activeModule.id);
@@ -535,7 +535,7 @@ const Layout: React.FC<LayoutProps> = ({
                     height="20"
                     viewBox="0 0 24 24"
                     fill="currentColor"
-                    className="w-5 h-5"
+                    className="size-5"
                     role="img"
                     aria-label="AI sparkle"
                   >
@@ -563,7 +563,7 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   return (
-    <div className="h-screen flex flex-col md:flex-row md:relative bg-slate-50 overflow-hidden">
+    <div className="h-screen flex flex-col md:flex-row md:relative bg-zinc-50 overflow-hidden">
       <div
         aria-hidden="true"
         className={`hidden md:block shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:w-20' : 'md:w-64'}`}
@@ -584,11 +584,11 @@ const Layout: React.FC<LayoutProps> = ({
           className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}
         >
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
+            <div className="size-7 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-zinc-900/20">
               <i className="fa-solid fa-clock text-praetor text-base"></i>
             </div>
             {!isCollapsed && (
-              <h1 className="text-xl font-black italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
+              <h1 className="text-xl font-semibold italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
                 PRAETOR
               </h1>
             )}
@@ -603,7 +603,7 @@ const Layout: React.FC<LayoutProps> = ({
 
           <button
             onClick={toggleSidebar}
-            className={`hidden md:flex absolute -right-3 top-12 w-6 h-6 bg-praetor border border-white/20 rounded-full items-center justify-center text-white/70 hover:text-white hover:bg-praetor transition-all z-40
+            className={`hidden md:flex absolute -right-3 top-12 size-6 bg-praetor border border-white/20 rounded-full items-center justify-center text-white/70 hover:text-white hover:bg-praetor transition-all z-40
               ${isCollapsedPinned ? 'rotate-180' : ''}`}
           >
             <i className="fa-solid fa-chevron-left text-[10px]"></i>
@@ -688,8 +688,8 @@ const Layout: React.FC<LayoutProps> = ({
       </nav>
 
       <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-slate-800 capitalize flex items-center gap-3">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-200 px-8 py-4 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-zinc-800 capitalize flex items-center gap-3">
             <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
             {isNotFound
               ? t('notFound')
@@ -721,7 +721,7 @@ const Layout: React.FC<LayoutProps> = ({
                                 )}
           </h2>
           <div className="flex items-center gap-6">
-            <span className="text-sm text-slate-400 font-medium hidden lg:inline">
+            <span className="text-sm text-zinc-400 font-medium hidden lg:inline">
               {new Date().toLocaleDateString(i18n.language, {
                 weekday: 'long',
                 month: 'long',
@@ -749,29 +749,27 @@ const Layout: React.FC<LayoutProps> = ({
                   setIsProfileMenuOpen(!isProfileMenuOpen);
                   setIsRoleSubmenuOpen(false);
                 }}
-                className="group flex items-center gap-3 p-1 pr-3 rounded-full bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-white transition-all focus:outline-none"
+                className="group flex items-center gap-3 p-1 pr-3 rounded-full bg-zinc-50 border border-zinc-200 hover:border-zinc-300 hover:bg-white transition-all focus:outline-none"
               >
-                <div className="w-8 h-8 rounded-full bg-praetor text-white flex items-center justify-center font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
+                <div className="size-8 rounded-full bg-praetor text-white flex items-center justify-center font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
                   {currentUser.avatarInitials}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">
+                  <p className="text-[10px] font-black text-zinc-400 uppercase leading-none mb-0.5">
                     {roleLabel}
                   </p>
-                  <p className="text-xs font-bold text-slate-700 leading-none">
-                    {currentUser.name}
-                  </p>
+                  <p className="text-xs font-bold text-zinc-700 leading-none">{currentUser.name}</p>
                 </div>
                 <i
-                  className={`fa-solid fa-chevron-down text-[10px] text-slate-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}
+                  className={`fa-solid fa-chevron-down text-[10px] text-zinc-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}
                 ></i>
               </button>
 
               {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <div className="px-4 py-3 border-b border-slate-100 mb-1 sm:hidden">
-                    <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">{roleLabel}</p>
+                <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                  <div className="px-4 py-3 border-b border-zinc-100 mb-1 sm:hidden">
+                    <p className="text-sm font-bold text-zinc-800">{currentUser.name}</p>
+                    <p className="text-xs text-zinc-500 capitalize">{roleLabel}</p>
                   </div>
 
                   {!!currentUser.availableRoles && currentUser.availableRoles.length > 1 && (
@@ -789,14 +787,14 @@ const Layout: React.FC<LayoutProps> = ({
                       }}
                     >
                       <button
-                        className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${isRoleSubmenuOpen ? 'bg-slate-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                        className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${isRoleSubmenuOpen ? 'bg-zinc-50' : 'text-zinc-700 hover:bg-zinc-50'}`}
                       >
                         <i className="fa-solid fa-id-badge w-4 text-center"></i>
                         <span className="flex-1">{t('menu.switchRole')}</span>
-                        <i className="fa-solid fa-chevron-left text-[10px] text-slate-400"></i>
+                        <i className="fa-solid fa-chevron-left text-[10px] text-zinc-400"></i>
                       </button>
                       {isRoleSubmenuOpen && (
-                        <div className="absolute right-full top-0 mr-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                        <div className="absolute right-full top-0 mr-2 w-48 bg-white rounded-2xl shadow-xl border border-zinc-200 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                           {currentUser.availableRoles.map((r) => {
                             const isActive = r.id === currentUser.role;
                             return (
@@ -810,8 +808,8 @@ const Layout: React.FC<LayoutProps> = ({
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-colors ${
                                   isActive
-                                    ? 'bg-slate-100 text-praetor'
-                                    : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
+                                    ? 'bg-zinc-100 text-praetor'
+                                    : 'text-zinc-700 hover:bg-zinc-50 cursor-pointer'
                                 }`}
                                 disabled={isActive}
                               >
@@ -832,13 +830,13 @@ const Layout: React.FC<LayoutProps> = ({
                       setIsProfileMenuOpen(false);
                       onViewChange('settings');
                     }}
-                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
+                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'}`}
                   >
                     <i className="fa-solid fa-gear w-4 text-center"></i>
                     {t('menu.settings')}
                   </button>
 
-                  <div className="border-t border-slate-100 mt-1 pt-1">
+                  <div className="border-t border-zinc-100 mt-1 pt-1">
                     <button
                       onClick={onLogout}
                       className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"

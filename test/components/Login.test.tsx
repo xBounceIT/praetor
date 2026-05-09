@@ -126,7 +126,7 @@ describe('<Login />', () => {
     const passwordInput = screen.getByPlaceholderText('auth:login.password') as HTMLInputElement;
     expect(passwordInput.type).toBe('password');
 
-    // The toggle button is the only button without text — sibling of the password input.
+    // The toggle button is the only button without text - sibling of the password input.
     const toggleButtons = screen.getAllByRole('button');
     const toggle = toggleButtons.find((btn) => btn.querySelector('i.fa-eye, i.fa-eye-slash'));
     if (!toggle) throw new Error('toggle button not found');

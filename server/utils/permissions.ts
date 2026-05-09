@@ -206,7 +206,7 @@ export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
-  // Auth hot path — parallelize the role and permissions lookups.
+  // Auth hot path - parallelize the role and permissions lookups.
   const [role, rawExplicit] = await Promise.all([
     rolesRepo.findById(roleId),
     rolesRepo.listExplicitPermissions(roleId),

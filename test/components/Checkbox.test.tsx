@@ -64,14 +64,12 @@ describe('<Checkbox />', () => {
   test('size sm uses smaller dimension classes', () => {
     const { container } = render(<Checkbox checked={false} onChange={() => {}} size="sm" />);
     const box = getBox(container);
-    expect(box.className).toContain('w-3.5');
-    expect(box.className).toContain('h-3.5');
+    expect(box.className).toContain('size-3.5');
   });
 
   test('size md (default) uses regular dimension classes', () => {
     const { container } = render(<Checkbox checked={false} onChange={() => {}} />);
     const box = getBox(container);
-    expect(box.className).toContain('w-5');
-    expect(box.className).toContain('h-5');
+    expect(box.className).toContain('size-5');
   });
 });

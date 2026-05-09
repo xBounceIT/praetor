@@ -11,7 +11,7 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// findById/listAll/listManagedBy use executeRows with raw SQL — rows come back with
+// findById/listAll/listManagedBy use executeRows with raw SQL - rows come back with
 // the camelCase keys that the SELECT aliases produce ("isDisabled", "userCount", etc.).
 // Other functions use the Drizzle query builder, which returns rows in `rowMode: 'array'`
 // (positional arrays). Fixtures below are tagged with the path they exercise.

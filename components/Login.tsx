@@ -99,10 +99,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
 
   return (
     <div className="min-h-screen bg-praetor flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl border border-zinc-200 p-6 w-full max-w-md">
         <div className="text-center mb-6">
           <img src="/praetor-logo.png" alt="Praetor Logo" className="h-32 mx-auto object-contain" />
-          <p className="text-slate-500 text-sm">{t('auth:login.title')}</p>
+          <p className="text-zinc-500 text-sm">{t('auth:login.title')}</p>
         </div>
 
         {logoutReason === 'inactivity' && (
@@ -132,7 +132,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 type="button"
                 onClick={() => handleSsoLogin(provider)}
                 disabled={isLoading}
-                className="w-full py-2.5 text-sm bg-white text-slate-700 font-bold rounded-xl border border-slate-200 hover:border-praetor hover:text-praetor transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2.5 text-sm bg-white text-zinc-700 font-bold rounded-xl border border-zinc-200 hover:border-praetor hover:text-praetor transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i
                   className={`fa-solid ${provider.protocol === 'saml' ? 'fa-building-shield' : 'fa-key'}`}
@@ -140,17 +140,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 {provider.name}
               </button>
             ))}
-            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-slate-300">
-              <div className="h-px flex-1 bg-slate-100"></div>
+            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+              <div className="h-px flex-1 bg-zinc-100"></div>
               <span>{t('auth:login.orPassword', 'or use password')}</span>
-              <div className="h-px flex-1 bg-slate-100"></div>
+              <div className="h-px flex-1 bg-zinc-100"></div>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
               {t('common:labels.username')}
             </label>
             <input
@@ -158,9 +158,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
               value={username}
               onChange={(e) => {
                 setUsername(e.target.value);
-                if (fieldErrors.username) setFieldErrors({ ...fieldErrors, username: '' });
+                if (fieldErrors.username) setFieldErrors((prev) => ({ ...prev, username: '' }));
               }}
-              className={`w-full px-3 py-2 text-sm bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-slate-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+              className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-zinc-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
               placeholder={t('auth:login.username')}
               disabled={isLoading}
             />
@@ -170,7 +170,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
               {t('common:labels.password')}
             </label>
             <div className="relative">
@@ -179,16 +179,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: '' });
+                  if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
                 }}
-                className={`w-full px-3 py-2 text-sm bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all pr-9 font-semibold text-slate-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all pr-9 font-semibold text-zinc-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 placeholder={t('auth:login.password')}
                 disabled={isLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
               >
                 <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
               </button>
@@ -208,7 +208,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 text-sm bg-praetor text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md shadow-slate-200 flex items-center justify-center gap-2 active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 text-sm bg-praetor text-white font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-md shadow-zinc-200 flex items-center justify-center gap-2 active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>

@@ -387,7 +387,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Backfill task_id only when missing — entries created before the FK column existed (or
+      // Backfill task_id only when missing - entries created before the FK column existed (or
       // before the matching task row existed) carry task_id NULL. Don't touch the FK on rows that
       // already have it set.
       let backfilledTaskId: string | undefined;

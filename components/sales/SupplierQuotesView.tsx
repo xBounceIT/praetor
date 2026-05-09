@@ -144,9 +144,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const totalsBreakdown = calculateTotals(formData.items || []);
 
   const inputClassName =
-    'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
+    'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
   const itemInputClassName =
-    'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
+    'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
@@ -288,7 +288,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       unitType: newType,
       unitPrice: adjustedPrice,
     };
-    setFormData({ ...formData, items: newItems });
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   const columns = useMemo<Column<SupplierQuote>[]>(
@@ -298,7 +298,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorKey: 'id',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.insertDate'),
@@ -306,9 +306,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorFn: (row) => row.createdAt ?? 0,
         className: 'whitespace-nowrap',
         cell: ({ row }) => {
-          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
           return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt)}
             </span>
           );
@@ -325,7 +325,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
-            <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+            <div className={history ? 'font-bold text-zinc-400' : 'font-bold text-zinc-800'}>
               {row.supplierName}
             </div>
           );
@@ -343,7 +343,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           const { total } = calculateTotals(row.items);
           return (
             <span
-              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
             >
               {total.toFixed(2)} {currency}
             </span>
@@ -359,7 +359,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           const history = isHistoryRow(row);
           return (
             <span
-              className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
+              className={`text-sm font-semibold ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
             >
               {row.paymentTerms === 'immediate'
                 ? t('sales:clientQuotes.immediatePayment')
@@ -373,12 +373,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorKey: 'expirationDate',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
-        filterFormat: (value) => (value ? formatDateOnlyForLocale(String(value)) : '—'),
+        filterFormat: (value) => (value ? formatDateOnlyForLocale(String(value)) : '-'),
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
-            <div className={`text-sm ${history ? 'text-slate-400' : 'text-slate-600'}`}>
-              {row.expirationDate ? formatDateOnlyForLocale(row.expirationDate) : '—'}
+            <div className={`text-sm ${history ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              {row.expirationDate ? formatDateOnlyForLocale(row.expirationDate) : '-'}
             </div>
           );
         },
@@ -439,7 +439,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         event.stopPropagation();
                         onViewOrders(row.id);
                       }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -455,7 +455,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       openEditModal(row);
                     }}
                     disabled={isEditDisabled}
-                    className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                    className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                   >
                     <i
                       className={`fa-solid ${isRowReadOnly && !hasOrder ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -473,7 +473,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         event.stopPropagation();
                         onUpdateQuote(row.id, { status: 'sent' });
                       }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                      className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -493,7 +493,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           event.stopPropagation();
                           onUpdateQuote(row.id, { status: 'accepted' });
                         }}
-                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                        className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
@@ -510,7 +510,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           event.stopPropagation();
                           onUpdateQuote(row.id, { status: 'denied' });
                         }}
-                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
@@ -528,7 +528,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         onCreateOrder(row);
                       }}
                       disabled={isCreateOrderDisabled}
-                      className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                      className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                     >
                       <i className="fa-solid fa-cart-shopping"></i>
                     </button>
@@ -544,7 +544,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         setQuoteToDelete(row);
                         setIsDeleteConfirmOpen(true);
                       }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                      className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
@@ -569,7 +569,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         onUpdateQuote(row.id, { status: 'draft' });
                       }}
                       disabled={hasOrder}
-                      className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                      className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                     >
                       <i className="fa-solid fa-rotate-left"></i>
                     </button>
@@ -641,9 +641,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="flex items-start gap-4 max-w-full">
           <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+              <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+                <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                   <i
                     className={`fa-solid ${
                       isReadOnly ? 'fa-eye' : editingQuote ? 'fa-pen-to-square' : 'fa-plus'
@@ -658,7 +658,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               </h3>
               <button
                 onClick={closeModal}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -691,13 +691,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 </div>
               )}
               {editingQuote?.linkedOrderId && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
                       <i className="fa-solid fa-link"></i>
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
+                      <div className="text-sm font-bold text-zinc-900">
                         {t('sales:supplierQuotes.linkedOrderTitle', {
                           defaultValue: 'Linked Order',
                         })}
@@ -708,7 +708,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           defaultValue: 'Order #{{number}}',
                         })}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-zinc-400 mt-0.5">
                         {t('sales:supplierQuotes.orderDetailsReadOnly', {
                           defaultValue: '(Quote details are read-only)',
                         })}
@@ -719,7 +719,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onViewOrders(editingQuote.id)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
                     >
                       {t('sales:supplierQuotes.viewOrder', { defaultValue: 'View Order' })}
                     </button>
@@ -728,8 +728,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
 
               <div className="space-y-2">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.supplierInformation', {
                     defaultValue: 'Supplier Information',
                   })}
@@ -743,7 +743,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
                     </label>
                     <CustomSelect
@@ -765,7 +765,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                     </label>
                     <input
@@ -792,7 +792,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}
                     </label>
                     <CustomSelect
@@ -809,7 +809,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.expirationDate', {
                         defaultValue: 'Expiration Date',
                       })}
@@ -829,8 +829,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
                     <FieldTooltip
                       description={t('sales:fieldInfo.supplierItems', {
@@ -844,7 +844,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <button
                       type="button"
                       onClick={addItem}
-                      className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
+                      className="text-xs font-bold text-praetor hover:text-zinc-700 flex items-center gap-1"
                     >
                       <i className="fa-solid fa-plus"></i>
                       {t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
@@ -858,17 +858,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 {formData.items && formData.items.length > 0 && (
                   <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                     <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                      <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      <div className="col-span-7 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                         {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                       </div>
-                      <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                         {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                       </div>
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                         {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                       </div>
                     </div>
-                    <div className="w-24 shrink-0 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">
+                    <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
                       {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                     </div>
                     <div className="w-10 shrink-0" />
@@ -886,12 +886,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       return (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                          className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-3"
                         >
                           <div className="lg:hidden flex items-start gap-3">
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
-                                <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                   {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                                 </div>
                                 <input
@@ -908,7 +908,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 />
                               </div>
                               <div>
-                                <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                   {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -920,7 +920,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     disabled={isReadOnly}
                                     className={`${itemInputClassName} text-center flex-1`}
                                   />
-                                  <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /
                                   </span>
                                   <UnitTypeSelector
@@ -938,14 +938,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               type="button"
                               onClick={() => removeItem(index)}
                               disabled={isReadOnly}
-                              className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="mt-5 size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
                           </div>
                           <div className="grid grid-cols-2 gap-3 lg:hidden">
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('sales:supplierQuotes.unitPrice', {
                                   defaultValue: 'Unit Price',
                                 })}
@@ -958,18 +958,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     updateItem(index, 'unitPrice', parseNumberInputValue(value))
                                   }
                                   disabled={isReadOnly}
-                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                   {currency}
                                 </span>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                                 {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                               </div>
-                              <div className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                              <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                 {lineTotal.toFixed(2)} {currency}
                               </div>
                             </div>
@@ -999,7 +999,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   disabled={isReadOnly}
                                   className={`${itemInputClassName} text-center`}
                                 />
-                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                   /
                                 </span>
                                 <UnitTypeSelector
@@ -1021,13 +1021,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   disabled={isReadOnly}
                                   className={`${itemInputClassName} flex-1`}
                                 />
-                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                   {currency}
                                 </span>
                               </div>
                             </div>
                             <div className="w-24 shrink-0 flex items-center justify-end">
-                              <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+                              <span className="text-sm font-bold text-zinc-800 whitespace-nowrap">
                                 {lineTotal.toFixed(2)} {currency}
                               </span>
                             </div>
@@ -1035,7 +1035,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               type="button"
                               onClick={() => removeItem(index)}
                               disabled={isReadOnly}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="size-10 flex items-center justify-center text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <i className="fa-solid fa-trash-can"></i>
                             </button>
@@ -1057,7 +1057,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
+                  <div className="text-center py-8 text-zinc-400 text-sm">
                     {t('sales:supplierQuotes.noItemsAdded', {
                       defaultValue: 'No items added yet',
                     })}
@@ -1074,8 +1074,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 />
               ) : (
                 !editingQuote && (
-                  <div className="border-t border-slate-100 pt-4">
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  <div className="border-t border-zinc-100 pt-4">
+                    <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
                       <i className="fa-solid fa-paperclip mr-2"></i>
                       {t('sales:supplierQuotes.attachments.saveQuoteFirst', {
                         defaultValue: 'Save the quote first to add attachments.',
@@ -1085,10 +1085,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 )
               )}
 
-              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
                 <div className="w-full space-y-4 md:w-2/3">
-                  <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                    <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
+                    <span className="size-1.5 rounded-full bg-praetor"></span>
                     {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
                     <FieldTooltip
                       description={t('sales:fieldInfo.notes', {
@@ -1108,7 +1108,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, notes: event.target.value }))
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1127,14 +1127,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
+                  className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
                 >
                   {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
                 </button>
                 {!isReadOnly && (
                   <button
                     type="submit"
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
+                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700"
                   >
                     {editingQuote
                       ? t('common:buttons.update', { defaultValue: 'Update' })
@@ -1159,17 +1159,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
           </div>
-          <h3 className="text-lg font-black text-slate-800">
+          <h3 className="text-lg font-semibold text-zinc-800">
             {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
           </h3>
-          <p className="text-sm text-slate-500">{quoteToDelete?.id}</p>
+          <p className="text-sm text-zinc-500">{quoteToDelete?.id}</p>
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+              className="flex-1 rounded-xl py-3 font-bold text-zinc-500 hover:bg-zinc-50"
             >
               {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
             </button>
@@ -1191,10 +1191,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
             </h2>
-            <p className="text-slate-500 text-sm">
+            <p className="text-zinc-500 text-sm">
               {t('sales:supplierQuotes.subtitle', {
                 defaultValue: 'Quotes that can be converted into supplier orders.',
               })}
@@ -1202,7 +1202,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           </div>
           <button
             onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
           >
             <i className="fa-solid fa-plus"></i>
             {t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
@@ -1227,8 +1227,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           const canOpenModal = !history || row.status === 'accepted' || row.status === 'denied';
           const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
-            ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
-            : `hover:bg-slate-50/50 ${cursorClass}`;
+            ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
+            : `hover:bg-zinc-50/50 ${cursorClass}`;
         }}
         initialFilterState={tableInitialFilterState}
       />

@@ -29,6 +29,19 @@ const getSurname = (name: string): string => {
   return parts.length > 1 ? parts[parts.length - 1] : name;
 };
 
+interface EmptyStateProps {
+  title: string;
+  description: string;
+}
+
+const EmptyState: React.FC<EmptyStateProps> = ({ title, description }) => (
+  <div className="p-8 text-center">
+    <i className="fa-solid fa-users text-4xl mb-3 text-zinc-300"></i>
+    <p className="text-zinc-500 font-medium">{title}</p>
+    <p className="text-sm text-zinc-400 mt-1">{description}</p>
+  </div>
+);
+
 const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   users,
   clients,
@@ -167,10 +180,10 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       accessorKey: 'name',
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
+          <div className="size-9 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
             {row.avatarInitials}
           </div>
-          <span className="font-semibold text-slate-800">{row.name}</span>
+          <span className="font-semibold text-zinc-800">{row.name}</span>
         </div>
       ),
     },
@@ -199,7 +212,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             accessorKey: 'costPerHour' as keyof User,
             align: 'right' as const,
             cell: ({ value }: { value: unknown }) => (
-              <span className="font-medium text-slate-600">
+              <span className="font-medium text-zinc-600">
                 {currency}
                 {Number(value ?? 0).toFixed(2)}
               </span>
@@ -226,7 +239,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 {() => (
                   <button
                     onClick={() => setManagingEmployee(row)}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-link"></i>
                   </button>
@@ -238,7 +251,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               {() => (
                 <button
                   onClick={() => openEditModal(row)}
-                  className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
                 >
                   <i className="fa-solid fa-pen-to-square"></i>
                 </button>
@@ -251,7 +264,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                   {() => (
                     <button
                       onClick={() => confirmDelete(row)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-trash"></i>
                     </button>
@@ -261,7 +274,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             : canDeleteEmployees && (
                 <Tooltip label={t('internalEmployees.cannotDeleteAppUser')}>
                   {() => (
-                    <span className="p-2 text-slate-300 cursor-not-allowed">
+                    <span className="p-2 text-zinc-300 cursor-not-allowed">
                       <i className="fa-solid fa-lock"></i>
                     </span>
                   )}
@@ -274,23 +287,14 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     },
   ];
 
-  // Custom empty state component
-  const EmptyState = () => (
-    <div className="p-8 text-center">
-      <i className="fa-solid fa-users text-4xl mb-3 text-slate-300"></i>
-      <p className="text-slate-500 font-medium">{t('internalEmployees.noEmployees')}</p>
-      <p className="text-sm text-slate-400 mt-1">{t('internalEmployees.createFirst')}</p>
-    </div>
-  );
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                 <i className={`fa-solid ${editingEmployee ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingEmployee
@@ -299,7 +303,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -313,16 +317,16 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
+              <label className="text-xs font-bold text-zinc-500 ml-1">
                 {t('internalEmployees.name')} *
               </label>
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                 className={`w-full px-4 py-3 border ${
-                  errors.name ? 'border-red-300' : 'border-slate-200'
-                } rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50`}
+                  errors.name ? 'border-red-300' : 'border-zinc-200'
+                } rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-zinc-50/50`}
                 placeholder={t('internalEmployees.name')}
               />
               {errors.name && <p className="text-xs text-red-500 mt-1 ml-1">{errors.name}</p>}
@@ -330,11 +334,11 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
 
             {canViewCosts && (
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
+                <label className="text-xs font-bold text-zinc-500 ml-1">
                   {t('internalEmployees.costPerHour')}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-medium">
                     {currency}
                   </span>
                   <input
@@ -342,8 +346,10 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                     step="0.01"
                     min="0"
                     value={formData.costPerHour}
-                    onChange={(e) => setFormData({ ...formData, costPerHour: e.target.value })}
-                    className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, costPerHour: e.target.value }))
+                    }
+                    className="w-full pl-8 pr-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-zinc-50/50"
                     placeholder="0.00"
                     disabled={!canUpdateCosts}
                   />
@@ -355,7 +361,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -379,20 +385,20 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="size-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <i className="fa-solid fa-trash text-2xl text-red-600"></i>
             </div>
-            <h3 className="text-xl font-black text-slate-800 mb-2">
+            <h3 className="text-xl font-semibold text-zinc-800 mb-2">
               {t('internalEmployees.deleteEmployee')}
             </h3>
-            <p className="text-slate-500">
+            <p className="text-zinc-500">
               {t('internalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
             </p>
           </div>
-          <div className="flex border-t border-slate-100">
+          <div className="flex border-t border-zinc-100">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 px-6 py-4 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+              className="flex-1 px-6 py-4 text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
             >
               {t('common:buttons.cancel')}
             </button>
@@ -409,8 +415,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('internalEmployees.title')}</h2>
-          <p className="text-slate-500">{t('internalEmployees.subtitle')}</p>
+          <h2 className="text-2xl font-semibold text-zinc-800">{t('internalEmployees.title')}</h2>
+          <p className="text-zinc-500">{t('internalEmployees.subtitle')}</p>
         </div>
         {canCreateEmployees && (
           <button
@@ -428,7 +434,12 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         title={t('internalEmployees.allEmployees')}
         data={allEmployees}
         columns={columns}
-        emptyState={<EmptyState />}
+        emptyState={
+          <EmptyState
+            title={t('internalEmployees.noEmployees')}
+            description={t('internalEmployees.createFirst')}
+          />
+        }
       />
 
       <EmployeeAssignmentsModal

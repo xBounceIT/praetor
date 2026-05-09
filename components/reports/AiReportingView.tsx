@@ -504,7 +504,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
     const now = Date.now();
     const assistantMessageId = `tmp-asst-${now}`;
-    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking…' });
+    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking...' });
     const optimisticUser: ReportChatMessage = {
       id: `tmp-user-${now}`,
       sessionId: activeSessionId || 'tmp',
@@ -820,7 +820,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setEditingMessageId('');
     setEditingDraft('');
 
-    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking…' });
+    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking...' });
     const placeholderId = pairedAssistant?.id || `tmp-asst-edit-${Date.now()}`;
     activeAssistantMessageIdRef.current = placeholderId;
 
@@ -1230,13 +1230,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         <div className="flex items-start justify-between gap-4 mb-4 px-4 md:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <div className="min-w-0">
-              <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              <div className="text-xs font-black text-zinc-400 uppercase tracking-widest">
                 {t('aiReporting.session', { defaultValue: 'Session' })}
               </div>
               <div className="flex items-center gap-2 min-w-0">
-                <div className="text-base font-extrabold text-slate-900 truncate">
-                  {activeTitle}
-                </div>
+                <div className="text-base font-extrabold text-zinc-900 truncate">{activeTitle}</div>
                 <StatusBadge type="experimental" label="EXPERIMENTAL" className="shrink-0" />
               </div>
             </div>
@@ -1276,10 +1274,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 if (!activeSession) return;
                 confirmDeleteSession(activeSession);
               }}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+              className={`size-11 rounded-xl flex items-center justify-center transition-colors ${
                 canDeleteActive
-                  ? 'bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50'
-                  : 'bg-slate-100 border border-slate-200 text-slate-300 cursor-not-allowed'
+                  ? 'bg-white border border-zinc-200 text-red-600 hover:text-red-600 hover:bg-red-50'
+                  : 'bg-zinc-100 border border-zinc-200 text-zinc-300 cursor-not-allowed'
               }`}
             >
               <i className="fa-solid fa-trash text-sm" />
@@ -1291,8 +1289,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               disabled={isNewChatDisabled}
               className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
                 !isNewChatDisabled
-                  ? 'bg-praetor text-white shadow-xl shadow-slate-200 hover:bg-[var(--color-primary-hover)] active:scale-95'
-                  : 'bg-slate-100 border border-slate-200 text-slate-400 shadow-none cursor-not-allowed active:scale-100'
+                  ? 'bg-praetor text-white shadow-xl shadow-zinc-200 hover:bg-[var(--color-primary-hover)] active:scale-95'
+                  : 'bg-zinc-100 border border-zinc-200 text-zinc-400 shadow-none cursor-not-allowed active:scale-100'
               }`}
             >
               <i
@@ -1312,7 +1310,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         )}
 
         {!enableAiReporting && (
-          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mx-4 md:mx-6">
+          <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 mx-4 md:mx-6">
             {t('aiReporting.disabledByAdmin', {
               defaultValue: 'AI Reporting is disabled by administration.',
             })}
@@ -1320,7 +1318,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         )}
 
         {enableAiReporting && !canSend && (
-          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mx-4 md:mx-6">
+          <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 mx-4 md:mx-6">
             {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
           </div>
         )}
@@ -1340,8 +1338,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                     disabled={isLoadingOlderMessages || isLoadingMessages}
                     className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
                       isLoadingOlderMessages || isLoadingMessages
-                        ? 'cursor-not-allowed border-slate-200 text-slate-400 bg-slate-50'
-                        : 'border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50'
+                        ? 'cursor-not-allowed border-zinc-200 text-zinc-400 bg-zinc-50'
+                        : 'border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50'
                     }`}
                   >
                     {isLoadingOlderMessages && <i className="fa-solid fa-spinner fa-spin" />}
@@ -1353,18 +1351,18 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               )}
 
               {isLoadingMessages && (
-                <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
+                <div className="text-sm text-zinc-500">{t('aiReporting.thinking')}</div>
               )}
 
               {!isLoadingMessages && messages.length === 0 && (
                 <div className="min-h-[45vh] flex items-center justify-center px-4">
                   <div className="max-w-xl text-center">
-                    <div className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+                    <div className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">
                       {t('aiReporting.emptyPlaceholderTitle', {
                         defaultValue: 'What should we build together now?',
                       })}
                     </div>
-                    <div className="mt-3 text-sm md:text-base text-slate-500 leading-relaxed">
+                    <div className="mt-3 text-sm md:text-base text-zinc-500 leading-relaxed">
                       {t('aiReporting.emptyPlaceholderBody', {
                         defaultValue:
                           'Start with a question about your business data. I will use your reports to help you.',
@@ -1403,13 +1401,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         <div className="group w-full flex justify-end">
                           {editingMessageId === userMessage.id ? (
                             <div className="w-full">
-                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
                                 <textarea
                                   value={editingDraft}
                                   onChange={(e) => setEditingDraft(e.target.value)}
                                   rows={3}
-                                  className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed text-slate-800"
-                                  autoFocus
+                                  className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed text-zinc-800"
                                   onKeyDown={(e) => {
                                     if (e.key === 'Escape') {
                                       setEditingMessageId('');
@@ -1427,7 +1424,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                       setEditingMessageId('');
                                       setEditingDraft('');
                                     }}
-                                    className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-full transition-colors"
+                                    className="px-4 py-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-800 hover:bg-zinc-200 rounded-full transition-colors"
                                   >
                                     {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
                                   </button>
@@ -1463,7 +1460,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                       onClick={() =>
                                         void handleCopy(userMessage.id, userMessage.content)
                                       }
-                                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
                                     >
                                       <i
                                         className={
@@ -1494,8 +1491,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                         !canSend ||
                                         editingMessageId !== '' ||
                                         userMessage.id.startsWith('tmp-')
-                                          ? 'text-slate-300 cursor-not-allowed'
-                                          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                          ? 'text-zinc-300 cursor-not-allowed'
+                                          : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
                                       }`}
                                     >
                                       <i className="fa-regular fa-pen-to-square" />
@@ -1510,9 +1507,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
                       {assistantMessage && (
                         <div className="group w-full flex justify-start">
-                          <div className="w-full text-sm leading-relaxed text-slate-800">
+                          <div className="w-full text-sm leading-relaxed text-zinc-800">
                             {assistantMessage.thoughtContent?.trim() && (
-                              <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
+                              <div className="mb-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/70 backdrop-blur-sm">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1522,10 +1519,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                         : [...prev, assistantMessage.id],
                                     )
                                   }
-                                  className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                                  className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-zinc-600 hover:text-zinc-800 transition-colors"
                                 >
                                   <span className="inline-flex items-center gap-2">
-                                    <i className="fa-regular fa-lightbulb text-slate-500" />
+                                    <i className="fa-regular fa-lightbulb text-zinc-500" />
                                     {t('aiReporting.thoughtLabel', {
                                       defaultValue: 'Thought process',
                                     })}
@@ -1543,9 +1540,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 >
                                   <div className="overflow-hidden">
                                     <div
-                                      className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
+                                      className={`border-t text-xs leading-relaxed text-zinc-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
                                         isThoughtExpanded
-                                          ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
+                                          ? 'border-zinc-200/80 px-3 py-2.5 opacity-100 translate-y-0'
                                           : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
                                       }`}
                                     >
@@ -1566,7 +1563,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                       href={safe}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                      className="font-semibold underline underline-offset-2 text-zinc-900 hover:text-zinc-700"
                                     >
                                       {children}
                                     </a>
@@ -1576,13 +1573,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   const safe = safeHref(src);
                                   const label = alt?.trim() ? alt.trim() : src || 'image';
                                   if (!safe)
-                                    return <span className="text-slate-500">[Image: {label}]</span>;
+                                    return <span className="text-zinc-500">[Image: {label}]</span>;
                                   return (
                                     <a
                                       href={safe}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                      className="font-semibold underline underline-offset-2 text-zinc-900 hover:text-zinc-700"
                                     >
                                       [Image: {label}]
                                     </a>
@@ -1592,27 +1589,27 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   <p className="my-2 first:mt-0 last:mb-0">{children}</p>
                                 ),
                                 h1: ({ children }: MarkdownRendererProps<'h1'>) => (
-                                  <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                                  <h1 className="mt-4 mb-2 text-lg font-semibold text-zinc-900">
                                     {children}
                                   </h1>
                                 ),
                                 h2: ({ children }: MarkdownRendererProps<'h2'>) => (
-                                  <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                                  <h2 className="mt-4 mb-2 text-base font-semibold text-zinc-900">
                                     {children}
                                   </h2>
                                 ),
                                 h3: ({ children }: MarkdownRendererProps<'h3'>) => (
-                                  <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                                  <h3 className="mt-3 mb-1 text-sm font-semibold text-zinc-900">
                                     {children}
                                   </h3>
                                 ),
                                 ul: ({ children }: MarkdownRendererProps<'ul'>) => (
-                                  <ul className="my-2 list-disc pl-5 marker:text-slate-400">
+                                  <ul className="my-2 list-disc pl-5 marker:text-zinc-400">
                                     {children}
                                   </ul>
                                 ),
                                 ol: ({ children }: MarkdownRendererProps<'ol'>) => (
-                                  <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                                  <ol className="my-2 list-decimal pl-5 marker:text-zinc-400">
                                     {children}
                                   </ol>
                                 ),
@@ -1620,22 +1617,22 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   <li className="my-1">{children}</li>
                                 ),
                                 blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
-                                  <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                                  <blockquote className="my-2 border-l-4 border-zinc-200 pl-3 text-zinc-700">
                                     {children}
                                   </blockquote>
                                 ),
-                                hr: () => <hr className="my-3 border-slate-200" />,
+                                hr: () => <hr className="my-3 border-zinc-200" />,
                                 table: ({ children }: MarkdownRendererProps<'table'>) => {
                                   tableRenderIndex += 1;
                                   const tableId = `${assistantMessage.id}-table-${tableRenderIndex}`;
                                   const copied = copiedTableId === tableId;
                                   return (
-                                    <div className="my-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                                      <div className="flex items-center justify-end border-b border-slate-200 px-2 py-1.5">
+                                    <div className="my-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                                      <div className="flex items-center justify-end border-b border-zinc-200 px-2 py-1.5">
                                         <button
                                           type="button"
                                           onClick={() => void handleCopyTable(tableId)}
-                                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
                                           aria-label={t('aiReporting.copyTable', {
                                             defaultValue: 'Copy table',
                                           })}
@@ -1658,7 +1655,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                               delete tableRefs.current[tableId];
                                             }
                                           }}
-                                          className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-slate-700"
+                                          className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-zinc-700"
                                         >
                                           {children}
                                         </table>
@@ -1667,17 +1664,17 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   );
                                 },
                                 th: ({ children }: MarkdownRendererProps<'th'>) => (
-                                  <th className="align-top whitespace-nowrap border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+                                  <th className="align-top whitespace-nowrap border border-zinc-200 bg-zinc-50 px-3 py-2 font-semibold text-zinc-700">
                                     {children}
                                   </th>
                                 ),
                                 td: ({ children }: MarkdownRendererProps<'td'>) => (
-                                  <td className="align-top break-words border border-slate-200/80 px-3 py-2">
+                                  <td className="align-top break-words border border-zinc-200/80 px-3 py-2">
                                     {children}
                                   </td>
                                 ),
                                 pre: ({ children }: MarkdownRendererProps<'pre'>) => (
-                                  <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                                  <pre className="my-2 overflow-x-auto rounded-xl bg-zinc-950 p-3 text-zinc-100">
                                     {children}
                                   </pre>
                                 ),
@@ -1698,7 +1695,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   if (inline === false) {
                                     return (
                                       <code
-                                        className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                        className={`font-mono text-[12px] leading-relaxed text-zinc-100 ${
                                           className ?? ''
                                         }`}
                                       >
@@ -1708,7 +1705,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   }
 
                                   return (
-                                    <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
+                                    <code className="font-mono text-[12px] rounded bg-zinc-100 px-1 py-0.5 text-zinc-900">
                                       {value}
                                     </code>
                                   );
@@ -1733,7 +1730,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     onClick={() =>
                                       void handleCopy(assistantMessage.id, assistantMessage.content)
                                     }
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
                                     aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
                                   >
                                     <i
@@ -1754,8 +1751,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     disabled={!canRetryAssistantMessage}
                                     className={`p-1.5 rounded-lg transition-colors ${
                                       canRetryAssistantMessage
-                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                        : 'text-slate-300 cursor-not-allowed'
+                                        ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
+                                        : 'text-zinc-300 cursor-not-allowed'
                                     }`}
                                     aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
                                   >
@@ -1779,13 +1776,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     })}
                                     className={`p-1 text-xs rounded transition-colors ${
                                       safeSelectedIndex > 0
-                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                        : 'text-slate-300 cursor-not-allowed'
+                                        ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
+                                        : 'text-zinc-300 cursor-not-allowed'
                                     }`}
                                   >
                                     <i className="fa-solid fa-chevron-left text-[10px]" />
                                   </button>
-                                  <span className="text-xs text-slate-500 min-w-[36px] text-center">
+                                  <span className="text-xs text-zinc-500 min-w-[36px] text-center">
                                     {safeSelectedIndex + 1}/{attemptCount}
                                   </span>
                                   <button
@@ -1805,8 +1802,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     })}
                                     className={`p-1 text-xs rounded transition-colors ${
                                       safeSelectedIndex < attemptCount - 1
-                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                        : 'text-slate-300 cursor-not-allowed'
+                                        ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
+                                        : 'text-zinc-300 cursor-not-allowed'
                                     }`}
                                   >
                                     <i className="fa-solid fa-chevron-right text-[10px]" />
@@ -1827,11 +1824,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         ) : (
           <div className="flex-1 px-4 md:px-6 pb-52">
             <div className="mx-auto w-full max-w-[760px] pt-10">
-              <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-6">
-                <div className="text-sm font-black text-slate-900">
+              <div className="rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/5 p-6">
+                <div className="text-sm font-black text-zinc-900">
                   {t('aiReporting.disabledTitle', { defaultValue: 'AI Reporting disabled' })}
                 </div>
-                <div className="mt-2 text-sm text-slate-600">
+                <div className="mt-2 text-sm text-zinc-600">
                   {t('aiReporting.disabledBody', {
                     defaultValue:
                       'This feature has been disabled by administration. Contact an admin to enable it in General Administration.',
@@ -1850,11 +1847,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               setHasNewText(false);
             }}
             aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
-            className="absolute left-1/2 -translate-x-1/2 bottom-32 z-[3] w-11 h-11 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors flex items-center justify-center"
+            className="absolute left-1/2 -translate-x-1/2 bottom-32 z-[3] size-11 rounded-full bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors flex items-center justify-center"
           >
             <i className="fa-solid fa-arrow-down" />
             {hasNewText && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-praetor border-2 border-white" />
+              <span className="absolute -top-1 -right-1 size-3 rounded-full bg-praetor border-2 border-white" />
             )}
           </button>
         )}
@@ -1873,7 +1870,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             <div className="absolute left-0 right-0 bottom-0 z-[2]">
               <div className="w-full px-4 md:px-6 pb-6">
                 <div className="mx-auto w-full max-w-[760px]">
-                  <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
+                  <div className="rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/5 p-3">
                     <div className="flex items-end gap-2">
                       <textarea
                         value={draft}
@@ -1887,14 +1884,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                           e.preventDefault();
                           void handleSend();
                         }}
-                        className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
+                        className="flex-1 resize-none bg-transparent outline-none text-sm text-zinc-900 placeholder:text-zinc-400 p-2 max-h-40 disabled:cursor-not-allowed"
                       />
 
                       {isSending ? (
                         <button
                           type="button"
                           onClick={handleStop}
-                          className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
+                          className="shrink-0 size-10 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
                           aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
                         >
                           <i className="fa-solid fa-stop text-sm" />
@@ -1904,9 +1901,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                           type="button"
                           onClick={() => void handleSend()}
                           disabled={!canSend || !draft.trim()}
-                          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                          className={`shrink-0 size-10 rounded-full flex items-center justify-center transition-colors ${
                             !canSend || !draft.trim()
-                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                              ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
                               : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
                           }`}
                           aria-label="Send"
@@ -1918,7 +1915,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                   </div>
                 </div>
                 <div className="mx-auto w-full max-w-[760px] mt-2 px-2">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-zinc-400">
                     {footerHintWithPeriod ? `${footerHintWithPeriod} ${aiWarning}` : aiWarning}
                   </div>
                 </div>
@@ -1938,14 +1935,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">
+              <h3 className="text-lg font-semibold text-zinc-800">
                 {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
               </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('aiReporting.deleteChatConfirm', {
                   name: sessionToDelete
                     ? toOptionLabel(sessionToDelete) ||
@@ -1962,7 +1959,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                   setIsDeleteConfirmOpen(false);
                   setSessionToDelete(null);
                 }}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
               </button>
@@ -1972,7 +1969,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 onClick={() => void handleArchiveSession()}
                 className={`flex-1 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
                   !canArchive || isDeletingSession || !sessionToDelete
-                    ? 'bg-slate-300 shadow-none cursor-not-allowed'
+                    ? 'bg-zinc-300 shadow-none cursor-not-allowed'
                     : 'bg-red-600 shadow-red-200 hover:bg-red-700'
                 }`}
               >

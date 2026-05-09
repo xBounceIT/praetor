@@ -10,7 +10,7 @@ const fetchMock = mock(
 );
 globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-// Load the real auth module — it pulls in the real client.ts, which calls our fetch mock.
+// Load the real auth module - it pulls in the real client.ts, which calls our fetch mock.
 const { authApi } = await import('../../services/api/auth');
 const { getAuthToken, setAuthToken } = await import('../../services/api/client');
 

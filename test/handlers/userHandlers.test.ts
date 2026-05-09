@@ -139,7 +139,7 @@ const silenceConsole = () => {
   };
 };
 
-describe('makeUserHandlers — users', () => {
+describe('makeUserHandlers - users', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
   });
@@ -282,7 +282,7 @@ describe('makeUserHandlers — users', () => {
   });
 });
 
-describe('makeUserHandlers — employees', () => {
+describe('makeUserHandlers - employees', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
   });
@@ -382,7 +382,7 @@ describe('makeUserHandlers — employees', () => {
   });
 });
 
-describe('makeUserHandlers — roles', () => {
+describe('makeUserHandlers - roles', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
   });
@@ -473,7 +473,7 @@ describe('makeUserHandlers — roles', () => {
   });
 });
 
-describe('makeUserHandlers — work units', () => {
+describe('makeUserHandlers - work units', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
   });

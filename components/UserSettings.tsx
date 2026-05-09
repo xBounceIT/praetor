@@ -119,7 +119,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
         <div className="text-center">
           <i className="fa-solid fa-circle-notch fa-spin text-praetor text-3xl mb-3"></i>
-          <p className="text-slate-500 font-medium">{t('common:states.loading')}</p>
+          <p className="text-zinc-500 font-medium">{t('common:states.loading')}</p>
         </div>
       </div>
     );
@@ -129,16 +129,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">{t('title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('subtitle')}</p>
+          <h2 className="text-2xl font-semibold text-zinc-800">{t('title')}</h2>
+          <p className="text-sm text-zinc-500 mt-1">{t('subtitle')}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-8">
+      <div className="flex border-b border-zinc-200 gap-8">
         <button
           onClick={() => setActiveTab('profile')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-user mr-2"></i>
           {t('userProfile.title')}
@@ -148,7 +148,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('appearance')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-palette mr-2"></i>
           {t('appearance.title')}
@@ -158,7 +158,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('language')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-language mr-2"></i>
           {t('language.title')}
@@ -168,7 +168,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('password')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'password' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'password' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-lock mr-2"></i>
           {t('password.title')}
@@ -179,39 +179,39 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       </div>
 
       {activeTab === 'profile' && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-left-4 duration-300">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-left-4 duration-300">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-user text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('userProfile.title')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('userProfile.title')}</h3>
           </div>
           <form onSubmit={handleSave}>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('userProfile.fullName')}
                   </label>
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('userProfile.email')}
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
               <button
                 type="submit"
                 disabled={isSaving || !hasChanges}
@@ -219,8 +219,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   isSaved
                     ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
                     : isSaving || !hasChanges
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                      : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
+                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
                 }`}
               >
                 {isSaving ? (
@@ -242,23 +242,25 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'appearance' && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-palette text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('appearance.title')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <button
                 onClick={() => handleThemeChange('default')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'default' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'default' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-[#20293F] shrink-0 shadow-sm flex items-center justify-center text-white">
+                <div className="size-10 rounded-full bg-[#20293F] shrink-0 shadow-sm flex items-center justify-center text-white">
                   {currentTheme === 'default' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('appearance.default.name')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <h4 className="font-semibold text-zinc-800 mb-1">
+                    {t('appearance.default.name')}
+                  </h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     {t('appearance.default.description')}
                   </p>
                 </div>
@@ -266,14 +268,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
               <button
                 onClick={() => handleThemeChange('tempo')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'tempo' ? 'border-indigo-600 bg-indigo-50/10' : 'border-slate-100 hover:border-indigo-100'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${currentTheme === 'tempo' ? 'border-praetor bg-praetor/5' : 'border-zinc-100 hover:border-praetor/20'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-[#4F46E5] shrink-0 shadow-sm flex items-center justify-center text-white">
+                <div className="size-10 rounded-full bg-[#4F46E5] shrink-0 shadow-sm flex items-center justify-center text-white">
                   {currentTheme === 'tempo' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('appearance.tempo.name')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <h4 className="font-semibold text-zinc-800 mb-1">{t('appearance.tempo.name')}</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     {t('appearance.tempo.description')}
                   </p>
                 </div>
@@ -284,50 +286,50 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'language' && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-language text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('language.title')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('language.title')}</h3>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <button
                 onClick={() => handleLanguageChange('auto')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'auto' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'auto' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
+                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <i
-                    className={`fa-solid fa-globe text-xl ${language === 'auto' ? 'text-praetor' : 'text-slate-400'}`}
+                    className={`fa-solid fa-globe text-xl ${language === 'auto' ? 'text-praetor' : 'text-zinc-400'}`}
                   ></i>
                   {language === 'auto' && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
                   )}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('language.auto')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">{t('language.autoDesc')}</p>
+                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.auto')}</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">{t('language.autoDesc')}</p>
                 </div>
               </button>
 
               <button
                 onClick={() => handleLanguageChange('en')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'en' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'en' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
+                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <span
                     className={`fi fi-gb text-xl ${language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
                   ></span>
                   {language === 'en' && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
                   )}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('language.english')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.english')}</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     {t('language.englishDesc')}
                   </p>
                 </div>
@@ -335,21 +337,21 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
               <button
                 onClick={() => handleLanguageChange('it')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'it' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'it' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
+                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <span
                     className={`fi fi-it text-xl ${language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
                   ></span>
                   {language === 'it' && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
                   )}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('language.italian')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.italian')}</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     {t('language.italianDesc')}
                   </p>
                 </div>
@@ -360,10 +362,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'password' && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
+        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-lock text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('password.title')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('password.title')}</h3>
           </div>
           <form onSubmit={handlePasswordUpdate}>
             <div className="p-6">
@@ -376,48 +378,48 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('password.currentPassword')}
                   </label>
                   <input
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
                 </div>
                 <div className="hidden md:block"></div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('password.newPassword')}
                   </label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('password.confirmNewPassword')}
                   </label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
               <button
                 type="submit"
                 disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
@@ -425,8 +427,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   passwordSuccess
                     ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
                     : isSavingPassword || !currentPassword || !newPassword || !confirmPassword
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                      : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
+                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
                 }`}
               >
                 {isSavingPassword ? (

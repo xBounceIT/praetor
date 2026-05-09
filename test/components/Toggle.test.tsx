@@ -46,7 +46,7 @@ describe('<Toggle />', () => {
   test('unchecked uses slate background', () => {
     render(<Toggle checked={false} onChange={() => {}} />);
     const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-slate-200');
+    expect(btn.className).toContain('bg-zinc-200');
   });
 
   test('partial state renders intermediate background and the partial dash indicator', () => {

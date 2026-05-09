@@ -6,7 +6,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
-import { ForeignKeyError, NotFoundError } from '../../utils/http-errors.ts';
+import { ForeignKeyError } from '../../utils/http-errors.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,

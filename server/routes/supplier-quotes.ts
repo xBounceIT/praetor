@@ -13,6 +13,7 @@ import {
   ATTACHMENT_MAX_BYTES,
   deleteSupplierQuoteAttachment,
   isAllowedAttachment,
+  type OpenedAttachment,
   openSupplierQuoteAttachment,
   saveSupplierQuoteAttachment,
 } from '../utils/fileStorage.ts';
@@ -482,7 +483,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const txResult = await withDbTransaction(async (tx) => {
           // Snapshot only when the patch carries actual content. ID-only renames cascade
           // through the FK without altering snapshot fields, and empty PUTs are no-ops in
-          // `update()` — both would otherwise create misleading "Save" rows.
+          // `update()` - both would otherwise create misleading "Save" rows.
           if (hasContentUpdate) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
@@ -896,7 +897,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           fileSize: uploaded.size,
           uploadedByUserId: request.user?.id ?? null,
         });
-        // DB row is now the source of truth — clear the cleanup token before audit so a
+        // DB row is now the source of truth - clear the cleanup token before audit so a
         // failing audit log doesn't unlink the file under a live row.
         uploaded = null;
 
@@ -953,7 +954,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Attachment not found' });
       }
 
-      let opened;
+      let opened: OpenedAttachment;
       try {
         opened = await openSupplierQuoteAttachment(attachment.storedName);
       } catch (err) {
@@ -1064,7 +1065,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete a quote once an order has been created from it' });
       }
 
-      // Fetch attachment metadata BEFORE deleting the quote — the FK cascade will drop the
+      // Fetch attachment metadata BEFORE deleting the quote - the FK cascade will drop the
       // rows, leaving us no way to learn which files to clean off disk.
       const attachmentsToCleanup = await supplierQuoteAttachmentsRepo.listForQuote(idResult.value);
 

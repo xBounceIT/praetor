@@ -257,7 +257,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // Literal path — Fastify's radix-tree router matches this before /:id parameterized routes
+  // Literal path - Fastify's radix-tree router matches this before /:id parameterized routes
   fastify.get(
     '/hours/batch',
     {

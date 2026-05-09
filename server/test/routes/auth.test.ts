@@ -15,7 +15,7 @@ import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 // Snapshot real exports so afterAll can restore them. Snapshot must run BEFORE mock.module
-// fires (i.e., before beforeAll executes) — see comment in middleware/auth.test.ts.
+// fires (i.e., before beforeAll executes) - see comment in middleware/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };

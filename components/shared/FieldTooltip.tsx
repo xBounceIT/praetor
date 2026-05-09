@@ -9,7 +9,7 @@ export interface FieldTooltipProps {
 }
 
 const renderTooltipIcon = () => (
-  <i className="fa-solid fa-circle-question text-slate-300 hover:text-slate-500 text-[10px] cursor-help transition-colors" />
+  <i className="fa-solid fa-circle-question text-zinc-300 hover:text-zinc-500 text-[10px] cursor-help transition-colors" />
 );
 
 const FieldTooltip: React.FC<FieldTooltipProps> = ({
