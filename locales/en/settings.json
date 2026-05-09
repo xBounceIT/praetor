@@ -20,11 +20,11 @@
     "title": "Appearance",
     "light": {
       "name": "Light",
-      "description": "Use the light interface for the application and shadcn components."
+      "description": "Use light mode for shadcn components."
     },
     "dark": {
       "name": "Dark",
-      "description": "Use the dark interface for the application and shadcn components."
+      "description": "Use dark mode for shadcn components."
     },
     "auto": {
       "name": "Auto",

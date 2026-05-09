@@ -20,11 +20,11 @@
     "title": "Aspetto",
     "light": {
       "name": "Chiaro",
-      "description": "Usa l'interfaccia chiara per l'applicazione e i componenti shadcn."
+      "description": "Usa la modalita chiara per i componenti shadcn."
     },
     "dark": {
       "name": "Scuro",
-      "description": "Usa l'interfaccia scura per l'applicazione e i componenti shadcn."
+      "description": "Usa la modalita scura per i componenti shadcn."
     },
     "auto": {
       "name": "Automatico",

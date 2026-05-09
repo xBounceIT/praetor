@@ -5,9 +5,11 @@ export type ResolvedTheme = Exclude<Theme, 'auto'>;
 
 const STORAGE_KEY = 'praetor_theme';
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
+const SHADCN_THEME_SCOPE_SELECTOR = '[data-shadcn-theme-scope]';
 
 export const THEME_STORAGE_KEY = STORAGE_KEY;
 export const THEME_MEDIA_QUERY = DARK_MODE_QUERY;
+export const THEME_SCOPE_SELECTOR = SHADCN_THEME_SCOPE_SELECTOR;
 
 let removeAutoThemeListener: (() => void) | undefined;
 
@@ -29,11 +31,19 @@ const resolveTheme = (theme: Theme): ResolvedTheme => {
   return theme === 'auto' ? getBrowserTheme() : theme;
 };
 
-const applyResolvedTheme = (theme: ResolvedTheme) => {
+const clearLegacyRootTheme = () => {
   const root = document.documentElement;
-  root.classList.toggle('dark', theme === 'dark');
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
+  root.classList.remove('dark');
+  root.removeAttribute('data-theme');
+  root.style.removeProperty('color-scheme');
+};
+
+const applyResolvedTheme = (theme: ResolvedTheme) => {
+  clearLegacyRootTheme();
+  document.querySelectorAll<HTMLElement>(SHADCN_THEME_SCOPE_SELECTOR).forEach((scope) => {
+    scope.classList.toggle('dark', theme === 'dark');
+    scope.dataset.shadcnTheme = theme;
+  });
 };
 
 const unsubscribeAutoTheme = () => {

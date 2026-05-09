@@ -4,6 +4,7 @@ import {
   getBrowserTheme,
   getTheme,
   THEME_MEDIA_QUERY,
+  THEME_SCOPE_SELECTOR,
   THEME_STORAGE_KEY,
   THEMES,
   type Theme,
@@ -43,7 +44,18 @@ const resetRootTheme = () => {
   const root = document.documentElement;
   root.classList.remove('dark');
   root.removeAttribute('data-theme');
+  root.removeAttribute('data-shadcn-theme');
   root.style.removeProperty('color-scheme');
+  document.querySelectorAll(THEME_SCOPE_SELECTOR).forEach((element) => {
+    element.remove();
+  });
+};
+
+const appendThemeScope = () => {
+  const scope = document.createElement('div');
+  scope.dataset.shadcnThemeScope = '';
+  document.body.append(scope);
+  return scope;
 };
 
 describe('THEMES constant', () => {
@@ -113,42 +125,51 @@ describe('applyTheme', () => {
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
 
-  test('applies light mode to the document root', () => {
+  test('applies light mode to shadcn theme scopes only', () => {
+    const scope = appendThemeScope();
     applyTheme('light');
     const root = document.documentElement;
     expect(root.classList.contains('dark')).toBe(false);
-    expect(root.dataset.theme).toBe('light');
-    expect(root.style.colorScheme).toBe('light');
+    expect(root.dataset.theme).toBeUndefined();
+    expect(root.style.colorScheme).toBe('');
+    expect(scope.classList.contains('dark')).toBe(false);
+    expect(scope.dataset.shadcnTheme).toBe('light');
   });
 
-  test('applies dark mode to the document root', () => {
+  test('applies dark mode to shadcn theme scopes only', () => {
+    const scope = appendThemeScope();
     applyTheme('dark');
     const root = document.documentElement;
-    expect(root.classList.contains('dark')).toBe(true);
-    expect(root.dataset.theme).toBe('dark');
-    expect(root.style.colorScheme).toBe('dark');
+    expect(root.classList.contains('dark')).toBe(false);
+    expect(root.dataset.theme).toBeUndefined();
+    expect(scope.classList.contains('dark')).toBe(true);
+    expect(scope.dataset.shadcnTheme).toBe('dark');
   });
 
   test('auto resolves to the browser theme', () => {
+    const scope = appendThemeScope();
     setBrowserDarkMode(true);
     applyTheme('auto');
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(scope.classList.contains('dark')).toBe(true);
+    expect(scope.dataset.shadcnTheme).toBe('dark');
   });
 
   test('auto follows browser theme changes after it is applied', () => {
+    const scope = appendThemeScope();
     const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
       triggerChange: (nextMatches: boolean) => void;
     };
 
     applyTheme('auto');
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(scope.classList.contains('dark')).toBe(false);
 
     mediaQuery.triggerChange(true);
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(scope.classList.contains('dark')).toBe(true);
   });
 
   test('switching to a fixed theme stops following browser theme changes', () => {
+    const scope = appendThemeScope();
     const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
       triggerChange: (nextMatches: boolean) => void;
     };
@@ -157,7 +178,7 @@ describe('applyTheme', () => {
     applyTheme('light');
 
     mediaQuery.triggerChange(true);
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(scope.classList.contains('dark')).toBe(false);
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
   });
 
