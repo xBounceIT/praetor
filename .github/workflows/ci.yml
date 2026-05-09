@@ -55,6 +55,22 @@ jobs:
           fi
         working-directory: server
 
+
+  react-doctor:
+    name: React Doctor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run React Doctor
+        uses: millionco/react-doctor@main
+        with:
+          diff: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     name: Tests
     runs-on: ubuntu-latest
