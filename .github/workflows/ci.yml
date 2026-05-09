@@ -87,11 +87,29 @@ jobs:
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup Node for React Doctor
+        if: steps.frontend-changes.outputs.has_changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Run React Doctor
         if: steps.frontend-changes.outputs.has_changes == 'true'
-        uses: millionco/react-doctor@main
-        with:
-          diff: main
+        shell: bash
+        env:
+          NO_COLOR: '1'
+          DIFF_BASE: main
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -o pipefail
+          case "$DIFF_BASE" in -* ) echo "::error::diff input cannot start with -"; exit 1 ;; esac
+          case "$HEAD_REF" in -* ) echo "::error::head_ref cannot start with -"; exit 1 ;; esac
+          git fetch origin "$DIFF_BASE" && git branch -f "$DIFF_BASE" FETCH_HEAD 2>/dev/null || true
+          git checkout "$HEAD_REF" 2>/dev/null || true
+
+          output_file="${RUNNER_TEMP:-/tmp}/react-doctor-output-${GITHUB_RUN_ID:-$$}.txt"
+          echo "REACT_DOCTOR_OUTPUT_FILE=$output_file" >> "$GITHUB_ENV"
+          npx -y react-doctor@latest . --fail-on error --verbose --diff "$DIFF_BASE" | tee "$output_file"
 
       - name: Post React Doctor comment
         if: steps.frontend-changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
