@@ -39,6 +39,14 @@ const openFilterFor = (headerText: string) => {
   });
 };
 
+const findPositionedFilterPopup = () => {
+  let el = screen.getByText('table.sortAsc').parentElement;
+  while (el && el.style.position !== 'absolute') {
+    el = el.parentElement;
+  }
+  return el as HTMLDivElement | null;
+};
+
 describe('<StandardTable />', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -316,6 +324,45 @@ describe('<StandardTable />', () => {
     });
     expect(tbody.textContent).toContain('Bob');
     expect(tbody.textContent).toContain('Charlie');
+  });
+
+  test('filter popup stays within the viewport near the right edge', () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 400,
+    });
+    try {
+      render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+      const ageHeader = screen.getByText('Age').closest('th') as HTMLTableCellElement;
+      const filterButton = ageHeader.querySelector('button') as HTMLButtonElement;
+      filterButton.getBoundingClientRect = () =>
+        ({
+          bottom: 20,
+          height: 16,
+          left: 380,
+          right: 396,
+          top: 4,
+          width: 16,
+          x: 380,
+          y: 4,
+          toJSON: () => ({}),
+        }) as DOMRect;
+
+      act(() => {
+        fireEvent.click(filterButton);
+      });
+
+      const popup = findPositionedFilterPopup();
+      expect(popup).not.toBeNull();
+      expect(popup?.style.left).toBe('168px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalInnerWidth,
+      });
+    }
   });
 
   // ---------------------------------------------------------------------------
