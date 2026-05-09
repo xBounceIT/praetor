@@ -64,15 +64,29 @@ describe('<Layout />', () => {
 
     const wrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
     const sidebar = container.querySelector('[data-slot="sidebar"]');
+    const shadcnThemeScope = container.querySelector('[data-shadcn-theme-scope]');
     const activeButtons = container.querySelectorAll(
       '[data-sidebar="menu-button"][data-active="true"]',
     );
 
     expect(wrapper).not.toBeNull();
     expect(sidebar).not.toBeNull();
+    expect(shadcnThemeScope).not.toBeNull();
     expect(sidebar?.getAttribute('data-state')).toBe('expanded');
     expect(activeButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
+  });
+
+  test('sidebar navigation text uses shadcn sidebar color tokens', () => {
+    const { container } = renderLayout();
+
+    const activeButton = container.querySelector(
+      '[data-sidebar="menu-button"][data-active="true"]',
+    );
+
+    expect(activeButton?.className).toContain('text-sidebar-foreground');
+    expect(activeButton?.className).toContain('data-[active=true]:text-sidebar-accent-foreground');
+    expect(activeButton?.className).not.toContain('text-black');
   });
 
   test('sidebar trigger toggles desktop icon-collapse state', () => {
