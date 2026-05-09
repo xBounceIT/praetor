@@ -620,8 +620,28 @@ describe('<StandardTable />', () => {
 
     const previousButton = screen.getByRole('button', { name: 'buttons.previous' });
     expect(previousButton).toBeDisabled();
+    expect(previousButton.getAttribute('data-size')).toBe('sm');
+    expect(previousButton.className).toContain('border-border');
     expect(previousButton.className).toContain('text-foreground');
     expect(previousButton.className).toContain('disabled:opacity-100');
+  });
+
+  test('toolbar outline buttons use the same shadcn border token as pagination', () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    const exportButton = screen.getByRole('button', { name: 'table.exportToCsv' });
+    const decreaseFontButton = screen.getByRole('button', { name: 'table.decreaseFont' });
+    const increaseFontButton = screen.getByRole('button', { name: 'table.increaseFont' });
+    const columnsButton = screen.getByRole('button', { name: 'table.columnSettings' });
+
+    expect(exportButton.getAttribute('data-size')).toBe('sm');
+    expect(columnsButton.getAttribute('data-size')).toBe('sm');
+    expect(decreaseFontButton.getAttribute('data-size')).toBe('icon-sm');
+    expect(increaseFontButton.getAttribute('data-size')).toBe('icon-sm');
+
+    for (const button of [exportButton, decreaseFontButton, increaseFontButton, columnsButton]) {
+      expect(button.className).toContain('border-border');
+    }
   });
 
   // ---------------------------------------------------------------------------

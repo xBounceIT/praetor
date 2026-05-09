@@ -938,13 +938,12 @@ const StandardTable = <T extends object>({
             ref={buttonRef}
             aria-label={label}
             variant={active ? 'secondary' : 'outline'}
-            size="sm"
+            size={text ? 'sm' : 'icon-sm'}
             onClick={(e) => {
               e.stopPropagation();
               onClick();
             }}
             disabled={disabled}
-            className={text ? 'h-8 px-3 text-sm font-medium' : 'size-8'}
           >
             <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>
             {text && <span>{text}</span>}
@@ -1101,7 +1100,7 @@ const StandardTable = <T extends object>({
             table.previousPage();
           }}
           disabled={!table.getCanPreviousPage()}
-          className="h-8 px-3 text-sm font-medium text-foreground disabled:opacity-100"
+          className="text-foreground disabled:opacity-100"
         >
           {t('buttons.previous')}
         </Button>
@@ -1117,7 +1116,7 @@ const StandardTable = <T extends object>({
             table.nextPage();
           }}
           disabled={!table.getCanNextPage()}
-          className="h-8 px-3 text-sm font-medium text-foreground disabled:opacity-100"
+          className="text-foreground disabled:opacity-100"
         >
           {t('buttons.next')}
         </Button>
@@ -1167,7 +1166,6 @@ const StandardTable = <T extends object>({
                     aria-label={t('table.columnSettings')}
                     variant={gearOpen ? 'secondary' : 'outline'}
                     size="sm"
-                    className="h-8 px-3 text-sm font-medium"
                   >
                     {t('table.columns')}
                     <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
