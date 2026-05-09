@@ -158,6 +158,7 @@ describe('<StandardTable />', () => {
     // The rows-per-page shadcn Select trigger shows the current value (default 10).
     const trigger = screen.getByRole('combobox');
     expect(trigger.textContent).toContain('10');
+    expect(trigger.className).toContain('rounded-lg');
     await user.click(trigger);
 
     // Pick "20" from the dropdown - fail loudly if the option isn't rendered.
@@ -184,6 +185,7 @@ describe('<StandardTable />', () => {
 
   test('CSV export click invokes downloadCsv with rows and filename', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    expect(screen.getByRole('table').parentElement?.className).toContain('rounded-lg');
     const exportButton = screen.getByText('table.export');
     fireEvent.click(exportButton);
 
@@ -299,7 +301,7 @@ describe('<StandardTable />', () => {
       .find((button) => button.textContent?.trim().startsWith('Name')) as HTMLButtonElement;
     const sortIcon = sortButton.querySelector('i.fa-arrow-up-arrow-down');
 
-    expect(sortButton.className).toContain('rounded-md');
+    expect(sortButton.className).toContain('rounded-lg');
     expect(sortButton.className).toContain('font-semibold');
     expect(sortButton.className).toContain('hover:bg-accent');
     expect(sortButton.className).toContain('hover:text-accent-foreground');
@@ -791,6 +793,7 @@ describe('<StandardTable />', () => {
     expect(previousButton).toBeDisabled();
     expect(previousButton.getAttribute('data-size')).toBe('xs');
     expect(previousButton.className).toContain('border-border');
+    expect(previousButton.className).toContain('rounded-lg');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
@@ -803,6 +806,8 @@ describe('<StandardTable />', () => {
 
     expect(previousButton).toBeDisabled();
     expect(nextButton).toBeDisabled();
+    expect(previousButton.className).toContain('rounded-lg');
+    expect(nextButton.className).toContain('rounded-lg');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(nextButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
@@ -825,6 +830,7 @@ describe('<StandardTable />', () => {
 
     for (const button of [exportButton, decreaseFontButton, increaseFontButton, columnsButton]) {
       expect(button.className).toContain('border-border');
+      expect(button.className).toContain('rounded-lg');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
 

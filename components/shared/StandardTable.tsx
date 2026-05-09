@@ -1052,6 +1052,7 @@ const StandardTable = <T extends object>({
             aria-label={label}
             variant={active ? 'secondary' : 'outline'}
             size={text ? 'xs' : 'icon-xs'}
+            className="rounded-lg"
             onClick={(e) => {
               e.stopPropagation();
               onClick();
@@ -1097,7 +1098,7 @@ const StandardTable = <T extends object>({
             size="icon-xs"
             aria-label={`${t('table.filters')} ${sourceColumn.header}`}
             onClick={(event) => event.stopPropagation()}
-            className="size-6"
+            className="size-6 rounded-lg"
           >
             <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
             {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
@@ -1195,7 +1196,7 @@ const StandardTable = <T extends object>({
               table.setPageSize(newValue);
             }}
           >
-            <SelectTrigger size="sm" className="h-7 w-[68px] text-xs text-foreground">
+            <SelectTrigger size="sm" className="h-7 w-[68px] rounded-lg text-xs text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1213,6 +1214,7 @@ const StandardTable = <T extends object>({
             type="button"
             variant="outline"
             size="xs"
+            className="rounded-lg"
             onClick={(e) => {
               e.stopPropagation();
               table.previousPage();
@@ -1228,6 +1230,7 @@ const StandardTable = <T extends object>({
             type="button"
             variant="outline"
             size="xs"
+            className="rounded-lg"
             onClick={(e) => {
               e.stopPropagation();
               table.nextPage();
@@ -1283,7 +1286,7 @@ const StandardTable = <T extends object>({
                     aria-label={t('table.columnSettings')}
                     variant="outline"
                     size="xs"
-                    className="data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0"
+                    className="rounded-lg data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0"
                   >
                     {t('table.columns')}
                     <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
@@ -1540,7 +1543,7 @@ const StandardTable = <T extends object>({
 
       <div
         ref={tableContainerRef}
-        className={`rounded-md border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'} ${resizingColId ? 'select-none' : ''}`}
+        className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
           <Table className={`w-full text-left ${usesFixedTableLayout ? 'table-fixed' : ''}`}>
@@ -1615,7 +1618,7 @@ const StandardTable = <T extends object>({
                               type="button"
                               disabled={!header.column.getCanSort()}
                               onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
                               <span className="truncate" data-column-header-label={colId}>
                                 {header.isPlaceholder
@@ -1732,6 +1735,7 @@ const StandardTable = <T extends object>({
                                     size="icon-xs"
                                     aria-label={t('table.rowActions')}
                                     onClick={(event) => event.stopPropagation()}
+                                    className="rounded-lg"
                                   >
                                     <i
                                       className="fa-solid fa-ellipsis text-[10px]"
@@ -1839,12 +1843,19 @@ const StandardTable = <T extends object>({
               )}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
-              <Button type="button" variant="ghost" size="sm" onClick={closePasteModal}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="rounded-lg"
+                onClick={closePasteModal}
+              >
                 {t('table.cancel')}
               </Button>
               <Button
                 type="button"
                 size="sm"
+                className="rounded-lg"
                 onClick={submitPasteImport}
                 disabled={pasteText.trim().length === 0}
               >
