@@ -78,11 +78,11 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                 <SidebarMenuButton
                   tooltip={item.title}
                   isActive={item.isActive}
-                  className="font-bold text-black hover:text-black data-[active=true]:text-black [&>svg]:text-black/70"
+                  className="font-normal! text-black hover:text-black data-[active=true]:font-normal! data-[active=true]:text-black [&_span]:font-normal! [&>svg]:text-black/70"
                 >
                   <item.icon />
                   <span>{item.title}</span>
-                  <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                  <ChevronRight className="ml-auto transition-transform duration-150 group-data-[state=open]/collapsible:rotate-90" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent className="sidebar-entry-content">
@@ -92,7 +92,7 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                       <SidebarMenuSubButton
                         asChild
                         isActive={subItem.isActive}
-                        className="font-bold text-black hover:text-black data-[active=true]:text-black [&>svg]:text-black/70"
+                        className="font-normal! text-black hover:text-black data-[active=true]:font-normal! data-[active=true]:text-black [&_span]:font-normal! [&>svg]:text-black/70"
                       >
                         <button
                           type="button"

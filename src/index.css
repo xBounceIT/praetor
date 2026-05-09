@@ -210,11 +210,11 @@ input[type="number"] {
 }
 
 .sidebar-entry-content[data-state="open"] {
-  animation: sidebar-entry-down 180ms ease-out;
+  animation: sidebar-entry-down 120ms ease-out;
 }
 
 .sidebar-entry-content[data-state="closed"] {
-  animation: sidebar-entry-up 160ms ease-in;
+  animation: sidebar-entry-up 100ms ease-in;
 }
 
 .profile-menu-content[data-state="open"] {
