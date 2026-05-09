@@ -126,27 +126,94 @@ jobs:
 
             const scoreMatches = [...output.matchAll(/\b([0-9]{1,3})\s*\/\s*100\b/g)];
             const score = scoreMatches.at(-1)?.[1];
-            const scoreLine = score ? `**Score:** \`${score}\` / 100\n\n` : '';
-            const marker = '<!-- react-doctor -->';
+            const issueSummary = output.match(/\n\s*(\d+\s+issues across[^\n]+)/)?.[1];
+            const lines = output.split(/\r?\n/);
+            const findings = [];
+            let current = null;
+            for (const line of lines) {
+              const heading = line.match(/^\s*⚠\s+(\S+)(?:\s+×(\d+))?/);
+              if (heading) {
+                if (current) findings.push(current);
+                current = {
+                  rule: heading[1],
+                  count: heading[2] ?? '1',
+                  lines: [line],
+                };
+                continue;
+              }
+
+              if (!current) continue;
+              if (/^\s*┌/.test(line)) {
+                findings.push(current);
+                current = null;
+                continue;
+              }
+              current.lines.push(line);
+            }
+            if (current) findings.push(current);
+
+            const summaryMarker = '<!-- react-doctor:summary -->';
+            const ruleMarkerPrefix = '<!-- react-doctor:rule:';
             const fence = '````';
-            const body = `${marker}\n## React Doctor\n\n${scoreLine}${fence}\n${output}\n${fence}`;
+            const scoreLine = score ? `**Score:** \`${score}\` / 100\n\n` : '';
+            const summaryLine = issueSummary ? `**Issues:** ${issueSummary}\n\n` : '';
+            const body = `${summaryMarker}\n## React Doctor\n\n${scoreLine}${summaryLine}Dedicated comments were posted for ${findings.length} finding groups.`;
 
             const { data: comments } = await github.rest.issues.listComments({
               ...context.repo,
               issue_number: context.issue.number,
             });
-            const prev = comments.find((comment) => comment.body?.startsWith(marker));
-            if (prev) {
-              await github.rest.issues.updateComment({
-                ...context.repo,
-                comment_id: prev.id,
-                body,
-              });
-            } else {
+
+            const upsertComment = async (marker, body) => {
+              const prev = comments.find((comment) => comment.body?.startsWith(marker));
+              if (prev) {
+                await github.rest.issues.updateComment({
+                  ...context.repo,
+                  comment_id: prev.id,
+                  body,
+                });
+                return;
+              }
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number: context.issue.number,
                 body,
+              });
+            };
+
+            await upsertComment(summaryMarker, body);
+
+            const activeRuleMarkers = new Set();
+            for (const finding of findings) {
+              const safeRule = finding.rule.replace(/[^A-Za-z0-9_.:/-]/g, '-');
+              const marker = `${ruleMarkerPrefix}${safeRule} -->`;
+              activeRuleMarkers.add(marker);
+              const title = finding.rule.replace(/^react-doctor\//, '');
+              const findingBody = [
+                marker,
+                `## React Doctor: ${title}`,
+                '',
+                `**Rule:** \`${finding.rule}\``,
+                `**Count:** \`${finding.count}\``,
+                '',
+                fence,
+                finding.lines.join('\n').trim(),
+                fence,
+              ].join('\n');
+              await upsertComment(marker, findingBody);
+            }
+
+            for (const comment of comments) {
+              const body = comment.body ?? '';
+              const isOldCombined = body.startsWith('<!-- react-doctor -->');
+              const isStaleRule =
+                body.startsWith(ruleMarkerPrefix) &&
+                !activeRuleMarkers.has(body.slice(0, body.indexOf('-->') + 3));
+              if (!isOldCombined && !isStaleRule) continue;
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: comment.id,
+                body: `${body.split('\n', 1)[0]}\nSuperseded by the latest React Doctor comments.`,
               });
             }
 
