@@ -46,9 +46,11 @@ function UserIdentityBlock({ user, roleLabel }: UserIdentityBlockProps) {
           {user.avatarInitials}
         </AvatarFallback>
       </Avatar>
-      <div className="grid flex-1 text-left text-sm leading-tight">
+      <div className="grid flex-1 text-left text-sm leading-tight text-sidebar-foreground group-data-[state=open]/menu-button:text-sidebar-accent-foreground">
         <span className="truncate font-medium">{user.name}</span>
-        <span className="truncate text-xs">{roleLabel}</span>
+        <span className="truncate text-xs text-sidebar-foreground/80 group-data-[state=open]/menu-button:text-sidebar-accent-foreground/80">
+          {roleLabel}
+        </span>
       </div>
     </>
   );
@@ -79,7 +81,7 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="group/menu-button text-sidebar-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&>svg]:text-sidebar-foreground/70 data-[state=open]:[&>svg]:text-sidebar-accent-foreground/70"
             >
               <UserIdentityBlock user={user} roleLabel={roleLabel} />
               <ChevronsUpDown className="ml-auto size-4" />

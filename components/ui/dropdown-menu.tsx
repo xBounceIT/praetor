@@ -3,6 +3,13 @@ import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import type * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { getBrowserTheme, getTheme } from '@/utils/theme';
+
+const getInitialShadcnThemeClass = () => {
+  const theme = getTheme();
+  const resolvedTheme = theme === 'auto' ? getBrowserTheme() : theme;
+  return resolvedTheme === 'dark' ? 'dark' : undefined;
+};
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
@@ -25,13 +32,18 @@ function DropdownMenuContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const themeClassName = getInitialShadcnThemeClass();
+
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
+        data-shadcn-theme-scope
         data-slot="dropdown-menu-content"
+        data-shadcn-theme={themeClassName === 'dark' ? 'dark' : 'light'}
         sideOffset={sideOffset}
         className={cn(
           'z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          themeClassName,
           className,
         )}
         {...props}
@@ -195,11 +207,16 @@ function DropdownMenuSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const themeClassName = getInitialShadcnThemeClass();
+
   return (
     <DropdownMenuPrimitive.SubContent
+      data-shadcn-theme-scope
       data-slot="dropdown-menu-sub-content"
+      data-shadcn-theme={themeClassName === 'dark' ? 'dark' : 'light'}
       className={cn(
         'z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+        themeClassName,
         className,
       )}
       {...props}

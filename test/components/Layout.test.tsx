@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
 import type { Role, User } from '../../types';
@@ -49,6 +49,12 @@ const renderLayout = (props?: Partial<React.ComponentProps<typeof Layout>>) =>
   );
 
 describe('<Layout />', () => {
+  beforeEach(() => {
+    isMobileViewport = false;
+    localStorage.clear();
+    document.documentElement.classList.remove('dark');
+  });
+
   test('header sits at z-40 so it paints above the table sticky-right cells (z-20)', () => {
     const { container } = renderLayout();
 
@@ -87,6 +93,21 @@ describe('<Layout />', () => {
     expect(activeButton?.className).toContain('text-sidebar-foreground');
     expect(activeButton?.className).toContain('data-[active=true]:text-sidebar-accent-foreground');
     expect(activeButton?.className).not.toContain('text-black');
+  });
+
+  test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', () => {
+    localStorage.setItem('praetor_theme', 'dark');
+    const { container } = renderLayout();
+
+    const trigger = screen.getByRole('button', { name: 'TU Test User roles.manager' });
+    fireEvent.pointerDown(trigger);
+
+    const dropdownContent = document.body.querySelector('[data-slot="dropdown-menu-content"]');
+
+    expect(trigger.className).toContain('text-sidebar-foreground');
+    expect(dropdownContent?.className).toContain('dark');
+    expect(dropdownContent?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(container.ownerDocument.documentElement.classList.contains('dark')).toBe(false);
   });
 
   test('sidebar trigger toggles desktop icon-collapse state', () => {
