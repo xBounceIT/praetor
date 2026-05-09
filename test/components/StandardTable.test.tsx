@@ -773,7 +773,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByText('table.noResults')).not.toBeInTheDocument();
   });
 
-  test('pagination "showing" counter renders and previous-button disables on page 1', () => {
+  test('pagination omits the range counter and previous-button disables on page 1', () => {
     const many: Row[] = Array.from({ length: 7 }, (_, i) => ({
       id: String(i + 1),
       name: `User${i + 1}`,
@@ -787,13 +787,15 @@ describe('<StandardTable />', () => {
         defaultRowsPerPage={5}
       />,
     );
-    expect(screen.getByText(/pagination\.showing/)).toBeInTheDocument();
+    expect(screen.queryByText(/pagination\.showing/)).not.toBeInTheDocument();
 
     const previousButton = screen.getByRole('button', { name: 'buttons.previous' });
     expect(previousButton).toBeDisabled();
-    expect(previousButton.getAttribute('data-size')).toBe('xs');
+    expect(previousButton.getAttribute('data-size')).toBe('sm');
     expect(previousButton.className).toContain('border-border');
     expect(previousButton.className).toContain('rounded-lg');
+    expect(previousButton.className).toContain('!h-7');
+    expect(previousButton.className).toContain('!text-[10px]');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
@@ -823,14 +825,16 @@ describe('<StandardTable />', () => {
     const increaseFontButton = screen.getByRole('button', { name: 'table.increaseFont' });
     const columnsButton = screen.getByRole('button', { name: 'table.columnSettings' });
 
-    expect(exportButton.getAttribute('data-size')).toBe('xs');
-    expect(columnsButton.getAttribute('data-size')).toBe('xs');
-    expect(decreaseFontButton.getAttribute('data-size')).toBe('icon-xs');
-    expect(increaseFontButton.getAttribute('data-size')).toBe('icon-xs');
+    expect(exportButton.getAttribute('data-size')).toBe('sm');
+    expect(columnsButton.getAttribute('data-size')).toBe('sm');
+    expect(decreaseFontButton.getAttribute('data-size')).toBe('sm');
+    expect(increaseFontButton.getAttribute('data-size')).toBe('sm');
 
     for (const button of [exportButton, decreaseFontButton, increaseFontButton, columnsButton]) {
       expect(button.className).toContain('border-border');
       expect(button.className).toContain('rounded-lg');
+      expect(button.className).toContain('!h-7');
+      expect(button.className).toContain('!text-[10px]');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
 

@@ -97,6 +97,7 @@ const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
 const ACTION_COLUMN_WIDTH = 80;
+const TABLE_CONTROL_BUTTON_CLASSNAME = '!h-7 !gap-1.5 !rounded-lg !px-2 !text-[10px] !font-bold';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -271,7 +272,8 @@ const StandardTable = <T extends object>({
     const container = tableContainerRef.current;
     if (!container) return;
     const maxScrollLeft = container.scrollWidth - container.clientWidth;
-    setActionColumnOverlaps(maxScrollLeft > 1 && container.scrollLeft < maxScrollLeft - 1);
+    const overlaps = maxScrollLeft > 1 && container.scrollLeft < maxScrollLeft - 1;
+    setActionColumnOverlaps((prev) => (prev === overlaps ? prev : overlaps));
   }, []);
 
   useEffect(() => {
@@ -466,11 +468,6 @@ const StandardTable = <T extends object>({
     };
   }, [updateActionColumnOverlap, updateHeaderMinWidths]);
 
-  useEffect(() => {
-    updateHeaderMinWidths();
-    updateActionColumnOverlap();
-  });
-
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
     if (col.accessorKey) return row[col.accessorKey];
@@ -664,7 +661,6 @@ const StandardTable = <T extends object>({
   const processedRows = data ? table.getPrePaginationRowModel().rows : [];
   const totalItems = data ? processedRows.length : externalTotalCount || 0;
   const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedRows = data ? table.getRowModel().rows : [];
 
   useEffect(() => {
@@ -1009,11 +1005,33 @@ const StandardTable = <T extends object>({
     e.preventDefault();
     e.stopPropagation();
     const th = e.currentTarget.parentElement as HTMLTableCellElement;
+    const container = tableContainerRef.current;
     const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
     const headerTextWidth = Math.max(
       headerLabel?.scrollWidth ?? 0,
       headerLabel?.getBoundingClientRect().width ?? 0,
     );
+    if (container) {
+      const measuredWidths: Record<string, number> = {};
+      for (const col of visibleColumns) {
+        const visibleColId = getColId(col);
+        const label = Array.from(
+          container.querySelectorAll<HTMLElement>('[data-column-header-label]'),
+        ).find((element) => element.getAttribute('data-column-header-label') === visibleColId);
+        const headerCell = label?.closest('th') as HTMLTableCellElement | null;
+        const width = Math.ceil(headerCell?.getBoundingClientRect().width ?? 0);
+        const labelWidth = Math.max(
+          label?.scrollWidth ?? 0,
+          label?.getBoundingClientRect().width ?? 0,
+        );
+        measuredWidths[visibleColId] = Math.max(
+          getHeaderMinWidth(col),
+          Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
+          width,
+        );
+      }
+      setColumnWidths((prev) => ({ ...prev, ...measuredWidths }));
+    }
     resizeStartXRef.current = e.clientX;
     resizeStartWidthRef.current = th.getBoundingClientRect().width;
     resizeMinWidthRef.current = Math.max(
@@ -1051,8 +1069,8 @@ const StandardTable = <T extends object>({
             ref={buttonRef}
             aria-label={label}
             variant={active ? 'secondary' : 'outline'}
-            size={text ? 'xs' : 'icon-xs'}
-            className="rounded-lg"
+            size="sm"
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
             onClick={(e) => {
               e.stopPropagation();
               onClick();
@@ -1179,12 +1197,6 @@ const StandardTable = <T extends object>({
     return (
       <>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span>
-            {t('pagination.showing')
-              .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
-              .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
-              .replace('{{total}}', String(totalItems))}
-          </span>
           <span className="text-xs font-medium text-muted-foreground">
             {t('pagination.rowsPerPage')}
           </span>
@@ -1196,7 +1208,10 @@ const StandardTable = <T extends object>({
               table.setPageSize(newValue);
             }}
           >
-            <SelectTrigger size="sm" className="h-7 w-[68px] rounded-lg text-xs text-foreground">
+            <SelectTrigger
+              size="sm"
+              className={`${TABLE_CONTROL_BUTTON_CLASSNAME} w-[68px] text-foreground`}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1213,8 +1228,8 @@ const StandardTable = <T extends object>({
           <Button
             type="button"
             variant="outline"
-            size="xs"
-            className="rounded-lg"
+            size="sm"
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
             onClick={(e) => {
               e.stopPropagation();
               table.previousPage();
@@ -1229,8 +1244,8 @@ const StandardTable = <T extends object>({
           <Button
             type="button"
             variant="outline"
-            size="xs"
-            className="rounded-lg"
+            size="sm"
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
             onClick={(e) => {
               e.stopPropagation();
               table.nextPage();
@@ -1285,8 +1300,8 @@ const StandardTable = <T extends object>({
                     type="button"
                     aria-label={t('table.columnSettings')}
                     variant="outline"
-                    size="xs"
-                    className="rounded-lg data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0"
+                    size="sm"
+                    className={`${TABLE_CONTROL_BUTTON_CLASSNAME} data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0`}
                   >
                     {t('table.columns')}
                     <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
@@ -1602,7 +1617,7 @@ const StandardTable = <T extends object>({
                             className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
                           >
                             <span
-                              className="truncate text-sm font-semibold text-muted-foreground"
+                              className="truncate text-sm font-semibold text-foreground"
                               data-column-header-label={colId}
                             >
                               {header.isPlaceholder
@@ -1618,7 +1633,7 @@ const StandardTable = <T extends object>({
                               type="button"
                               disabled={!header.column.getCanSort()}
                               onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
                               <span className="truncate" data-column-header-label={colId}>
                                 {header.isPlaceholder
