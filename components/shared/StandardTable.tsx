@@ -194,7 +194,6 @@ const StandardTable = <T extends object>({
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
   const [resizingColId, setResizingColId] = useState<string | null>(null);
-  const [actionColumnOverlaps, setActionColumnOverlaps] = useState(false);
   const [headerMinWidths, setHeaderMinWidths] = useState<Record<string, number>>({});
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
@@ -285,14 +284,6 @@ const StandardTable = <T extends object>({
     },
     [title],
   );
-
-  const updateActionColumnOverlap = useCallback(() => {
-    const container = tableContainerRef.current;
-    if (!container) return;
-    const maxScrollLeft = container.scrollWidth - container.clientWidth;
-    const overlaps = maxScrollLeft > 1 && container.scrollLeft < maxScrollLeft - 1;
-    setActionColumnOverlaps((prev) => (prev === overlaps ? prev : overlaps));
-  }, []);
 
   useEffect(() => {
     const next = initialFilterState ?? {};
@@ -557,25 +548,18 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     const container = tableContainerRef.current;
     if (!container) return;
-    const handleResizeLayout = () => {
-      updateHeaderMinWidths();
-      updateActionColumnOverlap();
-    };
-    const handleScroll = () => updateActionColumnOverlap();
 
-    handleResizeLayout();
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleResizeLayout);
+    updateHeaderMinWidths();
+    window.addEventListener('resize', updateHeaderMinWidths);
 
     const resizeObserver =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(handleResizeLayout) : null;
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateHeaderMinWidths) : null;
     resizeObserver?.observe(container);
     return () => {
-      container.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResizeLayout);
+      window.removeEventListener('resize', updateHeaderMinWidths);
       resizeObserver?.disconnect();
     };
-  }, [updateActionColumnOverlap, updateHeaderMinWidths]);
+  }, [updateHeaderMinWidths]);
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
@@ -1693,9 +1677,7 @@ const StandardTable = <T extends object>({
                     const sorted = header.column.getIsSorted();
                     const isResizing = resizingColId === colId || header.column.getIsResizing();
                     const stickyBorderClass =
-                      isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
-                        ? 'border-l border-border'
-                        : '';
+                      isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
 
                     return (
                       <TableHead
@@ -1857,9 +1839,7 @@ const StandardTable = <T extends object>({
                             ? Math.max(cell.column.getSize(), minColumnWidth)
                             : undefined;
                         const stickyBorderClass =
-                          isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
-                            ? 'border-l border-border'
-                            : '';
+                          isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
                         const stickyHoverClass =
                           isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
                         const rawValue = cell.getValue() as

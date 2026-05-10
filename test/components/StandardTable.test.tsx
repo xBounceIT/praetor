@@ -646,7 +646,7 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Edit Alice')).toBeInTheDocument();
   });
 
-  test('action column border appears only while the sticky column overlaps content', async () => {
+  test('action column stays borderless even while sticky over scrollable content', () => {
     const cols = [
       ...sampleColumns,
       {
@@ -675,15 +675,15 @@ describe('<StandardTable />', () => {
       fireEvent.scroll(tableContainer);
     });
 
-    await waitFor(() => expect(actionHeader.className).toContain('border-l'));
-    expect(actionCell.className).toContain('border-l');
+    expect(actionHeader.className).not.toContain('border-l');
+    expect(actionCell.className).not.toContain('border-l');
 
     tableContainer.scrollLeft = 300;
     act(() => {
       fireEvent.scroll(tableContainer);
     });
 
-    await waitFor(() => expect(actionHeader.className).not.toContain('border-l'));
+    expect(actionHeader.className).not.toContain('border-l');
     expect(actionCell.className).not.toContain('border-l');
   });
 
