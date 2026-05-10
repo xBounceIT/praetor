@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { cn } from '@/lib/utils';
+import { ModalThemeContext } from './ModalThemeContext';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -183,8 +184,10 @@ const Modal: React.FC<ModalProps> = ({
           focusModalContent();
         }}
       >
-        {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
-        {normalizedChildren}
+        <ModalThemeContext.Provider value={resolvedTheme}>
+          {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
+          {normalizedChildren}
+        </ModalThemeContext.Provider>
       </DialogContent>
     </Dialog>
   );

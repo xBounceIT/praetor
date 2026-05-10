@@ -1,6 +1,10 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
@@ -9,6 +13,14 @@ import { buildPermission, hasPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -546,172 +558,167 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}></i>
-              </div>
-              {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
-            </h3>
-            <button
-              onClick={closeModal}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="lg">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
+              </ModalTitle>
+              <ModalCloseButton onClick={closeModal} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {(() => {
-              const project = projects.find((p) => p.id === projectId);
-              const orderId = project?.orderId;
-              return editingTask && orderId ? (
-                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                      <i className="fa-solid fa-link"></i>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-zinc-900">
-                        {t('projects:projects.linkedOrder')}
+            <ModalBody className="space-y-6">
+              {(() => {
+                const project = projects.find((p) => p.id === projectId);
+                const orderId = project?.orderId;
+                return editingTask && orderId ? (
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                        <i className="fa-solid fa-link" aria-hidden="true"></i>
                       </div>
-                      <div className="text-xs text-praetor">{formatOrderId(orderId)}</div>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">
+                          {t('projects:projects.linkedOrder')}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatOrderId(orderId)}
+                        </div>
+                      </div>
                     </div>
+                    {onViewOrder && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => onViewOrder(orderId)}
+                        className="px-0"
+                      >
+                        {t('projects:projects.viewOrder')}
+                      </Button>
+                    )}
                   </div>
-                  {onViewOrder && (
-                    <button
-                      type="button"
-                      onClick={() => onViewOrder(orderId)}
-                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
-                    >
-                      {t('projects:projects.viewOrder')}
-                    </button>
-                  )}
-                </div>
-              ) : null;
-            })()}
+                ) : null;
+              })()}
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 ml-1">{t('tasks.project')}</label>
-              <SelectControl
-                options={projectSelectOptions}
-                value={projectId}
-                onChange={(val) => setProjectId(val as string)}
-                placeholder={t('common:labels.selectOption')}
-                searchable={true}
-                buttonClassName="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
-              />
-            </div>
+              <div className="space-y-4">
+                <SelectControl
+                  id="task-project"
+                  options={projectSelectOptions}
+                  value={projectId}
+                  onChange={(val) => setProjectId(val as string)}
+                  label={t('tasks.project')}
+                  placeholder={t('common:labels.selectOption')}
+                  searchable={true}
+                  buttonClassName="h-9"
+                />
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 ml-1">{t('tasks.name')}</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('tasks.taskNamePlaceholder')}
-                className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
-              />
-            </div>
+                <Field>
+                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                  <Input
+                    id="task-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('tasks.taskNamePlaceholder')}
+                  />
+                </Field>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 ml-1">
-                {t('tasks.description')}
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('tasks.taskDescriptionPlaceholder')}
-                rows={3}
-                className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
-              />
-            </div>
+                <Field>
+                  <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
+                  <Textarea
+                    id="task-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={t('tasks.taskDescriptionPlaceholder')}
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
 
-            {/* Status toggles - logic wrapped for conditional rendering */}
-            {(() => {
-              const project = projects.find((p) => p.id === projectId);
-              const client = clients.find((c) => c.id === project?.clientId);
-              const isProjectDisabled = project?.isDisabled || false;
-              const isClientDisabled = client?.isDisabled || false;
-              const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-              const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
+                {(() => {
+                  const project = projects.find((p) => p.id === projectId);
+                  const client = clients.find((c) => c.id === project?.clientId);
+                  const isProjectDisabled = project?.isDisabled || false;
+                  const isClientDisabled = client?.isDisabled || false;
+                  const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+                  const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
 
-              return (
-                <div className="space-y-2 pt-2">
-                  <div
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
-                      isCurrentlyDisabled
-                        ? 'bg-red-50 border-red-100'
-                        : 'bg-zinc-50 border-zinc-200'
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-black ${
-                        isCurrentlyDisabled ? 'text-red-700' : 'text-zinc-700'
-                      }`}
-                    >
-                      {t('tasks.isDisabled')}
-                    </p>
-                    <Toggle
-                      checked={isCurrentlyDisabled}
-                      onChange={() => {
-                        if (!isInheritedDisabled) {
-                          setTempIsDisabled(!tempIsDisabled);
-                        }
-                      }}
-                      disabled={isInheritedDisabled}
-                    />
-                  </div>
-                  {isInheritedDisabled && (
-                    <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1.5 px-1 ml-1">
-                      <i className="fa-solid fa-triangle-exclamation"></i>
-                      {isClientDisabled
-                        ? t('projects.inheritedFromDisabledClient', { clientName: client?.name })
-                        : t('tasks.inheritedFromDisabledProject', {
-                            projectName: project?.name,
-                          })}
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
+                  return (
+                    <Field>
+                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                        <div>
+                          <p
+                            className={`text-sm font-medium ${
+                              isInheritedDisabled ? 'text-muted-foreground' : 'text-foreground'
+                            }`}
+                          >
+                            {t('tasks.isDisabled')}
+                          </p>
+                          {isInheritedDisabled && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                              <i
+                                className="fa-solid fa-triangle-exclamation"
+                                aria-hidden="true"
+                              ></i>
+                              {isClientDisabled
+                                ? t('projects.inheritedFromDisabledClient', {
+                                    clientName: client?.name,
+                                  })
+                                : t('tasks.inheritedFromDisabledProject', {
+                                    projectName: project?.name,
+                                  })}
+                            </p>
+                          )}
+                        </div>
+                        <Toggle
+                          checked={isCurrentlyDisabled}
+                          onChange={() => {
+                            if (!isInheritedDisabled) {
+                              setTempIsDisabled(!tempIsDisabled);
+                            }
+                          }}
+                          disabled={isInheritedDisabled}
+                        />
+                      </div>
+                    </Field>
+                  );
+                })()}
+              </div>
+            </ModalBody>
 
-            <div className="pt-6 flex items-center justify-between gap-4 border-t border-zinc-100 mt-2">
-              {editingTask && canDeleteTasks && (
-                <button
+            <ModalFooter className="sm:justify-between">
+              {editingTask && canDeleteTasks ? (
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={confirmDelete}
-                  className="px-5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-bold transition-all border border-transparent hover:border-red-100"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
-                  <i className="fa-solid fa-trash-can mr-2"></i>
+                  <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
                   {t('common:buttons.delete')}
-                </button>
+                </Button>
+              ) : (
+                <span />
               )}
 
-              <div className="flex gap-3 ml-auto">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
-                >
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className={`px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${
-                    canSubmit
-                      ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
-                      : 'bg-zinc-300 shadow-none cursor-not-allowed'
-                  }`}
-                >
+                </Button>
+                <Button type="submit" disabled={!canSubmit}>
                   {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
-                </button>
+                </Button>
               </div>
-            </div>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       {/* Header */}

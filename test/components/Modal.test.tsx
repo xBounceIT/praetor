@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-const { THEME_STORAGE_KEY } = await import('../../utils/theme');
+const { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } = await import('../../utils/theme');
 const Modal = (await import('../../components/shared/Modal')).default;
 const { ModalContent } = await import('../../components/shared/ModalLayout');
 
@@ -215,6 +215,27 @@ describe('<Modal />', () => {
     expect(shell?.className).toContain('shadcn-theme-bridge');
     expect(shell?.className).toContain('bg-background');
     expect(shell?.className).toContain('rounded-lg');
+  });
+
+  test('modal layout reuses the shared modal theme subscription', () => {
+    const addEventListenerSpy = spyOn(window, 'addEventListener');
+
+    try {
+      render(
+        <Modal isOpen={true} onClose={() => {}}>
+          <ModalContent size="sm">
+            <div>Scoped shell</div>
+          </ModalContent>
+        </Modal>,
+      );
+
+      const themeSubscriptions = addEventListenerSpy.mock.calls.filter(
+        ([eventName]) => eventName === THEME_CHANGE_EVENT,
+      );
+      expect(themeSubscriptions).toHaveLength(1);
+    } finally {
+      addEventListenerSpy.mockRestore();
+    }
   });
 
   test('unmounting restores body overflow', () => {

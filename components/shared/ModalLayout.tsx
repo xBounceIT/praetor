@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { cn } from '@/lib/utils';
+import type { ResolvedTheme } from '@/utils/theme';
+import { useModalTheme } from './ModalThemeContext';
 
 const modalSizeClassName = {
   sm: 'max-w-sm',
@@ -17,17 +19,20 @@ const modalSizeClassName = {
 
 export type ModalLayoutSize = keyof typeof modalSizeClassName;
 
-export function ModalContent({
-  children,
-  className,
-  size = 'md',
-  ...props
-}: React.ComponentProps<'div'> & {
+type ModalContentProps = React.ComponentProps<'div'> & {
   children: React.ReactNode;
   size?: ModalLayoutSize;
-}) {
-  const resolvedTheme = useResolvedShadcnTheme();
+};
 
+function ModalContentShell({
+  children,
+  className,
+  resolvedTheme,
+  size = 'md',
+  ...props
+}: ModalContentProps & {
+  resolvedTheme: ResolvedTheme;
+}) {
   return (
     <div
       data-slot="modal-content"
@@ -44,6 +49,21 @@ export function ModalContent({
       {children}
     </div>
   );
+}
+
+function ModalContentWithResolvedTheme(props: ModalContentProps) {
+  const resolvedTheme = useResolvedShadcnTheme();
+  return <ModalContentShell {...props} resolvedTheme={resolvedTheme} />;
+}
+
+export function ModalContent(props: ModalContentProps) {
+  const resolvedTheme = useModalTheme();
+
+  if (!resolvedTheme) {
+    return <ModalContentWithResolvedTheme {...props} />;
+  }
+
+  return <ModalContentShell {...props} resolvedTheme={resolvedTheme} />;
 }
 
 export function ModalHeader({
