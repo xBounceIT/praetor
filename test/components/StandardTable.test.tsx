@@ -251,7 +251,6 @@ describe('<StandardTable />', () => {
       {
         id: 'actions',
         header: 'Actions',
-        sticky: 'right' as const,
         cell: () => <button type="button">x</button>,
       },
     ];
@@ -288,13 +287,12 @@ describe('<StandardTable />', () => {
     expect(ageResizeHandle?.className).not.toContain('z-30');
   });
 
-  test('sparse action-only custom views do not insert an action spacer', () => {
+  test('sparse action-only custom views keep actions sticky without inserting a spacer', () => {
     const columns = [
       { header: 'Name', accessorKey: 'name' as const, id: 'name' },
       {
         id: 'actions',
         header: 'Actions',
-        sticky: 'right' as const,
         cell: () => <button type="button">x</button>,
       },
     ];
@@ -307,8 +305,10 @@ describe('<StandardTable />', () => {
 
     expect(headers).toHaveLength(2);
     expect(cells).toHaveLength(2);
-    expect(headers[1].className).not.toContain('sticky');
-    expect(cells[1].className).not.toContain('sticky');
+    expect(headers[1].className).toContain('sticky');
+    expect(headers[1].className).toContain('right-0');
+    expect(cells[1].className).toContain('sticky');
+    expect(cells[1].className).toContain('right-0');
     expect(screen.getByRole('table').style.width).not.toBe('100%');
     expect(screen.getByRole('table').querySelector('[data-action-spacer]')).toBeNull();
     expect(
@@ -730,6 +730,13 @@ describe('<StandardTable />', () => {
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
     expect(screen.getByText('Edit Alice')).toBeInTheDocument();
+    const actionMenu = screen
+      .getByTestId('action-1')
+      .closest('[data-standard-table-action-menu="true"]') as HTMLElement;
+    expect(actionMenu).toHaveAttribute('data-slot', 'dropdown-menu-content');
+    expect(actionMenu.className).toContain('w-max');
+    expect(actionMenu.className).toContain('min-w-[9rem]');
+    expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
   });
 
   test('action column stays borderless even while sticky over scrollable content', () => {
@@ -846,10 +853,67 @@ describe('<StandardTable />', () => {
     });
 
     const action = await screen.findByTestId('context-action-2');
-    expect(action.closest('[data-slot="context-menu-content"]')).toBeInTheDocument();
+    const actionMenu = action.closest('[data-standard-table-action-menu="true"]') as HTMLElement;
+    expect(actionMenu).toHaveAttribute('data-slot', 'context-menu-content');
+    expect(actionMenu.className).toContain('w-max');
+    expect(actionMenu.className).toContain('min-w-[9rem]');
+    expect(action.className).toContain('text-popover-foreground');
 
     await userEvent.click(action);
     expect(onAction).toHaveBeenCalledWith('2');
+  });
+
+  test('saved views cannot hide the actions column or disable row context actions', async () => {
+    const onAction = mock((id: string) => id);
+    localStorage.setItem(
+      'praetor_table_customviews_action_persist',
+      JSON.stringify([
+        {
+          id: 'hide-actions',
+          name: 'Hide actions',
+          hiddenColIds: ['actions'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_action_persist', 'hide-actions');
+    const cols = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }: { row: Row }) => (
+          <button
+            type="button"
+            data-testid={`persisted-action-${row.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction(row.id);
+            }}
+          >
+            Edit {row.name}
+          </button>
+        ),
+      },
+    ];
+    render(<StandardTable<Row> title="Action Persist" data={sampleRows} columns={cols} />);
+
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('table.rowActions')).toHaveLength(sampleRows.length);
+
+    await openColumnSettings();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Actions' })).toBeNull();
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    act(() => {
+      fireEvent.contextMenu(screen.getAllByRole('row')[1], { clientX: 12, clientY: 24 });
+    });
+
+    const action = await screen.findByTestId('persisted-action-1');
+    await userEvent.click(action);
+    expect(onAction).toHaveBeenCalledWith('1');
   });
 
   // ---------------------------------------------------------------------------

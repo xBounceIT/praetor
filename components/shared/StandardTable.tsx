@@ -119,6 +119,10 @@ const ACTION_COLUMN_WIDTH = 96;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const TABLE_CONTROL_BUTTON_CLASSNAME =
   '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';
+const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
+const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
+const ACTION_MENU_BUTTON_CLASSNAME =
+  'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -299,17 +303,20 @@ const StandardTable = <T extends object>({
   );
 
   const isRowActionColumn = useCallback(
-    (col: Column<T>) => col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null,
-    [],
+    (col: Column<T>) =>
+      getColId(col) === 'actions' ||
+      (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null),
+    [getColId],
   );
 
   const visibleColumns = useMemo(
     () =>
       columns?.filter((col) => {
         if (col.hidden) return false;
+        if (isRowActionColumn(col)) return true;
         return !hiddenColIds.has(getColId(col));
       }) ?? [],
-    [columns, hiddenColIds, getColId],
+    [columns, hiddenColIds, getColId, isRowActionColumn],
   );
 
   const getColumnMinWidth = useCallback(
@@ -368,8 +375,12 @@ const StandardTable = <T extends object>({
 
   const usesFixedTableLayout = Boolean(columns && data);
 
-  // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
-  const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
+  // Excludes statically hidden filter-only columns and row actions; sort/filter
+  // still target hidden filter-only columns via colsById.
+  const gearColumns = useMemo(
+    () => columns?.filter((col) => !col.hidden && !isRowActionColumn(col)) ?? [],
+    [columns, isRowActionColumn],
+  );
 
   const modalColumns = useMemo(
     () => gearColumns.map((col) => ({ id: getColId(col), header: col.header })),
@@ -489,7 +500,7 @@ const StandardTable = <T extends object>({
           enableResizing: !isRowActionColumn(col),
           enableSorting: !col.disableSorting,
           enableColumnFilter: !col.disableFiltering,
-          enableHiding: !col.hidden,
+          enableHiding: !col.hidden && !isRowActionColumn(col),
           sortingFn: (rowA, rowB) => {
             const valA = rowA.getValue(colId);
             const valB = rowB.getValue(colId);
@@ -546,10 +557,11 @@ const StandardTable = <T extends object>({
       Object.fromEntries(
         (columns ?? []).map((col) => {
           const colId = getColId(col);
+          if (isRowActionColumn(col)) return [colId, true];
           return [colId, !col.hidden && !hiddenColIds.has(colId)];
         }),
       ) as VisibilityState,
-    [columns, getColId, hiddenColIds],
+    [columns, getColId, hiddenColIds, isRowActionColumn],
   );
 
   const onSortingChange = useCallback(
@@ -751,7 +763,10 @@ const StandardTable = <T extends object>({
         typeof element.props.onClick === 'function');
     if (!isButtonElement) {
       return (
-        <div key={key} className="flex min-h-7 items-center gap-2 px-2 py-1 text-xs">
+        <div
+          key={key}
+          className="flex min-h-7 items-center gap-2 px-2 py-1 text-xs text-popover-foreground"
+        >
           {node}
           {labelText && <span className="whitespace-nowrap">{labelText}</span>}
         </div>
@@ -776,7 +791,7 @@ const StandardTable = <T extends object>({
         aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
         data-testid={testId}
         disabled={props.disabled}
-        className="flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+        className={ACTION_MENU_BUTTON_CLASSNAME}
         onClick={(event) => {
           event.stopPropagation();
           props.onClick?.(event);
@@ -1550,16 +1565,15 @@ const StandardTable = <T extends object>({
                     const col = colsById.get(header.column.id);
                     if (!col) return null;
                     const colId = getColId(col);
-                    const isStickyRightColumn = col.sticky === 'right';
                     const isActionColumn = isRowActionColumn(col);
+                    const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === headerGroup.headers.length - 1;
                     const isBeforeActionSpacer =
                       shouldAnchorTrailingActionColumn &&
                       !isActionColumn &&
                       colIdx === headerGroup.headers.length - 2;
-                    const shouldStickRightColumn =
-                      isStickyRightColumn && (!isActionColumn || shouldAnchorTrailingActionColumn);
+                    const shouldStickRightColumn = isStickyRightColumn;
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
                       ? 'left'
@@ -1688,8 +1702,24 @@ const StandardTable = <T extends object>({
                     const col = colsById.get(cell.column.id);
                     return col ? isRowActionColumn(col) : false;
                   });
+                  const rowActionColumn = rowActionCell
+                    ? colsById.get(rowActionCell.column.id)
+                    : undefined;
+                  const rowActionValue = rowActionCell?.getValue() as
+                    | T[keyof T]
+                    | string
+                    | number
+                    | boolean
+                    | null
+                    | undefined;
                   const rowActionContent = rowActionCell
-                    ? flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
+                    ? rowActionColumn?.cell
+                      ? rowActionColumn.cell({
+                          getValue: () => rowActionValue,
+                          row,
+                          value: rowActionValue,
+                        })
+                      : flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
                     : null;
                   const rowElement = (
                     <TableRow
@@ -1701,13 +1731,11 @@ const StandardTable = <T extends object>({
                         const colId = cell.column.id;
                         const col = colsById.get(colId);
                         if (!col) return null;
-                        const isStickyRightColumn = col.sticky === 'right';
                         const isActionColumn = isRowActionColumn(col);
+                        const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
                         const isFirstColumn = colIdx === 0;
                         const isLastColumn = colIdx === visibleCells.length - 1;
-                        const shouldStickRightColumn =
-                          isStickyRightColumn &&
-                          (!isActionColumn || shouldAnchorTrailingActionColumn);
+                        const shouldStickRightColumn = isStickyRightColumn;
                         // Force alignment: first column left, last column right, otherwise use col.align
                         const effectiveAlign = isFirstColumn
                           ? 'left'
@@ -1769,11 +1797,12 @@ const StandardTable = <T extends object>({
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent
                                     align="end"
-                                    className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
+                                    data-standard-table-action-menu="true"
+                                    className={ACTION_MENU_CONTENT_CLASSNAME}
                                     onClick={(event) => event.stopPropagation()}
                                     onDoubleClick={(event) => event.stopPropagation()}
                                   >
-                                    <div className="flex flex-col gap-0.5">
+                                    <div className={ACTION_MENU_ITEMS_CLASSNAME}>
                                       {renderActionMenuItems(cellContent)}
                                     </div>
                                   </DropdownMenuContent>
@@ -1792,11 +1821,12 @@ const StandardTable = <T extends object>({
                     <ContextMenu key={tableRow.id}>
                       <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
                       <ContextMenuContent
-                        className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
+                        data-standard-table-action-menu="true"
+                        className={ACTION_MENU_CONTENT_CLASSNAME}
                         onClick={(event) => event.stopPropagation()}
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
-                        <div className="flex flex-col gap-0.5">
+                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>
                           {renderActionMenuItems(rowActionContent)}
                         </div>
                       </ContextMenuContent>
