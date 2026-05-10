@@ -1659,7 +1659,7 @@ const StandardTable = <T extends object>({
                                 type="button"
                                 disabled={!header.column.getCanSort()}
                                 onClick={header.column.getToggleSortingHandler()}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                                className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100 ${effectiveAlign === 'left' ? '-ml-2' : ''}`}
                               >
                                 <span
                                   className="whitespace-nowrap"

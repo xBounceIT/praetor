@@ -348,6 +348,7 @@ describe('<StandardTable />', () => {
     const sortIcon = sortButton.querySelector('svg.lucide-arrow-up-down');
 
     expect(sortButton.className).toContain('rounded-lg');
+    expect(sortButton.className).toContain('-ml-2');
     expect(sortButton.className).toContain('font-semibold');
     expect(sortButton.className).toContain('hover:bg-accent');
     expect(sortButton.className).toContain('hover:text-accent-foreground');
