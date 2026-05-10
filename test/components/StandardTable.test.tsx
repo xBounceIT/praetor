@@ -355,6 +355,18 @@ describe('<StandardTable />', () => {
     expect(sortIcon?.className).toContain('transition-colors');
   });
 
+  test('all sortable header buttons align with cell padding', () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    for (const headerText of ['Name', 'Age']) {
+      const headerCell = screen.getByText(headerText).closest('th') as HTMLTableCellElement;
+      const sortButton = within(headerCell)
+        .getAllByRole('button')
+        .find((button) => button.textContent?.trim().startsWith(headerText)) as HTMLButtonElement;
+      expect(sortButton.className).toContain('-ml-2');
+    }
+  });
+
   test('every non-action header shows a sort icon affordance', () => {
     const columns = [
       { header: 'Name', accessorKey: 'name' as const, id: 'name' },
