@@ -291,6 +291,11 @@ const StandardTable = <T extends object>({
     [],
   );
 
+  const isRowActionColumn = useCallback(
+    (col: Column<T>) => col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null,
+    [],
+  );
+
   const visibleColumns = useMemo(
     () =>
       columns?.filter((col) => {
@@ -299,30 +304,54 @@ const StandardTable = <T extends object>({
       }) ?? [],
     [columns, hiddenColIds, getColId],
   );
-  const updateHeaderMinWidths = useCallback(() => {
-    const container = tableContainerRef.current;
-    if (!container) return;
 
-    const next: Record<string, number> = {};
-    for (const col of visibleColumns) {
-      const colId = getColId(col);
-      if (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null) {
-        next[colId] = ACTION_COLUMN_WIDTH;
-        continue;
-      }
+  const getMeasuredColumnWidth = useCallback(
+    (col: Column<T>, label: HTMLElement | undefined, includeRenderedWidth = false) => {
+      if (isRowActionColumn(col)) return ACTION_COLUMN_WIDTH;
 
-      const headerLabel = Array.from(
-        container.querySelectorAll<HTMLElement>('[data-column-header-label]'),
-      ).find((element) => element.getAttribute('data-column-header-label') === colId);
       const labelWidth = Math.max(
-        headerLabel?.scrollWidth ?? 0,
-        headerLabel?.getBoundingClientRect().width ?? 0,
+        label?.scrollWidth ?? 0,
+        label?.getBoundingClientRect().width ?? 0,
       );
-      next[colId] = Math.max(
+      const minWidth = Math.max(
         DEFAULT_MIN_COL_WIDTH,
         Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
       );
-    }
+      if (!includeRenderedWidth) return minWidth;
+
+      const headerCell = label?.closest('th') as HTMLTableCellElement | null;
+      return Math.max(minWidth, Math.ceil(headerCell?.getBoundingClientRect().width ?? 0));
+    },
+    [isRowActionColumn],
+  );
+
+  const measureVisibleColumnWidths = useCallback(
+    (includeRenderedWidth = false) => {
+      const container = tableContainerRef.current;
+      if (!container) return null;
+
+      const labelsByColumnId = new Map(
+        Array.from(container.querySelectorAll<HTMLElement>('[data-column-header-label]')).map(
+          (element) => [element.getAttribute('data-column-header-label') ?? '', element],
+        ),
+      );
+      const next: Record<string, number> = {};
+      for (const col of visibleColumns) {
+        const colId = getColId(col);
+        next[colId] = getMeasuredColumnWidth(
+          col,
+          labelsByColumnId.get(colId),
+          includeRenderedWidth,
+        );
+      }
+      return next;
+    },
+    [getColId, getMeasuredColumnWidth, visibleColumns],
+  );
+
+  const updateHeaderMinWidths = useCallback(() => {
+    const next = measureVisibleColumnWidths();
+    if (!next) return;
 
     setHeaderMinWidths((prev) => {
       const prevEntries = Object.entries(prev);
@@ -335,7 +364,7 @@ const StandardTable = <T extends object>({
       }
       return next;
     });
-  }, [getColId, visibleColumns]);
+  }, [measureVisibleColumnWidths]);
   const validColumnWidths = useMemo(() => {
     const validIds = new Set((columns ?? []).map((col) => getColId(col)));
     return sanitizeColumnWidths(columnWidths, validIds);
@@ -446,24 +475,25 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     const container = tableContainerRef.current;
     if (!container) return;
-    const handleLayoutChange = () => {
+    const handleResizeLayout = () => {
       updateHeaderMinWidths();
       updateActionColumnOverlap();
     };
+    const handleScroll = () => updateActionColumnOverlap();
 
-    handleLayoutChange();
-    container.addEventListener('scroll', handleLayoutChange, { passive: true });
-    window.addEventListener('resize', handleLayoutChange);
+    handleResizeLayout();
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResizeLayout);
 
     const resizeObserver =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(handleLayoutChange) : null;
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(handleResizeLayout) : null;
     resizeObserver?.observe(container);
     const tableElement = container.querySelector('table');
     if (tableElement) resizeObserver?.observe(tableElement);
 
     return () => {
-      container.removeEventListener('scroll', handleLayoutChange);
-      window.removeEventListener('resize', handleLayoutChange);
+      container.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResizeLayout);
       resizeObserver?.disconnect();
     };
   }, [updateActionColumnOverlap, updateHeaderMinWidths]);
@@ -695,9 +725,6 @@ const StandardTable = <T extends object>({
     if (typeof filterValue === 'string') return [filterValue];
     return [];
   };
-
-  const isRowActionColumn = (col: Column<T>) =>
-    col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null;
 
   const getHeaderMinWidth = (col: Column<T>) =>
     isRowActionColumn(col)
@@ -1005,39 +1032,17 @@ const StandardTable = <T extends object>({
     e.preventDefault();
     e.stopPropagation();
     const th = e.currentTarget.parentElement as HTMLTableCellElement;
-    const container = tableContainerRef.current;
     const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
-    const headerTextWidth = Math.max(
-      headerLabel?.scrollWidth ?? 0,
-      headerLabel?.getBoundingClientRect().width ?? 0,
-    );
-    if (container) {
-      const measuredWidths: Record<string, number> = {};
-      for (const col of visibleColumns) {
-        const visibleColId = getColId(col);
-        const label = Array.from(
-          container.querySelectorAll<HTMLElement>('[data-column-header-label]'),
-        ).find((element) => element.getAttribute('data-column-header-label') === visibleColId);
-        const headerCell = label?.closest('th') as HTMLTableCellElement | null;
-        const width = Math.ceil(headerCell?.getBoundingClientRect().width ?? 0);
-        const labelWidth = Math.max(
-          label?.scrollWidth ?? 0,
-          label?.getBoundingClientRect().width ?? 0,
-        );
-        measuredWidths[visibleColId] = Math.max(
-          getHeaderMinWidth(col),
-          Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
-          width,
-        );
-      }
+    const measuredWidths = measureVisibleColumnWidths(true);
+    if (measuredWidths) {
       setColumnWidths((prev) => ({ ...prev, ...measuredWidths }));
     }
     resizeStartXRef.current = e.clientX;
     resizeStartWidthRef.current = th.getBoundingClientRect().width;
-    resizeMinWidthRef.current = Math.max(
-      DEFAULT_MIN_COL_WIDTH,
-      Math.ceil(headerTextWidth + HEADER_RESIZE_EXTRA_WIDTH),
-    );
+    const resizedColumn = colsById.get(colId);
+    resizeMinWidthRef.current = resizedColumn
+      ? getMeasuredColumnWidth(resizedColumn, headerLabel ?? undefined)
+      : DEFAULT_MIN_COL_WIDTH;
     setResizingColId(colId);
   };
 
