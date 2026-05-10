@@ -13,6 +13,7 @@ export interface UserSettingsProps {
 }
 
 type LanguagePreference = NonNullable<Settings['language']>;
+type ThemeSwatchVariant = 'auto' | 'praetor' | 'splitSidebar';
 
 const THEME_OPTION_META: Record<
   Theme,
@@ -20,8 +21,8 @@ const THEME_OPTION_META: Record<
     activeClassName: string;
     inactiveClassName: string;
     swatchClassName: string;
-    inactiveIconClassName: string;
-    activeIconClassName?: string;
+    iconClassName?: string;
+    swatchVariant?: ThemeSwatchVariant;
   }
 > = {
   light: {
@@ -29,36 +30,63 @@ const THEME_OPTION_META: Record<
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
       'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-sun text-sm',
+    iconClassName: 'fa-solid fa-sun text-sm',
   },
   dark: {
     activeClassName: 'border-secondary bg-secondary',
     inactiveClassName: 'border-zinc-100 hover:border-secondary',
     swatchClassName: 'bg-zinc-900 shrink-0 shadow-sm flex items-center justify-center text-white',
-    inactiveIconClassName: 'fa-solid fa-moon text-sm',
+    iconClassName: 'fa-solid fa-moon text-sm',
   },
   zebra: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-gradient-to-r from-zinc-950 from-50% to-white to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-table-columns text-sm bg-white rounded-full p-1',
+      'relative overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
+    swatchVariant: 'splitSidebar',
   },
   praetor: {
-    activeClassName: 'border-praetor bg-praetor/5',
-    inactiveClassName: 'border-zinc-100 hover:border-praetor/20',
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-gradient-to-r from-[#20293f] from-50% to-white to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-shield-halved text-sm bg-white rounded-full p-1',
+      'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
+    swatchVariant: 'praetor',
   },
   auto: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-gradient-to-br from-white from-50% to-zinc-900 to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-circle-half-stroke text-sm bg-white rounded-full p-1',
-    activeIconClassName: 'fa-solid fa-check text-xs bg-white rounded-full p-1',
+      'relative overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
+    swatchVariant: 'auto',
   },
+};
+
+const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
+  if (option.swatchVariant === 'splitSidebar') {
+    return (
+      <>
+        <span className="absolute inset-y-0 left-0 w-[38%] bg-zinc-950" />
+        <span className="absolute top-3 left-[48%] h-1 w-4 rounded-full bg-zinc-300" />
+        <span className="absolute top-5 left-[48%] h-1 w-3 rounded-full bg-zinc-200" />
+      </>
+    );
+  }
+
+  if (option.swatchVariant === 'auto') {
+    return (
+      <>
+        <span className="absolute inset-y-0 left-0 w-1/2 bg-white" />
+        <span className="absolute inset-y-0 right-0 w-1/2 bg-zinc-950" />
+        <span className="absolute inset-2 rounded-full border border-zinc-300" />
+      </>
+    );
+  }
+
+  if (option.swatchVariant === 'praetor') {
+    return <img src="/praetor-favicon.png" alt="" className="size-7 object-contain" />;
+  }
+
+  return <i className={option.iconClassName}></i>;
 };
 
 const UserSettings: React.FC<UserSettingsProps> = ({
@@ -311,14 +339,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       isSelected ? option.activeClassName : option.inactiveClassName
                     }`}
                   >
-                    <div className={`size-10 rounded-full ${option.swatchClassName}`}>
-                      <i
-                        className={
-                          isSelected
-                            ? (option.activeIconClassName ?? 'fa-solid fa-check text-xs')
-                            : option.inactiveIconClassName
-                        }
-                      ></i>
+                    <div className={`relative size-10 rounded-full ${option.swatchClassName}`}>
+                      {renderThemeSwatchContent(option)}
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-[8px] text-secondary-foreground shadow-sm">
+                          <i className="fa-solid fa-check"></i>
+                        </span>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-semibold text-zinc-800 mb-1">
