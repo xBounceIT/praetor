@@ -22,7 +22,9 @@
 }
 
 :root,
-[data-shadcn-theme="light"] {
+[data-shadcn-theme="light"],
+[data-shadcn-theme="zebra"],
+[data-shadcn-theme="praetor"] {
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
@@ -145,6 +147,28 @@ input[type="number"] {
   --sidebar-accent: hsl(240 3.7% 15.9%);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+[data-shadcn-theme="zebra"] {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+[data-shadcn-theme="praetor"] {
+  --sidebar: #20293f;
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.92 0.004 286.32);
+  --sidebar-primary-foreground: #20293f;
+  --sidebar-accent: #2d3a55;
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: rgb(255 255 255 / 10%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
@@ -279,6 +303,23 @@ input[type="number"] {
     .border-slate-300
   ) {
   border-color: var(--border);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.text-praetor, .hover\:text-praetor:hover) {
+  color: var(--secondary-foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.bg-praetor, .hover\:bg-praetor:hover) {
+  background-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(.border-praetor, .focus\:border-praetor:focus) {
+  border-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.focus\:ring-praetor:focus) {
+  --tw-ring-color: var(--secondary);
 }
 
 @theme inline {

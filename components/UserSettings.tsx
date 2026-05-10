@@ -1,6 +1,8 @@
+import { Check, Contrast, type LucideIcon, Moon, Sun, SunMoon } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import praetorFaviconUrl from '../praetor-favicon.png';
 import type { Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
@@ -13,6 +15,7 @@ export interface UserSettingsProps {
 }
 
 type LanguagePreference = NonNullable<Settings['language']>;
+type ThemeSwatchVariant = 'default' | 'praetor';
 
 const THEME_OPTION_META: Record<
   Theme,
@@ -20,31 +23,56 @@ const THEME_OPTION_META: Record<
     activeClassName: string;
     inactiveClassName: string;
     swatchClassName: string;
-    inactiveIconClassName: string;
-    activeIconClassName?: string;
+    Icon?: LucideIcon;
+    swatchVariant: ThemeSwatchVariant;
   }
 > = {
   light: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-sun text-sm',
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: Sun,
+    swatchVariant: 'default',
   },
   dark: {
-    activeClassName: 'border-praetor bg-praetor/5',
-    inactiveClassName: 'border-zinc-100 hover:border-praetor/20',
-    swatchClassName: 'bg-zinc-900 shrink-0 shadow-sm flex items-center justify-center text-white',
-    inactiveIconClassName: 'fa-solid fa-moon text-sm',
+    activeClassName: 'border-secondary bg-secondary',
+    inactiveClassName: 'border-zinc-100 hover:border-secondary',
+    swatchClassName: 'bg-zinc-900 shadow-sm flex items-center justify-center text-white',
+    Icon: Moon,
+    swatchVariant: 'default',
+  },
+  zebra: {
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
+    swatchClassName:
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: Contrast,
+    swatchVariant: 'default',
+  },
+  praetor: {
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
+    swatchClassName: 'bg-white border border-zinc-200 shadow-sm flex items-center justify-center',
+    swatchVariant: 'praetor',
   },
   auto: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-gradient-to-br from-white from-50% to-zinc-900 to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    inactiveIconClassName: 'fa-solid fa-circle-half-stroke text-sm bg-white rounded-full p-1',
-    activeIconClassName: 'fa-solid fa-check text-xs bg-white rounded-full p-1',
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: SunMoon,
+    swatchVariant: 'default',
   },
+};
+
+const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
+  if (option.swatchVariant === 'praetor') {
+    return <img src={praetorFaviconUrl} alt="" className="size-12 max-w-none object-cover" />;
+  }
+
+  const Icon = option.Icon;
+  return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
 };
 
 const UserSettings: React.FC<UserSettingsProps> = ({
@@ -284,7 +312,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {THEMES.map((theme) => {
                 const isSelected = currentTheme === theme;
                 const option = THEME_OPTION_META[theme];
@@ -297,14 +325,17 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       isSelected ? option.activeClassName : option.inactiveClassName
                     }`}
                   >
-                    <div className={`size-10 rounded-full ${option.swatchClassName}`}>
-                      <i
-                        className={
-                          isSelected
-                            ? (option.activeIconClassName ?? 'fa-solid fa-check text-xs')
-                            : option.inactiveIconClassName
-                        }
-                      ></i>
+                    <div className="relative size-10 shrink-0">
+                      <div
+                        className={`size-10 overflow-hidden rounded-full ${option.swatchClassName}`}
+                      >
+                        {renderThemeSwatchContent(option)}
+                      </div>
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-secondary-foreground shadow-sm">
+                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
+                        </span>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-semibold text-zinc-800 mb-1">

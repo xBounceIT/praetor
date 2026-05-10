@@ -26,6 +26,14 @@
       "name": "Dark",
       "description": "Use dark mode for shadcn components."
     },
+    "zebra": {
+      "name": "Zebra",
+      "description": "Use light mode with a dark sidebar."
+    },
+    "praetor": {
+      "name": "Praetor",
+      "description": "Use light mode with a Praetor-colored dark sidebar."
+    },
     "auto": {
       "name": "Auto",
       "description": "Match your browser or operating system color scheme automatically."
