@@ -46,6 +46,8 @@ describe('<Toggle />', () => {
     render(<Toggle checked={false} onChange={onChange} partial />);
     const switchControl = screen.getByRole('switch');
     expect(switchControl).toHaveAttribute('aria-checked', 'true');
+    expect(switchControl).toHaveAccessibleDescription('Partially selected');
+    expect(switchControl.className).toContain('data-[state=checked]:bg-primary/50');
     fireEvent.click(switchControl);
     expect(onChange).toHaveBeenCalledWith(true);
   });
