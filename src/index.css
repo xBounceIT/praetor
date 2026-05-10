@@ -305,6 +305,23 @@ input[type="number"] {
   border-color: var(--border);
 }
 
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.text-praetor, .hover\:text-praetor:hover) {
+  color: var(--secondary-foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.bg-praetor, .hover\:bg-praetor:hover) {
+  background-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(.border-praetor, .focus\:border-praetor:focus) {
+  border-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.focus\:ring-praetor:focus) {
+  --tw-ring-color: var(--secondary);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
