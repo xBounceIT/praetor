@@ -92,6 +92,11 @@ describe('<NotificationBell />', () => {
 
     openDropdown();
 
+    const header = screen.getByText('notifications.title').closest('div');
+    expect(header).not.toBeNull();
+    expect(header).toHaveClass('bg-popover', 'border-border');
+    expect(header?.className).not.toContain('bg-muted/50');
+
     const unreadTitle = screen.getByText('notifications.newProjects');
     const unreadRow = unreadTitle.closest('.group');
     expect(unreadRow).not.toBeNull();
