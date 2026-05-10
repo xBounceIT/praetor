@@ -60,7 +60,7 @@ export function AppSidebar({
                 <img
                   src={praetorFaviconUrl}
                   alt=""
-                  className="size-5 object-contain"
+                  className="size-full rounded-lg object-cover"
                   aria-hidden="true"
                 />
               </div>
