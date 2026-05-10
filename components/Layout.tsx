@@ -37,6 +37,8 @@ import { AppSidebar } from '@/components/app-sidebar';
 import type { SidebarModuleItem, SidebarRouteItem } from '@/components/nav-main';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
+import { cn } from '@/lib/utils';
 import type { Notification, User as PraetorUser, Role, View } from '../types';
 import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 import { applyTheme, getTheme } from '../utils/theme';
@@ -109,6 +111,8 @@ const Layout: React.FC<LayoutProps> = ({
   onDeleteNotification,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
+  const resolvedTheme = useResolvedShadcnTheme();
+  const shadcnThemeClassName = getShadcnThemeClassName(resolvedTheme);
 
   useLayoutEffect(() => {
     applyTheme(getTheme());
@@ -331,6 +335,7 @@ const Layout: React.FC<LayoutProps> = ({
     <SidebarProvider>
       <AppSidebar
         data-shadcn-theme-scope
+        data-shadcn-theme={resolvedTheme}
         navItems={navItems}
         currentUser={currentUser}
         roleLabel={roleLabel}
@@ -345,11 +350,15 @@ const Layout: React.FC<LayoutProps> = ({
         onViewChange={onViewChange}
         onLogout={onLogout}
         onSwitchRole={onSwitchRole}
-        className="z-50"
+        className={cn('z-50', shadcnThemeClassName)}
       />
       <SidebarInset
         data-shadcn-theme-scope
-        className="shadcn-theme-bridge h-screen overflow-y-auto text-foreground"
+        data-shadcn-theme={resolvedTheme}
+        className={cn(
+          'shadcn-theme-bridge h-screen overflow-y-auto text-foreground',
+          shadcnThemeClassName,
+        )}
       >
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
           <div className="flex min-w-0 items-center gap-2">
