@@ -25,7 +25,7 @@ const HeaderAddButton: React.FC<HeaderAddButtonProps> = ({
     type="button"
     variant="default"
     onClick={onClick}
-    className={`${sizeClasses[actionSize]} max-w-full whitespace-normal text-center`}
+    className={`${sizeClasses[actionSize]} max-w-full rounded-lg whitespace-normal text-center`}
   >
     <Plus data-icon="inline-start" />
     {children}
