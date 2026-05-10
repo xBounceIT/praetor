@@ -15,7 +15,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   Children,
   Fragment,
@@ -1015,6 +1015,7 @@ const StandardTable = <T extends object>({
   const renderToolbarButton = ({
     tooltipKey,
     iconClass,
+    icon,
     onClick,
     disabled = false,
     active = false,
@@ -1023,7 +1024,8 @@ const StandardTable = <T extends object>({
     text,
   }: {
     tooltipKey: string;
-    iconClass: string;
+    iconClass?: string;
+    icon?: ReactNode;
     onClick: () => void;
     disabled?: boolean;
     active?: boolean;
@@ -1048,7 +1050,7 @@ const StandardTable = <T extends object>({
             }}
             disabled={disabled}
           >
-            <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>
+            {icon ?? <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>}
             {text && <span>{text}</span>}
           </Button>
         )}
@@ -1255,13 +1257,13 @@ const StandardTable = <T extends object>({
               })}
               {renderToolbarButton({
                 tooltipKey: 'table.decreaseFont',
-                iconClass: 'fa-minus',
+                icon: <ZoomOut className="size-3.5" aria-hidden="true" />,
                 onClick: () => stepFontSize(-1),
                 disabled: fontSize === 'xs',
               })}
               {renderToolbarButton({
                 tooltipKey: 'table.increaseFont',
-                iconClass: 'fa-plus',
+                icon: <ZoomIn className="size-3.5" aria-hidden="true" />,
                 onClick: () => stepFontSize(1),
                 disabled: fontSize === 'base',
               })}
