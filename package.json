@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "bun run docs:user && vite build",
     "preview": "vite preview",
     "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
@@ -19,7 +19,9 @@
     "format": "biome format --write .",
     "docs:frontend": "typedoc --options typedoc.json",
     "docs:api": "bun ./server/scripts/generate-openapi.ts",
-    "docs": "bun run docs:frontend; bun run docs:api",
+    "docs:user": "astro build --root docs-site",
+    "docs:user:dev": "astro dev --root docs-site",
+    "docs": "bun run docs:frontend && bun run docs:api && bun run docs:user",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -51,6 +53,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@astrojs/starlight": "^0.39.2",
     "@biomejs/biome": "^2.4.14",
     "@biomejs/cli-win32-x64": "^2.4.14",
     "@happy-dom/global-registrator": "^20.9.0",
@@ -68,6 +71,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "astro": "^6.3.1",
     "autoprefixer": "^10.5.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",

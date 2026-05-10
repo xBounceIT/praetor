@@ -10,16 +10,50 @@ import { installI18nMock } from '../helpers/i18n';
 installI18nMock();
 
 let isMobileViewport = false;
+type MatchMediaListener = (event: MediaQueryListEvent) => void;
+const mediaQueryListeners = new Map<string, Set<MatchMediaListener>>();
 
-window.matchMedia = () =>
+const getMediaMatches = (media: string) => {
+  return media.includes('max-width') ? isMobileViewport : false;
+};
+
+const updateMediaQuery = (media: string) => {
+  const event = { matches: getMediaMatches(media), media } as MediaQueryListEvent;
+  for (const listener of mediaQueryListeners.get(media) ?? []) {
+    listener(event);
+  }
+};
+
+const setMobileViewport = (matches: boolean) => {
+  isMobileViewport = matches;
+  for (const media of mediaQueryListeners.keys()) {
+    if (media.includes('max-width')) updateMediaQuery(media);
+  }
+};
+
+window.matchMedia = (media: string) =>
   ({
-    matches: isMobileViewport,
-    media: '',
+    get matches() {
+      return getMediaMatches(media);
+    },
+    media,
     onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
+    addEventListener: (_type: string, callback: MatchMediaListener) => {
+      const listeners = mediaQueryListeners.get(media) ?? new Set<MatchMediaListener>();
+      listeners.add(callback);
+      mediaQueryListeners.set(media, listeners);
+    },
+    removeEventListener: (_type: string, callback: MatchMediaListener) => {
+      mediaQueryListeners.get(media)?.delete(callback);
+    },
+    addListener: (callback: MatchMediaListener) => {
+      const listeners = mediaQueryListeners.get(media) ?? new Set<MatchMediaListener>();
+      listeners.add(callback);
+      mediaQueryListeners.set(media, listeners);
+    },
+    removeListener: (callback: MatchMediaListener) => {
+      mediaQueryListeners.get(media)?.delete(callback);
+    },
     dispatchEvent: () => false,
   }) as MediaQueryList;
 
@@ -54,7 +88,8 @@ const renderLayout = (props?: Partial<React.ComponentProps<typeof Layout>>) =>
 
 describe('<Layout />', () => {
   beforeEach(() => {
-    isMobileViewport = false;
+    mediaQueryListeners.clear();
+    setMobileViewport(false);
     localStorage.clear();
     document.documentElement.classList.remove('dark');
   });
@@ -96,6 +131,32 @@ describe('<Layout />', () => {
     expect(main?.className).toContain('shadcn-theme-bridge');
     expect(main?.className).toContain('text-foreground');
     await waitFor(() => expect(main?.getAttribute('data-shadcn-theme')).toBe('dark'));
+  });
+
+  test('desktop sidebar keeps the selected shadcn theme after a viewport remount', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    const { container } = renderLayout();
+
+    await waitFor(() =>
+      expect(
+        container
+          .querySelector('[data-slot="sidebar-container"]')
+          ?.getAttribute('data-shadcn-theme'),
+      ).toBe('dark'),
+    );
+
+    act(() => setMobileViewport(true));
+    await waitFor(() =>
+      expect(container.querySelector('[data-slot="sidebar-container"]')).toBeNull(),
+    );
+
+    act(() => setMobileViewport(false));
+
+    await waitFor(() => {
+      const sidebarContainer = container.querySelector('[data-slot="sidebar-container"]');
+      expect(sidebarContainer?.getAttribute('data-shadcn-theme')).toBe('dark');
+      expect(sidebarContainer?.className).toContain('dark');
+    });
   });
 
   test('sidebar navigation text uses shadcn sidebar color tokens', () => {
@@ -177,7 +238,6 @@ describe('<Layout />', () => {
   });
 
   test('sidebar trigger toggles desktop icon-collapse state', () => {
-    isMobileViewport = false;
     const { container } = renderLayout();
 
     const sidebar = container.querySelector('[data-slot="sidebar"]') as HTMLElement;
@@ -194,7 +254,6 @@ describe('<Layout />', () => {
   });
 
   test('permission-filtered modules hide inaccessible routes', () => {
-    isMobileViewport = false;
     renderLayout();
 
     expect(screen.getByText('modules.timesheets')).toBeDefined();
@@ -205,7 +264,6 @@ describe('<Layout />', () => {
   });
 
   test('reports module stays visible with disabled AI reporting route when feature is off', async () => {
-    isMobileViewport = false;
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const onViewChange = mock(() => {});
     const user = userEvent.setup();
@@ -240,7 +298,6 @@ describe('<Layout />', () => {
   });
 
   test('AI reporting route is disabled by default while feature settings are unresolved', () => {
-    isMobileViewport = false;
     const onViewChange = mock(() => {});
     renderLayout({
       onViewChange,
@@ -261,7 +318,6 @@ describe('<Layout />', () => {
   });
 
   test('AI reporting route remains clickable when feature is on', () => {
-    isMobileViewport = false;
     const onViewChange = mock(() => {});
     renderLayout({
       onViewChange,
@@ -283,7 +339,6 @@ describe('<Layout />', () => {
   });
 
   test('active module expands when active view changes', () => {
-    isMobileViewport = false;
     const { rerender } = renderLayout();
 
     fireEvent.click(screen.getByRole('button', { name: 'modules.timesheets' }));
@@ -307,7 +362,7 @@ describe('<Layout />', () => {
   });
 
   test('mobile route click closes the sidebar sheet', () => {
-    isMobileViewport = true;
+    setMobileViewport(true);
     const onViewChange = mock(() => {});
     renderLayout({ onViewChange });
 
@@ -318,11 +373,10 @@ describe('<Layout />', () => {
 
     expect(onViewChange).toHaveBeenCalledWith('timesheets/recurring');
     expect(screen.queryByRole('dialog')).toBeNull();
-    isMobileViewport = false;
   });
 
   test('mobile user menu settings closes the sidebar sheet', async () => {
-    isMobileViewport = true;
+    setMobileViewport(true);
     const onViewChange = mock(() => {});
     const user = userEvent.setup();
     renderLayout({ onViewChange });
@@ -335,10 +389,9 @@ describe('<Layout />', () => {
 
     expect(onViewChange).toHaveBeenCalledWith('settings');
     expect(screen.queryByRole('dialog')).toBeNull();
-    isMobileViewport = false;
   });
 
-  test('account dropdown documentation item navigates to frontend docs', async () => {
+  test('account dropdown documentation item navigates to documentation hub', async () => {
     const onViewChange = mock(() => {});
     const user = userEvent.setup();
     renderLayout({ onViewChange });
@@ -346,6 +399,6 @@ describe('<Layout />', () => {
     await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
     await user.click(await screen.findByRole('menuitem', { name: 'menu.documentation' }));
 
-    expect(onViewChange).toHaveBeenCalledWith('docs/frontend');
+    expect(onViewChange).toHaveBeenCalledWith('docs');
   });
 });

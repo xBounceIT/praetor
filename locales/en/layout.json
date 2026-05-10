@@ -48,6 +48,7 @@
     "externalEmployees": "External Employees",
     "roles": "Roles",
     "aiReporting": "AI Reporting",
+    "docs": "Documentation",
     "logs": "Logs"
   },
   "menu": {
@@ -57,6 +58,9 @@
     "profile": "Profile",
     "help": "Help",
     "documentation": "Documentation"
+  },
+  "docsHub": {
+    "title": "Documentation"
   },
   "header": {
     "welcome": "Welcome, {{name}}",

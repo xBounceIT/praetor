@@ -18,6 +18,8 @@ package-lock.json
 .bun-install/
 server/.tmp/
 .tmp/
+docs-site/.astro/
+docs-site/dist/
 
 # Editor directories and files
 .vscode/*

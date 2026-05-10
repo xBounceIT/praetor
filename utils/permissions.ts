@@ -153,6 +153,32 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'hr/work-units': buildPermission('hr.work_units', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
+  docs: buildPermission('docs.frontend', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),
   'docs/frontend': buildPermission('docs.frontend', 'view'),
+};
+
+export const getDefaultViewForPermissions = (
+  permissions: Permission[] | undefined,
+  validViews: View[],
+): View => {
+  const allowedView = validViews.find((view) =>
+    hasPermission(permissions, VIEW_PERMISSION_MAP[view]),
+  );
+
+  return allowedView || 'timesheets/tracker';
+};
+
+export const getNotFoundReturnView = (
+  permissions: Permission[] | undefined,
+  validViews: View[],
+): View => {
+  const authSettingsView: View = 'administration/authentication';
+  const authSettingsPermission = VIEW_PERMISSION_MAP[authSettingsView];
+
+  if (hasPermission(permissions, authSettingsPermission)) {
+    return authSettingsView;
+  }
+
+  return getDefaultViewForPermissions(permissions, validViews);
 };

@@ -9,7 +9,6 @@ import { runDrizzleMigrations } from './db/migrationsRunner.ts';
 import { verifyDbReadiness } from './db/readiness.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
-  INSECURE_DEFAULT_ADMIN_PASSWORDS,
   INSECURE_DEFAULT_ENCRYPTION_KEYS,
   INSECURE_DEFAULT_JWT_SECRETS,
   validateRequiredNonDefaultEnv,
@@ -34,7 +33,6 @@ const assertSecureRuntimeConfig = () => {
   const errors = [
     validateRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS),
     validateRequiredNonDefaultEnv('ENCRYPTION_KEY', INSECURE_DEFAULT_ENCRYPTION_KEYS),
-    validateRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORDS),
   ].filter((error): error is string => error !== null);
 
   if (errors.length > 0) {

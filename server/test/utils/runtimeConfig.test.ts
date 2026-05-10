@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import * as runtimeConfig from '../../utils/runtimeConfig.ts';
 import {
   INSECURE_DEFAULT_JWT_SECRETS,
   readRequiredNonDefaultEnv,
@@ -30,5 +31,9 @@ describe('runtimeConfig', () => {
     expect(readRequiredNonDefaultEnv(ENV_NAME, INSECURE_DEFAULT_JWT_SECRETS)).toBe(
       'unique-secret-value',
     );
+  });
+
+  test('does not maintain a separate admin default password denylist', () => {
+    expect('INSECURE_DEFAULT_ADMIN_PASSWORDS' in runtimeConfig).toBe(false);
   });
 });
