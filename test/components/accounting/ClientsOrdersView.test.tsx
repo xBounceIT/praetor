@@ -80,4 +80,26 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getByText('Helios Energy Services')).toBeInTheDocument();
     expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
   });
+
+  test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/accounting/ClientsOrdersView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain("import { Button } from '@/components/ui/button';");
+    expect(source).toContain(
+      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+    );
+    expect(source).toContain("import { Textarea } from '@/components/ui/textarea';");
+    expect(source).toContain('<ModalContent size="full"');
+    expect(source).toContain('<ModalHeader>');
+    expect(source).toContain('<ModalBody className="flex-1 space-y-5">');
+    expect(source).toContain('<ModalFooter>');
+    expect(source).toContain('id="client-order-client"');
+    expect(source).toContain('id="client-order-notes"');
+    expect(source).toContain('<DeleteConfirmModal');
+    expect(source).not.toContain('rounded-2xl bg-white');
+    expect(source).not.toContain('shadow-lg shadow-zinc-200');
+    expect(source).not.toContain('<textarea');
+  });
 });
