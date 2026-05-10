@@ -33,6 +33,7 @@ import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboa
 import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
 import { Button } from '../ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -1646,7 +1647,7 @@ const StandardTable = <T extends object>({
 
                           {header.column.getCanResize() && (
                             <div
-                              className="absolute top-0 right-0 z-30 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
+                              className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
                               data-column-resize-handle={colId}
                               onMouseDown={(event) => {
                                 event.stopPropagation();
@@ -1683,7 +1684,14 @@ const StandardTable = <T extends object>({
                 paginatedRows.map((tableRow) => {
                   const row = tableRow.original;
                   const visibleCells = tableRow.getVisibleCells();
-                  return (
+                  const rowActionCell = visibleCells.find((cell) => {
+                    const col = colsById.get(cell.column.id);
+                    return col ? isRowActionColumn(col) : false;
+                  });
+                  const rowActionContent = rowActionCell
+                    ? flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
+                    : null;
+                  const rowElement = (
                     <TableRow
                       key={tableRow.id}
                       onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
@@ -1778,6 +1786,23 @@ const StandardTable = <T extends object>({
                         );
                       })}
                     </TableRow>
+                  );
+
+                  return rowActionContent ? (
+                    <ContextMenu key={tableRow.id}>
+                      <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
+                      <ContextMenuContent
+                        className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          {renderActionMenuItems(rowActionContent)}
+                        </div>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ) : (
+                    rowElement
                   );
                 })
               ) : (

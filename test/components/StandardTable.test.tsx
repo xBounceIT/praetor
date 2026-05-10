@@ -278,8 +278,14 @@ describe('<StandardTable />', () => {
       .getByText('Age')
       .closest('th')
       ?.querySelector('[data-column-resize-line="age"]');
+    const ageResizeHandle = screen
+      .getByText('Age')
+      .closest('th')
+      ?.querySelector('[data-column-resize-handle="age"]');
     expect(ageResizeLine?.className).toContain('bg-transparent');
     expect(ageResizeLine?.className).not.toContain('bg-border');
+    expect(ageResizeHandle?.className).toContain('z-10');
+    expect(ageResizeHandle?.className).not.toContain('z-30');
   });
 
   test('sparse action-only custom views do not insert an action spacer', () => {
@@ -807,6 +813,43 @@ describe('<StandardTable />', () => {
     expect(onAction).toHaveBeenCalledTimes(1);
     // stopPropagation in the action button keeps the row's onClick silent.
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  test('right-clicking a row opens its shadcn context menu actions', async () => {
+    const onAction = mock((id: string) => id);
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: ({ row }: { row: Row }) => (
+          <button
+            type="button"
+            data-testid={`context-action-${row.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction(row.id);
+            }}
+          >
+            Edit {row.name}
+          </button>
+        ),
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+
+    expect(screen.queryByTestId('context-action-2')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.contextMenu(screen.getAllByRole('row')[2], { clientX: 12, clientY: 24 });
+    });
+
+    const action = await screen.findByTestId('context-action-2');
+    expect(action.closest('[data-slot="context-menu-content"]')).toBeInTheDocument();
+
+    await userEvent.click(action);
+    expect(onAction).toHaveBeenCalledWith('2');
   });
 
   // ---------------------------------------------------------------------------
