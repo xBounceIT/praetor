@@ -17,7 +17,9 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
 });
 
 const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
+const { useState } = await import('react');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
+const Modal = (await import('../../components/shared/Modal')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
 type Row = { id: string; name: string; age: number };
@@ -770,9 +772,54 @@ describe('<StandardTable />', () => {
       .getByTestId('action-1')
       .closest('[data-standard-table-action-menu="true"]') as HTMLElement;
     expect(actionMenu).toHaveAttribute('data-slot', 'dropdown-menu-content');
+    expect(actionMenu.className).toContain('z-[70]');
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
+  });
+
+  test('modal table cell editing keeps focus across multiple keystrokes', async () => {
+    const user = userEvent.setup();
+
+    const ModalTableEditor = () => {
+      const [rows, setRows] = useState<Row[]>([{ id: '1', name: '', age: 0 }]);
+      const columns = [
+        {
+          header: 'Name',
+          id: 'name',
+          accessorKey: 'name' as const,
+          cell: ({ row }: { row: Row }) => (
+            <input
+              aria-label={`Edit ${row.id}`}
+              value={row.name}
+              onChange={(event) => {
+                const nextName = event.target.value;
+                setRows((currentRows) =>
+                  currentRows.map((currentRow) =>
+                    currentRow.id === row.id ? { ...currentRow, name: nextName } : currentRow,
+                  ),
+                );
+              }}
+            />
+          ),
+        },
+      ];
+
+      return (
+        <Modal isOpen onClose={() => {}}>
+          <StandardTable<Row> title="Modal Rows" data={rows} columns={columns} />
+        </Modal>
+      );
+    };
+
+    render(<ModalTableEditor />);
+
+    const input = screen.getByLabelText('Edit 1') as HTMLInputElement;
+    await user.click(input);
+    await user.keyboard('ab');
+
+    expect(input).toHaveValue('ab');
+    expect(document.activeElement).toBe(input);
   });
 
   test('collapsed tooltip-wrapped actions use tooltip text as menu labels', async () => {
@@ -954,6 +1001,7 @@ describe('<StandardTable />', () => {
     const action = await screen.findByTestId('context-action-2');
     const actionMenu = action.closest('[data-standard-table-action-menu="true"]') as HTMLElement;
     expect(actionMenu).toHaveAttribute('data-slot', 'context-menu-content');
+    expect(actionMenu.className).toContain('z-[70]');
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(action.className).toContain('text-popover-foreground');

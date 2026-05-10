@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
@@ -1105,12 +1106,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </div>
               {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
             </h3>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
               onClick={handleModalClose}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
+              className="shrink-0 text-muted-foreground"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
+              <span className="sr-only">{t('common:buttons.cancel')}</span>
+            </Button>
           </div>
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
@@ -1292,25 +1297,29 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => setContactsExpanded((prev) => !prev)}
-                    className="text-sm font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-2"
+                    className="gap-2 text-xs font-semibold uppercase tracking-wide"
                   >
                     <i
                       className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
                     ></i>
                     {t('crm:clients.contactsList')} ({contactTableRows.length})
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={addContact}
-                    className="px-3 py-2 text-xs font-bold bg-zinc-100 text-praetor rounded-lg hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                    className="gap-2"
                   >
                     <i className="fa-solid fa-plus"></i>
                     {t('crm:clients.addContact')}
-                  </button>
+                  </Button>
                 </div>
 
                 {contactsExpanded && (
@@ -1377,22 +1386,19 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="sm"
                               onClick={cancelContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
                             >
                               {t('common:buttons.cancel')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={saveContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-praetor hover:bg-zinc-700 rounded-lg transition-colors"
-                            >
+                            </Button>
+                            <Button type="button" size="sm" onClick={saveContactDraft}>
                               {editingContactIndex !== null
                                 ? t('common:buttons.update')
                                 : t('common:buttons.save')}
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -1466,13 +1472,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {t('crm:clients.sector')}
                     </label>
                     {canUpdateClients && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => openManageProfileOptions('sector')}
-                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <SelectControl
@@ -1495,13 +1503,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {t('crm:clients.numberOfEmployees')}
                     </label>
                     {canUpdateClients && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => openManageProfileOptions('numberOfEmployees')}
-                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <SelectControl
@@ -1524,13 +1534,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {t('crm:clients.revenue')}
                     </label>
                     {canUpdateClients && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => openManageProfileOptions('revenue')}
-                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <SelectControl
@@ -1553,13 +1565,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {t('crm:clients.officeCountRange')}
                     </label>
                     {canUpdateClients && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => openManageProfileOptions('officeCountRange')}
-                        className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <SelectControl
@@ -1601,24 +1615,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             )}
 
             <div className="flex justify-between items-center pt-4 border-t border-zinc-100">
-              <button
-                type="button"
-                onClick={handleModalClose}
-                className="px-8 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
-              >
+              <Button type="button" variant="outline" onClick={handleModalClose}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-                  canSubmit
-                    ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
-                    : 'bg-zinc-300 shadow-none cursor-not-allowed'
-                }`}
-              >
+              </Button>
+              <Button type="submit" disabled={!canSubmit}>
                 {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -1640,18 +1642,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </p>
             </div>
             <div className="flex gap-3 pt-2">
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                className="flex-1"
               >
                 {t('common:buttons.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
                 onClick={() => void handleDelete()}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                className="flex-1"
               >
                 {t('common:buttons.delete')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

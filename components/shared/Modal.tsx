@@ -67,7 +67,7 @@ const renderWithShadcnFormPrimitives = (node: React.ReactNode): React.ReactNode 
       : Children.map(props.children, renderWithShadcnFormPrimitives);
   const nextProps = children === props.children ? undefined : { children };
 
-  if (node.type === 'button') {
+  if (node.type === 'button' && !(node.props as React.ComponentProps<'button'>).className) {
     return <Button {...(node.props as React.ComponentProps<'button'>)}>{children}</Button>;
   }
 

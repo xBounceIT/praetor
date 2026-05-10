@@ -1857,10 +1857,9 @@ const StandardTable = <T extends object>({
                           | boolean
                           | null
                           | undefined;
-                        const cellContent =
-                          isActionColumn && col.cell
-                            ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                            : flexRender(cell.column.columnDef.cell, cell.getContext());
+                        const cellContent = col.cell
+                          ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                          : flexRender(cell.column.columnDef.cell, cell.getContext());
                         const actionMenuItems =
                           isActionColumn && hasActionMenuItems(cellContent)
                             ? renderActionMenuItems(cellContent)
