@@ -522,7 +522,7 @@ const StandardTable = <T extends object>({
                   : [];
             if (selected.length === 0) return true;
             const formatted = formatForFilter(row.getValue(columnId), col);
-            return selected.some((value) => formatted.toLowerCase().includes(value.toLowerCase()));
+            return selected.some((value) => formatted.toLowerCase() === value.toLowerCase());
           },
         } satisfies ColumnDef<T, unknown>;
       }),
@@ -841,6 +841,38 @@ const StandardTable = <T extends object>({
 
     visit(node);
     return items.length > 0 ? items : node;
+  };
+
+  const hasActionMenuItems = (node: ReactNode): boolean => {
+    const visit = (current: ReactNode): boolean => {
+      if (current === null || current === undefined || typeof current === 'boolean') return false;
+      if (typeof current === 'string' || typeof current === 'number') return false;
+      if (Array.isArray(current)) return current.some(visit);
+
+      const element = getElementLike(current);
+      if (!element) return false;
+
+      const props = element.props as {
+        children?: ReactNode | (() => ReactNode);
+        label?: ReactNode;
+        onClick?: unknown;
+        type?: unknown;
+      };
+
+      if (props.label !== undefined && typeof props.children === 'function') return true;
+
+      if (
+        (typeof element.type === 'string' && element.type === 'button') ||
+        props.type === 'button' ||
+        typeof props.onClick === 'function'
+      ) {
+        return true;
+      }
+
+      return Children.toArray(props.children as ReactNode).some(visit);
+    };
+
+    return visit(node);
   };
 
   const stepFontSize = (delta: -1 | 1) => {
@@ -1723,6 +1755,9 @@ const StandardTable = <T extends object>({
                         })
                       : flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
                     : null;
+                  const rowActionMenuItems = hasActionMenuItems(rowActionContent)
+                    ? renderActionMenuItems(rowActionContent)
+                    : null;
                   const rowElement = (
                     <TableRow
                       key={tableRow.id}
@@ -1763,6 +1798,10 @@ const StandardTable = <T extends object>({
                           isActionColumn && col.cell
                             ? col.cell({ getValue: () => rawValue, row, value: rawValue })
                             : flexRender(cell.column.columnDef.cell, cell.getContext());
+                        const actionMenuItems =
+                          isActionColumn && hasActionMenuItems(cellContent)
+                            ? renderActionMenuItems(cellContent)
+                            : null;
                         return (
                           <Fragment key={cell.id}>
                             {shouldAnchorTrailingActionColumn && isActionColumn && (
@@ -1781,34 +1820,36 @@ const StandardTable = <T extends object>({
                               className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      aria-label={t('table.rowActions')}
+                                actionMenuItems ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        aria-label={t('table.rowActions')}
+                                        onClick={(event) => event.stopPropagation()}
+                                        className="rounded-lg"
+                                      >
+                                        <i
+                                          className="fa-solid fa-ellipsis text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="end"
+                                      data-standard-table-action-menu="true"
+                                      className={ACTION_MENU_CONTENT_CLASSNAME}
                                       onClick={(event) => event.stopPropagation()}
-                                      className="rounded-lg"
+                                      onDoubleClick={(event) => event.stopPropagation()}
                                     >
-                                      <i
-                                        className="fa-solid fa-ellipsis text-[10px]"
-                                        aria-hidden="true"
-                                      ></i>
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent
-                                    align="end"
-                                    data-standard-table-action-menu="true"
-                                    className={ACTION_MENU_CONTENT_CLASSNAME}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onDoubleClick={(event) => event.stopPropagation()}
-                                  >
-                                    <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                                      {renderActionMenuItems(cellContent)}
-                                    </div>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                      <div className={ACTION_MENU_ITEMS_CLASSNAME}>
+                                        {actionMenuItems}
+                                      </div>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : null
                               ) : (
                                 cellContent
                               )}
@@ -1819,7 +1860,7 @@ const StandardTable = <T extends object>({
                     </TableRow>
                   );
 
-                  return rowActionContent ? (
+                  return rowActionMenuItems ? (
                     <ContextMenu key={tableRow.id}>
                       <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
                       <ContextMenuContent
@@ -1828,9 +1869,7 @@ const StandardTable = <T extends object>({
                         onClick={(event) => event.stopPropagation()}
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
-                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                          {renderActionMenuItems(rowActionContent)}
-                        </div>
+                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
                       </ContextMenuContent>
                     </ContextMenu>
                   ) : (

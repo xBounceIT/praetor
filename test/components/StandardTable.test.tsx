@@ -565,6 +565,28 @@ describe('<StandardTable />', () => {
     });
   });
 
+  test('selected filter values match exact options instead of substrings', () => {
+    type PaymentRow = { id: string; status: string };
+    const rows: PaymentRow[] = [
+      { id: '1', status: 'Paid' },
+      { id: '2', status: 'Unpaid' },
+    ];
+
+    render(
+      <StandardTable<PaymentRow>
+        title="Payments"
+        data={rows}
+        columns={[{ header: 'Status', accessorKey: 'status', id: 'status' }]}
+        initialFilterState={{ status: ['Paid'] }}
+      />,
+    );
+
+    const bodyRows = screen.getAllByRole('row').slice(1);
+    expect(bodyRows).toHaveLength(1);
+    expect(bodyRows[0].textContent).toContain('Paid');
+    expect(bodyRows[0].textContent).not.toContain('Unpaid');
+  });
+
   test('multi-column filters intersect (Name + Age)', () => {
     const rows: Row[] = [
       { id: '1', name: 'Alice', age: 30 },
@@ -737,6 +759,35 @@ describe('<StandardTable />', () => {
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
+  });
+
+  test('row action trigger is hidden when the action cell has no items', async () => {
+    const user = userEvent.setup();
+    const actionCell = mock(({ row }: { row: Row }) =>
+      row.id === '1' ? null : (
+        <button type="button" aria-label={`Edit ${row.name}`} data-testid={`action-${row.id}`}>
+          <i className="fa-solid fa-pencil" aria-hidden="true"></i>
+        </button>
+      ),
+    );
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: actionCell,
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 2)} columns={cols} />);
+
+    expect(screen.getAllByLabelText('table.rowActions')).toHaveLength(1);
+    fireEvent.contextMenu(screen.getByText('Alice').closest('tr') as HTMLElement);
+    expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('table.rowActions'));
+    expect(screen.getByTestId('action-2')).toBeInTheDocument();
   });
 
   test('action column stays borderless even while sticky over scrollable content', () => {
