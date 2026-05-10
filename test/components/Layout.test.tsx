@@ -337,4 +337,15 @@ describe('<Layout />', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     isMobileViewport = false;
   });
+
+  test('account dropdown documentation item navigates to frontend docs', async () => {
+    const onViewChange = mock(() => {});
+    const user = userEvent.setup();
+    renderLayout({ onViewChange });
+
+    await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'menu.documentation' }));
+
+    expect(onViewChange).toHaveBeenCalledWith('docs/frontend');
+  });
 });
