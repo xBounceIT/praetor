@@ -82,6 +82,7 @@ import {
   formatDateOnlyForLocale,
   getLocalDateString,
 } from './utils/date';
+import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
@@ -679,13 +680,8 @@ const App: React.FC = () => {
   );
 
   const [activeView, setActiveView] = useState<View | '404'>(() => {
-    const pathname = window.location.pathname;
-    if (pathname.startsWith('/docs/api')) {
-      return 'docs/api';
-    }
-    if (pathname.startsWith('/docs/frontend')) {
-      return 'docs/frontend';
-    }
+    const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
+    if (technicalDocsView) return technicalDocsView;
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization

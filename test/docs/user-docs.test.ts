@@ -47,6 +47,13 @@ describe('Starlight user documentation', () => {
     expect(englishIndex).toContain('link: /docs/en/faq/');
   });
 
+  test('uses base-relative sidebar links for reserved technical docs', () => {
+    expect(astroConfig).toContain("link: '/api'");
+    expect(astroConfig).toContain("link: '/frontend'");
+    expect(astroConfig).not.toContain("link: '/docs/api'");
+    expect(astroConfig).not.toContain("link: '/docs/frontend'");
+  });
+
   test('does not create Starlight pages for reserved technical docs routes', () => {
     const markdownFiles = walkMarkdownFiles(docsContentDir);
     const relativeMarkdownFiles = markdownFiles.map((file) =>

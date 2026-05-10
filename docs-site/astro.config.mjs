@@ -40,11 +40,11 @@ export default defineConfig({
           items: [
             {
               label: 'API',
-              link: '/docs/api',
+              link: '/api',
             },
             {
               label: 'Frontend',
-              link: '/docs/frontend',
+              link: '/frontend',
             },
           ],
         },
