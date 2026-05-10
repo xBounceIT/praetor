@@ -659,7 +659,6 @@ const TasksView: React.FC<TasksViewProps> = ({
                           setTempIsDisabled(!tempIsDisabled);
                         }
                       }}
-                      color="red"
                       disabled={isInheritedDisabled}
                     />
                   </div>
