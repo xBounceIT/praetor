@@ -15,7 +15,7 @@ const docsLinks = [
   },
   {
     label: 'App',
-    href: '/docs/',
+    href: '/docs/index.html',
     icon: BookOpen,
   },
 ];

@@ -11,6 +11,8 @@ describe('<DocsHubView />', () => {
       '/docs/frontend/index.html',
     );
     expect(screen.getByRole('link', { name: /backend/i }).getAttribute('href')).toBe('/docs/api');
-    expect(screen.getByRole('link', { name: /app/i }).getAttribute('href')).toBe('/docs/');
+    expect(screen.getByRole('link', { name: /app/i }).getAttribute('href')).toBe(
+      '/docs/index.html',
+    );
   });
 });
