@@ -1713,7 +1713,7 @@ const StandardTable = <T extends object>({
                         {isActionColumn ? (
                           <div
                             data-column-header-content={colId}
-                            className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
+                            className="inline-flex w-max items-center gap-1"
                           >
                             <span
                               className="whitespace-nowrap text-sm font-semibold text-foreground"
@@ -1727,7 +1727,7 @@ const StandardTable = <T extends object>({
                         ) : (
                           <div
                             data-column-header-content={colId}
-                            className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
+                            className="inline-flex w-max items-center gap-1"
                           >
                             <button
                               type="button"

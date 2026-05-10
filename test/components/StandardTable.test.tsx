@@ -426,6 +426,21 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
 
+  test('header measurement content stays intrinsic instead of filling stretched cells', () => {
+    render(
+      <StandardTable<Row> title="Intrinsic Headers" data={sampleRows} columns={sampleColumns} />,
+    );
+
+    const headerContent = screen
+      .getByText('Name')
+      .closest('th')
+      ?.querySelector('[data-column-header-content="name"]') as HTMLElement;
+
+    expect(headerContent.className).toContain('inline-flex');
+    expect(headerContent.className).toContain('w-max');
+    expect(Array.from(headerContent.classList)).not.toContain('flex');
+  });
+
   test('stale stored column widths do not force fixed table layout', () => {
     localStorage.setItem('praetor_table_colwidths_stale_widths', JSON.stringify({ missing: 160 }));
 
