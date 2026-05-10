@@ -1,9 +1,14 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+const { THEME_STORAGE_KEY } = await import('../../utils/theme');
 const Modal = (await import('../../components/shared/Modal')).default;
 
 describe('<Modal />', () => {
+  afterEach(() => {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  });
+
   test('renders nothing when isOpen is false', () => {
     render(
       <Modal isOpen={false} onClose={() => {}}>
@@ -89,7 +94,8 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByRole('dialog');
+    const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
+    fireEvent.pointerDown(backdrop);
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -112,7 +118,8 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByRole('dialog');
+    const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
+    fireEvent.pointerDown(backdrop);
     fireEvent.click(backdrop);
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -158,7 +165,9 @@ describe('<Modal />', () => {
       </Modal>,
     );
     const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
+    const dialog = screen.getByRole('dialog');
     expect(backdrop.style.zIndex).toBe('999');
+    expect(dialog.style.zIndex).toBe('1000');
   });
 
   test('custom backdropClass is applied', () => {
@@ -169,6 +178,21 @@ describe('<Modal />', () => {
     );
     const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
     expect(backdrop.className).toContain('custom-backdrop');
+  });
+
+  test('portaled content carries the resolved shadcn theme scope', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">Hi</div>
+      </Modal>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('data-shadcn-theme-scope')).toBe('');
+    expect(dialog.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(dialog.className).toContain('dark');
   });
 
   test('unmounting restores body overflow', () => {

@@ -1,4 +1,3 @@
-import { Dialog as DialogPrimitive } from 'radix-ui';
 import type React from 'react';
 import {
   Children,
@@ -10,10 +9,12 @@ import {
   useRef,
 } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
+import { cn } from '@/lib/utils';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -98,6 +99,7 @@ const Modal: React.FC<ModalProps> = ({
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const focusRunIdRef = useRef(0);
+  const resolvedTheme = useResolvedShadcnTheme();
   const normalizedChildren = useMemo(
     () => (isOpen ? Children.map(children, renderWithShadcnFormPrimitives) : null),
     [children, isOpen],
@@ -142,43 +144,48 @@ const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (closeOnBackdrop && e.target === e.currentTarget) {
+  const handleBackdropClick = () => {
+    if (closeOnBackdrop) {
       onClose();
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogPortal>
-        <DialogOverlay className={backdropClass} style={{ zIndex }} />
-        <DialogPrimitive.Content
-          ref={contentRef}
-          aria-modal="true"
-          aria-describedby={undefined}
-          className="fixed inset-0 flex items-center justify-center p-4 outline-none"
-          style={{ zIndex: zIndex + 1 }}
-          tabIndex={-1}
-          onClick={handleBackdropClick}
-          onEscapeKeyDown={(e) => {
-            if (!closeOnEsc) {
-              e.preventDefault();
-            }
-          }}
-          onInteractOutside={(e) => {
-            if (!closeOnBackdrop) {
-              e.preventDefault();
-            }
-          }}
-          onOpenAutoFocus={(e) => {
+      <DialogContent
+        ref={contentRef}
+        showCloseButton={false}
+        overlayClassName={backdropClass}
+        overlayProps={{ onClick: handleBackdropClick }}
+        overlayStyle={{ zIndex }}
+        data-shadcn-theme-scope=""
+        data-shadcn-theme={resolvedTheme}
+        aria-modal="true"
+        aria-describedby={undefined}
+        className={cn(
+          'fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none',
+          getShadcnThemeClassName(resolvedTheme),
+        )}
+        style={{ zIndex: zIndex + 1 }}
+        tabIndex={-1}
+        onEscapeKeyDown={(e) => {
+          if (!closeOnEsc) {
             e.preventDefault();
-            focusModalContent();
-          }}
-        >
-          {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
-          {normalizedChildren}
-        </DialogPrimitive.Content>
-      </DialogPortal>
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (!closeOnBackdrop) {
+            e.preventDefault();
+          }
+        }}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          focusModalContent();
+        }}
+      >
+        {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
+        {normalizedChildren}
+      </DialogContent>
     </Dialog>
   );
 };
