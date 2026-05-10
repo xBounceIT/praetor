@@ -730,6 +730,33 @@ const StandardTable = <T extends object>({
     return '';
   };
 
+  const findActionNode = (node: ReactNode): ReactNode | null => {
+    if (node === null || node === undefined || typeof node === 'boolean') return null;
+    if (typeof node === 'string' || typeof node === 'number') return null;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const actionNode = findActionNode(child);
+        if (actionNode) return actionNode;
+      }
+      return null;
+    }
+    const element = getElementLike(node);
+    if (!element) return null;
+    if (
+      (typeof element.type === 'string' && element.type === 'button') ||
+      element.props.type === 'button' ||
+      typeof element.props.onClick === 'function'
+    ) {
+      return node;
+    }
+
+    for (const child of Children.toArray(element.props.children as ReactNode)) {
+      const actionNode = findActionNode(child);
+      if (actionNode) return actionNode;
+    }
+    return null;
+  };
+
   const collectClassNames = (node: ReactNode): string => {
     if (node === null || node === undefined || typeof node === 'boolean') return '';
     if (Array.isArray(node)) return node.map(collectClassNames).join(' ');
@@ -821,6 +848,28 @@ const StandardTable = <T extends object>({
         children?: ReactNode | (() => ReactNode);
         label?: ReactNode;
       };
+      const children = Children.toArray(
+        typeof props.children === 'function' ? undefined : props.children,
+      );
+      const tooltipTrigger = children.find(
+        (child) => getElementLike(child)?.type === TooltipTrigger,
+      );
+      const tooltipContent = children.find(
+        (child) => getElementLike(child)?.type === TooltipContent,
+      );
+      if (tooltipTrigger && tooltipContent) {
+        const triggerProps = getElementLike(tooltipTrigger)?.props as
+          | { children?: ReactNode }
+          | undefined;
+        const contentProps = getElementLike(tooltipContent)?.props as
+          | { children?: ReactNode }
+          | undefined;
+        const actionNode = findActionNode(triggerProps?.children);
+        if (actionNode) {
+          items.push(renderActionMenuButton(actionNode, contentProps?.children, items.length));
+          return;
+        }
+      }
 
       if (props.label !== undefined && typeof props.children === 'function') {
         items.push(renderActionMenuButton(props.children(), props.label, items.length));
