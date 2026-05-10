@@ -203,6 +203,7 @@ describe('<Layout />', () => {
 
   test('reports module stays visible with disabled AI reporting route when feature is off', async () => {
     isMobileViewport = false;
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const onViewChange = mock(() => {});
     const user = userEvent.setup();
     renderLayout({
@@ -228,6 +229,11 @@ describe('<Layout />', () => {
     await user.hover(aiReportingButton.parentElement as HTMLElement);
 
     expect(await screen.findAllByText('sidebar.aiReportingDisabled')).toHaveLength(2);
+    const tooltipContent = document.body.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltipContent?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(tooltipContent?.className).toContain('dark');
+    expect(tooltipContent?.className).toContain('bg-primary');
+    expect(tooltipContent?.className).toContain('text-primary-foreground');
   });
 
   test('AI reporting route remains clickable when feature is on', () => {
