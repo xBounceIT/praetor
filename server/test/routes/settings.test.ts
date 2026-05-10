@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -16,6 +17,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const settingsRepoSnap = { ...realSettingsRepo };
+const notificationsRepoSnap = { ...realNotificationsRepo };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
@@ -25,6 +27,8 @@ const getOrCreateForUserMock = mock();
 const upsertForUserMock = mock();
 const getPasswordHashMock = mock();
 const updatePasswordHashMock = mock();
+const upsertAdminPasswordWarningMock = mock();
+const deleteAdminPasswordWarningMock = mock();
 const bcryptCompareMock = mock();
 const bcryptHashMock = mock();
 
@@ -52,6 +56,11 @@ beforeAll(async () => {
     getOrCreateForUser: getOrCreateForUserMock,
     upsertForUser: upsertForUserMock,
   }));
+  mock.module('../../repositories/notificationsRepo.ts', () => ({
+    ...notificationsRepoSnap,
+    upsertAdminPasswordWarning: upsertAdminPasswordWarningMock,
+    deleteAdminPasswordWarning: deleteAdminPasswordWarningMock,
+  }));
   mock.module('bcryptjs', () => ({
     default: { compare: bcryptCompareMock, hash: bcryptHashMock },
     compare: bcryptCompareMock,
@@ -67,6 +76,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
+  mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -93,6 +103,8 @@ const allMocks = [
   upsertForUserMock,
   getPasswordHashMock,
   updatePasswordHashMock,
+  upsertAdminPasswordWarningMock,
+  deleteAdminPasswordWarningMock,
   bcryptCompareMock,
   bcryptHashMock,
 ];
@@ -104,6 +116,8 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue([]);
+  upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
+  deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/settings');
 });
@@ -240,6 +254,46 @@ describe('PUT /api/settings/password', () => {
     expect(bcryptCompareMock).toHaveBeenCalledWith('old-pw1', '$2a$existing');
     expect(bcryptHashMock).toHaveBeenCalledWith('new-secure-pw', 12);
     expect(updatePasswordHashMock).toHaveBeenCalledWith('u1', '$2a$newhash');
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+  });
+
+  test('200 admin changing away from default password removes warning', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, username: 'admin' });
+    getPasswordHashMock.mockResolvedValue('$2a$existing');
+    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$newhash');
+    updatePasswordHashMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'password', newPassword: 'new-secure-pw' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+  });
+
+  test('200 admin setting password back to default recreates warning', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, username: 'admin' });
+    getPasswordHashMock.mockResolvedValue('$2a$existing');
+    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$newhash');
+    updatePasswordHashMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'new-secure-pw', newPassword: 'password' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
+    expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
 
   test('400 missing currentPassword', async () => {

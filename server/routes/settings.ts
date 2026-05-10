@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken } from '../middleware/auth.ts';
+import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -17,6 +18,9 @@ import {
   optionalNonEmptyString,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const ADMIN_USERNAME = 'admin';
+const DEFAULT_ADMIN_PASSWORD = 'password';
 
 const settingsSchema = {
   type: 'object',
@@ -156,6 +160,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const newHash = await bcrypt.hash(newPasswordResult.value, 12);
 
       await usersRepo.updatePasswordHash(request.user.id, newHash);
+      if (request.user.username === ADMIN_USERNAME) {
+        if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
+          await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
+        } else {
+          await notificationsRepo.deleteAdminPasswordWarning();
+        }
+      }
 
       return { message: 'Password updated successfully' };
     },
