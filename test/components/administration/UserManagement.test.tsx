@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -81,6 +82,7 @@ describe('<UserManagement />', () => {
     expect(screen.getByText('alice.admin')).toBeInTheDocument();
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     expect(screen.getByText('manager')).toBeInTheDocument();
+    expect(screen.getByText('manager').closest('[data-status-badge]')).not.toBeNull();
     expect(screen.getByText('common:common.none')).toBeInTheDocument();
     expect(screen.getAllByText('common:common.active')).toHaveLength(2);
   });
@@ -104,16 +106,20 @@ describe('<UserManagement />', () => {
     expect(screen.getByText('hr:workforce.editUser')).toBeInTheDocument();
   });
 
-  test('action button does not also trigger row edit', () => {
+  test('action button does not also trigger row edit', async () => {
+    const user = userEvent.setup();
     const props = renderUserManagement();
     const bobRow = getRowFor('Bob Brown');
-    const disableButton = bobRow.querySelector('.fa-ban')?.closest('button');
-    if (!disableButton) throw new Error('Could not find disable button');
+    const actionButton = bobRow.querySelector('[aria-label="table.rowActions"]');
+    if (!actionButton) throw new Error('Could not find row actions button');
 
-    fireEvent.click(disableButton);
+    await user.click(actionButton);
+    const disableButton = await screen.findByRole('button', { name: 'hr:workforce.disableUser' });
+
+    await user.click(disableButton);
 
     expect(props.onUpdateUser).toHaveBeenCalledWith('u2', { isDisabled: true });
-    expect(screen.queryByText('hr:workforce.editUser')).not.toBeInTheDocument();
+    expect(usersApiMock.getRoles).not.toHaveBeenCalled();
   });
 
   test('shows empty state when no users match the search', () => {

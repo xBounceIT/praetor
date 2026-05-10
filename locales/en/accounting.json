@@ -86,6 +86,7 @@
     "amountPaidInvalid": "Enter a valid paid amount.",
     "amountPaidExceedsTotal": "Amount paid cannot exceed the invoice total.",
     "status": "Status",
+    "actionsColumn": "Actions",
     "statusDraft": "Draft",
     "statusSent": "Sent",
     "statusPaid": "Paid",

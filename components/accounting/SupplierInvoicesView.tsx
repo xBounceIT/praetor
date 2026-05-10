@@ -276,7 +276,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:supplierInvoices.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',

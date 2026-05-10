@@ -71,6 +71,11 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 - Utilities: camelCase
 - Route files: kebab-case
 
+### Frontend UI
+- Always use shadcn/ui components and primitives for frontend UI work. Prefer existing components under `components/ui/*` and shadcn composition/props over bespoke controls or custom widget implementations.
+- If a needed shadcn/ui component is missing, add it with `bunx --bun shadcn@latest add <component>` and adapt behavior through the component API instead of rebuilding the same behavior manually.
+- Keep shadcn theme tokens (`bg-background`, `text-foreground`, `border-border`, `text-muted-foreground`, etc.) in new UI so the user's selected theme is respected.
+
 ## Important Notes
 
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
@@ -79,4 +84,4 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: The app itself runs on remote Docker containers. Do not run Docker commands locally, but Bun test commands such as `bun test` and `bun run test` may be run locally.
 - **Commit and PR titles**: Always format commit messages and pull request titles as `scope(category): description`.
-- **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+- **Docs**: Always use Context7 MCP for shadcn/ui and any library/API documentation, code generation, setup, configuration, or best-practice checks without me having to explicitly ask.

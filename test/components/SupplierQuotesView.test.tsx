@@ -1,22 +1,9 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import type { Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
-
-// Modal renders via createPortal, which doesn't reliably surface in screen
-// queries with happy-dom + React 19. Replace createPortal with a passthrough
-// so the real Modal source still runs but its children render inline. This
-// also avoids globally mocking '../../components/shared/Modal', which would
-// leak across test files in the same Bun process.
-const reactDom = await import('react-dom');
-mock.module('react-dom', () => ({
-  ...reactDom,
-  default: reactDom.default,
-  createPortal: (children: ReactNode) => <div data-testid="modal">{children}</div>,
-}));
 
 const SupplierQuotesView = (await import('../../components/sales/SupplierQuotesView')).default;
 
@@ -78,7 +65,6 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   test('clicking a draft row opens the modal in editable mode', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('SQ-DRAFT'));
-    expect(screen.getByTestId('modal')).toBeInTheDocument();
     // Edit modal title and Update submit button are rendered.
     expect(screen.getByText('sales:supplierQuotes.editQuote')).toBeInTheDocument();
     expect(screen.getByText('common:buttons.update')).toBeInTheDocument();
@@ -90,7 +76,6 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   test('clicking a sent row opens the modal in read-only mode', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('SQ-SENT'));
-    expect(screen.getByTestId('modal')).toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
@@ -99,7 +84,6 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   test('clicking an accepted row (without linked order) opens the modal in read-only mode', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('SQ-ACCEPTED'));
-    expect(screen.getByTestId('modal')).toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
@@ -108,7 +92,6 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   test('clicking a denied row opens the modal in read-only mode', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('SQ-DENIED'));
-    expect(screen.getByTestId('modal')).toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
@@ -117,7 +100,6 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   test('clicking an accepted row with a linked order shows the linked-order banner', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('SQ-ACCEPTED-ORDER'));
-    expect(screen.getByTestId('modal')).toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     // Linked-order copy wins over the generic non-draft copy.
