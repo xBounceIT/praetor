@@ -8,6 +8,7 @@ import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -1025,12 +1026,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           </div>
           <div className="flex items-center gap-3">
             {canCreateProjects && (
-              <button
-                onClick={openAddModal}
-                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-              >
-                <i className="fa-solid fa-plus"></i> {t('projects:projects.addProject')}
-              </button>
+              <HeaderAddButton onClick={openAddModal}>
+                {t('projects:projects.addProject')}
+              </HeaderAddButton>
             )}
           </div>
         </div>

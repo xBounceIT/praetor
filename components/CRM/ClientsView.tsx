@@ -12,6 +12,7 @@ import type {
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -1663,12 +1664,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <p className="text-zinc-500 text-sm">{t('crm:clients.subtitle')}</p>
           </div>
           {canCreateClients && (
-            <button
-              onClick={openAddModal}
-              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
-            </button>
+            <HeaderAddButton onClick={openAddModal}>{t('crm:clients.addClient')}</HeaderAddButton>
           )}
         </div>
       </div>

@@ -6,6 +6,7 @@ import { workUnitsApi } from '../services/api';
 import type { User, WorkUnit } from '../types';
 import { buildPermission, hasPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
+import HeaderAddButton from './shared/HeaderAddButton';
 import Modal from './shared/Modal';
 import SelectControl from './shared/SelectControl';
 
@@ -190,12 +191,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <p className="text-zinc-500 font-medium">{t('hr:workUnits.subtitle')}</p>
         </div>
         {canCreateWorkUnits && (
-          <button
-            onClick={openCreateModal}
-            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('hr:workUnits.newWorkUnit')}
-          </button>
+          <HeaderAddButton actionSize="wide" onClick={openCreateModal}>
+            {t('hr:workUnits.newWorkUnit')}
+          </HeaderAddButton>
         )}
       </div>
 

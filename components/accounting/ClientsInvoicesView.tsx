@@ -6,6 +6,7 @@ import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
@@ -856,12 +857,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
             </h2>
             <p className="text-sm text-zinc-500">{t('accounting:clientsInvoices.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95"
-          >
-            <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addInvoice')}
-          </button>
+          <HeaderAddButton onClick={openAddModal}>
+            {t('accounting:clientsInvoices.addInvoice')}
+          </HeaderAddButton>
         </div>
       </div>
 

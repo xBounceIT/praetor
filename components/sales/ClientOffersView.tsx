@@ -33,6 +33,7 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import FieldTooltip from '../shared/FieldTooltip';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -1541,13 +1542,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             </p>
           </div>
           {onAddOffer && (
-            <button
-              onClick={openAddModal}
-              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i>
+            <HeaderAddButton onClick={openAddModal}>
               {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
-            </button>
+            </HeaderAddButton>
           )}
         </div>
       </div>
