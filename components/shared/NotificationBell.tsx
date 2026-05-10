@@ -116,7 +116,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       {isOpen && (
         <div className="absolute right-0 z-50 mt-3 w-80 origin-top-right overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in zoom-in-95 duration-200">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-border bg-popover px-4 py-3">
             <h3 className="text-sm font-semibold text-popover-foreground">
               {t('notifications.title', 'Notifications')}
             </h3>
