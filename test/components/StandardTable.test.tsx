@@ -260,16 +260,20 @@ describe('<StandardTable />', () => {
     // rows[0] is the header; rows[1] is Alice's data row.
     const aliceRow = screen.getAllByRole('row')[1];
     const cells = aliceRow.querySelectorAll('td');
-    expect(cells.length).toBe(3);
+    expect(cells.length).toBe(4);
 
     // Fixed-layout cells keep their alignment without relying on a stretch column.
     expect(cells[1].className).toContain('align-middle');
     expect(cells[1].className).toContain('text-right');
     expect(cells[1].className).toContain('overflow-hidden');
 
-    // Sticky-right action column: stays w-auto, never w-full.
-    expect(cells[2].className).toContain('w-auto');
-    expect(cells[2].className).not.toMatch(/\bw-full\b/);
+    // Spacer absorbs spare container width so the sticky action column remains on the right.
+    expect(cells[2]).toHaveAttribute('aria-hidden', 'true');
+    expect(cells[2].style.width).toBe('auto');
+    expect(cells[3].className).toContain('w-auto');
+    expect(cells[3].className).not.toMatch(/\bw-full\b/);
+    expect(screen.getByRole('table').style.width).toBe('100%');
+    expect(screen.getByRole('table').style.minWidth).not.toBe('');
   });
 
   // ---------------------------------------------------------------------------

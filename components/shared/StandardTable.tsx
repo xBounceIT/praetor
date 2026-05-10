@@ -18,6 +18,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import {
   Children,
+  Fragment,
   isValidElement,
   type ReactNode,
   type Ref,
@@ -656,6 +657,8 @@ const StandardTable = <T extends object>({
   const totalItems = data ? processedRows.length : externalTotalCount || 0;
   const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = data ? table.getRowModel().rows : [];
+  const hasTrailingActionColumn =
+    visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
   const fixedTableWidth = useMemo(() => {
     if (!usesFixedTableLayout) return undefined;
     return table.getTotalSize();
@@ -1514,12 +1517,26 @@ const StandardTable = <T extends object>({
         {columns && data ? (
           <Table
             className="table-fixed text-left"
-            style={fixedTableWidth ? { width: `${fixedTableWidth}px` } : undefined}
+            style={
+              fixedTableWidth
+                ? {
+                    width: hasTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
+                    minWidth: hasTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
+                  }
+                : undefined
+            }
           >
             <colgroup>
               {table.getVisibleLeafColumns().map((column) => {
+                const col = colsById.get(column.id);
                 const colWidth = column.getSize();
-                return <col key={column.id} style={{ width: colWidth }} />;
+                const needsActionSpacer = hasTrailingActionColumn && col && isRowActionColumn(col);
+                return (
+                  <Fragment key={column.id}>
+                    {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
+                    <col style={{ width: colWidth }} />
+                  </Fragment>
+                );
               })}
             </colgroup>
             <TableHeader>
@@ -1548,87 +1565,101 @@ const StandardTable = <T extends object>({
                     const resizeHandler = header.getResizeHandler();
 
                     return (
-                      <TableHead
-                        key={header.id}
-                        style={{ width: colWidth, minWidth: minColumnWidth }}
-                        aria-label={isActionColumn ? col.header : undefined}
-                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
-                      >
-                        {isActionColumn ? (
-                          <div
-                            data-column-header-content={colId}
-                            className="inline-flex w-max items-center gap-1"
-                          >
-                            <span
-                              className="whitespace-nowrap text-sm font-semibold text-foreground"
-                              data-column-header-label={colId}
+                      <Fragment key={header.id}>
+                        {hasTrailingActionColumn && isActionColumn && (
+                          <TableHead
+                            aria-hidden="true"
+                            style={{ width: 'auto', minWidth: 0 }}
+                            className="h-10 border-border p-0"
+                          />
+                        )}
+                        <TableHead
+                          style={{ width: colWidth, minWidth: minColumnWidth }}
+                          aria-label={isActionColumn ? col.header : undefined}
+                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
+                        >
+                          {isActionColumn ? (
+                            <div
+                              data-column-header-content={colId}
+                              className="inline-flex w-max items-center gap-1"
                             >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(header.column.columnDef.header, header.getContext())}
-                            </span>
-                          </div>
-                        ) : (
-                          <div
-                            data-column-header-content={colId}
-                            className="inline-flex w-max items-center gap-1"
-                          >
-                            <button
-                              type="button"
-                              disabled={!header.column.getCanSort()}
-                              onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
-                            >
-                              <span className="whitespace-nowrap" data-column-header-label={colId}>
+                              <span
+                                className="whitespace-nowrap text-sm font-semibold text-foreground"
+                                data-column-header-label={colId}
+                              >
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
                               </span>
-                              {sorted === 'asc' ? (
-                                <ArrowUp
-                                  className="size-3 shrink-0 transition-colors"
-                                  aria-hidden="true"
-                                />
-                              ) : sorted === 'desc' ? (
-                                <ArrowDown
-                                  className="size-3 shrink-0 transition-colors"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <ArrowUpDown
-                                  className="size-3 shrink-0 transition-colors"
-                                  aria-hidden="true"
-                                />
-                              )}
-                            </button>
-                            {renderHeaderFilter(header.column, col)}
-                          </div>
-                        )}
+                            </div>
+                          ) : (
+                            <div
+                              data-column-header-content={colId}
+                              className="inline-flex w-max items-center gap-1"
+                            >
+                              <button
+                                type="button"
+                                disabled={!header.column.getCanSort()}
+                                onClick={header.column.getToggleSortingHandler()}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              >
+                                <span
+                                  className="whitespace-nowrap"
+                                  data-column-header-label={colId}
+                                >
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                </span>
+                                {sorted === 'asc' ? (
+                                  <ArrowUp
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                ) : sorted === 'desc' ? (
+                                  <ArrowDown
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <ArrowUpDown
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </button>
+                              {renderHeaderFilter(header.column, col)}
+                            </div>
+                          )}
 
-                        {header.column.getCanResize() && (
-                          <div
-                            className="absolute top-0 right-0 z-30 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
-                            data-column-resize-handle={colId}
-                            onMouseDown={(event) => {
-                              event.stopPropagation();
-                              resizeHandler(event);
-                            }}
-                            onTouchStart={(event) => {
-                              event.stopPropagation();
-                              resizeHandler(event);
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                            onDoubleClick={(event) => event.stopPropagation()}
-                          >
-                            <span
-                              data-column-resize-line={colId}
-                              className={`h-5 w-px rounded-full transition-colors ${
-                                isResizing ? 'bg-primary' : 'bg-border group-hover:bg-primary/40'
-                              }`}
-                            />
-                          </div>
-                        )}
-                      </TableHead>
+                          {header.column.getCanResize() && (
+                            <div
+                              className="absolute top-0 right-0 z-30 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
+                              data-column-resize-handle={colId}
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onTouchStart={(event) => {
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                            >
+                              <span
+                                data-column-resize-line={colId}
+                                className={`h-5 w-px rounded-full transition-colors ${
+                                  isResizing ? 'bg-primary' : 'bg-border group-hover:bg-primary/40'
+                                }`}
+                              />
+                            </div>
+                          )}
+                        </TableHead>
+                      </Fragment>
                     );
                   })}
                 </TableRow>
@@ -1677,47 +1708,55 @@ const StandardTable = <T extends object>({
                             ? col.cell({ getValue: () => rawValue, row, value: rawValue })
                             : flexRender(cell.column.columnDef.cell, cell.getContext());
                         return (
-                          <TableCell
-                            key={cell.id}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              col.onCellDoubleClick?.(row);
-                            }}
-                            style={{ width: colWidth, minWidth: minColumnWidth }}
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${isStickyRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
-                          >
-                            {isActionColumn ? (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    aria-label={t('table.rowActions')}
-                                    onClick={(event) => event.stopPropagation()}
-                                    className="rounded-lg"
-                                  >
-                                    <i
-                                      className="fa-solid fa-ellipsis text-[10px]"
-                                      aria-hidden="true"
-                                    ></i>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onDoubleClick={(event) => event.stopPropagation()}
-                                >
-                                  <div className="flex flex-col gap-0.5">
-                                    {renderActionMenuItems(cellContent)}
-                                  </div>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            ) : (
-                              cellContent
+                          <Fragment key={cell.id}>
+                            {hasTrailingActionColumn && isActionColumn && (
+                              <TableCell
+                                aria-hidden="true"
+                                style={{ width: 'auto', minWidth: 0 }}
+                                className="border-border p-0"
+                              />
                             )}
-                          </TableCell>
+                            <TableCell
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                col.onCellDoubleClick?.(row);
+                              }}
+                              style={{ width: colWidth, minWidth: minColumnWidth }}
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${isStickyRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            >
+                              {isActionColumn ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      aria-label={t('table.rowActions')}
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="rounded-lg"
+                                    >
+                                      <i
+                                        className="fa-solid fa-ellipsis text-[10px]"
+                                        aria-hidden="true"
+                                      ></i>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onDoubleClick={(event) => event.stopPropagation()}
+                                  >
+                                    <div className="flex flex-col gap-0.5">
+                                      {renderActionMenuItems(cellContent)}
+                                    </div>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                cellContent
+                              )}
+                            </TableCell>
+                          </Fragment>
                         );
                       })}
                     </TableRow>
@@ -1726,7 +1765,7 @@ const StandardTable = <T extends object>({
               ) : (
                 <TableRow className="border-border">
                   <TableCell
-                    colSpan={Math.max(visibleColumns.length, 1)}
+                    colSpan={Math.max(visibleColumns.length + (hasTrailingActionColumn ? 1 : 0), 1)}
                     className="p-12 text-center text-sm font-medium text-muted-foreground"
                   >
                     {emptyState ?? t('table.noResults')}
