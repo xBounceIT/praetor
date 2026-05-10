@@ -41,8 +41,7 @@ describe('<Tooltip />', () => {
 
     const tooltip = await findTooltipContent();
     expect(tooltip.hasAttribute('data-shadcn-theme-scope')).toBe(true);
-    expect(tooltip.getAttribute('data-shadcn-theme')).toBe('dark');
-    expect(tooltip.className).toContain('dark');
+    expect(tooltip.getAttribute('data-shadcn-theme')).toBe('light');
   });
 
   test('renders above the shared modal overlay layer', async () => {
@@ -64,7 +63,17 @@ describe('<Tooltip />', () => {
     expect(tooltip.className).toContain('whitespace-normal');
   });
 
-  test('uses an inverted theme when the resolved theme changes', async () => {
+  test('uses inverted theme colors from scoped shadcn variables', async () => {
+    renderTooltip();
+
+    await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
+
+    const tooltip = await findTooltipContent();
+    expect(tooltip.className).toContain('bg-[var(--foreground)]');
+    expect(tooltip.className).toContain('text-[var(--background)]');
+  });
+
+  test('updates portaled tooltip content when the resolved theme changes', async () => {
     renderTooltip();
 
     await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
@@ -72,8 +81,8 @@ describe('<Tooltip />', () => {
 
     act(() => applyTheme('dark'));
 
-    await waitFor(() => expect(tooltip.getAttribute('data-shadcn-theme')).toBe('light'));
-    expect(tooltip.className).not.toContain('dark');
+    await waitFor(() => expect(tooltip.getAttribute('data-shadcn-theme')).toBe('dark'));
+    expect(tooltip.className).toContain('dark');
   });
 
   test('renders FieldTooltip content with native tooltip primitives', async () => {
