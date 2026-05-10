@@ -285,7 +285,6 @@ const Layout: React.FC<LayoutProps> = ({
 
       for (const route of module.routes) {
         if (route.view === activeView) matchedRoute = route;
-        if (route.view === 'reports/ai-reporting' && !isAiReportingEnabled) continue;
 
         const permission = VIEW_PERMISSION_MAP[route.view];
         if (!permission || !hasPermission(currentUser.permissions, permission)) continue;
@@ -295,6 +294,7 @@ const Layout: React.FC<LayoutProps> = ({
           view: route.view,
           icon: route.icon,
           isActive: activeView === route.view,
+          disabled: route.view === 'reports/ai-reporting' && !isAiReportingEnabled,
         });
       }
 

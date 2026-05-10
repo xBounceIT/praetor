@@ -20,6 +20,7 @@ export interface SidebarRouteItem {
   view: View;
   icon: LucideIcon;
   isActive: boolean;
+  disabled?: boolean;
 }
 
 export interface SidebarModuleItem {
@@ -96,6 +97,7 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                       >
                         <button
                           type="button"
+                          disabled={subItem.disabled}
                           onClick={() => {
                             onViewChange(subItem.view);
                             if (isMobile) setOpenMobile(false);
