@@ -13,6 +13,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { View } from '@/types';
 
 export interface SidebarRouteItem {
@@ -20,6 +21,8 @@ export interface SidebarRouteItem {
   view: View;
   icon: LucideIcon;
   isActive: boolean;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }
 
 export interface SidebarModuleItem {
@@ -87,8 +90,8 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
               </CollapsibleTrigger>
               <CollapsibleContent className="sidebar-entry-content">
                 <SidebarMenuSub className="py-1">
-                  {item.items.map((subItem) => (
-                    <SidebarMenuSubItem key={subItem.view}>
+                  {item.items.map((subItem) => {
+                    const routeButton = (
                       <SidebarMenuSubButton
                         asChild
                         isActive={subItem.isActive}
@@ -96,6 +99,7 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                       >
                         <button
                           type="button"
+                          disabled={subItem.disabled}
                           onClick={() => {
                             onViewChange(subItem.view);
                             if (isMobile) setOpenMobile(false);
@@ -106,8 +110,23 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
                           <span>{subItem.title}</span>
                         </button>
                       </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
+                    );
+
+                    return (
+                      <SidebarMenuSubItem key={subItem.view}>
+                        {subItem.disabled && subItem.disabledTooltip ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="block">{routeButton}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">{subItem.disabledTooltip}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          routeButton
+                        )}
+                      </SidebarMenuSubItem>
+                    );
+                  })}
                 </SidebarMenuSub>
               </CollapsibleContent>
             </SidebarMenuItem>

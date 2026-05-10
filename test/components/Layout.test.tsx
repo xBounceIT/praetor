@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import type { Role, User } from '../../types';
+import { buildPermission } from '../../utils/permissions';
 import { applyTheme, THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
@@ -34,6 +35,7 @@ const mockUser: User = {
 };
 
 const mockRoles: Role[] = [];
+const aiReportingViewPermission = buildPermission('reports.ai_reporting', 'view');
 
 const renderLayout = (props?: Partial<React.ComponentProps<typeof Layout>>) =>
   render(
@@ -197,6 +199,84 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
     expect(screen.queryByText('routes.suppliers')).toBeNull();
     expect(screen.queryByText('modules.accounting')).toBeNull();
+  });
+
+  test('reports module stays visible with disabled AI reporting route when feature is off', async () => {
+    isMobileViewport = false;
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    const onViewChange = mock(() => {});
+    const user = userEvent.setup();
+    renderLayout({
+      onViewChange,
+      isAiReportingEnabled: false,
+      currentUser: {
+        ...mockUser,
+        permissions: [...(mockUser.permissions ?? []), aiReportingViewPermission],
+      },
+    });
+
+    expect(screen.getByText('modules.reports')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'modules.reports' }));
+    const aiReportingButton = screen.getByRole('button', { name: 'routes.aiReporting' });
+
+    expect(aiReportingButton).toBeDisabled();
+
+    fireEvent.click(aiReportingButton);
+
+    expect(onViewChange).not.toHaveBeenCalled();
+
+    await user.hover(aiReportingButton.parentElement as HTMLElement);
+
+    expect(await screen.findAllByText('sidebar.aiReportingDisabled')).toHaveLength(2);
+    const tooltipContent = document.body.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltipContent?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(tooltipContent?.className).toContain('dark');
+    expect(tooltipContent?.className).toContain('bg-primary');
+    expect(tooltipContent?.className).toContain('text-primary-foreground');
+  });
+
+  test('AI reporting route is disabled by default while feature settings are unresolved', () => {
+    isMobileViewport = false;
+    const onViewChange = mock(() => {});
+    renderLayout({
+      onViewChange,
+      currentUser: {
+        ...mockUser,
+        permissions: [...(mockUser.permissions ?? []), aiReportingViewPermission],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modules.reports' }));
+    const aiReportingButton = screen.getByRole('button', { name: 'routes.aiReporting' });
+
+    expect(aiReportingButton).toBeDisabled();
+
+    fireEvent.click(aiReportingButton);
+
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  test('AI reporting route remains clickable when feature is on', () => {
+    isMobileViewport = false;
+    const onViewChange = mock(() => {});
+    renderLayout({
+      onViewChange,
+      isAiReportingEnabled: true,
+      currentUser: {
+        ...mockUser,
+        permissions: [...(mockUser.permissions ?? []), aiReportingViewPermission],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modules.reports' }));
+    const aiReportingButton = screen.getByRole('button', { name: 'routes.aiReporting' });
+
+    expect(aiReportingButton).not.toBeDisabled();
+
+    fireEvent.click(aiReportingButton);
+
+    expect(onViewChange).toHaveBeenCalledWith('reports/ai-reporting');
   });
 
   test('active module expands when active view changes', () => {
