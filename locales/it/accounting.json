@@ -86,6 +86,7 @@
     "amountPaidInvalid": "Inserisci un importo pagato valido.",
     "amountPaidExceedsTotal": "L'importo pagato non puo' superare il totale della fattura.",
     "status": "Stato",
+    "actionsColumn": "Azioni",
     "statusDraft": "Bozza",
     "statusSent": "Inviata",
     "statusPaid": "Pagata",

@@ -409,7 +409,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:clientsInvoices.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',

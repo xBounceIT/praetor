@@ -652,7 +652,7 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-card');
-    expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(96);
+    expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(64);
     expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
     expect(within(actionsHeader).queryByRole('button')).not.toBeInTheDocument();
@@ -722,7 +722,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
-    expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(96);
+    expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(64);
     expect(firstActionCell?.className).not.toContain('bg-background');
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');

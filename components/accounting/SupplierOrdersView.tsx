@@ -341,7 +341,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:supplierOrders.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',

@@ -115,7 +115,7 @@ const HEADER_SORT_ICON_WIDTH = 12;
 const HEADER_SORT_ICON_GAP = 4;
 const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
-const ACTION_COLUMN_WIDTH = 96;
+const ACTION_COLUMN_WIDTH = 64;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const TABLE_CONTROL_BUTTON_CLASSNAME =
   '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';

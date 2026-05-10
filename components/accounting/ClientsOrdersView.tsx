@@ -571,7 +571,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:clientsOrders.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
