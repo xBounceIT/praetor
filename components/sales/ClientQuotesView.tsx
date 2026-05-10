@@ -36,6 +36,7 @@ import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import FieldTooltip from '../shared/FieldTooltip';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -2017,12 +2018,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </h2>
             <p className="text-zinc-500 text-sm">{t('sales:clientQuotes.quotesSubtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.createNewQuote')}
-          </button>
+          <HeaderAddButton onClick={openAddModal}>
+            {t('sales:clientQuotes.createNewQuote')}
+          </HeaderAddButton>
         </div>
       </div>
 

@@ -15,6 +15,7 @@ import {
   TOP_MANAGER_ROLE_ID,
 } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import Toggle from '../shared/Toggle';
 
@@ -416,12 +417,9 @@ const RolesView: React.FC<RolesViewProps> = ({
           <p className="text-zinc-500 font-medium">{t('administration:roles.subtitle')}</p>
         </div>
         {canCreateRoles && (
-          <button
-            onClick={openCreateModal}
-            className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('common:buttons.create')}
-          </button>
+          <HeaderAddButton actionSize="wide" onClick={openCreateModal}>
+            {t('common:buttons.create')}
+          </HeaderAddButton>
         )}
       </div>
 

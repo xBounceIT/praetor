@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -400,13 +401,9 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
           <p className="text-zinc-500">{t('externalEmployees.subtitle')}</p>
         </div>
         {canCreateEmployees && (
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
-          >
-            <i className="fa-solid fa-plus"></i>
+          <HeaderAddButton actionSize="tall" onClick={openAddModal}>
             {t('externalEmployees.addEmployee')}
-          </button>
+          </HeaderAddButton>
         )}
       </div>
 

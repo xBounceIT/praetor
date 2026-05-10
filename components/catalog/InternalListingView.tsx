@@ -12,6 +12,7 @@ import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -1542,12 +1543,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </h2>
             <p className="text-zinc-500 text-sm">{t('crm:internalListing.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addProduct')}
-          </button>
+          <HeaderAddButton onClick={openAddModal}>
+            {t('crm:internalListing.addProduct')}
+          </HeaderAddButton>
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -1304,12 +1305,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
           />
         </div>
         {canCreateUsers && (
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-zinc-200 transition-all hover:bg-zinc-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('hr:workforce.addUser')}
-          </button>
+          <HeaderAddButton onClick={() => setIsCreateModalOpen(true)}>
+            {t('hr:workforce.addUser')}
+          </HeaderAddButton>
         )}
       </div>
 
