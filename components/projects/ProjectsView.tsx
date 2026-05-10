@@ -1,6 +1,10 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
@@ -10,6 +14,14 @@ import { buildPermission, hasPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -421,13 +433,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'name',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           value={getTaskFieldValue(row.id, 'name', row.name)}
           disabled={!canUpdateTasks}
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => setTaskFieldValue(row.id, 'name', e.target.value)}
           onBlur={() => commitTaskField(row, 'name', (v) => v.trim() || row.name)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
+          className="h-8 min-w-[120px] text-xs"
         />
       ),
     },
@@ -437,7 +449,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'expectedEffort',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           type="number"
           min="0"
           step="1"
@@ -449,7 +461,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           }}
           onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
           onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -459,7 +471,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'revenue',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           type="number"
           min="0"
           step="0.01"
@@ -468,7 +480,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           placeholder="0.00"
           onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
           onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -478,13 +490,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'notes',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           disabled={!canUpdateTasks}
           value={getTaskFieldValue(row.id, 'notes', row.notes ?? '')}
           placeholder="-"
           onChange={(e) => setTaskFieldValue(row.id, 'notes', e.target.value)}
           onBlur={() => commitTaskField(row, 'notes', (v) => v.trim())}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
+          className="h-8 min-w-[120px] text-xs"
         />
       ),
     },
@@ -493,15 +505,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       id: 'progress',
       disableFiltering: true,
       cell: ({ row }) => {
-        if (hoursLoadState === 'loading') return <span className="text-zinc-400 text-xs">...</span>;
-        if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">-</span>;
+        if (hoursLoadState === 'loading')
+          return <span className="text-xs text-muted-foreground">...</span>;
+        if (hoursLoadState === 'error') return <span className="text-xs text-destructive">-</span>;
         const logged = projectTaskHours[row.name] ?? 0;
         const expected = row.expectedEffort ?? 0;
         const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
         const overBudget = expected > 0 && logged > expected;
         return (
           <span
-            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
+            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-destructive' : 'text-muted-foreground'}`}
           >
             {expected > 0 ? `${pct}%` : '-'}
           </span>
@@ -519,16 +532,18 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       promptDeleteTask(row);
                     }}
-                    className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
+                    className="text-muted-foreground hover:text-destructive"
                   >
                     <i className="fa-solid fa-trash-can text-xs"></i>
-                  </button>
+                  </Button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
@@ -562,12 +577,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'name',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           value={row.name}
           required
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => updateDraftTask(row._id, 'name', e.target.value)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="h-8 min-w-[120px] text-xs"
         />
       ),
     },
@@ -577,7 +592,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'expectedEffort',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           type="number"
           min="0"
           step="1"
@@ -588,7 +603,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
           }}
           onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -598,7 +613,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'revenue',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           type="number"
           min="0"
           step="0.01"
@@ -606,7 +621,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           value={row.revenue}
           placeholder="0.00"
           onChange={(e) => updateDraftTask(row._id, 'revenue', e.target.value)}
-          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -616,11 +631,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       accessorKey: 'notes',
       disableFiltering: true,
       cell: ({ row }) => (
-        <input
+        <Input
           value={row.notes}
           placeholder="-"
           onChange={(e) => updateDraftTask(row._id, 'notes', e.target.value)}
-          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+          className="h-8 min-w-[120px] text-xs"
         />
       ),
     },
@@ -631,13 +646,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       align: 'right',
       cell: ({ row }) => (
         <div className="flex justify-end">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => removeDraftTask(row._id)}
-            className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
+            className="text-muted-foreground hover:text-destructive"
           >
             <i className="fa-solid fa-trash-can text-xs"></i>
-          </button>
+          </Button>
         </div>
       ),
     },
@@ -647,346 +664,312 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                <i
-                  className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
-                ></i>
-              </div>
-              {editingProject
-                ? t('projects:projects.editProject')
-                : t('projects:projects.createNewProject')}
-            </h3>
-            <button
-              onClick={closeModal}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="2xl">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingProject
+                  ? t('projects:projects.editProject')
+                  : t('projects:projects.createNewProject')}
+              </ModalTitle>
+              <ModalCloseButton onClick={closeModal} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6">
-            {editingProject?.orderId && (
-              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                    <i className="fa-solid fa-link"></i>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-zinc-900">
-                      {t('projects:projects.linkedOrder')}
+            <ModalBody className="space-y-6">
+              {editingProject?.orderId && (
+                <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                      <i className="fa-solid fa-link" aria-hidden="true"></i>
                     </div>
-                    <div className="text-xs text-praetor">
-                      {formatOrderId(editingProject.orderId)}
+                    <div>
+                      <div className="text-sm font-medium text-foreground">
+                        {t('projects:projects.linkedOrder')}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatOrderId(editingProject.orderId)}
+                      </div>
                     </div>
                   </div>
+                  {onViewOrder && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => onViewOrder(editingProject?.orderId ?? '')}
+                      className="px-0"
+                    >
+                      {t('projects:projects.viewOrder')}
+                    </Button>
+                  )}
                 </div>
-                {onViewOrder && (
-                  <button
-                    type="button"
-                    onClick={() => onViewOrder(editingProject?.orderId ?? '')}
-                    className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
-                  >
-                    {t('projects:projects.viewOrder')}
-                  </button>
+              )}
+              <div className="space-y-4">
+                {/* Order selector (create only) / Client selector (edit only) */}
+                {editingProject ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-client"
+                        options={clientOptions}
+                        value={clientId}
+                        onChange={(val) => {
+                          setClientId(val as string);
+                          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                        }}
+                        label={t('projects:projects.client')}
+                        placeholder={t('projects:projects.selectClient')}
+                        searchable={true}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
+                    </div>
+                    <Field data-invalid={Boolean(errors.name)}>
+                      <FieldLabel htmlFor="project-name">{t('projects:projects.name')}</FieldLabel>
+                      <Input
+                        id="project-name"
+                        type="text"
+                        value={name}
+                        aria-invalid={Boolean(errors.name)}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                        }}
+                        placeholder={t('projects:projects.projectNamePlaceholder')}
+                      />
+                      <FieldError className="text-xs">{errors.name}</FieldError>
+                    </Field>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-order"
+                        options={orderOptions}
+                        value={orderId}
+                        onChange={(val) => {
+                          setOrderId(val as string);
+                          if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                        }}
+                        label={t('projects:projects.order')}
+                        placeholder={t('projects:projects.selectOrder')}
+                        searchable={true}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.orderId}</FieldError>
+                      {selectedOrder && (
+                        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                          <i
+                            className="fa-solid fa-building text-xs text-muted-foreground"
+                            aria-hidden="true"
+                          ></i>
+                          <span className="text-xs text-muted-foreground">
+                            {t('projects:projects.inheritedClientLabel')}:
+                          </span>
+                          <span className="text-xs font-medium text-foreground">
+                            {selectedOrder.clientName}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <Field data-invalid={Boolean(errors.name)}>
+                      <FieldLabel htmlFor="project-name">{t('projects:projects.name')}</FieldLabel>
+                      <Input
+                        id="project-name"
+                        type="text"
+                        value={name}
+                        aria-invalid={Boolean(errors.name)}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                        }}
+                        placeholder={t('projects:projects.projectNamePlaceholder')}
+                      />
+                      <FieldError className="text-xs">{errors.name}</FieldError>
+                    </Field>
+                  </div>
+                )}
+
+                <Field>
+                  <FieldLabel htmlFor="project-description">
+                    {t('projects:projects.description')}
+                  </FieldLabel>
+                  <Textarea
+                    id="project-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={t('projects:projects.descriptionPlaceholder')}
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
+
+                {/* Tasks section (create only) */}
+                {!editingProject && (
+                  <div className="space-y-2">
+                    <StandardTable<DraftTask>
+                      title={t('projects:projects.projectTasks')}
+                      data={draftTasks}
+                      columns={draftTaskColumns}
+                      defaultRowsPerPage={5}
+                      emptyState={
+                        <span className="text-xs italic text-muted-foreground">
+                          {t('projects:projects.noTasksAdded')}
+                        </span>
+                      }
+                      headerAction={
+                        <Button type="button" onClick={addDraftTask} size="sm">
+                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                          {t('projects:projects.addTaskRow')}
+                        </Button>
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Tasks section (edit only) */}
+                {editingProject && (
+                  <div className="space-y-2">
+                    <StandardTable<ProjectTask>
+                      title={t('projects:projects.projectTasks')}
+                      data={editingProjectTasks}
+                      columns={existingTaskColumns}
+                      defaultRowsPerPage={5}
+                      emptyState={
+                        <span className="text-xs italic text-muted-foreground">
+                          {t('projects:projects.noTasksAdded')}
+                        </span>
+                      }
+                      headerAction={
+                        canCreateTasks ? (
+                          <Button type="button" onClick={handleAddExistingTask} size="sm">
+                            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                            {t('projects:projects.addTaskRow')}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </div>
+                )}
+
+                <Field>
+                  <FieldLabel>{t('projects:projects.color')}</FieldLabel>
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+                    {COLORS.map((c) => (
+                      <Tooltip key={c}>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => {
+                                setColor(c);
+                                setHexInput(c);
+                              }}
+                              className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
+                              style={{ backgroundColor: c }}
+                            />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{c}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                    <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
+                      <Input
+                        type="color"
+                        value={color}
+                        onFocus={() => {
+                          skipPickerRef.current = false;
+                        }}
+                        onChange={(e) => {
+                          if (skipPickerRef.current) return;
+                          setColor(e.target.value);
+                          setHexInput(e.target.value);
+                        }}
+                        className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
+                      />
+                      <Input
+                        type="text"
+                        value={hexInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setHexInput(val);
+                          if (isValidHex(val)) {
+                            setColor(val);
+                          }
+                        }}
+                        onBlur={commitHexInput}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitHexInput();
+                          }
+                        }}
+                        placeholder="#000000"
+                        className="h-8 w-[90px] font-mono text-xs tabular-nums"
+                      />
+                    </div>
+                  </div>
+                </Field>
+
+                {editingProject && (
+                  <Field>
+                    {(() => {
+                      const client = clients.find((c: Client) => c.id === clientId);
+                      const isClientDisabled = client?.isDisabled || false;
+                      const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
+
+                      return (
+                        <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                          <div>
+                            <p
+                              className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
+                            >
+                              {t('projects:projects.projectDisabled')}
+                            </p>
+                            {isClientDisabled && (
+                              <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                                <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                                {t('projects:projects.inheritedFromDisabledClient', {
+                                  clientName: client?.name,
+                                })}
+                              </p>
+                            )}
+                          </div>
+                          <Toggle
+                            checked={isCurrentlyDisabled}
+                            onChange={() => {
+                              if (!isClientDisabled) {
+                                setTempIsDisabled(!tempIsDisabled);
+                              }
+                            }}
+                            disabled={isClientDisabled}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </Field>
                 )}
               </div>
-            )}
-            <div className="space-y-4">
-              {/* Order selector (create only) / Client selector (edit only) */}
-              {editingProject ? (
-                <div className="flex gap-4">
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('projects:projects.client')}
-                    </label>
-                    <SelectControl
-                      options={clientOptions}
-                      value={clientId}
-                      onChange={(val) => {
-                        setClientId(val as string);
-                        if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                      }}
-                      placeholder={t('projects:projects.selectClient')}
-                      searchable={true}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-zinc-200'}`}
-                    />
-                    {errors.clientId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('projects:projects.name')}
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => {
-                        setName(e.target.value);
-                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                      }}
-                      placeholder={t('projects:projects.projectNamePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                      }`}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-4">
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('projects:projects.order')}
-                    </label>
-                    <SelectControl
-                      options={orderOptions}
-                      value={orderId}
-                      onChange={(val) => {
-                        setOrderId(val as string);
-                        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
-                      }}
-                      placeholder={t('projects:projects.selectOrder')}
-                      searchable={true}
-                      className={errors.orderId ? 'border-red-300' : ''}
-                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-zinc-200'}`}
-                    />
-                    {errors.orderId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.orderId}</p>
-                    )}
-                    {selectedOrder && (
-                      <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl">
-                        <i className="fa-solid fa-building text-zinc-400 text-xs"></i>
-                        <span className="text-xs text-zinc-500">
-                          {t('projects:projects.inheritedClientLabel')}:
-                        </span>
-                        <span className="text-xs font-bold text-zinc-700">
-                          {selectedOrder.clientName}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('projects:projects.name')}
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => {
-                        setName(e.target.value);
-                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                      }}
-                      placeholder={t('projects:projects.projectNamePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                      }`}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                    )}
-                  </div>
-                </div>
-              )}
+            </ModalBody>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('projects:projects.description')}
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t('projects:projects.descriptionPlaceholder')}
-                  rows={3}
-                  className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                />
-              </div>
-
-              {/* Tasks section (create only) */}
-              {!editingProject && (
-                <div className="space-y-2">
-                  <StandardTable<DraftTask>
-                    title={t('projects:projects.projectTasks')}
-                    data={draftTasks}
-                    columns={draftTaskColumns}
-                    defaultRowsPerPage={5}
-                    emptyState={
-                      <span className="text-zinc-400 text-xs italic">
-                        {t('projects:projects.noTasksAdded')}
-                      </span>
-                    }
-                    headerAction={
-                      <button
-                        type="button"
-                        onClick={addDraftTask}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-zinc-700 transition-colors"
-                      >
-                        <i className="fa-solid fa-plus text-[10px]"></i>
-                        {t('projects:projects.addTaskRow')}
-                      </button>
-                    }
-                  />
-                </div>
-              )}
-
-              {/* Tasks section (edit only) */}
-              {editingProject && (
-                <div className="space-y-2">
-                  <StandardTable<ProjectTask>
-                    title={t('projects:projects.projectTasks')}
-                    data={editingProjectTasks}
-                    columns={existingTaskColumns}
-                    defaultRowsPerPage={5}
-                    emptyState={
-                      <span className="text-zinc-400 text-xs italic">
-                        {t('projects:projects.noTasksAdded')}
-                      </span>
-                    }
-                    headerAction={
-                      canCreateTasks ? (
-                        <button
-                          type="button"
-                          onClick={handleAddExistingTask}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-zinc-700 transition-colors"
-                        >
-                          <i className="fa-solid fa-plus text-[10px]"></i>
-                          {t('projects:projects.addTaskRow')}
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('projects:projects.color')}
-                </label>
-                <div className="flex flex-wrap items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  {COLORS.map((c) => (
-                    <Tooltip key={c}>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setColor(c);
-                              setHexInput(c);
-                            }}
-                            className={`size-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
-                            style={{ backgroundColor: c }}
-                          />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{c}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                  <div className="flex items-center gap-2 ml-1 pl-3 border-l border-zinc-300">
-                    <input
-                      type="color"
-                      value={color}
-                      onFocus={() => {
-                        skipPickerRef.current = false;
-                      }}
-                      onChange={(e) => {
-                        if (skipPickerRef.current) return;
-                        setColor(e.target.value);
-                        setHexInput(e.target.value);
-                      }}
-                      className="size-8 rounded-lg cursor-pointer border-2 border-zinc-200 p-0.5 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-none"
-                    />
-                    <input
-                      type="text"
-                      value={hexInput}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setHexInput(val);
-                        if (isValidHex(val)) {
-                          setColor(val);
-                        }
-                      }}
-                      onBlur={commitHexInput}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          commitHexInput();
-                        }
-                      }}
-                      placeholder="#000000"
-                      className="w-[90px] text-xs px-2 py-1.5 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none font-mono tabular-nums"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {editingProject && (
-                <div className="space-y-1.5">
-                  {(() => {
-                    const client = clients.find((c: Client) => c.id === clientId);
-                    const isClientDisabled = client?.isDisabled || false;
-                    const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
-
-                    return (
-                      <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
-                        <div>
-                          <p
-                            className={`text-sm font-bold ${isClientDisabled ? 'text-zinc-400' : 'text-zinc-700'}`}
-                          >
-                            {t('projects:projects.projectDisabled')}
-                          </p>
-                          {isClientDisabled && (
-                            <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 mt-1">
-                              <i className="fa-solid fa-circle-info"></i>
-                              {t('projects:projects.inheritedFromDisabledClient', {
-                                clientName: client?.name,
-                              })}
-                            </p>
-                          )}
-                        </div>
-                        <Toggle
-                          checked={isCurrentlyDisabled}
-                          onChange={() => {
-                            if (!isClientDisabled) {
-                              setTempIsDisabled(!tempIsDisabled);
-                            }
-                          }}
-                          disabled={isClientDisabled}
-                        />
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-100 gap-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
-              >
+            <ModalFooter className="sm:justify-between">
+              <Button type="button" variant="outline" onClick={closeModal}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-8 py-2.5 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-                  canSubmit
-                    ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
-                    : 'bg-zinc-300 shadow-none cursor-not-allowed'
-                }`}
-              >
+              </Button>
+              <Button type="submit" disabled={!canSubmit}>
                 {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
-              </button>
-            </div>
+              </Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       <DeleteConfirmModal
