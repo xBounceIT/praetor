@@ -335,6 +335,7 @@ const Layout: React.FC<LayoutProps> = ({
         navigationLabel={t('workspace')}
         workspaceLabel={t('workspace')}
         settingsLabel={t('menu.settings')}
+        documentationLabel={t('menu.documentation')}
         logoutLabel={t('menu.logout')}
         switchRoleLabel={t('menu.switchRole')}
         version={import.meta.env.VITE_APP_VERSION ?? ''}

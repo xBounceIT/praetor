@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
+import { BookOpen, Check, ChevronsUpDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -26,9 +26,11 @@ interface NavUserProps {
   roleLabel: string;
   roles: Role[];
   settingsLabel: string;
+  documentationLabel: string;
   logoutLabel: string;
   switchRoleLabel: string;
   onSettings: () => void;
+  onDocumentation: () => void;
   onLogout: () => void;
   onSwitchRole: (roleId: string) => void;
 }
@@ -76,9 +78,11 @@ export function NavUser({
   roleLabel,
   roles,
   settingsLabel,
+  documentationLabel,
   logoutLabel,
   switchRoleLabel,
   onSettings,
+  onDocumentation,
   onLogout,
   onSwitchRole,
 }: NavUserProps) {
@@ -150,6 +154,15 @@ export function NavUser({
               >
                 <Settings />
                 <span>{settingsLabel}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  onDocumentation();
+                  closeMobileSidebar();
+                }}
+              >
+                <BookOpen />
+                <span>{documentationLabel}</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

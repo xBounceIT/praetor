@@ -23,6 +23,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   navigationLabel: string;
   workspaceLabel: string;
   settingsLabel: string;
+  documentationLabel: string;
   logoutLabel: string;
   switchRoleLabel: string;
   version: string;
@@ -39,6 +40,7 @@ export function AppSidebar({
   navigationLabel,
   workspaceLabel,
   settingsLabel,
+  documentationLabel,
   logoutLabel,
   switchRoleLabel,
   version,
@@ -81,9 +83,11 @@ export function AppSidebar({
           roleLabel={roleLabel}
           roles={roles}
           settingsLabel={settingsLabel}
+          documentationLabel={documentationLabel}
           logoutLabel={logoutLabel}
           switchRoleLabel={switchRoleLabel}
           onSettings={() => onViewChange('settings')}
+          onDocumentation={() => onViewChange('docs/frontend')}
           onLogout={onLogout}
           onSwitchRole={onSwitchRole}
         />
