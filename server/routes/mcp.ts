@@ -379,8 +379,6 @@ const buildServer = () => {
   return server;
 };
 
-const mcpServer = buildServer();
-
 const sendMethodNotAllowed = (reply: FastifyReply) =>
   reply.code(405).send({
     jsonrpc: '2.0',
@@ -411,6 +409,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
       });
+      const mcpServer = buildServer();
       await mcpServer.connect(transport);
       reply.raw.on('close', () => {
         void transport.close().catch((err) => {
