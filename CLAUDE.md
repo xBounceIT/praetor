@@ -51,6 +51,11 @@ bun run start        # Run compiled server
 ### Internationalization
 - i18next; translation files under `locales/`
 
+### Documentation Maintenance
+- When changing application functionality, update the relevant user documentation under `docs-site/src/content/docs/` in both Italian root pages and English mirror pages.
+- If the change affects API behavior, generated frontend docs, or routing, also update the relevant OpenAPI/TypeDoc sources or documentation routing so `/docs/`, `/docs/api`, and `/docs/frontend` remain accurate.
+- Do not consider a feature or behavior change complete until documentation has been reviewed and either updated or explicitly deemed unchanged.
+
 ## Key Patterns
 
 ### Route Organization

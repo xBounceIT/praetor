@@ -92,7 +92,7 @@ export function AppSidebar({
           logoutLabel={logoutLabel}
           switchRoleLabel={switchRoleLabel}
           onSettings={() => onViewChange('settings')}
-          onDocumentation={() => onViewChange('docs/frontend')}
+          onDocumentation={() => onViewChange('docs')}
           onLogout={onLogout}
           onSwitchRole={onSwitchRole}
         />

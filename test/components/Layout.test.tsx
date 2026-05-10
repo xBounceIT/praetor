@@ -391,7 +391,7 @@ describe('<Layout />', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  test('account dropdown documentation item navigates to frontend docs', async () => {
+  test('account dropdown documentation item navigates to documentation hub', async () => {
     const onViewChange = mock(() => {});
     const user = userEvent.setup();
     renderLayout({ onViewChange });
@@ -399,6 +399,6 @@ describe('<Layout />', () => {
     await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
     await user.click(await screen.findByRole('menuitem', { name: 'menu.documentation' }));
 
-    expect(onViewChange).toHaveBeenCalledWith('docs/frontend');
+    expect(onViewChange).toHaveBeenCalledWith('docs');
   });
 });

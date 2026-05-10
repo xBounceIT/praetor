@@ -516,6 +516,7 @@ export type View =
   | 'reports/ai-reporting'
   // Standalone
   | 'settings'
+  | 'docs'
   | 'docs/api'
   | 'docs/frontend';
 

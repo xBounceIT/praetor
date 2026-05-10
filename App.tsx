@@ -15,6 +15,7 @@ import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
 import InternalListingView from './components/catalog/InternalListingView';
 import ApiDocsView from './components/docs/ApiDocsView';
+import DocsHubView from './components/docs/DocsHubView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
@@ -81,6 +82,7 @@ import {
   formatDateOnlyForLocale,
   getLocalDateString,
 } from './utils/date';
+import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
@@ -670,6 +672,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ],
@@ -677,13 +680,8 @@ const App: React.FC = () => {
   );
 
   const [activeView, setActiveView] = useState<View | '404'>(() => {
-    const pathname = window.location.pathname;
-    if (pathname.startsWith('/docs/api')) {
-      return 'docs/api';
-    }
-    if (pathname.startsWith('/docs/frontend')) {
-      return 'docs/frontend';
-    }
+    const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
+    if (technicalDocsView) return technicalDocsView;
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
@@ -717,6 +715,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ];
@@ -938,7 +937,9 @@ const App: React.FC = () => {
   }, [supplierInvoices]);
 
   const isRouteAccessible = useMemo(() => {
-    if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
+    if (activeView === 'docs' || activeView === 'docs/api' || activeView === 'docs/frontend') {
+      return true;
+    }
     if (!currentUser) return false;
     if (activeView === '404') return false;
     if (activeView === 'reports/ai-reporting') {
@@ -2109,6 +2110,7 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
+            {activeView === 'docs' && <DocsHubView />}
             {activeView === 'timesheets/tracker' && (
               <TrackerView
                 entries={entries.filter((e) => e.userId === viewingUserId)}
