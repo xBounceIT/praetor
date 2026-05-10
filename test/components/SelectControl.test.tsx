@@ -25,6 +25,15 @@ describe('<SelectControl />', () => {
     expect(onChange).toHaveBeenCalledWith('a');
   });
 
+  test('plain select content renders above the shared modal layer', () => {
+    render(<SelectControl options={options} value="b" onChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('combobox'));
+
+    const selectContent = document.querySelector('[data-slot="select-content"]');
+    expect(selectContent?.className).toContain('z-[70]');
+  });
+
   test('plain select shows placeholder when no option is selected', () => {
     render(
       <SelectControl options={options} value="" onChange={() => {}} placeholder="Pick something" />,
@@ -45,6 +54,15 @@ describe('<SelectControl />', () => {
 
     fireEvent.click(screen.getByText('Banana'));
     expect(onChange).toHaveBeenCalledWith('b');
+  });
+
+  test('searchable popover content renders above the shared modal layer', () => {
+    render(<SelectControl options={options} value="" onChange={() => {}} searchable />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    const popoverContent = document.querySelector('[data-slot="popover-content"]');
+    expect(popoverContent?.className).toContain('z-[70]');
   });
 
   test('multi combobox toggles selected values and renders chips', () => {
