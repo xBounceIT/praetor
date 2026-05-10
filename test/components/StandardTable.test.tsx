@@ -282,6 +282,35 @@ describe('<StandardTable />', () => {
     expect(ageResizeLine?.className).not.toContain('bg-border');
   });
 
+  test('sparse action-only custom views do not insert an action spacer', () => {
+    const columns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <button type="button">x</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={columns} />);
+
+    const headerRow = screen.getAllByRole('row')[0];
+    const headers = within(headerRow).getAllByRole('columnheader');
+    const aliceRow = screen.getAllByRole('row')[1];
+    const cells = aliceRow.querySelectorAll('td');
+
+    expect(headers).toHaveLength(2);
+    expect(cells).toHaveLength(2);
+    expect(headers[1].className).not.toContain('sticky');
+    expect(cells[1].className).not.toContain('sticky');
+    expect(screen.getByRole('table').style.width).not.toBe('100%');
+    expect(screen.getByRole('table').querySelector('[data-action-spacer]')).toBeNull();
+    expect(
+      screen.getByText('Name').closest('th')?.querySelector('[data-column-resize-line="name"]')
+        ?.className,
+    ).toContain('bg-border');
+  });
+
   // ---------------------------------------------------------------------------
   // Sorting (via TanStack header sort handlers)
   // ---------------------------------------------------------------------------

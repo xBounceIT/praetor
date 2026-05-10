@@ -659,6 +659,8 @@ const StandardTable = <T extends object>({
   const paginatedRows = data ? table.getRowModel().rows : [];
   const hasTrailingActionColumn =
     visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
+  const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;
+  const shouldAnchorTrailingActionColumn = hasTrailingActionColumn && visibleDataColumnCount > 1;
   const fixedTableWidth = useMemo(() => {
     if (!usesFixedTableLayout) return undefined;
     return table.getTotalSize();
@@ -1520,8 +1522,8 @@ const StandardTable = <T extends object>({
             style={
               fixedTableWidth
                 ? {
-                    width: hasTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
-                    minWidth: hasTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
+                    width: shouldAnchorTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
+                    minWidth: shouldAnchorTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
                   }
                 : undefined
             }
@@ -1530,7 +1532,8 @@ const StandardTable = <T extends object>({
               {table.getVisibleLeafColumns().map((column) => {
                 const col = colsById.get(column.id);
                 const colWidth = column.getSize();
-                const needsActionSpacer = hasTrailingActionColumn && col && isRowActionColumn(col);
+                const needsActionSpacer =
+                  shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
                 return (
                   <Fragment key={column.id}>
                     {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
@@ -1551,9 +1554,11 @@ const StandardTable = <T extends object>({
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === headerGroup.headers.length - 1;
                     const isBeforeActionSpacer =
-                      hasTrailingActionColumn &&
+                      shouldAnchorTrailingActionColumn &&
                       !isActionColumn &&
                       colIdx === headerGroup.headers.length - 2;
+                    const shouldStickRightColumn =
+                      isStickyRightColumn && (!isActionColumn || shouldAnchorTrailingActionColumn);
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
                       ? 'left'
@@ -1565,12 +1570,12 @@ const StandardTable = <T extends object>({
                     const sorted = header.column.getIsSorted();
                     const isResizing = header.column.getIsResizing();
                     const stickyBorderClass =
-                      isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
+                      shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
                     const resizeHandler = header.getResizeHandler();
 
                     return (
                       <Fragment key={header.id}>
-                        {hasTrailingActionColumn && isActionColumn && (
+                        {shouldAnchorTrailingActionColumn && isActionColumn && (
                           <TableHead
                             aria-hidden="true"
                             style={{ width: 'auto', minWidth: 0 }}
@@ -1580,7 +1585,7 @@ const StandardTable = <T extends object>({
                         <TableHead
                           style={{ width: colWidth, minWidth: minColumnWidth }}
                           aria-label={isActionColumn ? col.header : undefined}
-                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
+                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                         >
                           {isActionColumn ? (
                             <div
@@ -1692,6 +1697,9 @@ const StandardTable = <T extends object>({
                         const isActionColumn = isRowActionColumn(col);
                         const isFirstColumn = colIdx === 0;
                         const isLastColumn = colIdx === visibleCells.length - 1;
+                        const shouldStickRightColumn =
+                          isStickyRightColumn &&
+                          (!isActionColumn || shouldAnchorTrailingActionColumn);
                         // Force alignment: first column left, last column right, otherwise use col.align
                         const effectiveAlign = isFirstColumn
                           ? 'left'
@@ -1701,9 +1709,11 @@ const StandardTable = <T extends object>({
                         const minColumnWidth = getColumnMinWidth(col);
                         const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
                         const stickyBorderClass =
-                          isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
+                          shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
                         const stickyHoverClass =
-                          isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
+                          shouldStickRightColumn && !isActionColumn
+                            ? 'group-hover:bg-muted/50'
+                            : '';
                         const rawValue = cell.getValue() as
                           | T[keyof T]
                           | string
@@ -1717,7 +1727,7 @@ const StandardTable = <T extends object>({
                             : flexRender(cell.column.columnDef.cell, cell.getContext());
                         return (
                           <Fragment key={cell.id}>
-                            {hasTrailingActionColumn && isActionColumn && (
+                            {shouldAnchorTrailingActionColumn && isActionColumn && (
                               <TableCell
                                 aria-hidden="true"
                                 style={{ width: 'auto', minWidth: 0 }}
@@ -1730,7 +1740,7 @@ const StandardTable = <T extends object>({
                                 col.onCellDoubleClick?.(row);
                               }}
                               style={{ width: colWidth, minWidth: minColumnWidth }}
-                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${isStickyRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
                                 <DropdownMenu>
@@ -1773,7 +1783,10 @@ const StandardTable = <T extends object>({
               ) : (
                 <TableRow className="border-border">
                   <TableCell
-                    colSpan={Math.max(visibleColumns.length + (hasTrailingActionColumn ? 1 : 0), 1)}
+                    colSpan={Math.max(
+                      visibleColumns.length + (shouldAnchorTrailingActionColumn ? 1 : 0),
+                      1,
+                    )}
                     className="p-12 text-center text-sm font-medium text-muted-foreground"
                   >
                     {emptyState ?? t('table.noResults')}
