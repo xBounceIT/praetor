@@ -1,4 +1,3 @@
-import { Clock } from 'lucide-react';
 import type React from 'react';
 
 import { NavMain, type SidebarModuleItem } from '@/components/nav-main';
@@ -13,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar';
+import praetorFaviconUrl from '@/praetor-favicon.png';
 import type { Role, User, View } from '@/types';
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -56,8 +56,13 @@ export function AppSidebar({
               size="lg"
               className="cursor-default text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-transparent text-sidebar-foreground">
-                <Clock className="size-4" />
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-background">
+                <img
+                  src={praetorFaviconUrl}
+                  alt=""
+                  className="size-5 object-contain"
+                  aria-hidden="true"
+                />
               </div>
               <div className="grid flex-1 text-left text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground">
                 <span className="truncate font-semibold italic">PRAETOR</span>
