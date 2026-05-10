@@ -103,10 +103,11 @@ type FontSize = (typeof FONT_SIZES)[number];
 
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
-const DEFAULT_MIN_COL_WIDTH = 88;
-const HEADER_TEXT_CHAR_WIDTH = 9;
+const DEFAULT_COL_WIDTH = 150;
+const DEFAULT_MIN_COL_WIDTH = 56;
+const HEADER_TEXT_CHAR_WIDTH = 7;
 const HEADER_CELL_HORIZONTAL_PADDING = 24;
-const HEADER_RESIZE_GUTTER_WIDTH = 8;
+const HEADER_RESIZE_GUTTER_WIDTH = 0;
 const HEADER_SORT_BUTTON_HORIZONTAL_PADDING = 16;
 const HEADER_SORT_ICON_WIDTH = 12;
 const HEADER_SORT_ICON_GAP = 4;
@@ -463,6 +464,7 @@ const StandardTable = <T extends object>({
       (columns ?? []).map((col) => {
         const colId = getColId(col);
         const minSize = getColumnMinWidth(col);
+        const defaultSize = isRowActionColumn(col) ? minSize : Math.max(DEFAULT_COL_WIDTH, minSize);
         return {
           id: colId,
           accessorFn: (row) => getValue(row, col),
@@ -480,7 +482,7 @@ const StandardTable = <T extends object>({
               ? col.cell({ getValue: () => value, row, value })
               : (value as ReactNode);
           },
-          size: Math.max(clampedColumnSizing[colId] ?? minSize, minSize),
+          size: Math.max(clampedColumnSizing[colId] ?? defaultSize, minSize),
           minSize,
           enableResizing: !isRowActionColumn(col),
           enableSorting: !col.disableSorting,
@@ -1512,9 +1514,7 @@ const StandardTable = <T extends object>({
         {columns && data ? (
           <Table
             className="table-fixed text-left"
-            style={
-              fixedTableWidth ? { width: `${fixedTableWidth}px`, minWidth: '100%' } : undefined
-            }
+            style={fixedTableWidth ? { width: `${fixedTableWidth}px` } : undefined}
           >
             <colgroup>
               {table.getVisibleLeafColumns().map((column) => {
@@ -1607,7 +1607,7 @@ const StandardTable = <T extends object>({
 
                         {header.column.getCanResize() && (
                           <div
-                            className="absolute top-0 -right-1 z-10 flex h-full w-2 cursor-col-resize items-center justify-center"
+                            className="absolute top-0 right-0 z-30 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
                             data-column-resize-handle={colId}
                             onMouseDown={(event) => {
                               event.stopPropagation();
@@ -1617,6 +1617,8 @@ const StandardTable = <T extends object>({
                               event.stopPropagation();
                               resizeHandler(event);
                             }}
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
                           >
                             <span
                               data-column-resize-line={colId}

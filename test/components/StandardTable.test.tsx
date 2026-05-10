@@ -338,6 +338,8 @@ describe('<StandardTable />', () => {
     const initialWidth = headerCell.style.width;
 
     expect(resizeHandle.className).toContain('w-2');
+    expect(resizeHandle.className).toContain('right-0');
+    expect(resizeHandle.className).toContain('touch-none');
     expect(resizeLine.className).toContain('w-px');
     expect(resizeLine.className).toContain('bg-border');
 
@@ -384,7 +386,7 @@ describe('<StandardTable />', () => {
     expect(Number.parseInt(ageHeader.style.width, 10)).toBe(initialAgeWidth);
     const table = nameHeader.closest('table') as HTMLTableElement;
     expect(table.className).toContain('table-fixed');
-    expect(table.style.minWidth).toBe('100%');
+    expect(table.style.minWidth).toBe('');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
   });
@@ -415,12 +417,12 @@ describe('<StandardTable />', () => {
       fireEvent.mouseUp(document);
     });
 
-    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(128));
+    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(112));
     await waitFor(() => {
       const saved = JSON.parse(
         localStorage.getItem('praetor_table_colwidths_clamped_drag') ?? '{}',
       );
-      expect(saved.name).toBe(128);
+      expect(saved.name).toBe(112);
     });
   });
 
@@ -439,7 +441,7 @@ describe('<StandardTable />', () => {
     );
 
     const longHeaderCell = screen.getByText('Very Long Header').closest('th') as HTMLElement;
-    expect(Number.parseInt(longHeaderCell.style.minWidth, 10)).toBeGreaterThan(200);
+    expect(Number.parseInt(longHeaderCell.style.minWidth, 10)).toBeGreaterThan(190);
   });
 
   test('stored column widths are clamped to the full header label width', async () => {
@@ -450,7 +452,7 @@ describe('<StandardTable />', () => {
 
     const headerCell = screen.getByText('Ruolo').closest('th') as HTMLElement;
     await waitFor(() =>
-      expect(Number.parseInt(headerCell.style.minWidth, 10)).toBeGreaterThan(120),
+      expect(Number.parseInt(headerCell.style.minWidth, 10)).toBeGreaterThan(110),
     );
     expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
@@ -463,14 +465,14 @@ describe('<StandardTable />', () => {
     );
 
     const firstHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
-    await waitFor(() => expect(Number.parseInt(firstHeader.style.width, 10)).toBe(137));
+    await waitFor(() => expect(Number.parseInt(firstHeader.style.width, 10)).toBe(119));
     const savedAfterFirstRender = localStorage.getItem('praetor_table_colwidths_remount_width');
 
     unmount();
     render(<StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />);
 
     const secondHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
-    await waitFor(() => expect(Number.parseInt(secondHeader.style.width, 10)).toBe(137));
+    await waitFor(() => expect(Number.parseInt(secondHeader.style.width, 10)).toBe(119));
     expect(localStorage.getItem('praetor_table_colwidths_remount_width')).toBe(
       savedAfterFirstRender,
     );
