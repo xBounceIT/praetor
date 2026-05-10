@@ -87,6 +87,8 @@ import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
   buildPermission,
+  getDefaultViewForPermissions,
+  getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
   VIEW_PERMISSION_MAP,
@@ -773,7 +775,7 @@ const App: React.FC = () => {
     onLogin: (user) => {
       clearAuthScopedAppState();
       setViewingUserId(user.id);
-      const defaultView = getDefaultViewForPermissions(user.permissions || []);
+      const defaultView = getDefaultViewForPermissions(user.permissions || [], VALID_VIEWS);
       const activePermission =
         activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
       const canAccessActive = activePermission
@@ -1950,12 +1952,8 @@ const App: React.FC = () => {
     }
   };
 
-  const getDefaultViewForPermissions = (permissions: string[]): View => {
-    const allowedView = VALID_VIEWS.find((view) => {
-      const permission = VIEW_PERMISSION_MAP[view];
-      return permission ? hasPermission(permissions, permission) : false;
-    });
-    return allowedView || 'timesheets/tracker';
+  const handleNotFoundReturn = () => {
+    setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
   };
 
   const handleSaveLdapConfig = async (config: LdapConfig) => {
@@ -2097,7 +2095,7 @@ const App: React.FC = () => {
         onDeleteNotification={handleDeleteNotification}
       >
         {!isRouteAccessible ? (
-          <NotFound onReturn={() => setActiveView('timesheets/tracker')} />
+          <NotFound onReturn={handleNotFoundReturn} />
         ) : (
           <>
             {activeModuleLoadFailures.length > 0 && (
