@@ -1,13 +1,13 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 
 export interface SuppliersViewProps {
   suppliers: Supplier[];
@@ -305,40 +305,46 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
-            <Tooltip
-              label={row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
-            >
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canUpdateSuppliers) return;
-                    onUpdateSupplier(row.id, { isDisabled: !row.isDisabled });
-                  }}
-                  disabled={!canUpdateSuppliers}
-                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    row.isDisabled
-                      ? 'text-praetor hover:bg-zinc-100'
-                      : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                >
-                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
-              )}
-            </Tooltip>
-            {canDeleteSuppliers && (
-              <Tooltip label={t('common:buttons.delete')}>
-                {() => (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      confirmDelete(row);
+                      if (!canUpdateSuppliers) return;
+                      onUpdateSupplier(row.id, { isDisabled: !row.isDisabled });
                     }}
-                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={!canUpdateSuppliers}
+                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      row.isDisabled
+                        ? 'text-praetor hover:bg-zinc-100'
+                        : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
                   >
-                    <i className="fa-solid fa-trash-can"></i>
+                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
                   </button>
-                )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
+              </TooltipContent>
+            </Tooltip>
+            {canDeleteSuppliers && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(row);
+                      }}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
               </Tooltip>
             )}
           </div>

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
 import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
@@ -12,7 +13,6 @@ import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
-import Tooltip from '../shared/Tooltip';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
 
@@ -515,19 +515,22 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       cell: ({ row }) => (
         <div className="flex justify-end">
           {canDeleteTasks && (
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    promptDeleteTask(row);
-                  }}
-                  className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      promptDeleteTask(row);
+                    }}
+                    className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
+                  >
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -866,18 +869,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </label>
                 <div className="flex flex-wrap items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
                   {COLORS.map((c) => (
-                    <Tooltip key={c} label={c}>
-                      {() => (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setColor(c);
-                            setHexInput(c);
-                          }}
-                          className={`size-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
-                          style={{ backgroundColor: c }}
-                        />
-                      )}
+                    <Tooltip key={c}>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setColor(c);
+                              setHexInput(c);
+                            }}
+                            className={`size-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
+                            style={{ backgroundColor: c }}
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{c}</TooltipContent>
                     </Tooltip>
                   ))}
                   <div className="flex items-center gap-2 ml-1 pl-3 border-l border-zinc-300">
@@ -1179,79 +1185,94 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 return (
                   <div className="flex items-center justify-end gap-2">
                     {canManageAssignments && (
-                      <Tooltip label={t('projects:projects.manageMembers')}>
-                        {() => (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAssignments(row.id);
-                            }}
-                            className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                          >
-                            <i className="fa-solid fa-users"></i>
-                          </button>
-                        )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAssignments(row.id);
+                              }}
+                              className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                            >
+                              <i className="fa-solid fa-users"></i>
+                            </button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('projects:projects.manageMembers')}</TooltipContent>
                       </Tooltip>
                     )}
                     {canUpdateProjects && (
                       <>
-                        <Tooltip label={t('projects:projects.editProject')}>
-                          {() => (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditModal(row);
-                              }}
-                              className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                            >
-                              <i className="fa-solid fa-pen-to-square"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(row);
+                                }}
+                                className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                              >
+                                <i className="fa-solid fa-pen-to-square"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{t('projects:projects.editProject')}</TooltipContent>
                         </Tooltip>
                         {row.isDisabled ? (
-                          <Tooltip label={t('projects:projects.enableProject')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateProject(row.id, { isDisabled: false });
-                                }}
-                                className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-rotate-left"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateProject(row.id, { isDisabled: false });
+                                  }}
+                                  className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-rotate-left"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('projects:projects.enableProject')}</TooltipContent>
                           </Tooltip>
                         ) : (
-                          <Tooltip label={t('projects:projects.disableProject')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateProject(row.id, { isDisabled: true });
-                                }}
-                                className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                              >
-                                <i className="fa-solid fa-ban"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateProject(row.id, { isDisabled: true });
+                                  }}
+                                  className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                >
+                                  <i className="fa-solid fa-ban"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('projects:projects.disableProject')}</TooltipContent>
                           </Tooltip>
                         )}
                       </>
                     )}
                     {canDeleteProjects && (
-                      <Tooltip label={t('common:buttons.delete')}>
-                        {() => (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              promptDelete(row);
-                            }}
-                            className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promptDelete(row);
+                              }}
+                              className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
                       </Tooltip>
                     )}
                   </div>

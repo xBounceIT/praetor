@@ -16,6 +16,7 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
   reason: 'unavailable',
 });
 
+const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
@@ -772,6 +773,40 @@ describe('<StandardTable />', () => {
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
+  });
+
+  test('collapsed tooltip-wrapped actions use tooltip text as menu labels', async () => {
+    const user = userEvent.setup();
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: ({ row }: { row: Row }) => (
+          <div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button type="button" data-testid={`send-action-${row.id}`}>
+                    <i className="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Send {row.name}</TooltipContent>
+            </Tooltip>
+          </div>
+        ),
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+
+    await user.click(screen.getAllByLabelText('table.rowActions')[0]);
+
+    expect(screen.getByTestId('send-action-1')).toBeInTheDocument();
+    expect(screen.getByText('Send Alice')).toBeInTheDocument();
+    expect(screen.getByTestId('send-action-1').className).toContain('text-popover-foreground');
   });
 
   test('row action trigger is hidden when the action cell has no items', async () => {

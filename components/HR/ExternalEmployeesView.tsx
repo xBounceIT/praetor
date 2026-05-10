@@ -1,12 +1,12 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 
 export interface ExternalEmployeesViewProps {
@@ -217,39 +217,48 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
           {canManageEmployeeAssignments &&
             !row.hasTopManagerRole &&
             row.role !== TOP_MANAGER_ROLE_ID && (
-              <Tooltip label={t('workforce.manageAssignments')}>
-                {() => (
-                  <button
-                    onClick={() => setManagingEmployee(row)}
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-                  >
-                    <i className="fa-solid fa-link"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={() => setManagingEmployee(row)}
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('workforce.manageAssignments')}</TooltipContent>
               </Tooltip>
             )}
           {canUpdateEmployees && (
-            <Tooltip label={t('externalEmployees.editEmployee')}>
-              {() => (
-                <button
-                  onClick={() => openEditModal(row)}
-                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={() => openEditModal(row)}
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('externalEmployees.editEmployee')}</TooltipContent>
             </Tooltip>
           )}
           {canDeleteEmployees && (
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  onClick={() => confirmDelete(row)}
-                  className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <i className="fa-solid fa-trash"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={() => confirmDelete(row)}
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           )}
         </div>

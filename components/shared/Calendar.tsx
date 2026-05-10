@@ -1,10 +1,10 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { TimeEntry } from '../../types';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
-import Tooltip from './Tooltip';
 
 export interface CalendarProps {
   // Original props
@@ -170,15 +170,16 @@ const Calendar: React.FC<CalendarProps> = ({
       holidayName || (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '');
 
     days.push(
-      <Tooltip key={d} label={holidayLabel} disabled={!holidayLabel} wrapperClassName="w-full">
-        {() => (
-          <button
-            type="button"
-            disabled={isForbidden}
-            onClick={() => {
-              if (!isForbidden) handleDateClick(dateStr);
-            }}
-            className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border 
+      <Tooltip key={d} disabled={!holidayLabel}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex w-full">
+            <button
+              type="button"
+              disabled={isForbidden}
+              onClick={() => {
+                if (!isForbidden) handleDateClick(dateStr);
+              }}
+              className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border 
               ${
                 isSelected
                   ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
@@ -192,31 +193,33 @@ const Calendar: React.FC<CalendarProps> = ({
                           ? 'bg-zinc-100 text-praetor border-zinc-200'
                           : 'hover:bg-zinc-50 border-transparent text-zinc-700'
               }`}
-          >
-            <span
-              className={`${isCompact ? 'text-[13px]' : 'text-sm'} font-bold ${
-                isSelected || isInRange
-                  ? ''
-                  : isWeekendOrHoliday
-                    ? 'text-red-600'
-                    : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                      ? 'text-emerald-700'
-                      : ''
-              }`}
             >
-              {d}
-            </span>
-
-            {hasActivity && selectionMode === 'single' && (
               <span
-                className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-white' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
-              ></span>
-            )}
-            {holidayName && selectionMode === 'single' && (
-              <span className="absolute top-0.5 right-0.5 size-1 bg-red-400 rounded-full animate-pulse"></span>
-            )}
-          </button>
-        )}
+                className={`${isCompact ? 'text-[13px]' : 'text-sm'} font-bold ${
+                  isSelected || isInRange
+                    ? ''
+                    : isWeekendOrHoliday
+                      ? 'text-red-600'
+                      : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                        ? 'text-emerald-700'
+                        : ''
+                }`}
+              >
+                {d}
+              </span>
+
+              {hasActivity && selectionMode === 'single' && (
+                <span
+                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-white' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
+                ></span>
+              )}
+              {holidayName && selectionMode === 'single' && (
+                <span className="absolute top-0.5 right-0.5 size-1 bg-red-400 rounded-full animate-pulse"></span>
+              )}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{holidayLabel}</TooltipContent>
       </Tooltip>,
     );
   }

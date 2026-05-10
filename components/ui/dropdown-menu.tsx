@@ -1,29 +1,9 @@
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { cn } from '@/lib/utils';
-import { getResolvedTheme, type ResolvedTheme, THEME_CHANGE_EVENT } from '@/utils/theme';
-
-const getShadcnThemeClassName = (theme: ResolvedTheme) => {
-  return theme === 'dark' ? 'dark' : undefined;
-};
-
-const useResolvedShadcnTheme = () => {
-  const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(() => getResolvedTheme());
-
-  React.useEffect(() => {
-    const handleThemeChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ resolvedTheme?: ResolvedTheme }>).detail;
-      setResolvedTheme(detail?.resolvedTheme ?? getResolvedTheme());
-    };
-
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
-  }, []);
-
-  return resolvedTheme;
-};
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from './use-shadcn-theme';
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;

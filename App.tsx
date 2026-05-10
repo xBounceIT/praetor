@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import SupplierInvoicesView from './components/accounting/SupplierInvoicesView';
@@ -31,7 +32,6 @@ import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
-import Tooltip from './components/shared/Tooltip';
 import DailyView from './components/timesheet/DailyView';
 import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
@@ -262,8 +262,13 @@ const TrackerView: React.FC<{
           <div className="flex items-center gap-2">
             <span className="font-semibold text-zinc-800">{row.task}</span>
             {row.isPlaceholder && (
-              <Tooltip label={t('entry.recurringTask')}>
-                {() => <i className="fa-solid fa-repeat text-[10px] text-praetor/70" />}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <i className="fa-solid fa-repeat text-[10px] text-praetor/70" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('entry.recurringTask')}</TooltipContent>
               </Tooltip>
             )}
           </div>

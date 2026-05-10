@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   Product,
   Supplier,
@@ -16,7 +17,6 @@ import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierOrderVersionsPanel from './SupplierOrderVersionsPanel';
 
@@ -355,87 +355,100 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           return (
             <div className="flex justify-end gap-2">
               {onViewQuote && row.linkedQuoteId && (
-                <Tooltip label={t('accounting:supplierOrders.viewQuote')}>
-                  {() => (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const linkedQuoteId = row.linkedQuoteId;
+                          if (!linkedQuoteId) return;
+                          onViewQuote(linkedQuoteId);
+                        }}
+                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('accounting:supplierOrders.viewQuote')}</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        const linkedQuoteId = row.linkedQuoteId;
-                        if (!linkedQuoteId) return;
-                        onViewQuote(linkedQuoteId);
+                        openEditModal(row);
                       }}
                       className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                     >
-                      <i className="fa-solid fa-link"></i>
+                      <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                     </button>
-                  )}
-                </Tooltip>
-              )}
-              <Tooltip
-                label={
-                  isDraft
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isDraft
                     ? t('accounting:supplierOrders.editOrder')
-                    : t('accounting:supplierOrders.viewOrder')
-                }
-              >
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEditModal(row);
-                    }}
-                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
-                  >
-                    <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
-                  </button>
-                )}
+                    : t('accounting:supplierOrders.viewOrder')}
+                </TooltipContent>
               </Tooltip>
 
               {row.status === 'draft' && (
-                <Tooltip label={t('accounting:supplierOrders.markSent')}>
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onUpdateOrder(row.id, { status: 'sent' });
-                      }}
-                      className="rounded-lg p-2 text-blue-700 transition-all hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <i className="fa-solid fa-paper-plane"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onUpdateOrder(row.id, { status: 'sent' });
+                        }}
+                        className="rounded-lg p-2 text-blue-700 transition-all hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <i className="fa-solid fa-paper-plane"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('accounting:supplierOrders.markSent')}</TooltipContent>
                 </Tooltip>
               )}
 
               {row.status === 'sent' && !hasInvoice && onCreateInvoice && (
-                <Tooltip label={t('accounting:supplierOrders.createInvoice')}>
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onCreateInvoice(row);
-                      }}
-                      className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
-                    >
-                      <i className="fa-solid fa-file-invoice-dollar"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onCreateInvoice(row);
+                        }}
+                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                      >
+                        <i className="fa-solid fa-file-invoice-dollar"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('accounting:supplierOrders.createInvoice')}</TooltipContent>
                 </Tooltip>
               )}
 
               {row.status === 'draft' && (
-                <Tooltip label={t('common:buttons.delete')}>
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        confirmDelete(row);
-                      }}
-                      className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          confirmDelete(row);
+                        }}
+                        className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
                 </Tooltip>
               )}
             </div>

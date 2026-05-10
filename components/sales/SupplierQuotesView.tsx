@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   Product,
   Supplier,
@@ -25,7 +26,6 @@ import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
@@ -430,150 +430,174 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           return (
             <div className="flex justify-end gap-2">
               {row.linkedOrderId && onViewOrders && (
-                <Tooltip
-                  label={t('sales:supplierQuotes.viewOrder', { defaultValue: 'View order' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewOrders(row.id);
-                      }}
-                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewOrders(row.id);
+                        }}
+                        className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('sales:supplierQuotes.viewOrder', { defaultValue: 'View order' })}
+                  </TooltipContent>
                 </Tooltip>
               )}
-              <Tooltip label={editTitle}>
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (isEditDisabled) return;
-                      openEditModal(row);
-                    }}
-                    disabled={isEditDisabled}
-                    className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
-                  >
-                    <i
-                      className={`fa-solid ${isRowReadOnly && !hasOrder ? 'fa-eye' : 'fa-pen-to-square'}`}
-                    ></i>
-                  </button>
-                )}
-              </Tooltip>
-              {row.status === 'draft' && !hasOrder && (
-                <Tooltip
-                  label={t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
-                >
-                  {() => (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        onUpdateQuote(row.id, { status: 'sent' });
+                        if (isEditDisabled) return;
+                        openEditModal(row);
                       }}
-                      className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
+                      disabled={isEditDisabled}
+                      className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                     >
-                      <i className="fa-solid fa-paper-plane"></i>
+                      <i
+                        className={`fa-solid ${isRowReadOnly && !hasOrder ? 'fa-eye' : 'fa-pen-to-square'}`}
+                      ></i>
                     </button>
-                  )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{editTitle}</TooltipContent>
+              </Tooltip>
+              {row.status === 'draft' && !hasOrder && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onUpdateQuote(row.id, { status: 'sent' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
+                      >
+                        <i className="fa-solid fa-paper-plane"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
+                  </TooltipContent>
                 </Tooltip>
               )}
               {row.status === 'sent' && !hasOrder && (
                 <>
-                  <Tooltip
-                    label={t('sales:supplierQuotes.markAccepted', {
-                      defaultValue: 'Mark as accepted',
-                    })}
-                  >
-                    {() => (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onUpdateQuote(row.id, { status: 'accepted' });
-                        }}
-                        className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
-                      >
-                        <i className="fa-solid fa-check"></i>
-                      </button>
-                    )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onUpdateQuote(row.id, { status: 'accepted' });
+                          }}
+                          className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
+                        >
+                          <i className="fa-solid fa-check"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t('sales:supplierQuotes.markAccepted', {
+                        defaultValue: 'Mark as accepted',
+                      })}
+                    </TooltipContent>
                   </Tooltip>
-                  <Tooltip
-                    label={t('sales:supplierQuotes.markDenied', {
-                      defaultValue: 'Mark as denied',
-                    })}
-                  >
-                    {() => (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onUpdateQuote(row.id, { status: 'denied' });
-                        }}
-                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onUpdateQuote(row.id, { status: 'denied' });
+                          }}
+                          className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t('sales:supplierQuotes.markDenied', {
+                        defaultValue: 'Mark as denied',
+                      })}
+                    </TooltipContent>
                   </Tooltip>
                 </>
               )}
               {row.status === 'accepted' && onCreateOrder && (
-                <Tooltip label={createOrderTitle}>
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (isCreateOrderDisabled) return;
-                        onCreateOrder(row);
-                      }}
-                      disabled={isCreateOrderDisabled}
-                      className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
-                    >
-                      <i className="fa-solid fa-cart-shopping"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (isCreateOrderDisabled) return;
+                          onCreateOrder(row);
+                        }}
+                        disabled={isCreateOrderDisabled}
+                        className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                      >
+                        <i className="fa-solid fa-cart-shopping"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{createOrderTitle}</TooltipContent>
                 </Tooltip>
               )}
               {row.status === 'draft' && !hasOrder && (
-                <Tooltip label={t('common:buttons.delete', { defaultValue: 'Delete' })}>
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setQuoteToDelete(row);
-                        setIsDeleteConfirmOpen(true);
-                      }}
-                      className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setQuoteToDelete(row);
+                          setIsDeleteConfirmOpen(true);
+                        }}
+                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('common:buttons.delete', { defaultValue: 'Delete' })}
+                  </TooltipContent>
                 </Tooltip>
               )}
               {history && (
-                <Tooltip
-                  label={
-                    hasOrder
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (hasOrder) return;
+                          onUpdateQuote(row.id, { status: 'draft' });
+                        }}
+                        disabled={hasOrder}
+                        className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                      >
+                        <i className="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {hasOrder
                       ? t('sales:supplierQuotes.orderAlreadyExists', {
                           defaultValue: 'An order for this quote already exists.',
                         })
-                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })
-                  }
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (hasOrder) return;
-                        onUpdateQuote(row.id, { status: 'draft' });
-                      }}
-                      disabled={hasOrder}
-                      className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
-                    >
-                      <i className="fa-solid fa-rotate-left"></i>
-                    </button>
-                  )}
+                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })}
+                  </TooltipContent>
                 </Tooltip>
               )}
             </div>

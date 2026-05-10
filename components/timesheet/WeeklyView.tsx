@@ -1,10 +1,10 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
 import CustomSelect from '../shared/CustomSelect';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface WeeklyViewProps {
@@ -466,10 +466,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     >
                       {day.dayName}
                       {day.holidayName && (
-                        <Tooltip label={day.holidayName}>
-                          {() => (
-                            <span className="size-1.5 bg-red-500 rounded-full animate-pulse block"></span>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <span className="size-1.5 bg-red-500 rounded-full animate-pulse block"></span>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{day.holidayName}</TooltipContent>
                         </Tooltip>
                       )}
                     </div>
@@ -613,15 +616,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           .reduce((sum, d) => sum + (d.duration || 0), 0)
                           .toFixed(1)}
                       </span>
-                      <Tooltip label={t('weekly.deleteRow')}>
-                        {() => (
-                          <button
-                            onClick={() => deleteRow(rowIndex)}
-                            className="p-1.5 text-red-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
-                          >
-                            <i className="fa-solid fa-trash-can text-sm"></i>
-                          </button>
-                        )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <button
+                              onClick={() => deleteRow(rowIndex)}
+                              className="p-1.5 text-red-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
+                            >
+                              <i className="fa-solid fa-trash-can text-sm"></i>
+                            </button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('weekly.deleteRow')}</TooltipContent>
                       </Tooltip>
                     </div>
                   </td>

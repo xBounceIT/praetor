@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
   Client,
@@ -15,7 +16,6 @@ import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 
 export interface ClientsViewProps {
   clients: Client[];
@@ -625,33 +625,39 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         sticky: 'right',
         cell: ({ row }) => (
           <div className="flex justify-end items-center gap-1">
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    editContact(row.contactIndex);
-                  }}
-                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-pen"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      editContact(row.contactIndex);
+                    }}
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-pen"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeContact(row.contactIndex);
-                  }}
-                  className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-trash"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeContact(row.contactIndex);
+                    }}
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           </div>
         ),
@@ -845,54 +851,63 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
             {canUpdateClients && (
-              <Tooltip label={t('common:buttons.edit')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(row);
-                    }}
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-pen"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditModal(row);
+                      }}
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-pen"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
               </Tooltip>
             )}
-            <Tooltip
-              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
-            >
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canUpdateClients) return;
-                    onUpdateClient(row.id, { isDisabled: !row.isDisabled });
-                  }}
-                  disabled={!canUpdateClients}
-                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    row.isDisabled
-                      ? 'text-praetor hover:bg-zinc-100'
-                      : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                >
-                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
-              )}
-            </Tooltip>
-            {canDeleteClients && (
-              <Tooltip label={t('common:buttons.delete')}>
-                {() => (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      confirmDelete(row);
+                      if (!canUpdateClients) return;
+                      onUpdateClient(row.id, { isDisabled: !row.isDisabled });
                     }}
-                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={!canUpdateClients}
+                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      row.isDisabled
+                        ? 'text-praetor hover:bg-zinc-100'
+                        : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
                   >
-                    <i className="fa-solid fa-trash-can"></i>
+                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
                   </button>
-                )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
+              </TooltipContent>
+            </Tooltip>
+            {canDeleteClients && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(row);
+                      }}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -1032,40 +1047,42 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       const isDeleteBlocked = option.usageCount > 0;
                       return (
                         <div className="flex items-center gap-1">
-                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
-                            {() => (
-                              <button
-                                onClick={() => handleEditProfileOption(option)}
-                                className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleEditProfileOption(option)}
+                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip
-                            label={
-                              isDeleteBlocked
+                          <Tooltip disabled={!isDeleteBlocked}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => void handleDeleteProfileOption(option)}
+                                  disabled={isDeleteBlocked}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isDeleteBlocked
+                                      ? 'text-zinc-300 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isDeleteBlocked
                                 ? t('crm:clients.deleteProfileOptionBlocked', {
                                     count: option.usageCount,
                                   })
-                                : ''
-                            }
-                            disabled={!isDeleteBlocked}
-                            tooltipClassName="z-[80]"
-                          >
-                            {() => (
-                              <button
-                                onClick={() => void handleDeleteProfileOption(option)}
-                                disabled={isDeleteBlocked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isDeleteBlocked
-                                    ? 'text-zinc-300 cursor-not-allowed'
-                                    : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
-                            )}
+                                : ''}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       );

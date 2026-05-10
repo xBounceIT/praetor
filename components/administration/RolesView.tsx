@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Role } from '../../types';
 import {
   ALWAYS_GRANTED_MODULES,
@@ -16,7 +17,6 @@ import {
 import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
 import Toggle from '../shared/Toggle';
-import Tooltip from '../shared/Tooltip';
 
 export interface RolesViewProps {
   roles: Role[];
@@ -447,39 +447,48 @@ const RolesView: React.FC<RolesViewProps> = ({
                   {(canRenameRole || canEditPermissions || canRemoveRole) && (
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       {canRenameRole && (
-                        <Tooltip label={t('common:buttons.edit')}>
-                          {() => (
-                            <button
-                              onClick={() => openRenameModal(role)}
-                              className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
-                            >
-                              <i className="fa-solid fa-pen"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={() => openRenameModal(role)}
+                                className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                         </Tooltip>
                       )}
                       {canEditPermissions && (
-                        <Tooltip label={t('administration:roles.permissions')}>
-                          {() => (
-                            <button
-                              onClick={() => openPermissionsModal(role)}
-                              className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
-                            >
-                              <i className="fa-solid fa-shield"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={() => openPermissionsModal(role)}
+                                className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
+                              >
+                                <i className="fa-solid fa-shield"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{t('administration:roles.permissions')}</TooltipContent>
                         </Tooltip>
                       )}
                       {canRemoveRole && (
-                        <Tooltip label={t('common:buttons.delete')}>
-                          {() => (
-                            <button
-                              onClick={() => openDeleteModal(role)}
-                              className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={() => openDeleteModal(role)}
+                                className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
                         </Tooltip>
                       )}
                     </div>

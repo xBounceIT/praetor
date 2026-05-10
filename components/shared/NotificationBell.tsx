@@ -1,8 +1,8 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Notification } from '../../types';
-import Tooltip from './Tooltip';
 
 export interface NotificationBellProps {
   notifications: Notification[];
@@ -167,16 +167,21 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         {!notification.isRead && (
                           <span className="size-2 bg-praetor rounded-full flex-shrink-0"></span>
                         )}
-                        <Tooltip label={t('notifications.delete', 'Delete notification')}>
-                          {() => (
-                            <button
-                              onClick={(e) => handleDelete(e, notification.id)}
-                              className="flex-shrink-0 size-6 rounded-full flex items-center justify-center text-red-600 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                              aria-label={t('notifications.delete', 'Delete notification')}
-                            >
-                              <i className="fa-solid fa-xmark text-xs"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={(e) => handleDelete(e, notification.id)}
+                                className="flex-shrink-0 size-6 rounded-full flex items-center justify-center text-red-600 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                                aria-label={t('notifications.delete', 'Delete notification')}
+                              >
+                                <i className="fa-solid fa-xmark text-xs"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('notifications.delete', 'Delete notification')}
+                          </TooltipContent>
                         </Tooltip>
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5">

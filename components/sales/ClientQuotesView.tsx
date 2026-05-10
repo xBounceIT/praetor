@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -38,7 +39,6 @@ import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import QuoteVersionsPanel from './QuoteVersionsPanel';
@@ -1021,170 +1021,188 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
         return (
           <div className="flex justify-end gap-2">
-            <Tooltip
-              label={
-                history
-                  ? t('sales:clientQuotes.historyActionsDisabled', {
-                      defaultValue: 'History entries cannot be modified.',
-                    })
-                  : t('sales:clientQuotes.editQuote')
-              }
-            >
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (history) return;
-                    openEditModal(row);
-                  }}
-                  disabled={history}
-                  className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              )}
-            </Tooltip>
-            {row.linkedOfferId && onViewOffer && (
-              <Tooltip label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                      onViewOffer(row.linkedOfferId!);
-                    }}
-                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
-                  >
-                    <i className="fa-solid fa-link"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
-            {row.status === 'accepted' && onCreateOffer && (
-              <Tooltip label={createOfferTitle}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isCreateOfferDisabled) return;
-                      onCreateOffer(row);
-                    }}
-                    disabled={isCreateOfferDisabled}
-                    className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
-                  >
-                    <i className="fa-solid fa-file-signature"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
-            {row.status === 'draft' && (
-              <Tooltip
-                label={
-                  history
-                    ? t('sales:clientQuotes.historyActionsDisabled', {
-                        defaultValue: 'History entries cannot be modified.',
-                      })
-                    : t('sales:clientQuotes.markAsSent')
-                }
-              >
-                {() => (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       if (history) return;
-                      onUpdateQuote(row.id, { status: 'sent' });
+                      openEditModal(row);
                     }}
                     disabled={history}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                   >
-                    <i className="fa-solid fa-paper-plane"></i>
+                    <i className="fa-solid fa-pen-to-square"></i>
                   </button>
-                )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {history
+                  ? t('sales:clientQuotes.historyActionsDisabled', {
+                      defaultValue: 'History entries cannot be modified.',
+                    })
+                  : t('sales:clientQuotes.editQuote')}
+              </TooltipContent>
+            </Tooltip>
+            {row.linkedOfferId && onViewOffer && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
+                        onViewOffer(row.linkedOfferId!);
+                      }}
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {row.status === 'accepted' && onCreateOffer && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isCreateOfferDisabled) return;
+                        onCreateOffer(row);
+                      }}
+                      disabled={isCreateOfferDisabled}
+                      className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                    >
+                      <i className="fa-solid fa-file-signature"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{createOfferTitle}</TooltipContent>
+              </Tooltip>
+            )}
+            {row.status === 'draft' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (history) return;
+                        onUpdateQuote(row.id, { status: 'sent' });
+                      }}
+                      disabled={history}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                    >
+                      <i className="fa-solid fa-paper-plane"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {history
+                    ? t('sales:clientQuotes.historyActionsDisabled', {
+                        defaultValue: 'History entries cannot be modified.',
+                      })
+                    : t('sales:clientQuotes.markAsSent')}
+                </TooltipContent>
               </Tooltip>
             )}
             {row.status === 'sent' && (
               <>
-                <Tooltip
-                  label={
-                    history
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (history) return;
+                          onUpdateQuote(row.id, { status: 'accepted' });
+                        }}
+                        disabled={history}
+                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {history
                       ? t('sales:clientQuotes.historyActionsDisabled', {
                           defaultValue: 'History entries cannot be modified.',
                         })
-                      : t('sales:clientQuotes.markAsConfirmed')
-                  }
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (history) return;
-                        onUpdateQuote(row.id, { status: 'accepted' });
-                      }}
-                      disabled={history}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                    >
-                      <i className="fa-solid fa-check"></i>
-                    </button>
-                  )}
+                      : t('sales:clientQuotes.markAsConfirmed')}
+                  </TooltipContent>
                 </Tooltip>
-                <Tooltip
-                  label={
-                    history
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (history) return;
+                          onUpdateQuote(row.id, { status: 'denied' });
+                        }}
+                        disabled={history}
+                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {history
                       ? t('sales:clientQuotes.historyActionsDisabled', {
                           defaultValue: 'History entries cannot be modified.',
                         })
-                      : t('sales:clientQuotes.markAsDenied')
-                  }
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (history) return;
-                        onUpdateQuote(row.id, { status: 'denied' });
-                      }}
-                      disabled={history}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
-                    >
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  )}
+                      : t('sales:clientQuotes.markAsDenied')}
+                  </TooltipContent>
                 </Tooltip>
               </>
             )}
             {row.status === 'draft' && (
-              <Tooltip label={deleteTitle}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isDeleteDisabled) return;
-                      confirmDelete(row);
-                    }}
-                    disabled={isDeleteDisabled}
-                    className={`p-2 text-red-600 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isDeleteDisabled) return;
+                        confirmDelete(row);
+                      }}
+                      disabled={isDeleteDisabled}
+                      className={`p-2 text-red-600 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{deleteTitle}</TooltipContent>
               </Tooltip>
             )}
             {!row.linkedOfferId &&
               (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
-                <Tooltip label={restoreTitle}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!canRestore) return;
-                        onUpdateQuote(row.id, { status: 'draft', isExpired: false });
-                      }}
-                      disabled={!canRestore}
-                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}
-                    >
-                      <i className="fa-solid fa-rotate-left"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!canRestore) return;
+                          onUpdateQuote(row.id, { status: 'draft', isExpired: false });
+                        }}
+                        disabled={!canRestore}
+                        className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}
+                      >
+                        <i className="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{restoreTitle}</TooltipContent>
                 </Tooltip>
               )}
           </div>
