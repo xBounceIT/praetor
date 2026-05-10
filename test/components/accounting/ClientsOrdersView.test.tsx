@@ -37,7 +37,7 @@ const orders: ClientsOrder[] = [
 ];
 
 describe('<ClientsOrdersView />', () => {
-  test('pricing columns expose StandardTable header filters', () => {
+  test('pricing amount columns keep sorting but hide StandardTable header filters', () => {
     render(
       <ClientsOrdersView
         orders={orders}
@@ -49,14 +49,35 @@ describe('<ClientsOrdersView />', () => {
       />,
     );
 
+    expect(
+      screen.getByRole('button', { name: 'table.filters sales:clientQuotes.globalDiscount' }),
+    ).toBeInTheDocument();
+
     for (const header of [
-      'sales:clientQuotes.globalDiscount',
       'accounting:clientsOrders.subtotal',
       'common:labels.discount',
       'accounting:clientsOrders.margin',
       'sales:clientQuotes.totalCost',
+      'accounting:clientsOrders.totalColumn',
     ]) {
-      expect(screen.getByRole('button', { name: `table.filters ${header}` })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: `table.filters ${header}` })).toBeNull();
+      expect(screen.getByText(header).closest('th')?.querySelector('svg')).toBeInTheDocument();
     }
+  });
+
+  test('client column does not render item count below the client name', () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => {})}
+        onDeleteClientsOrder={mock(() => {})}
+      />,
+    );
+
+    expect(screen.getByText('Helios Energy Services')).toBeInTheDocument();
+    expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
   });
 });

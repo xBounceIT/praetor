@@ -435,9 +435,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             >
               {row.clientName}
             </div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
-              {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
-            </div>
           </div>
         ),
       },
@@ -466,6 +463,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.subtotal ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
@@ -481,6 +479,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.discountAmount ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
@@ -498,6 +497,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.margin ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
@@ -514,6 +514,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.totalCost ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
@@ -528,6 +529,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.total ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
