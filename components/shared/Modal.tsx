@@ -99,8 +99,8 @@ const Modal: React.FC<ModalProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const focusRunIdRef = useRef(0);
   const normalizedChildren = useMemo(
-    () => Children.map(children, renderWithShadcnFormPrimitives),
-    [children],
+    () => (isOpen ? Children.map(children, renderWithShadcnFormPrimitives) : null),
+    [children, isOpen],
   );
 
   useEffect(() => {
