@@ -1231,6 +1231,18 @@ describe('<StandardTable />', () => {
     expect(activeId).toBe(parsed[0].id);
   });
 
+  test('custom view modal opened from the shadcn columns menu is immediately keyboard-ready', async () => {
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    const user = await openCustomViews();
+    clickMenuItemByText('buttons.add');
+
+    const input = screen.getByPlaceholderText('table.viewNamePlaceholder') as HTMLInputElement;
+    await waitFor(() => expect(input).toHaveFocus());
+
+    await user.keyboard('Keyboard View');
+    expect(input.value).toBe('Keyboard View');
+  });
+
   test('custom view add and import actions render side by side', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     await openCustomViews();

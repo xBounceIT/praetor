@@ -93,6 +93,7 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
             <input
               id="custom-view-name"
               type="text"
+              data-autofocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('table.viewNamePlaceholder')}
