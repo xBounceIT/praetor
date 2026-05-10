@@ -197,12 +197,20 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [tokenError, setTokenError] = useState('');
   const [tokenCopied, setTokenCopied] = useState(false);
   const tokenLoadInFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     setFullName(settings.fullName);
     setEmail(settings.email);
     setLanguage(settings.language || 'auto');
   }, [settings]);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     translateRef.current = t;
@@ -211,29 +219,25 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   useEffect(() => {
     if (activeTab !== 'security' || personalAccessToken || tokenLoadInFlightRef.current) return;
 
-    let ignore = false;
     const loadToken = async () => {
       tokenLoadInFlightRef.current = true;
       setIsLoadingToken(true);
       setTokenError('');
       try {
         const tokenMetadata = await onGetPersonalAccessToken();
-        if (!ignore) setPersonalAccessToken(tokenMetadata);
+        if (isMountedRef.current) setPersonalAccessToken(tokenMetadata);
       } catch (err: unknown) {
         console.error('Failed to load personal access token:', err);
-        if (!ignore) {
+        if (isMountedRef.current) {
           setTokenError((err as Error).message || translateRef.current('security.tokenLoadFailed'));
         }
       } finally {
         tokenLoadInFlightRef.current = false;
-        if (!ignore) setIsLoadingToken(false);
+        if (isMountedRef.current) setIsLoadingToken(false);
       }
     };
 
     void loadToken();
-    return () => {
-      ignore = true;
-    };
   }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;

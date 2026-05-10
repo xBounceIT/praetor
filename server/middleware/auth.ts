@@ -135,7 +135,11 @@ const authenticatePersonalAccessToken = async (
     const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId);
     if (!userContext) return;
 
-    await personalAccessTokensRepo.markUsed(tokenHash);
+    try {
+      await personalAccessTokensRepo.markUsed(tokenHash);
+    } catch (err) {
+      request.log?.warn({ err }, 'Failed to update personal access token last-used timestamp');
+    }
   } catch {
     return reply.code(403).send({ error: 'Invalid or expired token' });
   }

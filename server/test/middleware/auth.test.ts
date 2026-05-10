@@ -337,6 +337,22 @@ describe('authenticateToken', () => {
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
   });
 
+  test('PAT remains authenticated when last-used tracking fails', async () => {
+    markPersonalAccessTokenUsedMock.mockRejectedValue(new Error('write failed'));
+    const token = 'praetor_pat_valid-token';
+    const request = buildFakeRequest(token);
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(0);
+    expect(reply.body).toBeUndefined();
+    expect(request.auth).toEqual({ userId: 'u1', source: 'personalAccessToken' });
+    expect(request.user?.id).toBe('u1');
+    expect(reply.headers['x-auth-token']).toBeUndefined();
+    expect(markPersonalAccessTokenUsedMock).toHaveBeenCalledWith(hashPersonalAccessToken(token));
+  });
+
   test('PAT rejects stale or invalid token hashes', async () => {
     findPersonalAccessTokenByHashMock.mockResolvedValue(null);
     const request = buildFakeRequest('praetor_pat_stale-token');

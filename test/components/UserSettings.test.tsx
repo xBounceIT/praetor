@@ -120,6 +120,29 @@ describe('<UserSettings /> Security tab', () => {
     });
     expect(screen.getByDisplayValue('praetor_pat_new-secret')).toBeInTheDocument();
   });
+
+  test('finishes token load when the user leaves and returns to Security before it resolves', async () => {
+    let resolveToken!: (value: typeof tokenMetadata & { token: string }) => void;
+    const onGetPersonalAccessToken = mock(
+      () =>
+        new Promise<typeof tokenMetadata & { token: string }>((resolve) => {
+          resolveToken = resolve;
+        }),
+    );
+    renderSettings({ onGetPersonalAccessToken });
+
+    fireEvent.click(screen.getByText('security.title'));
+    expect(screen.getByDisplayValue('security.personalAccessToken.loading')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('userProfile.title'));
+    fireEvent.click(screen.getByText('security.title'));
+    resolveToken({ ...tokenMetadata, token: 'praetor_pat_abc12345-secret' });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('praetor_pat_abc12345-secret')).toBeInTheDocument();
+    });
+    expect(onGetPersonalAccessToken).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('<UserSettings /> MCP tokens', () => {
