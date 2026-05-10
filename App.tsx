@@ -15,6 +15,7 @@ import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
 import InternalListingView from './components/catalog/InternalListingView';
 import ApiDocsView from './components/docs/ApiDocsView';
+import DocsHubView from './components/docs/DocsHubView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
@@ -670,6 +671,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ],
@@ -717,6 +719,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ];
@@ -938,7 +941,9 @@ const App: React.FC = () => {
   }, [supplierInvoices]);
 
   const isRouteAccessible = useMemo(() => {
-    if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
+    if (activeView === 'docs' || activeView === 'docs/api' || activeView === 'docs/frontend') {
+      return true;
+    }
     if (!currentUser) return false;
     if (activeView === '404') return false;
     if (activeView === 'reports/ai-reporting') {
@@ -2109,6 +2114,7 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
+            {activeView === 'docs' && <DocsHubView />}
             {activeView === 'timesheets/tracker' && (
               <TrackerView
                 entries={entries.filter((e) => e.userId === viewingUserId)}

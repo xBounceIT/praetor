@@ -63,6 +63,7 @@ const fallbackRouteTitleKey = (view: View) =>
     ?.replace(/-([a-z])/g, (match) => match[1].toUpperCase())}`;
 
 const getModuleFromRoute = (route: View): string => {
+  if (route === 'docs' || route.startsWith('docs/')) return 'docs';
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
   if (route.startsWith('sales/')) return 'sales';

@@ -1,0 +1,30 @@
+---
+title: CRM, catalogo e progetti
+description: Gestione di clienti, fornitori, prodotti, progetti, attività e unità di lavoro.
+sidebar:
+  order: 3
+---
+
+## Clienti e fornitori
+
+Le anagrafiche CRM raccolgono i dati usati nei flussi commerciali e contabili. Mantieni nomi, contatti, indirizzi e dati fiscali aggiornati prima di creare offerte, ordini o fatture.
+
+Evita duplicati: prima di creare una nuova anagrafica, cerca se il cliente o fornitore esiste già.
+
+## Catalogo interno
+
+Il catalogo contiene prodotti, categorie, unità di misura e logiche di prezzo. Le informazioni del catalogo alimentano preventivi, offerte e documenti contabili.
+
+Aggiorna il listino quando cambiano costi, margini o condizioni di vendita, così i nuovi documenti partono da dati affidabili.
+
+## Progetti e attività
+
+I progetti collegano clienti, attività e registrazioni di tempo. Crea attività chiare e riutilizzabili, con nomi che descrivono il lavoro effettivo.
+
+Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
+
+## Unità di lavoro
+
+Le unità di lavoro collegano risorse, costi e assegnazioni. Sono utili per analisi HR e controllo economico dei progetti.
+
+Solo utenti con permessi adeguati dovrebbero modificare costi, assegnazioni o dati storici.

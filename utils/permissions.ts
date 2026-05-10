@@ -153,6 +153,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'hr/work-units': buildPermission('hr.work_units', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
+  docs: buildPermission('docs.frontend', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),
   'docs/frontend': buildPermission('docs.frontend', 'view'),
 };
