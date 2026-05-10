@@ -51,7 +51,7 @@ import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
-import api, { type Settings } from './services/api';
+import api, { type PersonalAccessToken, type Settings } from './services/api';
 import type {
   Client,
   ClientOffer,
@@ -1959,6 +1959,16 @@ const App: React.FC = () => {
 
   const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
 
+  const handleGetPersonalAccessToken = useCallback(
+    async (): Promise<PersonalAccessToken> => api.settings.getPersonalAccessToken(),
+    [],
+  );
+
+  const handleRenewPersonalAccessToken = useCallback(
+    async (): Promise<PersonalAccessToken> => api.settings.renewPersonalAccessToken(),
+    [],
+  );
+
   const handleNotFoundReturn = () => {
     setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
   };
@@ -2565,6 +2575,8 @@ const App: React.FC = () => {
                 onListMcpTokens={handleListMcpTokens}
                 onCreateMcpToken={handleCreateMcpToken}
                 onRevokeMcpToken={handleRevokeMcpToken}
+                onGetPersonalAccessToken={handleGetPersonalAccessToken}
+                onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
               />
             )}
             {activeView === 'reports/ai-reporting' &&

@@ -3,6 +3,7 @@ import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realMcpTokensRepo from '../../repositories/mcpTokensRepo.ts';
 import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -20,6 +21,7 @@ const permissionsSnap = { ...realPermissions };
 const settingsRepoSnap = { ...realSettingsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const mcpTokensRepoSnap = { ...realMcpTokensRepo };
+const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
@@ -35,6 +37,9 @@ const listMcpTokensForUserMock = mock();
 const generateRawMcpTokenMock = mock();
 const createMcpTokenForUserMock = mock();
 const revokeMcpTokenForUserMock = mock();
+const findPersonalAccessTokenByUserIdMock = mock();
+const createPersonalAccessTokenIfMissingMock = mock();
+const renewPersonalAccessTokenForUserMock = mock();
 const bcryptCompareMock = mock();
 const bcryptHashMock = mock();
 
@@ -74,6 +79,12 @@ beforeAll(async () => {
     createForUser: createMcpTokenForUserMock,
     revokeForUser: revokeMcpTokenForUserMock,
   }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+    findByUserId: findPersonalAccessTokenByUserIdMock,
+    createForUserIfMissing: createPersonalAccessTokenIfMissingMock,
+    renewForUser: renewPersonalAccessTokenForUserMock,
+  }));
   mock.module('bcryptjs', () => ({
     default: { compare: bcryptCompareMock, hash: bcryptHashMock },
     compare: bcryptCompareMock,
@@ -91,6 +102,9 @@ afterAll(() => {
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('../../repositories/mcpTokensRepo.ts', () => mcpTokensRepoSnap);
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+  }));
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -109,6 +123,15 @@ const HAPPY_SETTINGS = {
   language: 'en',
 };
 
+const HAPPY_PERSONAL_ACCESS_TOKEN = {
+  userId: 'u1',
+  tokenHash: 'a'.repeat(64),
+  tokenPrefix: 'praetor_pat_abc12345',
+  createdAt: new Date('2026-05-11T08:00:00.000Z'),
+  updatedAt: new Date('2026-05-11T09:00:00.000Z'),
+  lastUsedAt: null,
+};
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -123,6 +146,9 @@ const allMocks = [
   generateRawMcpTokenMock,
   createMcpTokenForUserMock,
   revokeMcpTokenForUserMock,
+  findPersonalAccessTokenByUserIdMock,
+  createPersonalAccessTokenIfMissingMock,
+  renewPersonalAccessTokenForUserMock,
   bcryptCompareMock,
   bcryptHashMock,
 ];
@@ -146,6 +172,12 @@ beforeEach(async () => {
     lastUsedAt: null,
   });
   revokeMcpTokenForUserMock.mockResolvedValue(true);
+  findPersonalAccessTokenByUserIdMock.mockResolvedValue(HAPPY_PERSONAL_ACCESS_TOKEN);
+  createPersonalAccessTokenIfMissingMock.mockResolvedValue({
+    record: HAPPY_PERSONAL_ACCESS_TOKEN,
+    created: false,
+  });
+  renewPersonalAccessTokenForUserMock.mockResolvedValue(HAPPY_PERSONAL_ACCESS_TOKEN);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/settings');
 });
@@ -498,6 +530,84 @@ describe('PUT /api/settings/password', () => {
       method: 'PUT',
       url: '/api/settings/password',
       payload: { currentPassword: 'a', newPassword: 'b' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('GET /api/settings/personal-access-token', () => {
+  test('200 returns metadata and one-time token when auto-created', async () => {
+    findPersonalAccessTokenByUserIdMock.mockResolvedValue(null);
+    createPersonalAccessTokenIfMissingMock.mockResolvedValue({
+      record: HAPPY_PERSONAL_ACCESS_TOKEN,
+      created: true,
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/personal-access-token',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.tokenPrefix).toBe('praetor_pat_abc12345');
+    expect(body.createdAt).toBe('2026-05-11T08:00:00.000Z');
+    expect(body.updatedAt).toBe('2026-05-11T09:00:00.000Z');
+    expect(body.lastUsedAt).toBeNull();
+    expect(body.token).toMatch(/^praetor_pat_/);
+    expect(findPersonalAccessTokenByUserIdMock).toHaveBeenCalledWith('u1');
+    expect(createPersonalAccessTokenIfMissingMock).toHaveBeenCalledTimes(1);
+    expect(createPersonalAccessTokenIfMissingMock.mock.calls[0][0]).toBe('u1');
+    expect(createPersonalAccessTokenIfMissingMock.mock.calls[0][1]).toMatch(/^[a-f0-9]{64}$/);
+    expect(createPersonalAccessTokenIfMissingMock.mock.calls[0][2]).toMatch(/^praetor_pat_/);
+  });
+
+  test('200 returns metadata only when token already exists', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/personal-access-token',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.tokenPrefix).toBe('praetor_pat_abc12345');
+    expect(body.token).toBeUndefined();
+    expect(findPersonalAccessTokenByUserIdMock).toHaveBeenCalledWith('u1');
+    expect(createPersonalAccessTokenIfMissingMock).not.toHaveBeenCalled();
+  });
+
+  test('401 missing token', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/personal-access-token',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('POST /api/settings/personal-access-token/renew', () => {
+  test('200 renews the token and returns the new plaintext once', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/personal-access-token/renew',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.token).toMatch(/^praetor_pat_/);
+    expect(renewPersonalAccessTokenForUserMock).toHaveBeenCalledTimes(1);
+    expect(renewPersonalAccessTokenForUserMock.mock.calls[0][0]).toBe('u1');
+    expect(renewPersonalAccessTokenForUserMock.mock.calls[0][1]).toMatch(/^[a-f0-9]{64}$/);
+    expect(renewPersonalAccessTokenForUserMock.mock.calls[0][2]).toMatch(/^praetor_pat_/);
+  });
+
+  test('401 missing token', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/personal-access-token/renew',
     });
     expect(res.statusCode).toBe(401);
   });

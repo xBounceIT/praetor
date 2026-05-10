@@ -29,4 +29,6 @@ La barra laterale raggruppa i moduli principali. Le voci disponibili dipendono d
 
 Dal menu utente puoi aprire le impostazioni, cambiare ruolo se hai più profili disponibili, consultare questa documentazione e uscire dall'applicazione.
 
+La scheda **Sicurezza** contiene il cambio password e il token di accesso personale per usare le API. Il token eredita i permessi del tuo utente; copialo quando viene creato o rinnovato, perché in seguito verrà mostrato solo in forma mascherata.
+
 Controlla sempre di lavorare con il ruolo corretto prima di modificare dati amministrativi o contabili.

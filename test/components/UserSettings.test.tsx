@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { Settings } from '../../services/api';
+import type { PersonalAccessToken, Settings } from '../../services/api';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -11,6 +11,13 @@ const settings: Settings = {
   fullName: 'Alice',
   email: 'alice@example.com',
   language: 'en',
+};
+
+const tokenMetadata = {
+  tokenPrefix: 'praetor_pat_abc12345',
+  createdAt: '2026-05-11T08:00:00.000Z',
+  updatedAt: '2026-05-11T09:00:00.000Z',
+  lastUsedAt: null,
 };
 
 const onUpdate = mock((_updates: Partial<Settings>) => Promise.resolve());
@@ -41,8 +48,17 @@ const onCreateMcpToken = mock((_name: string) =>
   }),
 );
 const onRevokeMcpToken = mock((_id: string) => Promise.resolve());
+const onGetPersonalAccessToken = mock(() =>
+  Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_abc12345-secret' }),
+);
+const onRenewPersonalAccessToken = mock(() =>
+  Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_new-secret' }),
+);
 
-const renderSettings = () =>
+const renderSettings = (overrides: {
+  onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
+  onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
+} = {}) =>
   render(
     <UserSettings
       settings={settings}
@@ -51,8 +67,60 @@ const renderSettings = () =>
       onListMcpTokens={onListMcpTokens}
       onCreateMcpToken={onCreateMcpToken}
       onRevokeMcpToken={onRevokeMcpToken}
+      onGetPersonalAccessToken={overrides.onGetPersonalAccessToken ?? onGetPersonalAccessToken}
+      onRenewPersonalAccessToken={
+        overrides.onRenewPersonalAccessToken ?? onRenewPersonalAccessToken
+      }
     />,
   );
+
+describe('<UserSettings /> Security tab', () => {
+  beforeEach(() => {
+    for (const m of [
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    ]) {
+      m.mockClear();
+    }
+  });
+
+  test('renames the password tab to Security and loads the one-time PAT', async () => {
+    const getToken = mock(() =>
+      Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_abc12345-secret' }),
+    );
+    renderSettings({ onGetPersonalAccessToken: getToken });
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    await waitFor(() => {
+      expect(getToken).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByDisplayValue('praetor_pat_abc12345-secret')).toBeInTheDocument();
+    expect(screen.getByText('security.personalAccessToken.visibleOnce')).toBeInTheDocument();
+  });
+
+  test('renew replaces the displayed token', async () => {
+    const renewToken = mock(() =>
+      Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_new-secret' }),
+    );
+    renderSettings({ onRenewPersonalAccessToken: renewToken });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await screen.findByDisplayValue('praetor_pat_abc12345-secret');
+
+    fireEvent.click(screen.getByRole('button', { name: /security.personalAccessToken.renew/ }));
+
+    await waitFor(() => {
+      expect(renewToken).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByDisplayValue('praetor_pat_new-secret')).toBeInTheDocument();
+  });
+});
 
 describe('<UserSettings /> MCP tokens', () => {
   beforeEach(() => {
@@ -62,6 +130,8 @@ describe('<UserSettings /> MCP tokens', () => {
       onListMcpTokens,
       onCreateMcpToken,
       onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
     ]) {
       m.mockClear();
     }

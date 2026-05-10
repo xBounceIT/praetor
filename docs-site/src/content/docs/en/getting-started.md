@@ -29,4 +29,6 @@ The sidebar groups the main modules. Available items depend on your role:
 
 From the user menu you can open settings, switch role when multiple profiles are available, open this documentation, and log out.
 
+The **Security** tab contains password changes and your personal access token for API use. The token inherits your user permissions; copy it when it is created or renewed, because it is shown only in masked form afterward.
+
 Always check that you are using the right role before changing administrative or accounting data.
