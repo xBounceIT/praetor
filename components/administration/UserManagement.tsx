@@ -5,8 +5,8 @@ import { usersApi } from '../../services/api/users';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
@@ -1037,7 +1037,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         </p>
                       </div>
 
-                      <CustomSelect
+                      <SelectControl
                         label={t('hr:workforce.primaryRole')}
                         options={editAssignedRoleIds
                           .map((id) => roles.find((r) => r.id === id))
@@ -1060,7 +1060,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </div>
                   ) : (
                     <>
-                      <CustomSelect
+                      <SelectControl
                         label={t('hr:workforce.role')}
                         options={roleOptions}
                         value={editRole}
@@ -1260,7 +1260,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 )}
               </div>
               <div>
-                <CustomSelect
+                <SelectControl
                   label={t('hr:workforce.role')}
                   options={roleOptions}
                   value={newRole}
@@ -1355,7 +1355,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <CustomSelect
+                  <SelectControl
                     options={clientFilterOptions}
                     value={filterClientId}
                     onChange={(val) => setFilterClientId(val as string)}
@@ -1363,7 +1363,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     searchable={true}
                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                   />
-                  <CustomSelect
+                  <SelectControl
                     options={projectFilterOptions}
                     value={filterProjectId}
                     onChange={(val) => setFilterProjectId(val as string)}

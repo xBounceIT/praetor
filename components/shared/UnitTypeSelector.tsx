@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { SupplierUnitType } from '../../types';
-import CustomSelect from './CustomSelect';
+import SelectControl from './SelectControl';
 
 interface UnitTypeSelectorProps {
   value: SupplierUnitType;
@@ -36,7 +36,7 @@ const UnitTypeSelector: React.FC<UnitTypeSelectorProps> = ({
   ];
 
   return (
-    <CustomSelect
+    <SelectControl
       options={unitOptions}
       value={value}
       onChange={(val) => onChange(val as SupplierUnitType)}

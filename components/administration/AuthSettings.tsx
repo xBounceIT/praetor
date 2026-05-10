@@ -11,7 +11,7 @@ import type {
   SsoProvider,
   SsoRoleMapping,
 } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
+import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
@@ -364,7 +364,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   );
 
   const renderRoleSelect = (value: string, onChange: (value: string) => void) => (
-    <CustomSelect options={roleOptions} value={value} onChange={(val) => onChange(val as string)} />
+    <SelectControl
+      options={roleOptions}
+      value={value}
+      onChange={(val) => onChange(val as string)}
+    />
   );
 
   const renderProviderList = (protocol: SsoProtocol) => (

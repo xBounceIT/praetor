@@ -2,7 +2,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../shared/Modal';
-import CustomSelect from './CustomSelect';
+import SelectControl from './SelectControl';
 
 export interface CustomRepeatModalProps {
   isOpen: boolean;
@@ -59,7 +59,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
               {t('recurring.every')}
             </span>
             <div className="flex-1">
-              <CustomSelect
+              <SelectControl
                 options={occurrenceOptions}
                 value={type}
                 onChange={(val) => setType(val as typeof type)}
@@ -69,7 +69,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
           </div>
 
           <div className="space-y-2">
-            <CustomSelect
+            <SelectControl
               label={t('recurring.dayOfWeek')}
               options={days}
               value={dayOfWeek.toString()}
