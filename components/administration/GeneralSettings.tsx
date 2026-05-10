@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
-import CustomSelect, { type Option } from '../shared/CustomSelect';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
@@ -213,7 +213,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                   {t('general.currencyLabel')}
                 </label>
-                <CustomSelect
+                <SelectControl
                   options={CURRENCY_OPTIONS}
                   value={currency}
                   onChange={(val) => setCurrency(val as string)}
@@ -263,7 +263,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('general.startOfWeek')}
                   </label>
-                  <CustomSelect
+                  <SelectControl
                     options={[
                       { id: 'Monday', name: t('general.monday') },
                       { id: 'Sunday', name: t('general.sunday') },
@@ -280,7 +280,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                     {t('general.defaultLocationLabel')}
                   </label>
-                  <CustomSelect
+                  <SelectControl
                     options={[
                       { id: 'office', name: t('general.locationTypes.office') },
                       { id: 'customer_premise', name: t('general.locationTypes.customerPremise') },
@@ -350,7 +350,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                       {t('general.aiProviderLabel')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={AI_PROVIDER_OPTIONS}
                       value={aiProvider}
                       onChange={(val) => {

@@ -30,7 +30,7 @@ import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
 import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
-import CustomSelect from './components/shared/CustomSelect';
+import SelectControl from './components/shared/SelectControl';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
@@ -401,7 +401,7 @@ const TrackerView: React.FC<{
                   </div>
                 </div>
                 <div className="w-full sm:w-56 shrink-0">
-                  <CustomSelect
+                  <SelectControl
                     options={userOptions}
                     value={viewingUserId}
                     onChange={(val) => onViewUserChange(val as string)}

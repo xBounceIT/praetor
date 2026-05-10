@@ -2,7 +2,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmailConfig, SmtpEncryption } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
+import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 
 export interface EmailSettingsProps {
@@ -238,7 +238,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 {t('email.encryptionLabel', 'Encryption')}
               </label>
-              <CustomSelect
+              <SelectControl
                 options={encryptionOptions}
                 value={formData.smtpEncryption}
                 onChange={(val) =>

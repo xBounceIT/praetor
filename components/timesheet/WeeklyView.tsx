@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
-import CustomSelect from '../shared/CustomSelect';
+import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface WeeklyViewProps {
@@ -427,7 +427,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
         {availableUsers.length > 1 && (
           <div className="w-64">
-            <CustomSelect
+            <SelectControl
               options={availableUsers.map((u) => ({ id: u.id, name: u.name }))}
               value={viewingUserId}
               onChange={(val) => onViewUserChange(val as string)}
@@ -496,7 +496,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 >
                   <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
-                      <CustomSelect
+                      <SelectControl
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
                         value={row.clientId}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val as string)}
@@ -513,7 +513,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </td>
                   <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
-                      <CustomSelect
+                      <SelectControl
                         options={projects
                           .filter((p) => p.clientId === row.clientId)
                           .map((p) => ({ id: p.id, name: p.name }))}
@@ -535,7 +535,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </td>
                   <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
-                      <CustomSelect
+                      <SelectControl
                         options={projectTasks
                           .filter((t) => t.projectId === row.projectId)
                           .map((t) => ({ id: t.name, name: t.name }))}
@@ -561,7 +561,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </td>
                   <td className="p-4">
                     <div className="flex flex-col gap-1 w-full">
-                      <CustomSelect
+                      <SelectControl
                         options={[
                           { id: 'office', name: t('weekly.locationTypes.office') },
                           {

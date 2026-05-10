@@ -21,9 +21,9 @@ import {
 import { convertUnitPrice, parseNumberInputValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -770,7 +770,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={activeSuppliers.map((supplier) => ({
                         id: supplier.id,
                         name: supplier.name,
@@ -819,7 +819,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(value) =>

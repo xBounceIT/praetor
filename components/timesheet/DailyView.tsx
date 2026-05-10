@@ -6,7 +6,7 @@ import { getLocalDateString } from '../../utils/date';
 import { buildPermission, hasAnyPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
-import CustomSelect from '../shared/CustomSelect';
+import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface DailyViewProps {
@@ -257,7 +257,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px] gap-4 items-start">
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.client')}
               options={clientOptions}
               value={selectedClientId}
@@ -274,7 +274,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.project')}
               options={projectOptions}
               value={selectedProjectId}
@@ -294,7 +294,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.task')}
               options={taskOptions}
               value={selectedTaskId || (selectedTaskName === 'custom' ? 'custom' : '')}
@@ -326,7 +326,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.location')}
               options={[
                 { id: 'office', name: t('entry.locationTypes.office') },
@@ -407,7 +407,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               {makeRecurring && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
                   <div className="hidden sm:block h-4 w-px bg-zinc-200 mx-1 shrink-0"></div>
-                  <CustomSelect
+                  <SelectControl
                     options={[
                       { id: 'daily', name: t('entry.recurrencePatterns.daily') },
                       { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },

@@ -7,9 +7,9 @@ import { projectsApi, tasksApi } from '../../services/api';
 import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
@@ -701,7 +701,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.client')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={clientOptions}
                       value={clientId}
                       onChange={(val) => {
@@ -744,7 +744,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('projects:projects.order')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={orderOptions}
                       value={orderId}
                       onChange={(val) => {
