@@ -163,7 +163,7 @@ const Modal: React.FC<ModalProps> = ({
         aria-modal="true"
         aria-describedby={undefined}
         className={cn(
-          'fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none',
+          'shadcn-theme-bridge fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none',
           getShadcnThemeClassName(resolvedTheme),
         )}
         style={{ zIndex: zIndex + 1 }}

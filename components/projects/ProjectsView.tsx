@@ -26,6 +26,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
 
@@ -824,7 +825,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         </span>
                       }
                       headerAction={
-                        <Button type="button" onClick={addDraftTask} size="sm">
+                        <Button
+                          type="button"
+                          onClick={addDraftTask}
+                          size="sm"
+                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                        >
                           <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
                           {t('projects:projects.addTaskRow')}
                         </Button>
@@ -848,7 +854,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       }
                       headerAction={
                         canCreateTasks ? (
-                          <Button type="button" onClick={handleAddExistingTask} size="sm">
+                          <Button
+                            type="button"
+                            onClick={handleAddExistingTask}
+                            size="sm"
+                            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                          >
                             <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
                             {t('projects:projects.addTaskRow')}
                           </Button>

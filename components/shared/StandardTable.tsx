@@ -78,6 +78,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from './ModalLayout';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from './tableControlStyles';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -128,8 +129,6 @@ const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
-const TABLE_CONTROL_BUTTON_CLASSNAME =
-  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =

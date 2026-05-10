@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const { THEME_STORAGE_KEY } = await import('../../utils/theme');
 const Modal = (await import('../../components/shared/Modal')).default;
+const { ModalContent } = await import('../../components/shared/ModalLayout');
 
 describe('<Modal />', () => {
   afterEach(() => {
@@ -193,6 +194,27 @@ describe('<Modal />', () => {
     expect(dialog.getAttribute('data-shadcn-theme-scope')).toBe('');
     expect(dialog.getAttribute('data-shadcn-theme')).toBe('dark');
     expect(dialog.className).toContain('dark');
+  });
+
+  test('visible modal shell follows the active app shadcn theme scope', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'light');
+
+    render(
+      <div data-shadcn-theme-scope data-shadcn-theme="dark" className="dark">
+        <Modal isOpen={true} onClose={() => {}}>
+          <ModalContent size="sm">
+            <div>Scoped shell</div>
+          </ModalContent>
+        </Modal>
+      </div>,
+    );
+
+    const shell = screen.getByText('Scoped shell').closest('[data-slot="modal-content"]');
+    await waitFor(() => expect(shell?.getAttribute('data-shadcn-theme')).toBe('dark'));
+    expect(shell?.className).toContain('dark');
+    expect(shell?.className).toContain('shadcn-theme-bridge');
+    expect(shell?.className).toContain('bg-background');
+    expect(shell?.className).toContain('rounded-lg');
   });
 
   test('unmounting restores body overflow', () => {

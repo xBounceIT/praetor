@@ -2,6 +2,7 @@ import { XIcon } from 'lucide-react';
 import type React from 'react';
 import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { cn } from '@/lib/utils';
 
 const modalSizeClassName = {
@@ -25,10 +26,16 @@ export function ModalContent({
   children: React.ReactNode;
   size?: ModalLayoutSize;
 }) {
+  const resolvedTheme = useResolvedShadcnTheme();
+
   return (
     <div
+      data-slot="modal-content"
+      data-shadcn-theme-scope
+      data-shadcn-theme={resolvedTheme}
       className={cn(
-        'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in zoom-in-95 duration-200',
+        'shadcn-theme-bridge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in zoom-in-95 duration-200',
+        getShadcnThemeClassName(resolvedTheme),
         modalSizeClassName[size],
         className,
       )}
