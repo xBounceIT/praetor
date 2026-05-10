@@ -201,9 +201,10 @@ describe('<Layout />', () => {
     expect(screen.queryByText('modules.accounting')).toBeNull();
   });
 
-  test('reports module stays visible with disabled AI reporting route when feature is off', () => {
+  test('reports module stays visible with disabled AI reporting route when feature is off', async () => {
     isMobileViewport = false;
     const onViewChange = mock(() => {});
+    const user = userEvent.setup();
     renderLayout({
       onViewChange,
       isAiReportingEnabled: false,
@@ -223,6 +224,10 @@ describe('<Layout />', () => {
     fireEvent.click(aiReportingButton);
 
     expect(onViewChange).not.toHaveBeenCalled();
+
+    await user.hover(aiReportingButton.parentElement as HTMLElement);
+
+    expect(await screen.findAllByText('sidebar.aiReportingDisabled')).toHaveLength(2);
   });
 
   test('AI reporting route remains clickable when feature is on', () => {

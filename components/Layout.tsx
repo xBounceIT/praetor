@@ -288,13 +288,16 @@ const Layout: React.FC<LayoutProps> = ({
 
         const permission = VIEW_PERMISSION_MAP[route.view];
         if (!permission || !hasPermission(currentUser.permissions, permission)) continue;
+        const isDisabledAiReporting =
+          route.view === 'reports/ai-reporting' && !isAiReportingEnabled;
 
         routes.push({
           title: route.label,
           view: route.view,
           icon: route.icon,
           isActive: activeView === route.view,
-          disabled: route.view === 'reports/ai-reporting' && !isAiReportingEnabled,
+          disabled: isDisabledAiReporting,
+          disabledTooltip: isDisabledAiReporting ? t('sidebar.aiReportingDisabled') : undefined,
         });
       }
 
@@ -309,7 +312,7 @@ const Layout: React.FC<LayoutProps> = ({
     }
 
     return { activeRoute: matchedRoute, navItems: items };
-  }, [activeModuleId, activeView, currentUser.permissions, isAiReportingEnabled, modules]);
+  }, [activeModuleId, activeView, currentUser.permissions, isAiReportingEnabled, modules, t]);
 
   const canViewNotifications = hasPermission(
     currentUser.permissions,
