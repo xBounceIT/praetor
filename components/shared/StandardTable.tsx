@@ -47,9 +47,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Textarea } from '../ui/textarea';
 import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
@@ -67,6 +69,15 @@ import {
   type SortState,
 } from './customViewHelpers';
 import Modal from './Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from './ModalLayout';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -1977,60 +1988,53 @@ const StandardTable = <T extends object>({
       )}
 
       {data && columns && pasteModalOpen && (
-        <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
-          <div className="w-full max-w-md rounded-md border border-border bg-card shadow-lg animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 className="flex items-center gap-2 text-lg font-semibold">
+        <Modal isOpen={pasteModalOpen} onClose={closePasteModal} ariaLabel={null}>
+          <ModalContent size="md">
+            <ModalHeader>
+              <ModalTitle>
                 <i className="fa-solid fa-file-import text-primary"></i>
                 {t('table.pasteViewTitle')}
-              </h3>
-              <button
-                type="button"
-                onClick={closePasteModal}
-                className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-3">
-              <p className="text-xs text-muted-foreground">{t('table.pasteViewDescription')}</p>
-              <textarea
-                value={pasteText}
-                onChange={(e) => {
-                  setPasteText(e.target.value);
-                  if (pasteError) setPasteError(null);
-                }}
-                placeholder={t('table.pasteViewPlaceholder')}
-                rows={6}
-                className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-              {pasteError && (
-                <div role="alert" className="text-[11px] text-red-500">
-                  {pasteError}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="rounded-lg"
-                onClick={closePasteModal}
-              >
+              </ModalTitle>
+              <ModalCloseButton onClick={closePasteModal} />
+            </ModalHeader>
+            <ModalBody className="space-y-3">
+              <ModalDescription>{t('table.pasteViewDescription')}</ModalDescription>
+              <Field data-invalid={Boolean(pasteError)}>
+                <FieldLabel htmlFor="custom-view-import-payload" className="sr-only">
+                  {t('table.pasteViewTitle')}
+                </FieldLabel>
+                <Textarea
+                  id="custom-view-import-payload"
+                  value={pasteText}
+                  onChange={(e) => {
+                    setPasteText(e.target.value);
+                    if (pasteError) setPasteError(null);
+                  }}
+                  placeholder={t('table.pasteViewPlaceholder')}
+                  rows={6}
+                  aria-invalid={Boolean(pasteError)}
+                  className="resize-y font-mono text-xs"
+                />
+                {pasteError && (
+                  <FieldError role="alert" className="text-xs">
+                    {pasteError}
+                  </FieldError>
+                )}
+              </Field>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={closePasteModal}>
                 {t('table.cancel')}
               </Button>
               <Button
                 type="button"
-                size="sm"
-                className="rounded-lg"
                 onClick={submitPasteImport}
                 disabled={pasteText.trim().length === 0}
               >
                 {t('table.importView')}
               </Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalContent>
         </Modal>
       )}
     </div>

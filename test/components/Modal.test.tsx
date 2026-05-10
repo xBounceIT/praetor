@@ -50,6 +50,38 @@ describe('<Modal />', () => {
     await waitFor(() => expect(screen.getByLabelText('Preferred')).toHaveFocus());
   });
 
+  test('normalizes raw modal form elements through shadcn primitives', () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div>
+          <label htmlFor="modal-name">Name</label>
+          <input id="modal-name" />
+          <textarea aria-label="Notes" />
+          <button type="button">Save</button>
+        </div>
+      </Modal>,
+    );
+
+    expect(screen.getByText('Name').getAttribute('data-slot')).toBe('field-label');
+    expect(screen.getByLabelText('Name').getAttribute('data-slot')).toBe('input');
+    expect(screen.getByLabelText('Notes').getAttribute('data-slot')).toBe('textarea');
+    expect(screen.getByRole('button', { name: 'Save' }).getAttribute('data-slot')).toBe('button');
+  });
+
+  test('does not normalize checkbox inputs or wrapper labels', () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <label>
+          <input type="checkbox" aria-label="Enabled" />
+          Enabled
+        </label>
+      </Modal>,
+    );
+
+    expect(screen.getByLabelText('Enabled').getAttribute('data-slot')).toBeNull();
+    expect(screen.getByText('Enabled').getAttribute('data-slot')).toBeNull();
+  });
+
   test('clicking the backdrop calls onClose', () => {
     const onClose = mock(() => {});
     render(

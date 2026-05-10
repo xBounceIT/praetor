@@ -1,12 +1,25 @@
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import type React from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
+import { FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  ariaLabel?: string | null;
   zIndex?: number;
   closeOnBackdrop?: boolean;
   closeOnEsc?: boolean;
@@ -25,10 +38,59 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+const TEXT_LIKE_INPUT_TYPES = new Set([
+  '',
+  'date',
+  'datetime-local',
+  'email',
+  'month',
+  'number',
+  'password',
+  'search',
+  'tel',
+  'text',
+  'time',
+  'url',
+  'week',
+]);
+
+const isTextLikeInput = (props: React.ComponentProps<'input'>) =>
+  TEXT_LIKE_INPUT_TYPES.has(String(props.type ?? '').toLowerCase());
+
+const renderWithShadcnFormPrimitives = (node: React.ReactNode): React.ReactNode => {
+  if (!isValidElement(node)) return node;
+
+  const props = node.props as { children?: React.ReactNode };
+  const children =
+    props.children === undefined
+      ? props.children
+      : Children.map(props.children, renderWithShadcnFormPrimitives);
+  const nextProps = children === props.children ? undefined : { children };
+
+  if (node.type === 'button') {
+    return <Button {...(node.props as React.ComponentProps<'button'>)}>{children}</Button>;
+  }
+
+  if (node.type === 'input' && isTextLikeInput(node.props as React.ComponentProps<'input'>)) {
+    return <Input {...(node.props as React.ComponentProps<'input'>)} />;
+  }
+
+  if (node.type === 'textarea') {
+    return <Textarea {...(node.props as React.ComponentProps<'textarea'>)}>{children}</Textarea>;
+  }
+
+  if (node.type === 'label' && (node.props as React.ComponentProps<'label'>).htmlFor) {
+    return <FieldLabel {...(node.props as React.ComponentProps<'label'>)}>{children}</FieldLabel>;
+  }
+
+  return nextProps ? cloneElement(node, nextProps) : node;
+};
+
 const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   children,
+  ariaLabel = 'Dialog',
   zIndex = 60,
   closeOnBackdrop = true,
   closeOnEsc = true,
@@ -36,6 +98,10 @@ const Modal: React.FC<ModalProps> = ({
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const focusRunIdRef = useRef(0);
+  const normalizedChildren = useMemo(
+    () => Children.map(children, renderWithShadcnFormPrimitives),
+    [children],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -88,7 +154,6 @@ const Modal: React.FC<ModalProps> = ({
         <DialogOverlay className={backdropClass} style={{ zIndex }} />
         <DialogPrimitive.Content
           ref={contentRef}
-          aria-label="Dialog"
           aria-modal="true"
           aria-describedby={undefined}
           className="fixed inset-0 flex items-center justify-center p-4 outline-none"
@@ -110,8 +175,8 @@ const Modal: React.FC<ModalProps> = ({
             focusModalContent();
           }}
         >
-          <DialogTitle className="sr-only">Dialog</DialogTitle>
-          {children}
+          {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
+          {normalizedChildren}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

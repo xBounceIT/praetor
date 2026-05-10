@@ -1,6 +1,8 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import Modal from './Modal';
+import { ModalBody, ModalContent, ModalFooter, ModalHeader, ModalTitle } from './ModalLayout';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -19,34 +21,30 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 }) => {
   const { t } = useTranslation('common');
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-        <div className="p-6 text-center space-y-4">
-          <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+      <ModalContent size="sm">
+        <ModalHeader className="justify-center text-center">
+          <div className="space-y-3">
+            <div className="size-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto text-destructive">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <ModalTitle className="justify-center">{title}</ModalTitle>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-800">{title}</h3>
-            {description && (
-              <div className="text-sm text-zinc-500 mt-2 leading-relaxed">{description}</div>
-            )}
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
-            >
-              {t('buttons.noGoBack')}
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-            >
-              {t('buttons.yesDelete')}
-            </button>
-          </div>
-        </div>
-      </div>
+        </ModalHeader>
+        {description && (
+          <ModalBody className="text-center text-sm text-muted-foreground leading-relaxed">
+            {description}
+          </ModalBody>
+        )}
+        <ModalFooter className="grid grid-cols-2 sm:flex">
+          <Button type="button" variant="outline" onClick={onClose}>
+            {t('buttons.noGoBack')}
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm}>
+            {t('buttons.yesDelete')}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
     </Modal>
   );
 };
