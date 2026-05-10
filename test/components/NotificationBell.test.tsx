@@ -63,7 +63,7 @@ describe('<NotificationBell />', () => {
     const bell = screen.getByRole('button', { name: 'notifications.title' });
     expect(bell).toBeInTheDocument();
     expect(bell.querySelector('i.fa-bell')).not.toBeNull();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('3')).toHaveClass('bg-destructive', 'text-background');
   });
 
   test('hides the unread badge when count is zero', () => {
@@ -85,6 +85,28 @@ describe('<NotificationBell />', () => {
 
     expect(screen.getByText('notifications.newProjects')).toBeInTheDocument();
     expect(screen.getByText('A generic notification')).toBeInTheDocument();
+  });
+
+  test('notification rows use theme tokens instead of hardcoded light colors', () => {
+    render(<NotificationBell {...baseProps} />);
+
+    openDropdown();
+
+    const unreadTitle = screen.getByText('notifications.newProjects');
+    const unreadRow = unreadTitle.closest('.group');
+    expect(unreadRow).not.toBeNull();
+    expect(unreadRow).toHaveClass('bg-accent', 'text-accent-foreground', 'border-border');
+    expect(unreadRow?.className).not.toContain('bg-blue-50/50');
+    expect(unreadTitle).toHaveClass('text-accent-foreground', 'font-medium');
+    expect(unreadTitle.className).not.toContain('text-zinc-800');
+
+    const readTitle = screen.getByText('A generic notification');
+    const readRow = readTitle.closest('.group');
+    expect(readRow).not.toBeNull();
+    expect(readRow).toHaveClass('bg-popover', 'text-popover-foreground', 'border-border');
+    expect(readRow?.className).not.toContain('bg-white');
+    expect(readTitle).toHaveClass('text-muted-foreground');
+    expect(readTitle.className).not.toContain('text-zinc-600');
   });
 
   test('admin password warning notifications use the warning icon', () => {
