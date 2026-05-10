@@ -262,10 +262,10 @@ describe('<StandardTable />', () => {
     const cells = aliceRow.querySelectorAll('td');
     expect(cells.length).toBe(3);
 
-    // Stretch column (Age): absorbs leftover width AND keeps its right alignment.
-    expect(cells[1].className).toContain('w-full');
+    // Fixed-layout cells keep their alignment without relying on a stretch column.
+    expect(cells[1].className).toContain('align-middle');
     expect(cells[1].className).toContain('text-right');
-    expect(cells[1].className).not.toMatch(/\bw-px\b/);
+    expect(cells[1].className).toContain('overflow-hidden');
 
     // Sticky-right action column: stays w-auto, never w-full.
     expect(cells[2].className).toContain('w-auto');
@@ -327,90 +327,119 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Actions').closest('th')?.querySelector('svg')).toBeNull();
   });
 
-  test('column resize clamps to the measured header label width', async () => {
+  test('simple resize handle click does not change or persist the column width', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
 
     const headerCell = screen.getByText('Name').closest('th') as HTMLTableCellElement;
-    const headerContent = headerCell.querySelector(
-      '[data-column-header-content="name"]',
-    ) as HTMLElement;
-    const ageHeaderContent = screen
-      .getByText('Age')
-      .closest('th')
-      ?.querySelector('[data-column-header-content="age"]') as HTMLElement;
     const resizeHandle = headerCell.querySelector(
       '[data-column-resize-handle="name"]',
     ) as HTMLElement;
     const resizeLine = headerCell.querySelector('[data-column-resize-line="name"]') as HTMLElement;
-
-    Object.defineProperty(headerContent, 'scrollWidth', { configurable: true, value: 128 });
-    Object.defineProperty(ageHeaderContent, 'scrollWidth', { configurable: true, value: 87 });
-    Object.defineProperty(headerCell, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        bottom: 0,
-        height: 40,
-        left: 0,
-        right: 220,
-        top: 0,
-        width: 220,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }),
-    });
+    const initialWidth = headerCell.style.width;
 
     expect(resizeHandle.className).toContain('w-2');
     expect(resizeLine.className).toContain('w-px');
     expect(resizeLine.className).toContain('bg-border');
 
     act(() => {
+      fireEvent.mouseDown(resizeHandle, { clientX: 128 });
+      fireEvent.mouseUp(document);
+    });
+
+    await waitFor(() => expect(headerCell.style.width).toBe(initialWidth));
+    const saved = JSON.parse(localStorage.getItem('praetor_table_colwidths_people') ?? '{}');
+    expect(saved.name).toBeUndefined();
+  });
+
+  test('dragging a resize handle increases only the target column', async () => {
+    render(<StandardTable<Row> title="Drag Widths" data={sampleRows} columns={sampleColumns} />);
+
+    const nameHeader = screen.getByText('Name').closest('th') as HTMLTableCellElement;
+    const ageHeader = screen.getByText('Age').closest('th') as HTMLTableCellElement;
+    const resizeHandle = nameHeader.querySelector(
+      '[data-column-resize-handle="name"]',
+    ) as HTMLElement;
+    const initialNameWidth = Number.parseInt(nameHeader.style.width, 10);
+    const initialAgeWidth = Number.parseInt(ageHeader.style.width, 10);
+
+    act(() => {
+      fireEvent.mouseDown(resizeHandle, { clientX: initialNameWidth });
+    });
+
+    await waitFor(() =>
+      expect(nameHeader.querySelector('[data-column-resize-line="name"]')?.className).toContain(
+        'bg-primary',
+      ),
+    );
+
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: initialNameWidth + 60 });
+      fireEvent.mouseUp(document);
+    });
+
+    await waitFor(() =>
+      expect(Number.parseInt(nameHeader.style.width, 10)).toBeGreaterThan(initialNameWidth),
+    );
+    expect(Number.parseInt(nameHeader.style.width, 10)).toBe(initialNameWidth + 60);
+    expect(Number.parseInt(ageHeader.style.width, 10)).toBe(initialAgeWidth);
+    const table = nameHeader.closest('table') as HTMLTableElement;
+    expect(table.className).toContain('table-fixed');
+    expect(table.style.minWidth).toBe('100%');
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
+  });
+
+  test('dragging far left clamps to the deterministic header-control minimum', async () => {
+    localStorage.setItem('praetor_table_colwidths_clamped_drag', JSON.stringify({ name: 220 }));
+    render(<StandardTable<Row> title="Clamped Drag" data={sampleRows} columns={sampleColumns} />);
+
+    const nameHeader = screen.getByText('Name').closest('th') as HTMLTableCellElement;
+    const resizeHandle = nameHeader.querySelector(
+      '[data-column-resize-handle="name"]',
+    ) as HTMLElement;
+
+    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(220));
+
+    act(() => {
       fireEvent.mouseDown(resizeHandle, { clientX: 220 });
     });
 
-    await waitFor(() => expect(document.body.style.cursor).toBe('col-resize'));
-    expect(headerCell.style.width).toBe('');
-    expect(headerCell.closest('table')?.className).not.toContain('table-fixed');
+    await waitFor(() =>
+      expect(nameHeader.querySelector('[data-column-resize-line="name"]')?.className).toContain(
+        'bg-primary',
+      ),
+    );
 
     act(() => {
-      fireEvent.mouseMove(document, { clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: -500 });
+      fireEvent.mouseUp(document);
     });
 
-    await waitFor(() => expect(headerCell.style.width).toBe('160px'));
-    expect(headerCell.style.minWidth).toBe('160px');
-    const table = headerCell.closest('table') as HTMLTableElement;
-    await waitFor(() => expect(table.className).toContain('table-fixed'));
-    expect(table.style.width).toBe('279px');
-    expect(table.style.minWidth).toBe('100%');
-    expect(screen.getByText('Age').closest('th')?.style.minWidth).toBe('119px');
-    expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
-    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
-
-    act(() => {
-      fireEvent.mouseUp(document);
+    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(128));
+    await waitFor(() => {
+      const saved = JSON.parse(
+        localStorage.getItem('praetor_table_colwidths_clamped_drag') ?? '{}',
+      );
+      expect(saved.name).toBe(128);
     });
   });
 
-  test('fixed table fallback widths use measured full header text', async () => {
-    localStorage.setItem('praetor_table_colwidths_measured_headers', JSON.stringify({ name: 160 }));
+  test('fixed table fallback widths use deterministic full header text', () => {
+    localStorage.setItem(
+      'praetor_table_colwidths_deterministic_headers',
+      JSON.stringify({ name: 160 }),
+    );
     const columns = [
       { header: 'Name', accessorKey: 'name' as const, id: 'name' },
       { header: 'Very Long Header', accessorKey: 'age' as const, id: 'age' },
     ];
 
-    render(<StandardTable<Row> title="Measured Headers" data={sampleRows} columns={columns} />);
+    render(
+      <StandardTable<Row> title="Deterministic Headers" data={sampleRows} columns={columns} />,
+    );
 
     const longHeaderCell = screen.getByText('Very Long Header').closest('th') as HTMLElement;
-    const longHeaderContent = longHeaderCell.querySelector(
-      '[data-column-header-content="age"]',
-    ) as HTMLElement;
-    Object.defineProperty(longHeaderContent, 'scrollWidth', { configurable: true, value: 204 });
-
-    act(() => {
-      fireEvent.resize(window);
-    });
-
-    await waitFor(() => expect(longHeaderCell.style.minWidth).toBe('236px'));
+    expect(Number.parseInt(longHeaderCell.style.minWidth, 10)).toBeGreaterThan(200);
   });
 
   test('stored column widths are clamped to the full header label width', async () => {
@@ -426,28 +455,37 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
 
-  test('header measurement content stays intrinsic instead of filling stretched cells', () => {
-    render(
-      <StandardTable<Row> title="Intrinsic Headers" data={sampleRows} columns={sampleColumns} />,
+  test('stored widths below minimum are clamped once and do not widen on remount', async () => {
+    localStorage.setItem('praetor_table_colwidths_remount_width', JSON.stringify({ role: 32 }));
+    const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];
+    const { unmount } = render(
+      <StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />,
     );
 
-    const headerContent = screen
-      .getByText('Name')
-      .closest('th')
-      ?.querySelector('[data-column-header-content="name"]') as HTMLElement;
+    const firstHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
+    await waitFor(() => expect(Number.parseInt(firstHeader.style.width, 10)).toBe(137));
+    const savedAfterFirstRender = localStorage.getItem('praetor_table_colwidths_remount_width');
 
-    expect(headerContent.className).toContain('inline-flex');
-    expect(headerContent.className).toContain('w-max');
-    expect(Array.from(headerContent.classList)).not.toContain('flex');
+    unmount();
+    render(<StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />);
+
+    const secondHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
+    await waitFor(() => expect(Number.parseInt(secondHeader.style.width, 10)).toBe(137));
+    expect(localStorage.getItem('praetor_table_colwidths_remount_width')).toBe(
+      savedAfterFirstRender,
+    );
   });
 
-  test('stale stored column widths do not force fixed table layout', () => {
+  test('stale stored column widths are ignored while fixed layout remains deterministic', async () => {
     localStorage.setItem('praetor_table_colwidths_stale_widths', JSON.stringify({ missing: 160 }));
 
     render(<StandardTable<Row> title="Stale Widths" data={sampleRows} columns={sampleColumns} />);
 
-    expect(screen.getByRole('table').className).not.toContain('table-fixed');
-    expect(screen.getByText('Alice').closest('td')?.className).not.toContain('overflow-hidden');
+    expect(screen.getByRole('table').className).toContain('table-fixed');
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
+    await waitFor(() =>
+      expect(localStorage.getItem('praetor_table_colwidths_stale_widths')).toBe('{}'),
+    );
   });
 
   test('sorting descending by age reorders numerically (largest first)', () => {
@@ -567,10 +605,11 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-card');
-    expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(80);
+    expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(96);
     expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
     expect(within(actionsHeader).queryByRole('button')).not.toBeInTheDocument();
+    expect(actionsHeader.querySelector('[data-column-resize-handle="actions"]')).toBeNull();
     expect(actionsHeader.querySelector('svg')).toBeNull();
   });
 
@@ -636,7 +675,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
-    expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(80);
+    expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(96);
     expect(firstActionCell?.className).not.toContain('bg-background');
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
