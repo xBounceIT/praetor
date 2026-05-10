@@ -44,6 +44,25 @@ describe('<Tooltip />', () => {
     expect(tooltip.getAttribute('data-shadcn-theme')).toBe('light');
   });
 
+  test('renders above the shared modal overlay layer', async () => {
+    renderTooltip();
+
+    await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
+
+    const tooltip = await findTooltipContent();
+    expect(tooltip.className).toContain('z-[70]');
+  });
+
+  test('applies shared width and wrapping constraints', async () => {
+    renderTooltip();
+
+    await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
+
+    const tooltip = await findTooltipContent();
+    expect(tooltip.className).toContain('max-w-72');
+    expect(tooltip.className).toContain('whitespace-normal');
+  });
+
   test('updates portaled tooltip content when the resolved theme changes', async () => {
     renderTooltip();
 
