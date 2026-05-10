@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { normalizeClientOfferItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -36,7 +37,6 @@ import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OfferVersionsPanel from './OfferVersionsPanel';
@@ -486,115 +486,140 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         return (
           <div className="flex justify-end gap-2">
             {row.linkedQuoteId && onViewQuote && (
-              <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
-                {() => (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewQuote(row.linkedQuoteId);
+                      }}
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onViewQuote(row.linkedQuoteId);
+                      openEditModal(row);
                     }}
                     className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                   >
-                    <i className="fa-solid fa-link"></i>
+                    <i className="fa-solid fa-pen-to-square"></i>
                   </button>
-                )}
-              </Tooltip>
-            )}
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEditModal(row);
-                  }}
-                  className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
             {row.status === 'draft' && (
-              <Tooltip label={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUpdateOffer(row.id, { status: 'sent' });
-                    }}
-                    className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
-                  >
-                    <i className="fa-solid fa-paper-plane"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateOffer(row.id, { status: 'sent' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
+                    >
+                      <i className="fa-solid fa-paper-plane"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
+                </TooltipContent>
               </Tooltip>
             )}
             {row.status === 'sent' && (
               <>
-                <Tooltip
-                  label={t('sales:clientOffers.markAccepted', {
-                    defaultValue: 'Mark as accepted',
-                  })}
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateOffer(row.id, { status: 'accepted' });
-                      }}
-                      className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
-                    >
-                      <i className="fa-solid fa-check"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateOffer(row.id, { status: 'accepted' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('sales:clientOffers.markAccepted', {
+                      defaultValue: 'Mark as accepted',
+                    })}
+                  </TooltipContent>
                 </Tooltip>
-                <Tooltip
-                  label={t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateOffer(row.id, { status: 'denied' });
-                      }}
-                      className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateOffer(row.id, { status: 'denied' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
+                  </TooltipContent>
                 </Tooltip>
               </>
             )}
             {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
-              <Tooltip
-                label={t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
-              >
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCreateClientsOrder(row);
-                    }}
-                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
-                  >
-                    <i className="fa-solid fa-cart-plus"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCreateClientsOrder(row);
+                      }}
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    >
+                      <i className="fa-solid fa-cart-plus"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
+                </TooltipContent>
               </Tooltip>
             )}
             {row.status === 'draft' && (
-              <Tooltip label={t('common:buttons.delete')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOfferToDelete(row);
-                      setIsDeleteConfirmOpen(true);
-                    }}
-                    className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOfferToDelete(row);
+                        setIsDeleteConfirmOpen(true);
+                      }}
+                      className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
               </Tooltip>
             )}
           </div>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { writeTextToClipboard } from '../../utils/clipboard';
@@ -11,7 +12,6 @@ import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -1445,59 +1445,65 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 {userMessage.content}
                               </div>
                               <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all">
-                                <Tooltip
-                                  label={
-                                    copiedMessageId === userMessage.id
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handleCopy(userMessage.id, userMessage.content)
+                                        }
+                                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
+                                      >
+                                        <i
+                                          className={
+                                            copiedMessageId === userMessage.id
+                                              ? 'fa-solid fa-check text-green-500'
+                                              : 'fa-regular fa-copy'
+                                          }
+                                        />
+                                      </button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {copiedMessageId === userMessage.id
                                       ? t('notifications:success.copied', {
                                           defaultValue: 'Copied to clipboard',
                                         })
-                                      : t('common:buttons.copy', { defaultValue: 'Copy' })
-                                  }
-                                >
-                                  {() => (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleCopy(userMessage.id, userMessage.content)
-                                      }
-                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
-                                    >
-                                      <i
-                                        className={
-                                          copiedMessageId === userMessage.id
-                                            ? 'fa-solid fa-check text-green-500'
-                                            : 'fa-regular fa-copy'
-                                        }
-                                      />
-                                    </button>
-                                  )}
+                                      : t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                  </TooltipContent>
                                 </Tooltip>
-                                <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
-                                  {() => (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingMessageId(userMessage.id);
-                                        setEditingDraft(userMessage.content);
-                                      }}
-                                      disabled={
-                                        isSending ||
-                                        !canSend ||
-                                        editingMessageId !== '' ||
-                                        userMessage.id.startsWith('tmp-')
-                                      }
-                                      className={`p-1.5 rounded-lg transition-colors ${
-                                        isSending ||
-                                        !canSend ||
-                                        editingMessageId !== '' ||
-                                        userMessage.id.startsWith('tmp-')
-                                          ? 'text-zinc-300 cursor-not-allowed'
-                                          : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
-                                      }`}
-                                    >
-                                      <i className="fa-regular fa-pen-to-square" />
-                                    </button>
-                                  )}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingMessageId(userMessage.id);
+                                          setEditingDraft(userMessage.content);
+                                        }}
+                                        disabled={
+                                          isSending ||
+                                          !canSend ||
+                                          editingMessageId !== '' ||
+                                          userMessage.id.startsWith('tmp-')
+                                        }
+                                        className={`p-1.5 rounded-lg transition-colors ${
+                                          isSending ||
+                                          !canSend ||
+                                          editingMessageId !== '' ||
+                                          userMessage.id.startsWith('tmp-')
+                                            ? 'text-zinc-300 cursor-not-allowed'
+                                            : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                        }`}
+                                      >
+                                        <i className="fa-regular fa-pen-to-square" />
+                                      </button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {t('common:buttons.edit', { defaultValue: 'Edit' })}
+                                  </TooltipContent>
                                 </Tooltip>
                               </div>
                             </div>
@@ -1715,50 +1721,61 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               {assistantMessage.content}
                             </ReactMarkdown>
                             <div className="mt-2 flex justify-start items-center gap-1.5">
-                              <Tooltip
-                                label={
-                                  copiedMessageId === assistantMessage.id
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleCopy(
+                                          assistantMessage.id,
+                                          assistantMessage.content,
+                                        )
+                                      }
+                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
+                                      aria-label={t('common:buttons.copy', {
+                                        defaultValue: 'Copy',
+                                      })}
+                                    >
+                                      <i
+                                        className={
+                                          copiedMessageId === assistantMessage.id
+                                            ? 'fa-solid fa-check text-green-500'
+                                            : 'fa-regular fa-copy'
+                                        }
+                                      />
+                                    </button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {copiedMessageId === assistantMessage.id
                                     ? t('notifications:success.copied', {
                                         defaultValue: 'Copied to clipboard',
                                       })
-                                    : t('common:buttons.copy', { defaultValue: 'Copy' })
-                                }
-                              >
-                                {() => (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleCopy(assistantMessage.id, assistantMessage.content)
-                                    }
-                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
-                                    aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
-                                  >
-                                    <i
-                                      className={
-                                        copiedMessageId === assistantMessage.id
-                                          ? 'fa-solid fa-check text-green-500'
-                                          : 'fa-regular fa-copy'
-                                      }
-                                    />
-                                  </button>
-                                )}
+                                    : t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                </TooltipContent>
                               </Tooltip>
-                              <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
-                                {() => (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleRetryMessage(assistantMessage.id)}
-                                    disabled={!canRetryAssistantMessage}
-                                    className={`p-1.5 rounded-lg transition-colors ${
-                                      canRetryAssistantMessage
-                                        ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
-                                        : 'text-zinc-300 cursor-not-allowed'
-                                    }`}
-                                    aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
-                                  >
-                                    <i className="fa-solid fa-rotate-right" />
-                                  </button>
-                                )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleRetryMessage(assistantMessage.id)}
+                                      disabled={!canRetryAssistantMessage}
+                                      className={`p-1.5 rounded-lg transition-colors ${
+                                        canRetryAssistantMessage
+                                          ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
+                                          : 'text-zinc-300 cursor-not-allowed'
+                                      }`}
+                                      aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                    >
+                                      <i className="fa-solid fa-rotate-right" />
+                                    </button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                </TooltipContent>
                               </Tooltip>
                               {attemptCount > 1 && (
                                 <div className="inline-flex items-center gap-1">

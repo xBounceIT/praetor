@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
@@ -9,7 +10,6 @@ import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -418,31 +418,37 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         align: 'right' as const,
         cell: ({ row }: { row: Invoice }) => (
           <div className="flex justify-end gap-2">
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openEditModal(row);
-                  }}
-                  className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEditModal(row);
+                    }}
+                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    confirmDelete(row);
-                  }}
-                  className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      confirmDelete(row);
+                    }}
+                    className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           </div>
         ),

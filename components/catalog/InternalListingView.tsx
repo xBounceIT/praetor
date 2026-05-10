@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
   InternalProductCategory,
@@ -14,7 +15,6 @@ import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface InternalListingViewProps {
@@ -867,34 +867,38 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                       return (
                         <div className="flex items-center gap-1">
-                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
-                            {() => (
-                              <button
-                                onClick={() => handleEditType(type)}
-                                className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleEditType(type)}
+                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip
-                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
-                            disabled={!isDeleteBlocked}
-                            tooltipClassName="z-[80]"
-                          >
-                            {() => (
-                              <button
-                                onClick={() => handleDeleteType(type)}
-                                disabled={isDeleteBlocked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isDeleteBlocked
-                                    ? 'text-zinc-300 cursor-not-allowed'
-                                    : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
-                            )}
+                          <Tooltip disabled={!isDeleteBlocked}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleDeleteType(type)}
+                                  disabled={isDeleteBlocked}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isDeleteBlocked
+                                      ? 'text-zinc-300 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isDeleteBlocked ? deleteBlockedMessage : ''}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       );
@@ -1019,34 +1023,38 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                       return (
                         <div className="flex items-center gap-1">
-                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
-                            {() => (
-                              <button
-                                onClick={() => handleEditCategory(category)}
-                                className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleEditCategory(category)}
+                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip
-                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
-                            disabled={!isDeleteBlocked}
-                            tooltipClassName="z-[80]"
-                          >
-                            {() => (
-                              <button
-                                onClick={() => handleDeleteCategory(category)}
-                                disabled={isDeleteBlocked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isDeleteBlocked
-                                    ? 'text-zinc-300 cursor-not-allowed'
-                                    : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
-                            )}
+                          <Tooltip disabled={!isDeleteBlocked}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleDeleteCategory(category)}
+                                  disabled={isDeleteBlocked}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isDeleteBlocked
+                                      ? 'text-zinc-300 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isDeleteBlocked ? deleteBlockedMessage : ''}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       );
@@ -1174,34 +1182,38 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                       return (
                         <div className="flex items-center gap-1">
-                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
-                            {() => (
-                              <button
-                                onClick={() => handleEditSubcategory(subcategory)}
-                                className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleEditSubcategory(subcategory)}
+                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip
-                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
-                            disabled={!isDeleteBlocked}
-                            tooltipClassName="z-[80]"
-                          >
-                            {() => (
-                              <button
-                                onClick={() => handleDeleteSubcategory(subcategory)}
-                                disabled={isDeleteBlocked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isDeleteBlocked
-                                    ? 'text-zinc-300 cursor-not-allowed'
-                                    : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
-                            )}
+                          <Tooltip disabled={!isDeleteBlocked}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleDeleteSubcategory(subcategory)}
+                                  disabled={isDeleteBlocked}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isDeleteBlocked
+                                      ? 'text-zinc-300 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isDeleteBlocked ? deleteBlockedMessage : ''}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       );
@@ -1689,45 +1701,49 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             disableFiltering: true,
             cell: ({ row: p }) => (
               <div className="flex justify-end gap-2">
-                <Tooltip
-                  label={
-                    p.isDisabled
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (p.isDisabled) {
+                            onUpdateProduct(p.id, { isDisabled: false });
+                          } else {
+                            onUpdateProduct(p.id, { isDisabled: true });
+                          }
+                        }}
+                        className={`p-2 rounded-lg transition-all ${
+                          p.isDisabled
+                            ? 'text-praetor hover:bg-emerald-50'
+                            : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                        }`}
+                      >
+                        <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {p.isDisabled
                       ? t('crm:internalListing.enableProduct')
-                      : t('crm:internalListing.disableProduct')
-                  }
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (p.isDisabled) {
-                          onUpdateProduct(p.id, { isDisabled: false });
-                        } else {
-                          onUpdateProduct(p.id, { isDisabled: true });
-                        }
-                      }}
-                      className={`p-2 rounded-lg transition-all ${
-                        p.isDisabled
-                          ? 'text-praetor hover:bg-emerald-50'
-                          : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
-                      }`}
-                    >
-                      <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                    </button>
-                  )}
+                      : t('crm:internalListing.disableProduct')}
+                  </TooltipContent>
                 </Tooltip>
-                <Tooltip label={t('crm:internalListing.deleteProductTooltip')}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        confirmDelete(p);
-                      }}
-                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          confirmDelete(p);
+                        }}
+                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('crm:internalListing.deleteProductTooltip')}</TooltipContent>
                 </Tooltip>
               </div>
             ),

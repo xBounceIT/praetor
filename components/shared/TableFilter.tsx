@@ -1,8 +1,8 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Checkbox from './Checkbox';
-import Tooltip from './Tooltip';
 
 export interface TableFilterProps {
   title: string;
@@ -130,12 +130,15 @@ const TableFilter: React.FC<TableFilterProps> = ({
                 checked={selectedValues.includes(opt)}
                 onChange={() => handleCheckboxChange(opt)}
               />
-              <Tooltip label={displayLabel(opt)}>
-                {() => (
-                  <span className="text-[11px] text-zinc-600 truncate select-none">
-                    {displayLabel(opt)}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <span className="text-[11px] text-zinc-600 truncate select-none">
+                      {displayLabel(opt)}
+                    </span>
                   </span>
-                )}
+                </TooltipTrigger>
+                <TooltipContent>{displayLabel(opt)}</TooltipContent>
               </Tooltip>
             </label>
           ))

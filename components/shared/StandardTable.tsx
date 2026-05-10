@@ -1,6 +1,7 @@
 import { type ReactNode, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
@@ -24,7 +25,6 @@ import {
 } from './customViewHelpers';
 import Modal from './Modal';
 import TableFilter from './TableFilter';
-import Tooltip from './Tooltip';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -762,25 +762,28 @@ const StandardTable = <T extends object>({
   }) => {
     const label = t(tooltipKey);
     return (
-      <Tooltip label={label} position="bottom" disabled={tooltipDisabled}>
-        {() => (
-          <button
-            type="button"
-            ref={buttonRef}
-            aria-label={label}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-            disabled={disabled}
-            className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              active ? 'bg-zinc-100 text-praetor' : 'bg-white text-zinc-500 hover:bg-zinc-100'
-            }`}
-          >
-            <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
-            {text && <span className="text-[10px] font-bold">{text}</span>}
-          </button>
-        )}
+      <Tooltip disabled={tooltipDisabled}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <button
+              type="button"
+              ref={buttonRef}
+              aria-label={label}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick();
+              }}
+              disabled={disabled}
+              className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                active ? 'bg-zinc-100 text-praetor' : 'bg-white text-zinc-500 hover:bg-zinc-100'
+              }`}
+            >
+              <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
+              {text && <span className="text-[10px] font-bold">{text}</span>}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={'bottom'}>{label}</TooltipContent>
       </Tooltip>
     );
   };

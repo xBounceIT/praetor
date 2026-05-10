@@ -1,13 +1,13 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api';
 import type { User, WorkUnit } from '../types';
 import { buildPermission, hasPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
-import Tooltip from './shared/Tooltip';
 
 export interface WorkUnitPayload {
   name: string;
@@ -213,27 +213,33 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               {(canUpdateWorkUnits || canDeleteWorkUnits) && (
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   {canUpdateWorkUnits && (
-                    <Tooltip label="Edit">
-                      {() => (
-                        <button
-                          onClick={() => openEditModal(unit)}
-                          className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
-                        >
-                          <i className="fa-solid fa-pen"></i>
-                        </button>
-                      )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <button
+                            onClick={() => openEditModal(unit)}
+                            className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
+                          >
+                            <i className="fa-solid fa-pen"></i>
+                          </button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit</TooltipContent>
                     </Tooltip>
                   )}
                   {canDeleteWorkUnits && (
-                    <Tooltip label="Delete">
-                      {() => (
-                        <button
-                          onClick={() => confirmDelete(unit)}
-                          className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <button
+                            onClick={() => confirmDelete(unit)}
+                            className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete</TooltipContent>
                     </Tooltip>
                   )}
                 </div>

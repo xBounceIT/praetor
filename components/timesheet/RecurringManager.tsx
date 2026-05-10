@@ -1,13 +1,13 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import RecurringTaskEditModal from './RecurringTaskEditModal';
 
 export interface RecurringManagerProps {
@@ -135,33 +135,39 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         className: 'w-px!',
         cell: ({ row: task }) => (
           <div className="flex items-center justify-end gap-1">
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingTask(task);
-                  }}
-                  className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-pen text-xs"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTask(task);
+                    }}
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-pen text-xs"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingTask(task);
-                  }}
-                  className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingTask(task);
+                    }}
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           </div>
         ),

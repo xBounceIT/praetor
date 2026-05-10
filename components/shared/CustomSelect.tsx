@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import Tooltip from './Tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface Option {
   id: string;
@@ -268,18 +268,17 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               ))}
             </div>
           ) : (
-            <Tooltip
-              label={tooltipLabel}
-              disabled={!tooltipLabel}
-              wrapperClassName="min-w-0 w-full"
-            >
-              {() => (
-                <span
-                  className={`w-full truncate ${!isMulti && value ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}`}
-                >
-                  {buttonLabel}
+            <Tooltip disabled={!tooltipLabel}>
+              <TooltipTrigger asChild>
+                <span className="inline-flex min-w-0 w-full">
+                  <span
+                    className={`w-full truncate ${!isMulti && value ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}`}
+                  >
+                    {buttonLabel}
+                  </span>
                 </span>
-              )}
+              </TooltipTrigger>
+              <TooltipContent>{tooltipLabel}</TooltipContent>
             </Tooltip>
           )}
         </div>
