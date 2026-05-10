@@ -6,9 +6,9 @@ import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -490,7 +490,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.client')}
                   </label>
-                  <CustomSelect
+                  <SelectControl
                     options={activeClients.map((client) => ({
                       id: client.id,
                       name: client.name,
@@ -563,7 +563,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   <label className="ml-1 text-xs font-bold text-zinc-500">
                     {t('accounting:clientsInvoices.status')}
                   </label>
-                  <CustomSelect
+                  <SelectControl
                     options={statusOptions}
                     value={formData.status || 'draft'}
                     onChange={(value) =>
@@ -623,7 +623,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                               {t('common:labels.product')}
                             </label>
-                            <CustomSelect
+                            <SelectControl
                               options={[
                                 { id: '', name: t('accounting:clientsInvoices.customItem') },
                                 ...activeProducts.map((product) => ({

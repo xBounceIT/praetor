@@ -6,10 +6,10 @@ import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
@@ -594,7 +594,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-zinc-500 ml-1">{t('tasks.project')}</label>
-              <CustomSelect
+              <SelectControl
                 options={projectSelectOptions}
                 value={projectId}
                 onChange={(val) => setProjectId(val as string)}
@@ -660,7 +660,6 @@ const TasksView: React.FC<TasksViewProps> = ({
                           setTempIsDisabled(!tempIsDisabled);
                         }
                       }}
-                      color="red"
                       disabled={isInheritedDisabled}
                     />
                   </div>
@@ -749,7 +748,7 @@ const TasksView: React.FC<TasksViewProps> = ({
               <span className="text-xs font-bold text-zinc-500">
                 {t('common:labels.rowsPerPage')}
               </span>
-              <CustomSelect
+              <SelectControl
                 options={[
                   { id: '5', name: '5' },
                   { id: '10', name: '10' },

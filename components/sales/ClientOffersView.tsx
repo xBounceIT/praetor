@@ -32,10 +32,10 @@ import {
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -184,7 +184,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       );
     }
     return (
-      <CustomSelect
+      <SelectControl
         options={productOptions}
         value={item.productId}
         onChange={(val) => updateItem(index, 'productId', val as string)}
@@ -899,7 +899,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientOffers.client', { defaultValue: 'Client' })}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={clientOptions}
                       value={formData.clientId || ''}
                       onChange={(value) => handleClientChange(value as string)}
@@ -936,7 +936,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientOffers.paymentTerms', { defaultValue: 'Payment terms' })}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(value) =>
@@ -1081,7 +1081,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     statusLabel={statusLabel}
                                   />
                                 </div>
-                                <CustomSelect
+                                <SelectControl
                                   options={supplierQuoteSelectOptions}
                                   value={item.supplierQuoteItemId || 'none'}
                                   onChange={(val) =>
@@ -1244,7 +1244,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           <div className="hidden lg:flex gap-2 items-center">
                             <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
                               <div className="col-span-3 min-w-0">
-                                <CustomSelect
+                                <SelectControl
                                   options={supplierQuoteSelectOptions}
                                   value={item.supplierQuoteItemId || 'none'}
                                   onChange={(val) =>

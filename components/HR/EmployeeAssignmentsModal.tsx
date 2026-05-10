@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 
 interface EmployeeAssignmentsModalProps {
   user: User | null;
@@ -352,7 +352,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <CustomSelect
+                <SelectControl
                   options={clientFilterOptions}
                   value={filterClientId}
                   onChange={(value) => setFilterClientId(value as string)}
@@ -360,7 +360,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                   searchable={true}
                   buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                 />
-                <CustomSelect
+                <SelectControl
                   options={projectFilterOptions}
                   value={filterProjectId}
                   onChange={(value) => setFilterProjectId(value as string)}

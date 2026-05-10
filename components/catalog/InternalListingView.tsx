@@ -11,9 +11,9 @@ import type {
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
-import CustomSelect, { type Option } from '../shared/CustomSelect';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -758,7 +758,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     className="flex-1 text-sm px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
                   />
-                  <CustomSelect
+                  <SelectControl
                     options={[
                       { id: 'unit', name: t('crm:internalListing.unit') },
                       { id: 'hours', name: t('crm:internalListing.hour') },
@@ -1332,7 +1332,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                     </button>
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={typeOptions}
                     value={formData.type || (productTypes[0]?.name ?? '')}
                     onChange={(val) => handleTypeChange(val as string)}
@@ -1361,7 +1361,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                     </button>
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={categoryOptions}
                     value={formData.category || ''}
                     onChange={(val) => {
@@ -1391,7 +1391,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                     </button>
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={subcategoryOptions}
                     value={formData.subcategory || ''}
                     onChange={(val) =>

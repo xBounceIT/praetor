@@ -13,8 +13,8 @@ import { formatInsertDateTime } from '../../utils/date';
 import { formatDiscountValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -561,7 +561,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:supplierOrders.supplier')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={supplierOptions}
                       value={formData.supplierId || ''}
                       onChange={(value) => {
@@ -588,7 +588,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:supplierOrders.paymentTerms')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(value) =>
@@ -641,7 +641,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-3"
                         >
                           <div className="lg:hidden space-y-2">
-                            <CustomSelect
+                            <SelectControl
                               options={productOptions}
                               value={item.productId}
                               onChange={(value) => updateItem(index, 'productId', value as string)}
@@ -722,7 +722,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           <div className="hidden lg:flex items-start gap-2">
                             <div className="grid flex-1 grid-cols-12 gap-2">
                               <div className="lg:col-span-3 min-w-0">
-                                <CustomSelect
+                                <SelectControl
                                   options={productOptions}
                                   value={item.productId}
                                   onChange={(value) =>

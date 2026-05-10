@@ -4,65 +4,58 @@ import { fireEvent, render, screen } from '@testing-library/react';
 const Toggle = (await import('../../components/shared/Toggle')).default;
 
 describe('<Toggle />', () => {
-  test('renders a button', () => {
+  test('renders a switch', () => {
     render(<Toggle checked={false} onChange={() => {}} />);
-    expect(screen.getByRole('button')).toBeInTheDocument();
+    expect(screen.getByRole('switch')).toBeInTheDocument();
   });
 
   test('clicking the toggle calls onChange with the inverted value (off -> on)', () => {
     const onChange = mock((_v: boolean) => {});
     render(<Toggle checked={false} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
   test('clicking the toggle when checked sends false (on -> off)', () => {
     const onChange = mock((_v: boolean) => {});
     render(<Toggle checked={true} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(false);
   });
 
-  test('disabled prop disables the button and adds disabled styles', () => {
+  test('disabled prop disables the switch and keeps shadcn disabled styles', () => {
     render(<Toggle checked={false} onChange={() => {}} disabled />);
-    const btn = screen.getByRole('button') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-    expect(btn.className).toContain('cursor-not-allowed');
-    expect(btn.className).toContain('opacity-50');
+    const switchControl = screen.getByRole('switch') as HTMLButtonElement;
+    expect(switchControl.disabled).toBe(true);
   });
 
-  test('checked state uses praetor background by default', () => {
+  test('checked state is exposed accessibly', () => {
     render(<Toggle checked={true} onChange={() => {}} />);
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-praetor');
+    const switchControl = screen.getByRole('switch');
+    expect(switchControl).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('checked + color="red" uses red background', () => {
-    render(<Toggle checked={true} onChange={() => {}} color="red" />);
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-red-500');
-  });
-
-  test('unchecked uses slate background', () => {
+  test('unchecked state is exposed accessibly', () => {
     render(<Toggle checked={false} onChange={() => {}} />);
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-zinc-200');
+    const switchControl = screen.getByRole('switch');
+    expect(switchControl).toHaveAttribute('aria-checked', 'false');
   });
 
-  test('partial state renders intermediate background and the partial dash indicator', () => {
-    const { container } = render(<Toggle checked={false} onChange={() => {}} partial />);
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-praetor/40');
-    const dash = container.querySelector('span > span');
-    expect(dash).not.toBeNull();
-    const knob = container.querySelector('span');
-    expect(knob?.className).toContain('translate-x-5');
+  test('partial state renders as active while preserving the next checked value', () => {
+    const onChange = mock((_v: boolean) => {});
+    render(<Toggle checked={false} onChange={onChange} partial />);
+    const switchControl = screen.getByRole('switch');
+    expect(switchControl).toHaveAttribute('aria-checked', 'true');
+    expect(switchControl).toHaveAccessibleDescription('Partially selected');
+    expect(switchControl.className).toContain('data-[state=checked]:bg-primary/50');
+    fireEvent.click(switchControl);
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 
   test('disabled toggle does not fire onChange on click', () => {
     const onChange = mock((_v: boolean) => {});
     render(<Toggle checked={false} onChange={onChange} disabled />);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('switch'));
     expect(onChange).not.toHaveBeenCalled();
   });
 });

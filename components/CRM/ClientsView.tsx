@@ -12,9 +12,9 @@ import type {
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 
@@ -1164,7 +1164,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   <label className="text-xs font-bold text-zinc-500 ml-1">
                     {t('crm:clients.clientType')}
                   </label>
-                  <CustomSelect
+                  <SelectControl
                     options={typeOptions}
                     value={formData.type || 'company'}
                     onChange={(val) =>
@@ -1475,7 +1475,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       </button>
                     )}
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={sectorOptions}
                     value={formData.sector || ''}
                     onChange={(val) =>
@@ -1504,7 +1504,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       </button>
                     )}
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={numberOfEmployeesOptions}
                     value={formData.numberOfEmployees || ''}
                     onChange={(val) =>
@@ -1533,7 +1533,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       </button>
                     )}
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={revenueOptions}
                     value={formData.revenue || ''}
                     onChange={(val) =>
@@ -1562,7 +1562,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       </button>
                     )}
                   </div>
-                  <CustomSelect
+                  <SelectControl
                     options={officeCountRangeOptions}
                     value={formData.officeCountRange || ''}
                     onChange={(val) =>

@@ -34,10 +34,10 @@ import {
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -723,7 +723,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       );
     }
     return (
-      <CustomSelect
+      <SelectControl
         options={activeProductOptions}
         value={item.productId}
         onChange={(val) => updateProductRow(index, 'productId', val as string)}
@@ -1323,7 +1323,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.client')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                       value={formData.clientId || ''}
                       onChange={(val) => handleClientChange(val as string)}
@@ -1367,7 +1367,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <label className="text-xs font-bold text-zinc-500 ml-1">
                       {t('sales:clientQuotes.paymentTerms')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(val) =>
@@ -1510,7 +1510,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     statusLabel={statusLabel}
                                   />
                                 </div>
-                                <CustomSelect
+                                <SelectControl
                                   options={[
                                     {
                                       id: 'none',
@@ -1685,7 +1685,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           <div className="hidden lg:flex gap-2 items-center">
                             <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
                               <div className="col-span-3 min-w-0">
-                                <CustomSelect
+                                <SelectControl
                                   options={[
                                     {
                                       id: 'none',

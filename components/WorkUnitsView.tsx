@@ -6,9 +6,9 @@ import { workUnitsApi } from '../services/api';
 import type { User, WorkUnit } from '../types';
 import { buildPermission, hasPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
-import CustomSelect from './shared/CustomSelect';
 import HeaderAddButton from './shared/HeaderAddButton';
 import Modal from './shared/Modal';
+import SelectControl from './shared/SelectControl';
 
 export interface WorkUnitPayload {
   name: string;
@@ -364,7 +364,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               )}
             </div>
             <div>
-              <CustomSelect
+              <SelectControl
                 label={t('hr:workUnits.managers')}
                 options={managerOptions}
                 value={selectedManagerIds}
@@ -445,7 +445,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               )}
             </div>
             <div>
-              <CustomSelect
+              <SelectControl
                 label={t('hr:workUnits.managers')}
                 options={managerOptions}
                 value={selectedManagerIds}

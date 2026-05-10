@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api';
 import type { AuditLogEntry } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
 import DatePickerButton from '../shared/DatePickerButton';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 
 const humanizeToken = (value: string) =>
@@ -331,7 +331,7 @@ const LogsView: React.FC = () => {
         onClear={handleEndDateClear}
         buttonClassName={tableToolbarButtonClassName}
       />
-      <CustomSelect
+      <SelectControl
         options={timeRangeOptions}
         value={dropdownValue}
         onChange={handleTimeRangeChange}

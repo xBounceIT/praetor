@@ -9,8 +9,8 @@ import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { writeTextToClipboard } from '../../utils/clipboard';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
 
 export interface AiReportingViewProps {
@@ -1242,7 +1242,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
           <div className="shrink-0 flex items-center gap-3">
             <div className="w-48 sm:w-56 md:w-72">
-              <CustomSelect
+              <SelectControl
                 options={sessionOptions}
                 value={activeSessionId}
                 onChange={(value) => {

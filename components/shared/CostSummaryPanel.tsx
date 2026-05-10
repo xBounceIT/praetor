@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { DiscountType } from '../../types';
-import CustomSelect from './CustomSelect';
+import SelectControl from './SelectControl';
 import ValidatedNumberInput from './ValidatedNumberInput';
 
 export interface CostSummaryPanelProps {
@@ -65,7 +65,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
               disabled={globalDiscount.disabled}
               className="w-20 text-sm px-2 py-1.5 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            <CustomSelect
+            <SelectControl
               options={[
                 { id: 'percentage', name: '%' },
                 { id: 'currency', name: currency },

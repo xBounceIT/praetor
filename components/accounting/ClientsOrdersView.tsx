@@ -30,8 +30,8 @@ import {
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
@@ -780,7 +780,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.client')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                       value={formData.clientId || ''}
                       onChange={(val) => handleClientChange(val as string)}
@@ -805,7 +805,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <label className="ml-1 text-xs font-bold text-zinc-500">
                       {t('accounting:clientsOrders.paymentTerms')}
                     </label>
-                    <CustomSelect
+                    <SelectControl
                       options={paymentTermsOptions}
                       value={formData.paymentTerms || 'immediate'}
                       onChange={(val) =>
@@ -937,7 +937,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
                                   {t('sales:clientQuotes.productsServices')}
                                 </label>
-                                <CustomSelect
+                                <SelectControl
                                   options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
                                   value={item.productId}
                                   onChange={(val) =>
