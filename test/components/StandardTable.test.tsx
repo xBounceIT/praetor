@@ -825,7 +825,7 @@ describe('<StandardTable />', () => {
     expect(previousButton.className).toContain('!h-7');
     expect(previousButton.className).toContain('!text-sm');
     expect(previousButton.className).toContain('!leading-[var(--text-sm--line-height)]');
-    expect(previousButton.className).toContain('!font-normal');
+    expect(previousButton.className).toContain('!font-medium');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
@@ -866,7 +866,7 @@ describe('<StandardTable />', () => {
       expect(button.className).toContain('!h-7');
       expect(button.className).toContain('!text-sm');
       expect(button.className).toContain('!leading-[var(--text-sm--line-height)]');
-      expect(button.className).toContain('!font-normal');
+      expect(button.className).toContain('!font-medium');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
 

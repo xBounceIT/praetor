@@ -100,7 +100,7 @@ const HEADER_RESIZE_EXTRA_WIDTH = 64;
 const ACTION_COLUMN_WIDTH = 80;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const TABLE_CONTROL_BUTTON_CLASSNAME =
-  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-normal';
+  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
