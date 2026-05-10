@@ -47,11 +47,11 @@
   --color-accent: #9a2222;
   --color-neutral: #b8b5b3;
   --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-foreground: var(--foreground);
   --sidebar-primary: hsl(240 5.9% 10%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
   --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
@@ -139,11 +139,11 @@ input[type="number"] {
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.552 0.016 285.938);
   --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-foreground: var(--foreground);
   --sidebar-primary: hsl(224.3 76.3% 48%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
@@ -175,6 +175,110 @@ input[type="number"] {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Legacy pages still use neutral Tailwind utilities. Keep them readable inside the
+   scoped shadcn dark theme until those views are migrated to semantic tokens. */
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .text-black,
+    .text-zinc-950,
+    .text-zinc-900,
+    .text-zinc-800,
+    .text-zinc-700,
+    .text-gray-950,
+    .text-gray-900,
+    .text-gray-800,
+    .text-gray-700,
+    .text-slate-950,
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700
+  ) {
+  color: var(--foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .text-zinc-600,
+    .text-zinc-500,
+    .text-zinc-400,
+    .text-zinc-300,
+    .text-gray-600,
+    .text-gray-500,
+    .text-gray-400,
+    .text-gray-300,
+    .text-slate-600,
+    .text-slate-500,
+    .text-slate-400,
+    .text-slate-300
+  ) {
+  color: var(--muted-foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .bg-white,
+    .bg-white\/80,
+    .bg-zinc-50,
+    .bg-zinc-50\/50,
+    .bg-gray-50,
+    .bg-gray-50\/50,
+    .bg-slate-50,
+    .bg-slate-50\/50
+  ) {
+  background-color: var(--card);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .bg-zinc-100,
+    .bg-zinc-100\/30,
+    .bg-gray-100,
+    .bg-gray-100\/30,
+    .bg-slate-100,
+    .bg-slate-100\/30,
+    .bg-zinc-200,
+    .bg-gray-200,
+    .bg-slate-200
+  ) {
+  background-color: var(--muted);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .hover\:bg-zinc-50:hover,
+    .hover\:bg-zinc-50\/50:hover,
+    .hover\:bg-gray-50:hover,
+    .hover\:bg-gray-50\/50:hover,
+    .hover\:bg-slate-50:hover,
+    .hover\:bg-slate-50\/50:hover,
+    .hover\:bg-zinc-100:hover,
+    .hover\:bg-gray-100:hover,
+    .hover\:bg-slate-100:hover,
+    .hover\:bg-zinc-200:hover,
+    .hover\:bg-zinc-200\/50:hover,
+    .hover\:bg-gray-200:hover,
+    .hover\:bg-gray-200\/50:hover,
+    .hover\:bg-slate-200:hover,
+    .hover\:bg-slate-200\/50:hover
+  ) {
+  background-color: var(--accent);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .border-zinc-100,
+    .border-zinc-200,
+    .border-zinc-300,
+    .border-gray-100,
+    .border-gray-200,
+    .border-gray-300,
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300
+  ) {
+  border-color: var(--border);
 }
 
 @theme inline {
@@ -242,4 +346,24 @@ input[type="number"] {
 
 .sidebar-entry-content[data-state="closed"] {
   animation: sidebar-entry-up 100ms ease-in;
+}
+
+.standard-table-value-cell :where(:not([data-status-badge], [data-status-badge] *)) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  letter-spacing: normal !important;
+  padding: 0 !important;
+  text-transform: none !important;
+}
+
+.standard-table-value-cell i {
+  display: none !important;
+}
+
+.standard-table-value-cell [data-status-badge] i {
+  display: inline-block !important;
 }

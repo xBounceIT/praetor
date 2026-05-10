@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import type { Role, User } from '../../types';
-import { applyTheme } from '../../utils/theme';
+import { applyTheme, THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -85,25 +85,50 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
   });
 
+  test('main content is scoped to the selected shadcn theme', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    const { container } = renderLayout();
+
+    const main = container.querySelector('[data-slot="sidebar-inset"]');
+    expect(main?.hasAttribute('data-shadcn-theme-scope')).toBe(true);
+    expect(main?.className).toContain('shadcn-theme-bridge');
+    expect(main?.className).toContain('text-foreground');
+    await waitFor(() => expect(main?.getAttribute('data-shadcn-theme')).toBe('dark'));
+  });
+
   test('sidebar navigation text uses shadcn sidebar color tokens', () => {
     const { container } = renderLayout();
 
+    const sidebarContainer = container.querySelector('[data-slot="sidebar-container"]');
     const activeButton = container.querySelector(
       '[data-sidebar="menu-button"][data-active="true"]',
     );
     const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
+    const brandLogo = brandButton?.querySelector('svg')?.parentElement;
     const brandSubtitle = screen.getByText('roles.manager workspace');
+    const avatarFallback = screen.getByText('TU');
 
+    expect(sidebarContainer?.className).toContain('border-sidebar-border');
+    expect(sidebarContainer?.className).not.toContain('border-zinc-200');
     expect(activeButton?.className).toContain('text-sidebar-foreground');
     expect(activeButton?.className).toContain('data-[active=true]:text-sidebar-accent-foreground');
     expect(activeButton?.className).not.toContain('text-black');
     expect(brandButton?.className).toContain('text-sidebar-foreground');
     expect(brandButton?.className).toContain('hover:text-sidebar-foreground');
+    expect(brandLogo?.className).toContain('text-sidebar-foreground');
+    expect(brandLogo?.className).not.toContain('text-white');
+    expect(brandLogo?.className).not.toContain('bg-praetor');
+    expect(brandSubtitle.className).toContain('text-sm');
+    expect(brandSubtitle.className).toContain('leading-[var(--text-sm--line-height)]');
     expect(brandSubtitle.className).toContain('text-sidebar-foreground/80');
+    expect(avatarFallback.className).toContain('text-sm');
+    expect(avatarFallback.className).toContain('leading-[var(--text-sm--line-height)]');
+    expect(avatarFallback.className).toContain('text-sidebar-foreground');
+    expect(avatarFallback.className).not.toContain('text-white');
   });
 
   test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', async () => {
-    localStorage.setItem('praetor_theme', 'dark');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();
     const { container } = renderLayout();
 
@@ -126,7 +151,7 @@ describe('<Layout />', () => {
   });
 
   test('open account dropdown updates when shadcn theme changes', async () => {
-    localStorage.setItem('praetor_theme', 'light');
+    localStorage.setItem(THEME_STORAGE_KEY, 'light');
     const user = userEvent.setup();
     renderLayout();
 

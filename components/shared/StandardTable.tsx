@@ -1,12 +1,55 @@
-import { type ReactNode, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type ColumnSizingState,
+  flexRender,
+  functionalUpdate,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type PaginationState,
+  type SortingState,
+  type Column as TanStackColumn,
+  type Updater,
+  useReactTable,
+  type VisibilityState,
+} from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
-import Checkbox from './Checkbox';
-import CustomSelect from './CustomSelect';
+import { Button } from '../ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
@@ -24,7 +67,6 @@ import {
   type SortState,
 } from './customViewHelpers';
 import Modal from './Modal';
-import TableFilter from './TableFilter';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -39,51 +81,49 @@ const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
 const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suffix}_${slugify(t)}`;
 
+const sanitizeColumnWidths = (
+  value: unknown,
+  validIds?: ReadonlySet<string>,
+): Record<string, number> => {
+  if (typeof value !== 'object' || value === null) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([id, width]) =>
+        (!validIds || validIds.has(id)) && typeof width === 'number' && Number.isFinite(width),
+    ),
+  );
+};
+
+const numberRecordsEqual = (a: Record<string, number>, b: Record<string, number>) => {
+  const aEntries = Object.entries(a);
+  const bEntries = Object.entries(b);
+  return aEntries.length === bEntries.length && aEntries.every(([key, value]) => b[key] === value);
+};
+
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
-const VIEWS_HOVER_CLOSE_DELAY_MS = 200;
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
-const FILTER_POPUP_WIDTH_PX = 224;
-const FILTER_POPUP_VIEWPORT_MARGIN_PX = 8;
-
+const DEFAULT_COL_WIDTH = 150;
+const DEFAULT_MIN_COL_WIDTH = 56;
+const HEADER_TEXT_CHAR_WIDTH = 7;
+const HEADER_CELL_HORIZONTAL_PADDING = 24;
+const HEADER_RESIZE_GUTTER_WIDTH = 0;
+const HEADER_SORT_BUTTON_HORIZONTAL_PADDING = 16;
+const HEADER_SORT_ICON_WIDTH = 12;
+const HEADER_SORT_ICON_GAP = 4;
+const HEADER_FILTER_BUTTON_WIDTH = 24;
+const HEADER_CONTENT_GAP = 4;
+const ACTION_COLUMN_WIDTH = 64;
+const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
+const TABLE_CONTROL_BUTTON_CLASSNAME =
+  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';
+const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
+const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
+const ACTION_MENU_BUTTON_CLASSNAME =
+  'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
-
-const getFilterPopupPosition = (rect: DOMRect) => {
-  const scrollX = window.scrollX;
-  const minLeft = scrollX + FILTER_POPUP_VIEWPORT_MARGIN_PX;
-  const maxLeft =
-    scrollX + window.innerWidth - FILTER_POPUP_VIEWPORT_MARGIN_PX - FILTER_POPUP_WIDTH_PX;
-  const preferredLeft = rect.left + scrollX;
-
-  return {
-    top: rect.bottom + window.scrollY + 4,
-    left: Math.max(minLeft, Math.min(preferredLeft, maxLeft)),
-  };
-};
-
-const ViewActionButton = ({
-  icon,
-  title,
-  onClick,
-  className = 'hover:bg-zinc-200 text-zinc-500',
-}: {
-  icon: string;
-  title: string;
-  onClick: (e: React.MouseEvent) => void;
-  className?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={title}
-    aria-label={title}
-    className={`size-5 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${className}`}
-  >
-    <i className={`fa-solid ${icon} text-[9px]`} aria-hidden="true"></i>
-  </button>
-);
 
 export type Column<T> = {
   header: string;
@@ -148,23 +188,15 @@ const StandardTable = <T extends object>({
   initialFilterState,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
-  const filterRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const gearButtonRef = useRef<HTMLButtonElement>(null);
-  const gearPopupRef = useRef<HTMLDivElement>(null);
-  const resizeStartXRef = useRef(0);
-  const resizeStartWidthRef = useRef(0);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [sortState, setSortState] = useState<SortState>(null);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
   const filterStateRef = useRef(filterState);
   filterStateRef.current = filterState;
 
-  const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
-  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
-  const [resizingColId, setResizingColId] = useState<string | null>(null);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
@@ -189,13 +221,12 @@ const StandardTable = <T extends object>({
   // Session-only: column visibility resets on page reload
   const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
 
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
     if (typeof window === 'undefined') return {};
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed === 'object' && parsed !== null) return parsed as Record<string, number>;
+        return sanitizeColumnWidths(JSON.parse(saved));
       } catch {}
     }
     return {};
@@ -218,7 +249,7 @@ const StandardTable = <T extends object>({
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState<string | null>(null);
-  const viewsHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [filterSearchByColumnId, setFilterSearchByColumnId] = useState<Record<string, string>>({});
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
@@ -271,26 +302,85 @@ const StandardTable = <T extends object>({
     [],
   );
 
+  const isRowActionColumn = useCallback(
+    (col: Column<T>) =>
+      getColId(col) === 'actions' ||
+      (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null),
+    [getColId],
+  );
+
   const visibleColumns = useMemo(
     () =>
       columns?.filter((col) => {
         if (col.hidden) return false;
+        if (isRowActionColumn(col)) return true;
         return !hiddenColIds.has(getColId(col));
       }) ?? [],
-    [columns, hiddenColIds, getColId],
+    [columns, hiddenColIds, getColId, isRowActionColumn],
   );
 
-  // Rightmost non-sticky column absorbs leftover width. When the last column is
-  // sticky-right, this prevents that sticky column from expanding to fill space.
-  const stretchColumnIdx = useMemo(() => {
-    for (let i = visibleColumns.length - 1; i >= 0; i--) {
-      if (visibleColumns[i].sticky !== 'right') return i;
-    }
-    return -1;
-  }, [visibleColumns]);
+  const getColumnMinWidth = useCallback(
+    (col: Column<T>) => {
+      const headerTextWidth = String(col.header).length * HEADER_TEXT_CHAR_WIDTH;
+      if (isRowActionColumn(col)) {
+        return Math.max(
+          ACTION_COLUMN_WIDTH,
+          Math.ceil(headerTextWidth + HEADER_CELL_HORIZONTAL_PADDING),
+        );
+      }
 
-  // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
-  const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
+      const filterWidth = col.disableFiltering
+        ? 0
+        : HEADER_CONTENT_GAP + HEADER_FILTER_BUTTON_WIDTH;
+      return Math.max(
+        DEFAULT_MIN_COL_WIDTH,
+        Math.ceil(
+          headerTextWidth +
+            HEADER_SORT_BUTTON_HORIZONTAL_PADDING +
+            HEADER_SORT_ICON_GAP +
+            HEADER_SORT_ICON_WIDTH +
+            filterWidth +
+            HEADER_CELL_HORIZONTAL_PADDING +
+            HEADER_RESIZE_GUTTER_WIDTH,
+        ),
+      );
+    },
+    [isRowActionColumn],
+  );
+
+  const validColumnSizing = useMemo(() => {
+    const validIds = new Set((columns ?? []).map((col) => getColId(col)));
+    return sanitizeColumnWidths(columnSizing, validIds);
+  }, [columns, columnSizing, getColId]);
+
+  const clampColumnSizing = useCallback(
+    (value: ColumnSizingState) => {
+      const validIds = new Set((columns ?? []).map((col) => getColId(col)));
+      const next = sanitizeColumnWidths(value, validIds);
+      for (const col of columns ?? []) {
+        const colId = getColId(col);
+        if (next[colId] != null) {
+          next[colId] = Math.max(next[colId], getColumnMinWidth(col));
+        }
+      }
+      return next;
+    },
+    [columns, getColId, getColumnMinWidth],
+  );
+
+  const clampedColumnSizing = useMemo(
+    () => clampColumnSizing(validColumnSizing),
+    [clampColumnSizing, validColumnSizing],
+  );
+
+  const usesFixedTableLayout = Boolean(columns && data);
+
+  // Excludes statically hidden filter-only columns and row actions; sort/filter
+  // still target hidden filter-only columns via colsById.
+  const gearColumns = useMemo(
+    () => columns?.filter((col) => !col.hidden && !isRowActionColumn(col)) ?? [],
+    [columns, isRowActionColumn],
+  );
 
   const modalColumns = useMemo(
     () => gearColumns.map((col) => ({ id: getColId(col), header: col.header })),
@@ -333,7 +423,6 @@ const StandardTable = <T extends object>({
 
   useEffect(
     () => () => {
-      if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
       if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
       if (viewErrorTimeoutRef.current) clearTimeout(viewErrorTimeoutRef.current);
     },
@@ -348,78 +437,16 @@ const StandardTable = <T extends object>({
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
-  // Close filter popup when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        filterRef.current &&
-        !filterRef.current.contains(event.target as Node) &&
-        popupRef.current &&
-        !popupRef.current.contains(event.target as Node)
-      ) {
-        setActiveFilterCol(null);
-      }
-    };
-
-    if (activeFilterCol) {
-      document.addEventListener('mousedown', handleClickOutside);
+    const next = clampColumnSizing(columnSizing);
+    if (!numberRecordsEqual(columnSizing, next)) {
+      setColumnSizing(next);
+      return;
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeFilterCol]);
-
-  // Close gear popup when clicking outside. Suspended while the create/rename
-  // modal is open: the modal portals to document.body (outside gearPopupRef),
-  // so a Save click would otherwise close the gear popup as a side effect.
-  useEffect(() => {
-    if (!gearOpen || modalState !== null) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        gearButtonRef.current &&
-        !gearButtonRef.current.contains(event.target as Node) &&
-        gearPopupRef.current &&
-        !gearPopupRef.current.contains(event.target as Node)
-      ) {
-        setGearOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [gearOpen, modalState]);
-
-  useEffect(() => {
-    if (!resizingColId) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizeStartXRef.current;
-      const newWidth = Math.max(40, resizeStartWidthRef.current + delta);
-      setColumnWidths((prev) => {
-        if (prev[resizingColId] === newWidth) return prev;
-        return { ...prev, [resizingColId]: newWidth };
-      });
-    };
-
-    const handleMouseUp = () => {
-      setResizingColId(null);
-      document.body.style.cursor = '';
-      setColumnWidths((prev) => {
-        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(prev));
-        return prev;
-      });
-    };
-
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-    };
-  }, [resizingColId, title]);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(next));
+    }
+  }, [clampColumnSizing, columnSizing, title]);
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
@@ -445,46 +472,212 @@ const StandardTable = <T extends object>({
     return m;
   }, [columns, getColId]);
 
-  const processedData = useMemo(() => {
-    if (!data || !columns) return [];
-    let result = [...data];
+  const tanStackColumns = useMemo<ColumnDef<T, unknown>[]>(
+    () =>
+      (columns ?? []).map((col) => {
+        const colId = getColId(col);
+        const minSize = getColumnMinWidth(col);
+        const defaultSize = isRowActionColumn(col) ? minSize : Math.max(DEFAULT_COL_WIDTH, minSize);
+        return {
+          id: colId,
+          accessorFn: (row) => getValue(row, col),
+          header: col.header,
+          cell: (info) => {
+            const row = info.row.original;
+            const value = info.getValue() as
+              | T[keyof T]
+              | string
+              | number
+              | boolean
+              | null
+              | undefined;
+            return col.cell
+              ? col.cell({ getValue: () => value, row, value })
+              : (value as ReactNode);
+          },
+          size: Math.max(clampedColumnSizing[colId] ?? defaultSize, minSize),
+          minSize,
+          enableResizing: !isRowActionColumn(col),
+          enableSorting: !col.disableSorting,
+          enableColumnFilter: !col.disableFiltering,
+          enableHiding: !col.hidden && !isRowActionColumn(col),
+          sortingFn: (rowA, rowB) => {
+            const valA = rowA.getValue(colId);
+            const valB = rowB.getValue(colId);
+            if (typeof valA === 'number' && typeof valB === 'number') {
+              return valA - valB;
+            }
+            const strA = String(valA || '').toLowerCase();
+            const strB = String(valB || '').toLowerCase();
+            if (strA < strB) return -1;
+            if (strA > strB) return 1;
+            return 0;
+          },
+          filterFn: (row, columnId, selectedValues) => {
+            const selected =
+              typeof selectedValues === 'string'
+                ? [selectedValues]
+                : Array.isArray(selectedValues)
+                  ? selectedValues
+                  : [];
+            if (selected.length === 0) return true;
+            const formatted = formatForFilter(row.getValue(columnId), col);
+            return selected.some((value) => formatted.toLowerCase() === value.toLowerCase());
+          },
+        } satisfies ColumnDef<T, unknown>;
+      }),
+    [
+      clampedColumnSizing,
+      columns,
+      getColId,
+      getColumnMinWidth,
+      getValue,
+      formatForFilter,
+      isRowActionColumn,
+    ],
+  );
 
-    Object.keys(filterState).forEach((filterColId) => {
-      const selectedValues = filterState[filterColId];
-      if (!selectedValues || selectedValues.length === 0) return;
-      const col = colsById.get(filterColId);
-      if (!col) return;
-      result = result.filter((row) => {
-        const val = formatForFilter(getValue(row, col), col);
-        return selectedValues.includes(val);
-      });
-    });
+  const sorting = useMemo<SortingState>(
+    () => (sortState ? [{ id: sortState.colId, desc: sortState.px === 'desc' }] : []),
+    [sortState],
+  );
 
-    if (sortState) {
-      const col = colsById.get(sortState.colId);
-      if (col) {
-        result.sort((a, b) => {
-          const valA = getValue(a, col);
-          const valB = getValue(b, col);
-          if (typeof valA === 'number' && typeof valB === 'number') {
-            return sortState.px === 'asc' ? valA - valB : valB - valA;
-          }
-          const strA = String(valA || '').toLowerCase();
-          const strB = String(valB || '').toLowerCase();
-          if (strA < strB) return sortState.px === 'asc' ? -1 : 1;
-          if (strA > strB) return sortState.px === 'asc' ? 1 : -1;
-          return 0;
-        });
+  const columnFilters = useMemo<ColumnFiltersState>(
+    () => Object.entries(filterState).map(([id, value]) => ({ id, value })),
+    [filterState],
+  );
+
+  const pagination = useMemo<PaginationState>(
+    () => ({ pageIndex: currentPage - 1, pageSize: rowsPerPage }),
+    [currentPage, rowsPerPage],
+  );
+
+  const columnVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        (columns ?? []).map((col) => {
+          const colId = getColId(col);
+          if (isRowActionColumn(col)) return [colId, true];
+          return [colId, !col.hidden && !hiddenColIds.has(colId)];
+        }),
+      ) as VisibilityState,
+    [columns, getColId, hiddenColIds, isRowActionColumn],
+  );
+
+  const onSortingChange = useCallback(
+    (updater: Updater<SortingState>) => {
+      const next = functionalUpdate(updater, sorting);
+      const firstSort = next[0];
+      setSortState(firstSort ? { colId: firstSort.id, px: firstSort.desc ? 'desc' : 'asc' } : null);
+      updateActiveViewId(null);
+    },
+    [sorting, updateActiveViewId],
+  );
+
+  const onColumnFiltersChange = useCallback(
+    (updater: Updater<ColumnFiltersState>) => {
+      const next = functionalUpdate(updater, columnFilters);
+      const nextFilterState: FilterState = {};
+      for (const filter of next) {
+        if (Array.isArray(filter.value)) {
+          if (filter.value.length > 0) nextFilterState[filter.id] = filter.value;
+        } else if (typeof filter.value === 'string' && filter.value.trim().length > 0) {
+          nextFilterState[filter.id] = [filter.value];
+        }
       }
-    }
+      setFilterState(nextFilterState);
+      setCurrentPage(1);
+      updateActiveViewId(null);
+    },
+    [columnFilters, updateActiveViewId],
+  );
 
-    return result;
-  }, [data, columns, filterState, sortState, getValue, colsById, formatForFilter]);
+  const onPaginationChange = useCallback(
+    (updater: Updater<PaginationState>) => {
+      const next = functionalUpdate(updater, pagination);
+      setCurrentPage(next.pageIndex + 1);
+      if (next.pageSize !== rowsPerPage) {
+        setRowsPerPage(next.pageSize);
+        if (storageKey) {
+          localStorage.setItem(storageKey, String(next.pageSize));
+        }
+      }
+    },
+    [pagination, rowsPerPage, storageKey],
+  );
 
-  const totalItems = data ? processedData.length : externalTotalCount || 0;
-  const totalPages = Math.ceil(totalItems / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
+  const onColumnVisibilityChange = useCallback(
+    (updater: Updater<VisibilityState>) => {
+      const next = functionalUpdate(updater, columnVisibility);
+      const nextHiddenColIds = new Set<string>();
+      for (const col of gearColumns) {
+        const colId = getColId(col);
+        if (next[colId] === false) nextHiddenColIds.add(colId);
+      }
+
+      setHiddenColIds(nextHiddenColIds);
+      if (sortState && nextHiddenColIds.has(sortState.colId)) setSortState(null);
+      setFilterState((prev) => {
+        let changed = false;
+        const nextFilters = { ...prev };
+        for (const colId of nextHiddenColIds) {
+          if (nextFilters[colId]) {
+            delete nextFilters[colId];
+            changed = true;
+          }
+        }
+        return changed ? nextFilters : prev;
+      });
+      updateActiveViewId(null);
+    },
+    [columnVisibility, gearColumns, getColId, sortState, updateActiveViewId],
+  );
+
+  const onColumnSizingChange = useCallback(
+    (updater: Updater<ColumnSizingState>) => {
+      setColumnSizing((prev) => {
+        const next = functionalUpdate(updater, clampColumnSizing(prev));
+        return clampColumnSizing(next);
+      });
+    },
+    [clampColumnSizing],
+  );
+
+  const table = useReactTable({
+    data: data ?? [],
+    columns: tanStackColumns,
+    onSortingChange,
+    onColumnFiltersChange,
+    onPaginationChange,
+    onColumnVisibilityChange,
+    onColumnSizingChange,
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
+    state: {
+      sorting,
+      columnFilters,
+      pagination,
+      columnVisibility,
+      columnSizing: clampedColumnSizing,
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const processedRows = data ? table.getPrePaginationRowModel().rows : [];
+  const totalItems = data ? processedRows.length : externalTotalCount || 0;
+  const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
+  const paginatedRows = data ? table.getRowModel().rows : [];
+  const hasTrailingActionColumn =
+    visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
+  const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;
+  const shouldAnchorTrailingActionColumn = hasTrailingActionColumn && visibleDataColumnCount > 1;
+  const fixedTableWidth = useMemo(() => {
+    if (!usesFixedTableLayout) return undefined;
+    return table.getTotalSize();
+  }, [table, usesFixedTableLayout]);
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -512,21 +705,174 @@ const StandardTable = <T extends object>({
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
-  const handleSort = (colId: string, dir: 'asc' | 'desc' | null) => {
-    if (!dir) setSortState(null);
-    else setSortState({ colId, px: dir });
-    updateActiveViewId(null);
+  const getSelectedFilterValues = (column: TanStackColumn<T, unknown>) => {
+    const filterValue = column.getFilterValue();
+    if (Array.isArray(filterValue)) return filterValue as string[];
+    if (typeof filterValue === 'string') return [filterValue];
+    return [];
   };
 
-  const handleFilter = (colId: string, selected: string[]) => {
-    setFilterState((prev) => {
-      const next = { ...prev };
-      if (selected.length === 0) delete next[colId];
-      else next[colId] = selected;
-      return next;
-    });
-    setCurrentPage(1); // Reset to page 1 on filter
-    updateActiveViewId(null);
+  const getElementLike = (node: ReactNode) => {
+    if (isValidElement(node))
+      return { type: node.type, props: node.props as Record<string, unknown> };
+    if (typeof node === 'object' && node !== null && 'props' in node) {
+      return node as { type?: unknown; props: Record<string, unknown> };
+    }
+    return null;
+  };
+
+  const getNodeText = (node: ReactNode): string => {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(getNodeText).join(' ').trim();
+    const element = getElementLike(node);
+    if (element) return getNodeText(element.props.children as ReactNode);
+    return '';
+  };
+
+  const collectClassNames = (node: ReactNode): string => {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (Array.isArray(node)) return node.map(collectClassNames).join(' ');
+    const element = getElementLike(node);
+    if (!element) return '';
+    const props = element.props as { className?: unknown; children?: ReactNode };
+    return [
+      typeof props.className === 'string' ? props.className : '',
+      collectClassNames(props.children),
+    ]
+      .filter(Boolean)
+      .join(' ');
+  };
+
+  const getActionIconClassName = (node: ReactNode) => {
+    const classNames = collectClassNames(node);
+    if (classNames.includes('fa-trash')) return 'text-destructive';
+    if (classNames.includes('fa-ban')) return 'text-amber-600';
+    if (classNames.includes('fa-rotate-left')) return 'text-primary';
+    if (classNames.includes('fa-pen')) return 'text-blue-500';
+    return 'text-muted-foreground';
+  };
+
+  const renderActionMenuButton = (node: ReactNode, label: ReactNode, key: number) => {
+    const labelText = getNodeText(label);
+    const element = getElementLike(node);
+    const isButtonElement =
+      element &&
+      ((typeof element.type === 'string' && element.type === 'button') ||
+        element.props.type === 'button' ||
+        typeof element.props.onClick === 'function');
+    if (!isButtonElement) {
+      return (
+        <div
+          key={key}
+          className="flex min-h-7 items-center gap-2 px-2 py-1 text-xs text-popover-foreground"
+        >
+          {node}
+          {labelText && <span className="whitespace-nowrap">{labelText}</span>}
+        </div>
+      );
+    }
+
+    const props = element.props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      children?: ReactNode;
+      'data-testid'?: string;
+    };
+    const explicitLabel = props['aria-label'] ?? props.title;
+    const testId = props['data-testid'];
+    const text =
+      labelText ||
+      (typeof explicitLabel === 'string' ? explicitLabel : getNodeText(explicitLabel)) ||
+      getNodeText(props.children);
+
+    return (
+      <button
+        key={key}
+        type="button"
+        aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
+        data-testid={testId}
+        disabled={props.disabled}
+        className={ACTION_MENU_BUTTON_CLASSNAME}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onClick?.(event);
+        }}
+      >
+        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(props.children)}`}>
+          {props.children}
+        </span>
+        {text && <span className="whitespace-nowrap">{text}</span>}
+      </button>
+    );
+  };
+
+  const renderActionMenuItems = (node: ReactNode) => {
+    const items: ReactNode[] = [];
+    const visit = (current: ReactNode) => {
+      if (current === null || current === undefined || typeof current === 'boolean') return;
+      if (typeof current === 'string' || typeof current === 'number') return;
+      if (Array.isArray(current)) {
+        current.forEach(visit);
+        return;
+      }
+      const element = getElementLike(current);
+      if (!element) return;
+
+      const props = element.props as {
+        children?: ReactNode | (() => ReactNode);
+        label?: ReactNode;
+      };
+
+      if (props.label !== undefined && typeof props.children === 'function') {
+        items.push(renderActionMenuButton(props.children(), props.label, items.length));
+        return;
+      }
+
+      if (
+        (typeof element.type === 'string' && element.type === 'button') ||
+        (props as { type?: unknown }).type === 'button' ||
+        typeof (props as { onClick?: unknown }).onClick === 'function'
+      ) {
+        items.push(renderActionMenuButton(current, undefined, items.length));
+        return;
+      }
+
+      Children.toArray(props.children as ReactNode).forEach(visit);
+    };
+
+    visit(node);
+    return items.length > 0 ? items : node;
+  };
+
+  const hasActionMenuItems = (node: ReactNode): boolean => {
+    const visit = (current: ReactNode): boolean => {
+      if (current === null || current === undefined || typeof current === 'boolean') return false;
+      if (typeof current === 'string' || typeof current === 'number') return false;
+      if (Array.isArray(current)) return current.some(visit);
+
+      const element = getElementLike(current);
+      if (!element) return false;
+
+      const props = element.props as {
+        children?: ReactNode | (() => ReactNode);
+        label?: ReactNode;
+        onClick?: unknown;
+        type?: unknown;
+      };
+
+      if (props.label !== undefined && typeof props.children === 'function') return true;
+
+      if (
+        (typeof element.type === 'string' && element.type === 'button') ||
+        props.type === 'button' ||
+        typeof props.onClick === 'function'
+      ) {
+        return true;
+      }
+
+      return Children.toArray(props.children as ReactNode).some(visit);
+    };
+
+    return visit(node);
   };
 
   const stepFontSize = (delta: -1 | 1) => {
@@ -550,36 +896,15 @@ const StandardTable = <T extends object>({
     );
     const rows = [
       exportColumns.map((c) => c.header),
-      ...processedData.map((row) =>
-        exportColumns.map((col) => formatForFilter(getValue(row, col), col)),
+      ...processedRows.map((row) =>
+        exportColumns.map((col) => formatForFilter(getValue(row.original, col), col)),
       ),
     ];
     downloadCsv(rows, `${slugify(title)}_${getLocalDateString()}.csv`);
   };
 
-  const toggleColumnVisibility = (colId: string) => {
-    setHiddenColIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(colId)) {
-        next.delete(colId);
-      } else {
-        next.add(colId);
-        if (sortState?.colId === colId) setSortState(null);
-        setFilterState((fs) => {
-          if (!fs[colId]) return fs;
-          const nextFs = { ...fs };
-          delete nextFs[colId];
-          return nextFs;
-        });
-      }
-      return next;
-    });
-    updateActiveViewId(null);
-  };
-
   const resetColumnVisibility = () => {
-    setHiddenColIds(new Set<string>());
-    updateActiveViewId(null);
+    table.setColumnVisibility({});
   };
 
   const applyView = (view: CustomView) => {
@@ -719,31 +1044,10 @@ const StandardTable = <T extends object>({
     setPasteError(null);
   };
 
-  const handleViewsMouseEnter = () => {
-    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
-    setViewsSubmenuOpen(true);
-  };
-
-  const handleViewsMouseLeave = () => {
-    if (viewsHoverTimeoutRef.current) clearTimeout(viewsHoverTimeoutRef.current);
-    viewsHoverTimeoutRef.current = setTimeout(
-      () => setViewsSubmenuOpen(false),
-      VIEWS_HOVER_CLOSE_DELAY_MS,
-    );
-  };
-
-  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const th = e.currentTarget.parentElement as HTMLTableCellElement;
-    resizeStartXRef.current = e.clientX;
-    resizeStartWidthRef.current = th.getBoundingClientRect().width;
-    setResizingColId(colId);
-  };
-
   const renderToolbarButton = ({
     tooltipKey,
     iconClass,
+    icon,
     onClick,
     disabled = false,
     active = false,
@@ -752,7 +1056,8 @@ const StandardTable = <T extends object>({
     text,
   }: {
     tooltipKey: string;
-    iconClass: string;
+    iconClass?: string;
+    icon?: ReactNode;
     onClick: () => void;
     disabled?: boolean;
     active?: boolean;
@@ -765,623 +1070,830 @@ const StandardTable = <T extends object>({
       <Tooltip disabled={tooltipDisabled}>
         <TooltipTrigger asChild>
           <span className="inline-flex">
-            <button
+            <Button
               type="button"
               ref={buttonRef}
               aria-label={label}
+              variant={active ? 'secondary' : 'outline'}
+              size="sm"
+              className={TABLE_CONTROL_BUTTON_CLASSNAME}
               onClick={(e) => {
                 e.stopPropagation();
                 onClick();
               }}
               disabled={disabled}
-              className={`h-7 ${text ? 'px-2 gap-1.5' : 'w-7 justify-center'} flex items-center rounded-lg border border-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                active ? 'bg-zinc-100 text-praetor' : 'bg-white text-zinc-500 hover:bg-zinc-100'
-              }`}
             >
-              <i className={`fa-solid ${iconClass} text-[10px]`} aria-hidden="true"></i>
-              {text && <span className="text-[10px] font-bold">{text}</span>}
-            </button>
+              {icon ?? <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>}
+              {text && <span>{text}</span>}
+            </Button>
           </span>
         </TooltipTrigger>
-        <TooltipContent side={'bottom'}>{label}</TooltipContent>
+        <TooltipContent side="bottom">{label}</TooltipContent>
       </Tooltip>
     );
   };
 
-  const renderInternalFooter = () => (
-    <>
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-bold text-zinc-500">{t('pagination.rowsPerPage')}</span>
-        <CustomSelect
-          options={[
-            { id: '5', name: '5' },
-            { id: '10', name: '10' },
-            { id: '20', name: '20' },
-            { id: '50', name: '50' },
-          ]}
-          value={rowsPerPage.toString()}
-          onChange={(val) => {
-            const newValue = Number(val);
-            setRowsPerPage(newValue);
-            setCurrentPage(1);
-            if (storageKey) {
-              localStorage.setItem(storageKey, String(newValue));
-            }
-          }}
-          className="w-20"
-          buttonClassName="px-2 py-1 bg-white border border-zinc-200 text-xs font-bold text-zinc-700 rounded-lg"
-          searchable={false}
-        />
-        <span className="text-xs font-bold text-zinc-400 ml-2">
-          {t('pagination.showing')
-            .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
-            .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
-            .replace('{{total}}', String(totalItems))}
-        </span>
-      </div>
+  const renderHeaderFilter = (column: TanStackColumn<T, unknown>, sourceColumn: Column<T>) => {
+    if (!column.getCanFilter()) return null;
+    const selectedValues = getSelectedFilterValues(column);
+    const hasFilter = selectedValues.length > 0;
+    const options = getFilterOptions(column.id);
+    const filterSearch = filterSearchByColumnId[column.id] ?? '';
+    const normalizedFilterSearch = filterSearch.trim().toLocaleLowerCase();
+    const visibleOptions = normalizedFilterSearch
+      ? options.filter((option) =>
+          (option || t('table.empty')).toLocaleLowerCase().includes(normalizedFilterSearch),
+        )
+      : options;
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setCurrentPage((prev) => Math.max(1, prev - 1));
-          }}
-          disabled={currentPage === 1}
-          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
+    return (
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open || !filterSearchByColumnId[column.id]) return;
+          setFilterSearchByColumnId((prev) => {
+            const next = { ...prev };
+            delete next[column.id];
+            return next;
+          });
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant={hasFilter ? 'secondary' : 'ghost'}
+            size="icon-xs"
+            aria-label={`${t('table.filters')} ${sourceColumn.header}`}
+            onClick={(event) => event.stopPropagation()}
+            className="size-6 rounded-lg"
+          >
+            <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
+            {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-64"
+          onClick={(event) => event.stopPropagation()}
         >
-          <i className="fa-solid fa-chevron-left text-xs"></i>
-        </button>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(
-              (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
-            )
-            .map((page, i, arr) => (
-              <div key={page} className="flex items-center">
-                {i > 0 && page - arr[i - 1] > 1 && <span className="text-zinc-400 mx-1">...</span>}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentPage(page);
+          <DropdownMenuLabel className="text-xs">{sourceColumn.header}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="p-1">
+            <Input
+              type="search"
+              value={filterSearch}
+              onChange={(event) => {
+                const value = event.target.value;
+                setFilterSearchByColumnId((prev) => ({ ...prev, [column.id]: value }));
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder={t('table.search')}
+              aria-label={`${t('table.search')} ${sourceColumn.header}`}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {visibleOptions.length > 0 ? (
+              visibleOptions.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option || '__empty__'}
+                  checked={selectedValues.includes(option)}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    const next = selectedValues.includes(option)
+                      ? selectedValues.filter((value) => value !== option)
+                      : [...selectedValues, option];
+                    column.setFilterValue(next.length > 0 ? next : undefined);
+                    table.setPageIndex(0);
                   }}
-                  className={`size-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                    currentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-zinc-200'
-                      : 'text-zinc-500 hover:bg-zinc-100'
-                  }`}
+                  className="text-xs"
                 >
-                  {page}
-                </button>
-              </div>
-            ))}
+                  <span className="truncate">{option || t('table.empty')}</span>
+                </DropdownMenuCheckboxItem>
+              ))
+            ) : (
+              <DropdownMenuItem disabled className="text-xs">
+                {t('table.noResults')}
+              </DropdownMenuItem>
+            )}
+          </div>
+          {hasFilter && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  column.setFilterValue(undefined);
+                  table.setPageIndex(0);
+                }}
+                className="text-xs"
+              >
+                {t('table.clearFilter')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  const renderInternalFooter = () => {
+    const isSinglePage = Math.max(totalPages, 1) <= 1;
+    const canPreviousPage = !isSinglePage && table.getCanPreviousPage();
+    const canNextPage = !isSinglePage && table.getCanNextPage();
+
+    return (
+      <>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">
+            {t('pagination.rowsPerPage')}
+          </span>
+          <Select
+            value={rowsPerPage.toString()}
+            onValueChange={(val) => {
+              const newValue = Number(val);
+              table.setPageIndex(0);
+              table.setPageSize(newValue);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className={`${TABLE_CONTROL_BUTTON_CLASSNAME} w-[68px] text-foreground`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[5, 10, 20, 50].map((value) => (
+                <SelectItem key={value} value={String(value)}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setCurrentPage((prev) => Math.min(totalPages, prev + 1));
-          }}
-          disabled={currentPage === totalPages || totalPages === 0}
-          className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
-        >
-          <i className="fa-solid fa-chevron-right text-xs"></i>
-        </button>
-      </div>
-    </>
-  );
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+            onClick={(e) => {
+              e.stopPropagation();
+              table.previousPage();
+            }}
+            disabled={!canPreviousPage}
+          >
+            {t('buttons.previous')}
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {currentPage} / {Math.max(totalPages, 1)}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+            onClick={(e) => {
+              e.stopPropagation();
+              table.nextPage();
+            }}
+            disabled={!canNextPage}
+          >
+            {t('buttons.next')}
+          </Button>
+        </div>
+      </>
+    );
+  };
 
   return (
-    <div
-      className={`bg-white rounded-3xl border border-zinc-200 shadow-sm ${containerClassName ?? ''}`.trim()}
-    >
-      <div className="p-3 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center rounded-t-3xl">
+    <div className={`w-full space-y-3 ${containerClassName ?? ''}`.trim()}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h4 className="font-semibold text-zinc-400 uppercase text-[10px] tracking-widest">
-            {title}
-          </h4>
+          <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
           {typeof totalItems === 'number' && (
-            <span className="bg-zinc-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
+            <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {totalItems} {totalLabel || t('table.total')}
             </span>
           )}
         </div>
-        {(data != null && columns != null) || headerExtras != null || headerAction != null ? (
-          <div className="flex items-center gap-3">
-            {data != null && columns != null && (
-              <div className="flex items-center gap-1">
-                {renderToolbarButton({
-                  tooltipKey: 'table.exportToCsv',
-                  iconClass: 'fa-file-export',
-                  onClick: handleExportToCsv,
-                  disabled: processedData.length === 0,
-                  text: t('table.export'),
-                })}
-                {renderToolbarButton({
-                  tooltipKey: 'table.decreaseFont',
-                  iconClass: 'fa-minus',
-                  onClick: () => stepFontSize(-1),
-                  disabled: fontSize === 'xs',
-                })}
-                {renderToolbarButton({
-                  tooltipKey: 'table.increaseFont',
-                  iconClass: 'fa-plus',
-                  onClick: () => stepFontSize(1),
-                  disabled: fontSize === 'base',
-                })}
-                <div className="relative">
-                  {renderToolbarButton({
-                    tooltipKey: 'table.columnSettings',
-                    iconClass: 'fa-gear',
-                    onClick: () => setGearOpen((prev) => !prev),
-                    active: gearOpen,
-                    buttonRef: gearButtonRef,
-                    tooltipDisabled: gearOpen,
-                  })}
-                  {gearOpen && (
-                    <div
-                      ref={gearPopupRef}
-                      className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
-                    >
-                      <div className="px-3 py-2 border-b border-zinc-100 flex items-center justify-between gap-2">
-                        <span
-                          className="text-[10px] font-black text-zinc-400 uppercase tracking-wider truncate"
-                          title={activeView ? activeView.name : undefined}
-                        >
-                          {activeView
-                            ? `${t('table.columns')} · ${activeView.name}`
-                            : t('table.columns')}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {headerExtras}
+          {headerAction}
+          {data != null && columns != null && (
+            <>
+              {renderToolbarButton({
+                tooltipKey: 'table.exportToCsv',
+                iconClass: 'fa-file-export',
+                onClick: handleExportToCsv,
+                disabled: processedRows.length === 0,
+                text: t('table.export'),
+              })}
+              {renderToolbarButton({
+                tooltipKey: 'table.decreaseFont',
+                icon: <ZoomOut className="size-3.5" aria-hidden="true" />,
+                onClick: () => stepFontSize(-1),
+                disabled: fontSize === 'xs',
+              })}
+              {renderToolbarButton({
+                tooltipKey: 'table.increaseFont',
+                icon: <ZoomIn className="size-3.5" aria-hidden="true" />,
+                onClick: () => stepFontSize(1),
+                disabled: fontSize === 'base',
+              })}
+              <DropdownMenu open={gearOpen} onOpenChange={setGearOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    aria-label={t('table.columnSettings')}
+                    variant="outline"
+                    size="sm"
+                    className={`${TABLE_CONTROL_BUTTON_CLASSNAME} data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0`}
+                  >
+                    {t('table.columns')}
+                    <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel
+                    className="truncate text-xs"
+                    title={activeView ? activeView.name : undefined}
+                  >
+                    {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-64 overflow-y-auto">
+                    {(() => {
+                      const hideableColumns = table
+                        .getAllColumns()
+                        .filter((column) => column.getCanHide() && colsById.has(column.id));
+                      const visibleHideableColumnCount = table
+                        .getVisibleLeafColumns()
+                        .filter((visibleColumn) => visibleColumn.getCanHide()).length;
+                      return hideableColumns.map((column) => {
+                        const sourceColumn = colsById.get(column.id);
+                        const isVisible = column.getIsVisible();
+                        const isLastVisible = visibleHideableColumnCount === 1 && isVisible;
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={column.id}
+                            checked={isVisible}
+                            disabled={isLastVisible}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              if (!isLastVisible) column.toggleVisibility(!isVisible);
+                            }}
+                            className="text-xs"
+                          >
+                            <span className="truncate">{sourceColumn?.header ?? column.id}</span>
+                          </DropdownMenuCheckboxItem>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      resetColumnVisibility();
+                    }}
+                    className="text-xs"
+                  >
+                    <i className="fa-solid fa-rotate-left text-[10px]" aria-hidden="true"></i>
+                    <span>{t('table.resetColumns')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSub open={viewsSubmenuOpen} onOpenChange={setViewsSubmenuOpen}>
+                    <DropdownMenuSubTrigger className="text-xs">
+                      <i className="fa-solid fa-layer-group text-[10px]" aria-hidden="true"></i>
+                      <span>{t('table.customViews')}</span>
+                      {customViews.length > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {customViews.length}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-72">
+                      <DropdownMenuLabel className="text-xs">
+                        {t('table.customViews')}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {customViews.length > 0 && (
+                        <div className="max-h-64 overflow-y-auto p-1">
+                          {customViews.map((view) => {
+                            const isActive = view.id === activeViewId;
+                            const isCopied = copiedViewId === view.id;
+                            const isDragOver =
+                              dragOverViewId === view.id && draggingViewId !== view.id;
+                            return (
+                              <div
+                                key={view.id}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  // Firefox aborts the drag unless setData is called.
+                                  e.dataTransfer.setData('text/plain', view.name);
+                                  setDraggingViewId(view.id);
+                                }}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (
+                                    draggingViewId &&
+                                    draggingViewId !== view.id &&
+                                    dragOverViewId !== view.id
+                                  ) {
+                                    setDragOverViewId(view.id);
+                                  }
+                                }}
+                                onDragLeave={(e) => {
+                                  e.stopPropagation();
+                                  if (dragOverViewId === view.id) setDragOverViewId(null);
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (draggingViewId) {
+                                    reorderViews(draggingViewId, view.id);
+                                  }
+                                  setDraggingViewId(null);
+                                  setDragOverViewId(null);
+                                }}
+                                onDragEnd={() => {
+                                  setDraggingViewId(null);
+                                  setDragOverViewId(null);
+                                }}
+                                className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
+                                  isActive
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'hover:bg-accent hover:text-accent-foreground'
+                                } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
+                                  draggingViewId === view.id ? 'opacity-40' : ''
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  title={t('table.reorderViewHandle')}
+                                  aria-label={t('table.reorderViewHandle')}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveViewByDelta(view.id, -1);
+                                    } else if (e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveViewByDelta(view.id, 1);
+                                    }
+                                  }}
+                                  className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                >
+                                  <i
+                                    className="fa-solid fa-grip-vertical text-[10px]"
+                                    aria-hidden="true"
+                                  ></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    applyView(view);
+                                    setGearOpen(false);
+                                  }}
+                                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                  title={view.name}
+                                >
+                                  {isActive && (
+                                    <i
+                                      className="fa-solid fa-check shrink-0 text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  )}
+                                  <span className="truncate text-xs font-medium">{view.name}</span>
+                                </button>
+                                <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                  <DropdownMenuItem
+                                    aria-label={t('table.renameView')}
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setModalState({ kind: 'edit', view });
+                                      setGearOpen(false);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className="fa-solid fa-pen text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    aria-label={
+                                      isCopied ? t('table.viewCopied') : t('table.exportView')
+                                    }
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      void exportView(view);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    aria-label={t('table.deleteView')}
+                                    variant="destructive"
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      deleteView(view.id);
+                                    }}
+                                    className="size-7 justify-center p-0"
+                                  >
+                                    <i
+                                      className="fa-solid fa-trash text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </DropdownMenuItem>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <DropdownMenuSeparator />
+                      <div className="flex gap-1 p-1">
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setModalState({ kind: 'create' });
                             setGearOpen(false);
                           }}
-                          className="text-zinc-400 hover:text-zinc-600 transition-colors flex-shrink-0"
+                          className="flex-1 justify-center text-xs"
                         >
-                          <i className="fa-solid fa-xmark text-xs"></i>
-                        </button>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
-                        {gearColumns.map((col) => {
-                          const colId = getColId(col);
-                          const isVisible = !hiddenColIds.has(colId);
-                          const isLastVisible = visibleColumns.length === 1 && isVisible;
-                          // Checkbox onChange owns the toggle; the row's
-                          // onClick handles clicks on the text label only.
-                          // Clicks inside the inner <label> bubble twice (the
-                          // visible click + a UA-synthesised click on the
-                          // hidden input), so we ignore those here to avoid a
-                          // double-toggle that cancels itself.
-                          return (
-                            <div
-                              key={colId}
-                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-zinc-50 rounded cursor-pointer"
-                              onClick={(e) => {
-                                if (isLastVisible) return;
-                                if ((e.target as HTMLElement).closest('label')) return;
-                                toggleColumnVisibility(colId);
-                              }}
-                            >
-                              <Checkbox
-                                size="sm"
-                                checked={isVisible}
-                                disabled={isLastVisible}
-                                onChange={() => toggleColumnVisibility(colId)}
-                              />
-                              <span className="text-[11px] text-zinc-600 select-none">
-                                {col.header}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="p-2 border-t border-zinc-100">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            resetColumnVisibility();
+                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                          <span>{t('buttons.add')}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            void importView();
                           }}
-                          className="w-full px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                          className="flex-1 justify-center text-xs"
                         >
-                          <i className="fa-solid fa-rotate-left text-[10px]"></i>
-                          <span>{t('table.resetColumns')}</span>
-                        </button>
+                          <i className="fa-solid fa-file-import text-[10px]" aria-hidden="true"></i>
+                          <span>{t('buttons.import')}</span>
+                        </DropdownMenuItem>
                       </div>
-                      <div
-                        className="relative border-t border-zinc-100 p-2"
-                        onMouseEnter={handleViewsMouseEnter}
-                        onMouseLeave={handleViewsMouseLeave}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewsSubmenuOpen(true);
-                          }}
-                          onFocus={() => setViewsSubmenuOpen(true)}
-                          className={`w-full px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-between ${
-                            viewsSubmenuOpen
-                              ? 'bg-zinc-100 text-praetor'
-                              : 'text-zinc-600 hover:bg-zinc-50'
-                          }`}
+                      {viewError && (
+                        <div
+                          role="alert"
+                          className="px-2 pb-2 text-center text-xs text-destructive"
                         >
-                          <span className="flex items-center gap-1.5">
-                            <i className="fa-solid fa-layer-group text-[10px]"></i>
-                            {t('table.customViews')}
-                            {customViews.length > 0 && (
-                              <span className="text-[9px] font-bold text-zinc-400">
-                                ({customViews.length})
-                              </span>
-                            )}
-                          </span>
-                          <i className="fa-solid fa-chevron-right text-[9px]"></i>
-                        </button>
-                        {viewsSubmenuOpen && (
-                          <div
-                            className="absolute right-full top-0 mr-2 w-64 bg-white rounded-2xl shadow-xl border border-zinc-200 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"
-                            onMouseEnter={handleViewsMouseEnter}
-                            onMouseLeave={handleViewsMouseLeave}
-                          >
-                            <div className="px-3 py-2 border-b border-zinc-100">
-                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                {t('table.customViews')}
-                              </span>
-                            </div>
-                            {customViews.length > 0 && (
-                              <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
-                                {customViews.map((view) => {
-                                  const isActive = view.id === activeViewId;
-                                  const isCopied = copiedViewId === view.id;
-                                  const isDragOver =
-                                    dragOverViewId === view.id && draggingViewId !== view.id;
-                                  return (
-                                    <div
-                                      key={view.id}
-                                      draggable
-                                      onDragStart={(e) => {
-                                        e.stopPropagation();
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        // Firefox aborts the drag unless setData is called.
-                                        e.dataTransfer.setData('text/plain', view.name);
-                                        setDraggingViewId(view.id);
-                                      }}
-                                      onDragOver={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        e.dataTransfer.dropEffect = 'move';
-                                        if (
-                                          draggingViewId &&
-                                          draggingViewId !== view.id &&
-                                          dragOverViewId !== view.id
-                                        ) {
-                                          setDragOverViewId(view.id);
-                                        }
-                                      }}
-                                      onDragLeave={(e) => {
-                                        e.stopPropagation();
-                                        if (dragOverViewId === view.id) setDragOverViewId(null);
-                                      }}
-                                      onDrop={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (draggingViewId) {
-                                          reorderViews(draggingViewId, view.id);
-                                        }
-                                        setDraggingViewId(null);
-                                        setDragOverViewId(null);
-                                      }}
-                                      onDragEnd={() => {
-                                        setDraggingViewId(null);
-                                        setDragOverViewId(null);
-                                      }}
-                                      className={`group flex items-center gap-1 px-1.5 py-1 rounded transition-colors border-t-2 ${
-                                        isActive ? 'bg-zinc-100' : 'hover:bg-zinc-50'
-                                      } ${isDragOver ? 'border-praetor' : 'border-transparent'} ${
-                                        draggingViewId === view.id ? 'opacity-40' : ''
-                                      }`}
-                                    >
-                                      <button
-                                        type="button"
-                                        title={t('table.reorderViewHandle')}
-                                        aria-label={t('table.reorderViewHandle')}
-                                        onClick={(e) => e.stopPropagation()}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'ArrowUp') {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            moveViewByDelta(view.id, -1);
-                                          } else if (e.key === 'ArrowDown') {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            moveViewByDelta(view.id, 1);
-                                          }
-                                        }}
-                                        className="text-zinc-300 group-hover:text-zinc-400 hover:text-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 rounded cursor-move flex-shrink-0 px-0.5"
-                                      >
-                                        <i
-                                          className="fa-solid fa-grip-vertical text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          applyView(view);
-                                        }}
-                                        className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
-                                        title={view.name}
-                                      >
-                                        {isActive && (
-                                          <i className="fa-solid fa-check text-[10px] text-praetor flex-shrink-0"></i>
-                                        )}
-                                        <span
-                                          className={`text-[11px] truncate ${
-                                            isActive
-                                              ? 'text-praetor font-bold'
-                                              : 'text-zinc-600 font-semibold'
-                                          }`}
-                                        >
-                                          {view.name}
-                                        </span>
-                                      </button>
-                                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
-                                        <ViewActionButton
-                                          icon="fa-pen"
-                                          title={t('table.renameView')}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setModalState({ kind: 'edit', view });
-                                            setViewsSubmenuOpen(false);
-                                          }}
-                                        />
-                                        <ViewActionButton
-                                          icon={isCopied ? 'fa-check' : 'fa-copy'}
-                                          title={
-                                            isCopied ? t('table.viewCopied') : t('table.exportView')
-                                          }
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            void exportView(view);
-                                          }}
-                                          className={`hover:bg-zinc-200 ${isCopied ? 'text-praetor' : 'text-zinc-500'}`}
-                                        />
-                                        <ViewActionButton
-                                          icon="fa-trash"
-                                          title={t('table.deleteView')}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteView(view.id);
-                                          }}
-                                          className="hover:bg-red-100 hover:text-red-600 text-red-600"
-                                        />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                            <div className="p-2 border-t border-zinc-100 space-y-1">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setModalState({ kind: 'create' });
-                                    setViewsSubmenuOpen(false);
-                                  }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:text-white bg-zinc-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
-                                >
-                                  <i className="fa-solid fa-plus text-[10px]"></i>
-                                  <span>{t('buttons.add')}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void importView();
-                                  }}
-                                  className="flex-1 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                                >
-                                  <i className="fa-solid fa-file-import text-[10px]"></i>
-                                  <span>{t('buttons.import')}</span>
-                                </button>
-                              </div>
-                              {viewError && (
-                                <div
-                                  role="alert"
-                                  className="text-[10px] text-red-500 text-center px-1 pt-1"
-                                >
-                                  {viewError}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {headerExtras}
-            {headerAction}
-          </div>
-        ) : null}
+                          {viewError}
+                        </div>
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+        </div>
       </div>
 
       <div
-        className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
+        ref={tableContainerRef}
+        className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
       >
         {columns && data ? (
-          <table className="w-full text-left border-separate border-spacing-0">
-            {(paginatedData.length > 0 ||
-              Object.keys(filterState).length > 0 ||
-              sortState !== null) && (
-              <thead className="bg-zinc-50">
-                <tr>
-                  {visibleColumns.map((col, colIdx) => {
+          <Table
+            className="table-fixed text-left"
+            style={
+              fixedTableWidth
+                ? {
+                    width: shouldAnchorTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
+                    minWidth: shouldAnchorTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
+                  }
+                : undefined
+            }
+          >
+            <colgroup>
+              {table.getVisibleLeafColumns().map((column) => {
+                const col = colsById.get(column.id);
+                const colWidth = column.getSize();
+                const needsActionSpacer =
+                  shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
+                return (
+                  <Fragment key={column.id}>
+                    {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
+                    <col style={{ width: colWidth }} />
+                  </Fragment>
+                );
+              })}
+            </colgroup>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="border-border hover:bg-transparent">
+                  {headerGroup.headers.map((header, colIdx) => {
+                    const col = colsById.get(header.column.id);
+                    if (!col) return null;
                     const colId = getColId(col);
-                    const isFiltered = filterState[colId] && filterState[colId].length > 0;
-                    const isSorted = sortState?.colId === colId;
+                    const isActionColumn = isRowActionColumn(col);
+                    const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
                     const isFirstColumn = colIdx === 0;
-                    const isLastColumn = colIdx === visibleColumns.length - 1;
-                    const isStretchColumn = colIdx === stretchColumnIdx;
+                    const isLastColumn = colIdx === headerGroup.headers.length - 1;
+                    const isBeforeActionSpacer =
+                      shouldAnchorTrailingActionColumn &&
+                      !isActionColumn &&
+                      colIdx === headerGroup.headers.length - 2;
+                    const shouldStickRightColumn = isStickyRightColumn;
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
                       ? 'left'
                       : isLastColumn
                         ? 'right'
                         : col.align;
-                    const colWidth = columnWidths[colId];
+                    const minColumnWidth = getColumnMinWidth(col);
+                    const colWidth = Math.max(header.getSize(), minColumnWidth);
+                    const sorted = header.column.getIsSorted();
+                    const isResizing = header.column.getIsResizing();
+                    const stickyBorderClass =
+                      shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
+                    const resizeHandler = header.getResizeHandler();
 
                     return (
-                      <th
-                        key={colId}
-                        style={
-                          colWidth
-                            ? { width: colWidth, minWidth: colWidth }
-                            : col.sticky === 'right'
-                              ? { minWidth: '40px', width: 'auto' }
-                              : undefined
-                        }
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-1.5 text-[10px] font-black text-zinc-400 uppercase tracking-widest whitespace-nowrap border-b border-zinc-100 ${isStretchColumn ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-zinc-50 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          <span>{col.header}</span>
-
-                          {!col.disableFiltering && (
-                            <button
-                              type="button"
-                              ref={activeFilterCol === colId ? filterRef : undefined}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (activeFilterCol === colId) {
-                                  setActiveFilterCol(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setFilterPos(getFilterPopupPosition(rect));
-                                  setActiveFilterCol(colId);
-                                }
-                              }}
-                              className={`p-1 rounded hover:bg-zinc-200 transition-colors ${
-                                isFiltered || isSorted || activeFilterCol === colId
-                                  ? 'text-praetor'
-                                  : 'text-zinc-400'
-                              }`}
-                            >
-                              <i className="fa-solid fa-filter"></i>
-                            </button>
-                          )}
-                        </span>
-
-                        <div
-                          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 opacity-0 group-hover:opacity-100 hover:bg-praetor/30 ${resizingColId === colId ? 'opacity-100 bg-praetor/50' : ''}`}
-                          onMouseDown={(e) => handleResizeStart(e, colId)}
-                        />
-
-                        {activeFilterCol === colId &&
-                          filterPos &&
-                          createPortal(
+                      <Fragment key={header.id}>
+                        {shouldAnchorTrailingActionColumn && isActionColumn && (
+                          <TableHead
+                            aria-hidden="true"
+                            style={{ width: 'auto', minWidth: 0 }}
+                            className="h-10 border-border p-0"
+                          />
+                        )}
+                        <TableHead
+                          style={{ width: colWidth, minWidth: minColumnWidth }}
+                          aria-label={isActionColumn ? col.header : undefined}
+                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
+                        >
+                          {isActionColumn ? (
                             <div
-                              ref={popupRef}
-                              style={{
-                                top: filterPos.top,
-                                left: filterPos.left,
-                                position: 'absolute',
-                                zIndex: 9999,
-                              }}
+                              data-column-header-content={colId}
+                              className="inline-flex w-max items-center gap-1"
                             >
-                              <TableFilter
-                                title={col.header}
-                                options={getFilterOptions(colId)}
-                                selectedValues={filterState[colId] || []}
-                                onFilterChange={(selected) => handleFilter(colId, selected)}
-                                sortDirection={sortState?.colId === colId ? sortState.px : null}
-                                onSortChange={(dir) => handleSort(colId, dir)}
-                                onClose={() => setActiveFilterCol(null)}
-                              />
-                            </div>,
-                            document.body,
+                              <span
+                                className="whitespace-nowrap text-sm font-semibold text-foreground"
+                                data-column-header-label={colId}
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              data-column-header-content={colId}
+                              className="inline-flex w-max items-center gap-1"
+                            >
+                              <button
+                                type="button"
+                                disabled={!header.column.getCanSort()}
+                                onClick={header.column.getToggleSortingHandler()}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              >
+                                <span
+                                  className="whitespace-nowrap"
+                                  data-column-header-label={colId}
+                                >
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                </span>
+                                {sorted === 'asc' ? (
+                                  <ArrowUp
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                ) : sorted === 'desc' ? (
+                                  <ArrowDown
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <ArrowUpDown
+                                    className="size-3 shrink-0 transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </button>
+                              {renderHeaderFilter(header.column, col)}
+                            </div>
                           )}
-                      </th>
+
+                          {header.column.getCanResize() && (
+                            <div
+                              className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
+                              data-column-resize-handle={colId}
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onTouchStart={(event) => {
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                            >
+                              <span
+                                data-column-resize-line={colId}
+                                className={`h-5 w-px rounded-full transition-colors ${
+                                  isBeforeActionSpacer
+                                    ? 'bg-transparent'
+                                    : isResizing
+                                      ? 'bg-primary'
+                                      : 'bg-border group-hover:bg-primary/40'
+                                }`}
+                              />
+                            </div>
+                          )}
+                        </TableHead>
+                      </Fragment>
                     );
                   })}
-                </tr>
-              </thead>
-            )}
-            <tbody>
-              {paginatedData.length > 0 ? (
-                paginatedData.map((row, idx) => {
-                  const isLastRow = idx === paginatedData.length - 1;
-                  return (
-                    <tr
-                      key={idx}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.length > 0 ? (
+                paginatedRows.map((tableRow) => {
+                  const row = tableRow.original;
+                  const visibleCells = tableRow.getVisibleCells();
+                  const rowActionCell = visibleCells.find((cell) => {
+                    const col = colsById.get(cell.column.id);
+                    return col ? isRowActionColumn(col) : false;
+                  });
+                  const rowActionColumn = rowActionCell
+                    ? colsById.get(rowActionCell.column.id)
+                    : undefined;
+                  const rowActionValue = rowActionCell?.getValue() as
+                    | T[keyof T]
+                    | string
+                    | number
+                    | boolean
+                    | null
+                    | undefined;
+                  const rowActionContent = rowActionCell
+                    ? rowActionColumn?.cell
+                      ? rowActionColumn.cell({
+                          getValue: () => rowActionValue,
+                          row,
+                          value: rowActionValue,
+                        })
+                      : flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
+                    : null;
+                  const rowActionMenuItems = hasActionMenuItems(rowActionContent)
+                    ? renderActionMenuItems(rowActionContent)
+                    : null;
+                  const rowElement = (
+                    <TableRow
+                      key={tableRow.id}
                       onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                      className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-zinc-300 text-zinc-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-zinc-50/50'}`}`}
+                      className={`group border-border transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
                     >
-                      {visibleColumns.map((col, colIdx) => {
-                        const colId = getColId(col);
-                        const val = getValue(row, col);
+                      {visibleCells.map((cell, colIdx) => {
+                        const colId = cell.column.id;
+                        const col = colsById.get(colId);
+                        if (!col) return null;
+                        const isActionColumn = isRowActionColumn(col);
+                        const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
                         const isFirstColumn = colIdx === 0;
-                        const isLastColumn = colIdx === visibleColumns.length - 1;
-                        const isStretchColumn = colIdx === stretchColumnIdx;
+                        const isLastColumn = colIdx === visibleCells.length - 1;
+                        const shouldStickRightColumn = isStickyRightColumn;
                         // Force alignment: first column left, last column right, otherwise use col.align
                         const effectiveAlign = isFirstColumn
                           ? 'left'
                           : isLastColumn
                             ? 'right'
                             : col.align;
-                        const colWidth = columnWidths[colId];
+                        const minColumnWidth = getColumnMinWidth(col);
+                        const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
+                        const stickyBorderClass =
+                          shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
+                        const stickyHoverClass =
+                          shouldStickRightColumn && !isActionColumn
+                            ? 'group-hover:bg-muted/50'
+                            : '';
+                        const rawValue = cell.getValue() as
+                          | T[keyof T]
+                          | string
+                          | number
+                          | boolean
+                          | null
+                          | undefined;
+                        const cellContent =
+                          isActionColumn && col.cell
+                            ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                            : flexRender(cell.column.columnDef.cell, cell.getContext());
+                        const actionMenuItems =
+                          isActionColumn && hasActionMenuItems(cellContent)
+                            ? renderActionMenuItems(cellContent)
+                            : null;
                         return (
-                          <td
-                            key={colId}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              col.onCellDoubleClick?.(row);
-                            }}
-                            style={
-                              colWidth
-                                ? { width: colWidth, minWidth: colWidth }
-                                : col.sticky === 'right'
-                                  ? { minWidth: '40px' }
-                                  : undefined
-                            }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${col.sticky === 'right' ? 'w-auto text-right' : `${isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-zinc-100' : ''} ${!isLastRow ? 'border-b border-zinc-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-zinc-50 transition-all duration-500 border-l border-zinc-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
-                          >
-                            {col.sticky === 'right' ? (
-                              <div className="flex justify-end items-center size-full">
-                                {col.cell
-                                  ? col.cell({ getValue: () => val, row, value: val })
-                                  : (val as ReactNode)}
-                              </div>
-                            ) : col.cell ? (
-                              col.cell({ getValue: () => val, row, value: val })
-                            ) : (
-                              (val as ReactNode)
+                          <Fragment key={cell.id}>
+                            {shouldAnchorTrailingActionColumn && isActionColumn && (
+                              <TableCell
+                                aria-hidden="true"
+                                style={{ width: 'auto', minWidth: 0 }}
+                                className="border-border p-0"
+                              />
                             )}
-                          </td>
+                            <TableCell
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                col.onCellDoubleClick?.(row);
+                              }}
+                              style={{ width: colWidth, minWidth: minColumnWidth }}
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            >
+                              {isActionColumn ? (
+                                actionMenuItems ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        aria-label={t('table.rowActions')}
+                                        onClick={(event) => event.stopPropagation()}
+                                        className="rounded-lg"
+                                      >
+                                        <i
+                                          className="fa-solid fa-ellipsis text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="end"
+                                      data-standard-table-action-menu="true"
+                                      className={ACTION_MENU_CONTENT_CLASSNAME}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onDoubleClick={(event) => event.stopPropagation()}
+                                    >
+                                      <div className={ACTION_MENU_ITEMS_CLASSNAME}>
+                                        {actionMenuItems}
+                                      </div>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : null
+                              ) : (
+                                cellContent
+                              )}
+                            </TableCell>
+                          </Fragment>
                         );
                       })}
-                    </tr>
+                    </TableRow>
+                  );
+
+                  return rowActionMenuItems ? (
+                    <ContextMenu key={tableRow.id}>
+                      <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
+                      <ContextMenuContent
+                        data-standard-table-action-menu="true"
+                        className={ACTION_MENU_CONTENT_CLASSNAME}
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ) : (
+                    rowElement
                   );
                 })
               ) : (
-                <tr>
-                  <td
-                    colSpan={Math.max(visibleColumns.length, 1)}
-                    className="p-12 text-center text-zinc-400 text-sm font-bold"
+                <TableRow className="border-border">
+                  <TableCell
+                    colSpan={Math.max(
+                      visibleColumns.length + (shouldAnchorTrailingActionColumn ? 1 : 0),
+                      1,
+                    )}
+                    className="p-12 text-center text-sm font-medium text-muted-foreground"
                   >
                     {emptyState ?? t('table.noResults')}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ) : (
           children
         )}
@@ -1389,7 +1901,7 @@ const StandardTable = <T extends object>({
 
       {(externalFooter || (data && columns)) && (
         <div
-          className={`px-3 py-2 bg-zinc-50 border-t border-zinc-200 rounded-b-3xl ${
+          className={`py-1 ${
             footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
@@ -1417,22 +1929,22 @@ const StandardTable = <T extends object>({
 
       {data && columns && pasteModalOpen && (
         <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 rounded-t-2xl flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
-                <i className="fa-solid fa-file-import text-praetor"></i>
+          <div className="w-full max-w-md rounded-md border border-border bg-card shadow-lg animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <h3 className="flex items-center gap-2 text-lg font-semibold">
+                <i className="fa-solid fa-file-import text-primary"></i>
                 {t('table.pasteViewTitle')}
               </h3>
               <button
                 type="button"
                 onClick={closePasteModal}
-                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
             <div className="px-6 py-5 space-y-3">
-              <p className="text-xs text-zinc-500">{t('table.pasteViewDescription')}</p>
+              <p className="text-xs text-muted-foreground">{t('table.pasteViewDescription')}</p>
               <textarea
                 value={pasteText}
                 onChange={(e) => {
@@ -1441,7 +1953,7 @@ const StandardTable = <T extends object>({
                 }}
                 placeholder={t('table.pasteViewPlaceholder')}
                 rows={6}
-                className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-praetor/30 focus:border-praetor resize-y"
+                className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
               {pasteError && (
                 <div role="alert" className="text-[11px] text-red-500">
@@ -1449,22 +1961,25 @@ const StandardTable = <T extends object>({
                 </div>
               )}
             </div>
-            <div className="px-6 py-3 border-t border-zinc-100 bg-zinc-50/50 rounded-b-2xl flex items-center justify-end gap-2">
-              <button
+            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                className="rounded-lg"
                 onClick={closePasteModal}
-                className="px-4 py-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
               >
                 {t('table.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
+                className="rounded-lg"
                 onClick={submitPasteImport}
                 disabled={pasteText.trim().length === 0}
-                className="px-4 py-2 text-xs font-bold text-white bg-praetor hover:bg-praetor/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {t('table.importView')}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

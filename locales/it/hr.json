@@ -29,7 +29,7 @@
     "selectTasks": "Seleziona Attività",
     "assignmentsSaved": "Assegnazioni salvate con successo",
     "deleteConfirm": "Sei sicuro di voler eliminare questo utente? Tutti i dati associati saranno interessati.",
-    "deleteUser": "Elimina Utente?",
+    "deleteUser": "Elimina Utente",
     "createNewUser": "Crea Nuovo Utente",
     "manageAccess": "Gestisci Accesso: {{name}}",
     "disabled": "Disabilitato",

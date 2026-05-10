@@ -8,7 +8,7 @@ import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
-import StatusBadge from '../shared/StatusBadge';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
@@ -682,22 +682,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
     const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
 
     return {
-      roleBadgeClass: isAdminRole
-        ? 'bg-zinc-800 text-white border-zinc-700'
+      roleBadgeType: (isAdminRole
+        ? 'role_admin'
         : isTopManagerRole
-          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          ? 'role_top_manager'
           : isManagerRole
-            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            ? 'role_manager'
             : role?.isSystem
-              ? 'bg-zinc-100 text-zinc-600 border-zinc-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      roleIcon: isAdminRole
-        ? 'fa-shield-halved'
-        : isTopManagerRole
-          ? 'fa-crown'
-          : isManagerRole
-            ? 'fa-briefcase'
-            : 'fa-user',
+              ? 'role_user'
+              : 'role_custom') as StatusType,
       roleName: role?.name || user.role,
     };
   };
@@ -739,15 +732,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       header: t('hr:workforce.role'),
       accessorFn: (user) => getRolePresentation(user).roleName,
       cell: ({ row }) => {
-        const { roleBadgeClass, roleIcon, roleName } = getRolePresentation(row);
-        return (
-          <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
-          >
-            <i className={`fa-solid ${roleIcon}`}></i>
-            {roleName}
-          </span>
-        );
+        const { roleBadgeType, roleName } = getRolePresentation(row);
+        return <StatusBadge type={roleBadgeType} label={roleName} />;
       },
     },
     {
@@ -779,6 +765,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <span className="inline-flex">
                     <button
                       type="button"
+                      aria-label={t('hr:workforce.manageAssignments')}
                       onClick={(e) => {
                         e.stopPropagation();
                         openAssignments(row.id);
@@ -799,6 +786,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <span className="inline-flex">
                       <button
                         type="button"
+                        aria-label={t('hr:workforce.editUser')}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEdit(row);
@@ -817,6 +805,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       <span className="inline-flex">
                         <button
                           type="button"
+                          aria-label={t('hr:workforce.reEnableUser')}
                           onClick={(e) => {
                             e.stopPropagation();
                             onUpdateUser(row.id, { isDisabled: false });
@@ -835,6 +824,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       <span className="inline-flex">
                         <button
                           type="button"
+                          aria-label={t('hr:workforce.disableUser')}
                           onClick={(e) => {
                             e.stopPropagation();
                             onUpdateUser(row.id, { isDisabled: true });
@@ -857,6 +847,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <span className="inline-flex">
                     <button
                       type="button"
+                      aria-label={t('hr:workforce.deleteUser')}
                       onClick={(e) => {
                         e.stopPropagation();
                         confirmDelete(row);

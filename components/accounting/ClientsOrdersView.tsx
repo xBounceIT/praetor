@@ -435,19 +435,17 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             >
               {row.clientName}
             </div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
-              {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
-            </div>
           </div>
         ),
       },
       {
         header: t('sales:clientQuotes.globalDiscount'),
         id: 'globalDiscount',
+        accessorFn: (row: ClientsOrder) =>
+          formatDiscountValue(row.discount, row.discountType, currency),
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
         disableSorting: true,
-        disableFiltering: true,
         cell: ({ row }: { row: ClientsOrder }) => {
           const history = isHistoryRow(row.status);
           return (
@@ -531,6 +529,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.total ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
+        disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
@@ -571,7 +570,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:clientsOrders.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',

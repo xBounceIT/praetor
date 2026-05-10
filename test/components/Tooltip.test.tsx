@@ -63,14 +63,14 @@ describe('<Tooltip />', () => {
     expect(tooltip.className).toContain('whitespace-normal');
   });
 
-  test('uses inverted theme colors from scoped shadcn variables', async () => {
+  test('uses inverted shadcn theme colors', async () => {
     renderTooltip();
 
     await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
 
     const tooltip = await findTooltipContent();
-    expect(tooltip.className).toContain('bg-[var(--foreground)]');
-    expect(tooltip.className).toContain('text-[var(--background)]');
+    expect(tooltip.className).toContain('bg-primary');
+    expect(tooltip.className).toContain('text-primary-foreground');
   });
 
   test('updates portaled tooltip content when the resolved theme changes', async () => {
