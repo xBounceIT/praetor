@@ -1,4 +1,5 @@
 import { BookOpen, Code2, Server } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 
@@ -21,9 +22,13 @@ const docsLinks = [
 ];
 
 export default function DocsHubView() {
+  const { t } = useTranslation('layout');
+
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-8">
-      <h1 className="text-2xl font-semibold tracking-normal text-foreground">Documentazione</h1>
+      <h1 className="text-2xl font-semibold tracking-normal text-foreground">
+        {t('docsHub.title')}
+      </h1>
       <div className="grid gap-3 sm:grid-cols-3">
         {docsLinks.map(({ label, href, icon: Icon }) => (
           <Button
