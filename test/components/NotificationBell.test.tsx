@@ -87,6 +87,25 @@ describe('<NotificationBell />', () => {
     expect(screen.getByText('A generic notification')).toBeInTheDocument();
   });
 
+  test('admin password warning notifications use the warning icon', () => {
+    const warning: Notification = {
+      id: 'admin-default-password-warning',
+      userId: 'u1',
+      type: 'admin_password_warning',
+      title: 'Change the default admin password',
+      isRead: false,
+      createdAt: NOW,
+    };
+
+    const { container } = render(<NotificationBell {...baseProps} notifications={[warning]} />);
+
+    openDropdown();
+
+    expect(screen.getByText('Change the default admin password')).toBeInTheDocument();
+    expect(container.querySelector('i.fa-triangle-exclamation')).not.toBeNull();
+    expect(container.querySelector('i.fa-folder-tree')).toBeNull();
+  });
+
   test('clicking a single-project notification uses the singular translation key', () => {
     const single: Notification = {
       id: 'n3',

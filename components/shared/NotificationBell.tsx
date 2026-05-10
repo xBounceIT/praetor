@@ -12,6 +12,9 @@ export interface NotificationBellProps {
   onDelete: (id: string) => void;
 }
 
+const getNotificationIconClass = (type: string) =>
+  type === 'admin_password_warning' ? 'fa-triangle-exclamation' : 'fa-folder-tree';
+
 const NotificationBell: React.FC<NotificationBellProps> = ({
   notifications,
   unreadCount,
@@ -153,7 +156,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                           : 'bg-praetor/10 text-praetor'
                       }`}
                     >
-                      <i className="fa-solid fa-folder-tree text-sm"></i>
+                      <i
+                        className={`fa-solid ${getNotificationIconClass(notification.type)} text-sm`}
+                      ></i>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
