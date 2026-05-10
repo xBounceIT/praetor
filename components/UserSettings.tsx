@@ -1,6 +1,8 @@
+import { Check, Contrast, type LucideIcon, Moon, Sun, SunMoon } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import praetorFaviconUrl from '../praetor-favicon.png';
 import type { Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
@@ -13,7 +15,7 @@ export interface UserSettingsProps {
 }
 
 type LanguagePreference = NonNullable<Settings['language']>;
-type ThemeSwatchVariant = 'auto' | 'praetor' | 'splitSidebar';
+type ThemeSwatchVariant = 'default' | 'praetor';
 
 const THEME_OPTION_META: Record<
   Theme,
@@ -21,72 +23,56 @@ const THEME_OPTION_META: Record<
     activeClassName: string;
     inactiveClassName: string;
     swatchClassName: string;
-    iconClassName?: string;
-    swatchVariant?: ThemeSwatchVariant;
+    Icon?: LucideIcon;
+    swatchVariant: ThemeSwatchVariant;
   }
 > = {
   light: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
-    iconClassName: 'fa-solid fa-sun text-sm',
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: Sun,
+    swatchVariant: 'default',
   },
   dark: {
     activeClassName: 'border-secondary bg-secondary',
     inactiveClassName: 'border-zinc-100 hover:border-secondary',
-    swatchClassName: 'bg-zinc-900 shrink-0 shadow-sm flex items-center justify-center text-white',
-    iconClassName: 'fa-solid fa-moon text-sm',
+    swatchClassName: 'bg-zinc-900 shadow-sm flex items-center justify-center text-white',
+    Icon: Moon,
+    swatchVariant: 'default',
   },
   zebra: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'relative overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
-    swatchVariant: 'splitSidebar',
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: Contrast,
+    swatchVariant: 'default',
   },
   praetor: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
-    swatchClassName:
-      'bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
+    swatchClassName: 'bg-white border border-zinc-200 shadow-sm flex items-center justify-center',
     swatchVariant: 'praetor',
   },
   auto: {
     activeClassName: 'border-praetor bg-zinc-50',
     inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
-      'relative overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center',
-    swatchVariant: 'auto',
+      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
+    Icon: SunMoon,
+    swatchVariant: 'default',
   },
 };
 
 const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
-  if (option.swatchVariant === 'splitSidebar') {
-    return (
-      <>
-        <span className="absolute inset-y-0 left-0 w-[38%] bg-zinc-950" />
-        <span className="absolute top-3 left-[48%] h-1 w-4 rounded-full bg-zinc-300" />
-        <span className="absolute top-5 left-[48%] h-1 w-3 rounded-full bg-zinc-200" />
-      </>
-    );
-  }
-
-  if (option.swatchVariant === 'auto') {
-    return (
-      <>
-        <span className="absolute inset-y-0 left-0 w-1/2 bg-white" />
-        <span className="absolute inset-y-0 right-0 w-1/2 bg-zinc-950" />
-        <span className="absolute inset-2 rounded-full border border-zinc-300" />
-      </>
-    );
-  }
-
   if (option.swatchVariant === 'praetor') {
-    return <img src="/praetor-favicon.png" alt="" className="size-7 object-contain" />;
+    return <img src={praetorFaviconUrl} alt="" className="size-7 object-contain" />;
   }
 
-  return <i className={option.iconClassName}></i>;
+  const Icon = option.Icon;
+  return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
 };
 
 const UserSettings: React.FC<UserSettingsProps> = ({
@@ -339,11 +325,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       isSelected ? option.activeClassName : option.inactiveClassName
                     }`}
                   >
-                    <div className={`relative size-10 rounded-full ${option.swatchClassName}`}>
-                      {renderThemeSwatchContent(option)}
+                    <div className="relative size-10 shrink-0">
+                      <div
+                        className={`size-10 overflow-hidden rounded-full ${option.swatchClassName}`}
+                      >
+                        {renderThemeSwatchContent(option)}
+                      </div>
                       {isSelected && (
-                        <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-[8px] text-secondary-foreground shadow-sm">
-                          <i className="fa-solid fa-check"></i>
+                        <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-secondary-foreground shadow-sm">
+                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
                         </span>
                       )}
                     </div>
