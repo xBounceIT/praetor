@@ -299,13 +299,31 @@ describe('<StandardTable />', () => {
     const sortButton = within(headerCell)
       .getAllByRole('button')
       .find((button) => button.textContent?.trim().startsWith('Name')) as HTMLButtonElement;
-    const sortIcon = sortButton.querySelector('i.fa-arrow-up-arrow-down');
+    const sortIcon = sortButton.querySelector('svg.lucide-arrow-up-down');
 
     expect(sortButton.className).toContain('rounded-lg');
     expect(sortButton.className).toContain('font-semibold');
     expect(sortButton.className).toContain('hover:bg-accent');
     expect(sortButton.className).toContain('hover:text-accent-foreground');
     expect(sortIcon?.className).toContain('transition-colors');
+  });
+
+  test('every non-action header shows a sort icon affordance', () => {
+    const columns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      { header: 'Age', accessorKey: 'age' as const, id: 'age', disableSorting: true },
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <span>X</span>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={columns} />);
+
+    expect(screen.getByText('Name').closest('th')?.querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByText('Age').closest('th')?.querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByText('Actions').closest('th')?.querySelector('svg')).toBeNull();
   });
 
   test('column resize clamps to the measured header label width', async () => {
@@ -356,7 +374,10 @@ describe('<StandardTable />', () => {
 
     await waitFor(() => expect(headerCell.style.width).toBe('160px'));
     expect(headerCell.style.minWidth).toBe('160px');
-    await waitFor(() => expect(headerCell.closest('table')?.className).toContain('table-fixed'));
+    const table = headerCell.closest('table') as HTMLTableElement;
+    await waitFor(() => expect(table.className).toContain('table-fixed'));
+    expect(table.style.width).toBe('248px');
+    expect(table.style.minWidth).toBe('100%');
     expect(screen.getByText('Age').closest('th')?.style.minWidth).toBe('88px');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
@@ -518,7 +539,7 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
     expect(within(actionsHeader).queryByRole('button')).not.toBeInTheDocument();
-    expect(actionsHeader.querySelector('i.fa-arrow-up-arrow-down')).toBeNull();
+    expect(actionsHeader.querySelector('svg')).toBeNull();
   });
 
   test('value cells reset custom value styling while preserving status badges', () => {
@@ -544,6 +565,7 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Alice').closest('td')?.className).toContain(
       'standard-table-value-cell',
     );
+    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-sm');
     expect(screen.getByText('Active')).toHaveAttribute('data-status-badge');
   });
 
@@ -795,7 +817,7 @@ describe('<StandardTable />', () => {
     expect(previousButton.className).toContain('border-border');
     expect(previousButton.className).toContain('rounded-lg');
     expect(previousButton.className).toContain('!h-7');
-    expect(previousButton.className).toContain('!text-[10px]');
+    expect(previousButton.className).toContain('!text-sm');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
@@ -834,7 +856,7 @@ describe('<StandardTable />', () => {
       expect(button.className).toContain('border-border');
       expect(button.className).toContain('rounded-lg');
       expect(button.className).toContain('!h-7');
-      expect(button.className).toContain('!text-[10px]');
+      expect(button.className).toContain('!text-sm');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
 

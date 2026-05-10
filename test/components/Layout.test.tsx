@@ -104,7 +104,9 @@ describe('<Layout />', () => {
       '[data-sidebar="menu-button"][data-active="true"]',
     );
     const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
+    const brandLogo = brandButton?.querySelector('svg')?.parentElement;
     const brandSubtitle = screen.getByText('roles.manager workspace');
+    const avatarFallback = screen.getByText('TU');
 
     expect(sidebarContainer?.className).toContain('border-sidebar-border');
     expect(sidebarContainer?.className).not.toContain('border-zinc-200');
@@ -113,7 +115,14 @@ describe('<Layout />', () => {
     expect(activeButton?.className).not.toContain('text-black');
     expect(brandButton?.className).toContain('text-sidebar-foreground');
     expect(brandButton?.className).toContain('hover:text-sidebar-foreground');
+    expect(brandLogo?.className).toContain('text-sidebar-foreground');
+    expect(brandLogo?.className).not.toContain('text-white');
+    expect(brandLogo?.className).not.toContain('bg-praetor');
+    expect(brandSubtitle.className).toContain('text-sm');
     expect(brandSubtitle.className).toContain('text-sidebar-foreground/80');
+    expect(avatarFallback.className).toContain('text-sm');
+    expect(avatarFallback.className).toContain('text-sidebar-foreground');
+    expect(avatarFallback.className).not.toContain('text-white');
   });
 
   test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', async () => {

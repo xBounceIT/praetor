@@ -45,7 +45,7 @@ function UserIdentityBlock({ user, roleLabel, context = 'sidebar' }: UserIdentit
   return (
     <>
       <Avatar className="h-8 w-8 rounded-lg">
-        <AvatarFallback className="rounded-lg bg-praetor text-xs font-semibold text-white">
+        <AvatarFallback className="rounded-lg bg-sidebar-accent text-sm font-semibold text-sidebar-foreground">
           {user.avatarInitials}
         </AvatarFallback>
       </Avatar>
@@ -58,7 +58,7 @@ function UserIdentityBlock({ user, roleLabel, context = 'sidebar' }: UserIdentit
       >
         <span className="truncate font-medium">{user.name}</span>
         <span
-          className={`truncate text-xs ${
+          className={`truncate text-sm ${
             isPopover
               ? 'text-muted-foreground'
               : 'text-sidebar-foreground/80 group-data-[state=open]/menu-button:text-sidebar-accent-foreground/80'

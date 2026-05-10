@@ -14,6 +14,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import {
   Children,
   isValidElement,
@@ -97,7 +98,7 @@ const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
 const ACTION_COLUMN_WIDTH = 80;
-const TABLE_CONTROL_BUTTON_CLASSNAME = '!h-7 !gap-1.5 !rounded-lg !px-2 !text-[10px] !font-bold';
+const TABLE_CONTROL_BUTTON_CLASSNAME = '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !font-bold';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -365,6 +366,15 @@ const StandardTable = <T extends object>({
       return next;
     });
   }, [measureVisibleColumnWidths]);
+
+  const getHeaderMinWidth = useCallback(
+    (col: Column<T>) =>
+      isRowActionColumn(col)
+        ? ACTION_COLUMN_WIDTH
+        : (headerMinWidths[getColId(col)] ?? DEFAULT_MIN_COL_WIDTH),
+    [getColId, headerMinWidths, isRowActionColumn],
+  );
+
   const validColumnWidths = useMemo(() => {
     const validIds = new Set((columns ?? []).map((col) => getColId(col)));
     return sanitizeColumnWidths(columnWidths, validIds);
@@ -692,6 +702,14 @@ const StandardTable = <T extends object>({
   const totalItems = data ? processedRows.length : externalTotalCount || 0;
   const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = data ? table.getRowModel().rows : [];
+  const fixedTableWidth = useMemo(() => {
+    if (!usesFixedTableLayout) return undefined;
+    return table.getVisibleLeafColumns().reduce((total, column) => {
+      const col = colsById.get(column.id);
+      if (!col) return total;
+      return total + (validColumnWidths[column.id] ?? getHeaderMinWidth(col));
+    }, 0);
+  }, [colsById, getHeaderMinWidth, table, usesFixedTableLayout, validColumnWidths]);
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -725,11 +743,6 @@ const StandardTable = <T extends object>({
     if (typeof filterValue === 'string') return [filterValue];
     return [];
   };
-
-  const getHeaderMinWidth = (col: Column<T>) =>
-    isRowActionColumn(col)
-      ? ACTION_COLUMN_WIDTH
-      : (headerMinWidths[getColId(col)] ?? DEFAULT_MIN_COL_WIDTH);
 
   const getElementLike = (node: ReactNode) => {
     if (isValidElement(node))
@@ -1033,13 +1046,21 @@ const StandardTable = <T extends object>({
     e.stopPropagation();
     const th = e.currentTarget.parentElement as HTMLTableCellElement;
     const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
-    const measuredWidths = measureVisibleColumnWidths(true);
-    if (measuredWidths) {
-      setColumnWidths((prev) => ({ ...prev, ...measuredWidths }));
+    const measuredMinWidths = measureVisibleColumnWidths();
+    if (measuredMinWidths) setHeaderMinWidths(measuredMinWidths);
+    const resizedColumn = colsById.get(colId);
+    const currentWidth = Math.ceil(th.getBoundingClientRect().width);
+    if (resizedColumn && currentWidth > 0) {
+      setColumnWidths((prev) => ({
+        ...prev,
+        [colId]: Math.max(
+          getMeasuredColumnWidth(resizedColumn, headerLabel ?? undefined),
+          currentWidth,
+        ),
+      }));
     }
     resizeStartXRef.current = e.clientX;
-    resizeStartWidthRef.current = th.getBoundingClientRect().width;
-    const resizedColumn = colsById.get(colId);
+    resizeStartWidthRef.current = currentWidth;
     resizeMinWidthRef.current = resizedColumn
       ? getMeasuredColumnWidth(resizedColumn, headerLabel ?? undefined)
       : DEFAULT_MIN_COL_WIDTH;
@@ -1566,7 +1587,12 @@ const StandardTable = <T extends object>({
         className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
-          <Table className={`w-full text-left ${usesFixedTableLayout ? 'table-fixed' : ''}`}>
+          <Table
+            className={`text-left ${usesFixedTableLayout ? 'table-fixed' : 'w-full'}`}
+            style={
+              fixedTableWidth ? { width: `${fixedTableWidth}px`, minWidth: '100%' } : undefined
+            }
+          >
             {usesFixedTableLayout && (
               <colgroup>
                 {table.getVisibleLeafColumns().map((column) => {
@@ -1645,16 +1671,22 @@ const StandardTable = <T extends object>({
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
                               </span>
-                              <i
-                                className={`fa-solid ${
-                                  sorted === 'asc'
-                                    ? 'fa-arrow-up'
-                                    : sorted === 'desc'
-                                      ? 'fa-arrow-down'
-                                      : 'fa-arrow-up-arrow-down'
-                                } shrink-0 text-[10px] transition-colors`}
-                                aria-hidden="true"
-                              ></i>
+                              {sorted === 'asc' ? (
+                                <ArrowUp
+                                  className="size-3 shrink-0 transition-colors"
+                                  aria-hidden="true"
+                                />
+                              ) : sorted === 'desc' ? (
+                                <ArrowDown
+                                  className="size-3 shrink-0 transition-colors"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <ArrowUpDown
+                                  className="size-3 shrink-0 transition-colors"
+                                  aria-hidden="true"
+                                />
+                              )}
                             </button>
                             {renderHeaderFilter(header.column, col)}
                           </div>
@@ -1744,7 +1776,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell font-normal' : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell text-sm font-normal' : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>
