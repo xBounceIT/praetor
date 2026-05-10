@@ -1550,6 +1550,10 @@ const StandardTable = <T extends object>({
                     const isActionColumn = isRowActionColumn(col);
                     const isFirstColumn = colIdx === 0;
                     const isLastColumn = colIdx === headerGroup.headers.length - 1;
+                    const isBeforeActionSpacer =
+                      hasTrailingActionColumn &&
+                      !isActionColumn &&
+                      colIdx === headerGroup.headers.length - 2;
                     // Force alignment: first column left, last column right, otherwise use col.align
                     const effectiveAlign = isFirstColumn
                       ? 'left'
@@ -1653,7 +1657,11 @@ const StandardTable = <T extends object>({
                               <span
                                 data-column-resize-line={colId}
                                 className={`h-5 w-px rounded-full transition-colors ${
-                                  isResizing ? 'bg-primary' : 'bg-border group-hover:bg-primary/40'
+                                  isBeforeActionSpacer
+                                    ? 'bg-transparent'
+                                    : isResizing
+                                      ? 'bg-primary'
+                                      : 'bg-border group-hover:bg-primary/40'
                                 }`}
                               />
                             </div>

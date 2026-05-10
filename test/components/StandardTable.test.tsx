@@ -274,6 +274,12 @@ describe('<StandardTable />', () => {
     expect(cells[3].className).not.toMatch(/\bw-full\b/);
     expect(screen.getByRole('table').style.width).toBe('100%');
     expect(screen.getByRole('table').style.minWidth).not.toBe('');
+    const ageResizeLine = screen
+      .getByText('Age')
+      .closest('th')
+      ?.querySelector('[data-column-resize-line="age"]');
+    expect(ageResizeLine?.className).toContain('bg-transparent');
+    expect(ageResizeLine?.className).not.toContain('bg-border');
   });
 
   // ---------------------------------------------------------------------------
