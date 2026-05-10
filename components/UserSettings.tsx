@@ -68,7 +68,7 @@ const THEME_OPTION_META: Record<
 
 const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
   if (option.swatchVariant === 'praetor') {
-    return <img src={praetorFaviconUrl} alt="" className="size-7 object-contain" />;
+    return <img src={praetorFaviconUrl} alt="" className="size-12 max-w-none object-cover" />;
   }
 
   const Icon = option.Icon;
