@@ -1,33 +1,20 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
-import * as entriesRepo from '../repositories/entriesRepo.ts';
-import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
-import * as projectsRepo from '../repositories/projectsRepo.ts';
-import * as tasksRepo from '../repositories/tasksRepo.ts';
-import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
-import * as usersRepo from '../repositories/usersRepo.ts';
-import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { todayLocalDateOnly } from '../utils/date.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
-  badRequest,
-  isWeekendDate,
-  optionalLocalizedNonNegativeNumber,
-  optionalNonEmptyString,
-  parseBoolean,
-  parseDateString,
-  parseLocalizedNonNegativeNumber,
-  parseQueryBoolean,
-  requireNonEmptyString,
-} from '../utils/validation.ts';
+  bulkDeleteTimeEntries,
+  createTimeEntry,
+  deleteTimeEntry,
+  listTimeEntries,
+  TimeEntryServiceError,
+  updateTimeEntry,
+} from '../services/timeEntries.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 
 const idParamSchema = {
   type: 'object',
@@ -130,6 +117,18 @@ const entriesBulkDeleteQuerySchema = {
   required: ['projectId', 'task'],
 } as const;
 
+const actorFromRequest = (request: FastifyRequest) => ({
+  id: request.user?.id ?? '',
+  permissions: request.user?.permissions ?? [],
+});
+
+const handleTimeEntryServiceError = (err: unknown, reply: FastifyReply) => {
+  if (err instanceof TimeEntryServiceError) {
+    return reply.code(err.statusCode).send({ error: err.message });
+  }
+  throw err;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
   fastify.get(
@@ -158,30 +157,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         limit?: number;
         cursor?: string;
       };
-      const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
-      const viewerId = request.user.id;
-
-      if (!canViewAll && userId && userId !== viewerId) {
-        const allowed = await workUnitsRepo.isUserManagedBy(viewerId, userId);
-        if (!allowed) {
-          return reply.code(403).send({ error: 'Not authorized to view entries for this user' });
-        }
+      try {
+        return await listTimeEntries(actorFromRequest(request), { userId, limit, cursor });
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
       }
-
-      const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
-      if (cursor && !decodedCursor) return badRequest(reply, 'cursor is invalid');
-
-      const options = { limit, cursor: decodedCursor ?? undefined };
-      const result = userId
-        ? await entriesRepo.listForUser(userId, options)
-        : canViewAll
-          ? await entriesRepo.listAll(options)
-          : await entriesRepo.listForManagerView(viewerId, options);
-
-      return {
-        entries: result.entries,
-        nextCursor: result.nextCursor ? entriesRepo.encodeCursor(result.nextCursor) : null,
-      };
     },
   );
 
@@ -203,129 +183,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const {
-        date,
-        clientId,
-        clientName,
-        projectId,
-        projectName,
-        task,
-        notes,
-        duration,
-        isPlaceholder,
-        userId,
-        location,
-      } = request.body as {
-        date: string;
-        clientId: string;
-        clientName: string;
-        projectId: string;
-        projectName: string;
-        task: string;
-        notes?: string;
-        duration?: number;
-        isPlaceholder?: boolean;
-        userId?: string;
-        location?: string;
-      };
-
-      const dateResult = parseDateString(date, 'date');
-      if (!dateResult.ok) return badRequest(reply, dateResult.message);
-
-      // Weekend validation
-      if (isWeekendDate(dateResult.value)) {
-        const settings = await generalSettingsRepo.get();
-        const allowWeekendSelection = settings?.allowWeekendSelection ?? true;
-        if (!allowWeekendSelection) {
-          return badRequest(reply, 'Time entries on weekends are not allowed');
-        }
+      try {
+        const created = await createTimeEntry(actorFromRequest(request), request.body ?? {});
+        return reply.code(201).send(created);
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
       }
-
-      const clientIdResult = requireNonEmptyString(clientId, 'clientId');
-      if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
-
-      const clientNameResult = requireNonEmptyString(clientName, 'clientName');
-      if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
-
-      const projectIdResult = requireNonEmptyString(projectId, 'projectId');
-      if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
-
-      const projectNameResult = requireNonEmptyString(projectName, 'projectName');
-      if (!projectNameResult.ok) return badRequest(reply, projectNameResult.message);
-
-      const taskResult = requireNonEmptyString(task, 'task');
-      if (!taskResult.ok) return badRequest(reply, taskResult.message);
-
-      const durationResult = optionalLocalizedNonNegativeNumber(duration, 'duration');
-      if (!durationResult.ok) return badRequest(reply, durationResult.message);
-
-      const isPlaceholderValue = parseBoolean(isPlaceholder);
-
-      let targetUserId = request.user.id;
-      if (userId) {
-        const targetUserIdResult = requireNonEmptyString(userId, 'userId');
-        if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
-        targetUserId = targetUserIdResult.value;
-
-        if (
-          targetUserId !== request.user.id &&
-          !hasPermission(request, 'timesheets.tracker_all.view')
-        ) {
-          const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, targetUserId);
-          if (!allowed) {
-            return reply
-              .code(403)
-              .send({ error: 'Not authorized to create entries for this user' });
-          }
-        }
-      }
-
-      const hourlyCost = await usersRepo.findCostPerHour(targetUserId);
-      const resolvedTaskId = await tasksRepo.findIdByProjectAndName(
-        projectIdResult.value,
-        taskResult.value,
-      );
-      const projectClientId = await projectsRepo.findClientId(projectIdResult.value);
-      if (projectClientId === null) {
-        return badRequest(reply, 'Project not found');
-      }
-      if (projectClientId !== clientIdResult.value) {
-        return badRequest(reply, 'Project does not belong to the selected client');
-      }
-
-      if (!hasPermission(request, 'timesheets.tracker_all.view')) {
-        const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
-          userAssignmentsRepo.isClientAssignedToUser(targetUserId, clientIdResult.value),
-          userAssignmentsRepo.isProjectAssignedToUser(targetUserId, projectIdResult.value),
-          resolvedTaskId
-            ? userAssignmentsRepo.isTaskAssignedToUser(targetUserId, resolvedTaskId)
-            : Promise.resolve(true),
-        ]);
-        if (!clientAllowed || !projectAllowed || !taskAllowed) {
-          return reply
-            .code(403)
-            .send({ error: 'Not authorized to create entries for this client, project, or task' });
-        }
-      }
-
-      const created = await entriesRepo.create({
-        id: generatePrefixedId('te'),
-        userId: targetUserId,
-        date: dateResult.value,
-        clientId: clientIdResult.value,
-        clientName: clientNameResult.value,
-        projectId: projectIdResult.value,
-        projectName: projectNameResult.value,
-        task: taskResult.value,
-        taskId: resolvedTaskId,
-        notes: notes || null,
-        duration: durationResult.value || 0,
-        hourlyCost,
-        isPlaceholder: isPlaceholderValue,
-        location: location || 'remote',
-      });
-
-      return reply.code(201).send(created);
     },
   );
 
@@ -349,66 +212,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const { id } = request.params as { id: string };
-      const { duration, notes, isPlaceholder, location } = request.body as {
-        duration?: number;
-        notes?: string;
-        isPlaceholder?: boolean;
-        location?: string;
-      };
-      const idResult = requireNonEmptyString(id, 'id');
-      if (!idResult.ok) return badRequest(reply, idResult.message);
-
-      let parsedDuration: number | undefined;
-      if (duration !== undefined) {
-        const durationResult = parseLocalizedNonNegativeNumber(duration, 'duration');
-        if (!durationResult.ok) return badRequest(reply, durationResult.message);
-        parsedDuration = durationResult.value;
+      try {
+        return await updateTimeEntry(actorFromRequest(request), id, request.body ?? {});
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
       }
-
-      let validatedNotes: string | null | undefined;
-      if (notes !== undefined) {
-        const notesResult = optionalNonEmptyString(notes, 'notes');
-        if (!notesResult.ok) return badRequest(reply, notesResult.message);
-        validatedNotes = notesResult.value;
-      }
-
-      const context = await entriesRepo.findContext(idResult.value);
-      if (context === null) {
-        return reply.code(404).send({ error: 'Entry not found' });
-      }
-
-      if (
-        context.userId !== request.user.id &&
-        !hasPermission(request, 'timesheets.tracker_all.view')
-      ) {
-        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, context.userId);
-        if (!allowed) {
-          return reply.code(403).send({ error: 'Not authorized to update this entry' });
-        }
-      }
-
-      // Backfill task_id only when missing - entries created before the FK column existed (or
-      // before the matching task row existed) carry task_id NULL. Don't touch the FK on rows that
-      // already have it set.
-      let backfilledTaskId: string | undefined;
-      if (context.taskId === null) {
-        const found = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
-        backfilledTaskId = found ?? undefined;
-      }
-
-      const updated = await entriesRepo.update(idResult.value, {
-        duration: parsedDuration,
-        notes: validatedNotes,
-        isPlaceholder,
-        location,
-        taskId: backfilledTaskId,
-      });
-
-      if (!updated) {
-        return reply.code(404).send({ error: 'Entry not found' });
-      }
-
-      return updated;
     },
   );
 
@@ -431,23 +239,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
-      if (!idResult.ok) return badRequest(reply, idResult.message);
-
-      const ownerId = await entriesRepo.findOwner(idResult.value);
-      if (ownerId === null) {
-        return reply.code(404).send({ error: 'Entry not found' });
+      try {
+        return await deleteTimeEntry(actorFromRequest(request), id);
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
       }
-
-      if (ownerId !== request.user.id && !hasPermission(request, 'timesheets.tracker_all.view')) {
-        const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, ownerId);
-        if (!allowed) {
-          return reply.code(403).send({ error: 'Not authorized to delete this entry' });
-        }
-      }
-
-      await entriesRepo.deleteById(idResult.value);
-      return { message: 'Entry deleted' };
     },
   );
 
@@ -479,29 +275,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         futureOnly?: string;
         placeholderOnly?: string;
       };
-
-      const projectIdResult = requireNonEmptyString(projectId, 'projectId');
-      if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
-
-      const taskResult = requireNonEmptyString(task, 'task');
-      if (!taskResult.ok) return badRequest(reply, taskResult.message);
-
-      const futureOnlyValue = parseQueryBoolean(futureOnly) || false;
-      const placeholderOnlyValue = parseQueryBoolean(placeholderOnly) || false;
-
-      const restrictToManagerScopeOf = hasPermission(request, 'timesheets.tracker_all.view')
-        ? undefined
-        : request.user.id;
-
-      const deleted = await entriesRepo.bulkDelete({
-        projectId: projectIdResult.value,
-        task: taskResult.value,
-        restrictToManagerScopeOf,
-        fromDate: futureOnlyValue ? todayLocalDateOnly() : undefined,
-        placeholderOnly: placeholderOnlyValue,
-      });
-
-      return { message: `Deleted ${deleted} entries` };
+      try {
+        return await bulkDeleteTimeEntries(actorFromRequest(request), {
+          projectId,
+          task,
+          futureOnly,
+          placeholderOnly,
+        });
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
+      }
     },
   );
 }

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken } from '../middleware/auth.ts';
+import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
@@ -10,6 +11,7 @@ import {
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -49,6 +51,37 @@ const passwordUpdateBodySchema = {
   },
   required: ['currentPassword', 'newPassword'],
 } as const;
+
+const mcpTokenSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    tokenPrefix: { type: 'string' },
+    createdAt: { type: 'number' },
+    lastUsedAt: { type: ['number', 'null'] },
+  },
+  required: ['id', 'name', 'tokenPrefix', 'createdAt', 'lastUsedAt'],
+} as const;
+
+const mcpTokenCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+  },
+  required: ['name'],
+} as const;
+
+const mcpTokenCreateResponseSchema = {
+  type: 'object',
+  properties: {
+    token: mcpTokenSchema,
+    rawToken: { type: 'string' },
+  },
+  required: ['token', 'rawToken'],
+} as const;
+
+const MAX_ACTIVE_MCP_TOKENS_PER_USER = 20;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get current user's settings
@@ -112,6 +145,97 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email: emailResult.value,
         language: languageResult.value,
       });
+    },
+  );
+
+  // GET /mcp-tokens - List current user's active MCP tokens
+  fastify.get(
+    '/mcp-tokens',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'List current user MCP tokens',
+        response: {
+          200: { type: 'array', items: mcpTokenSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      return mcpTokensRepo.listForUser(request.user.id);
+    },
+  );
+
+  // POST /mcp-tokens - Create current user's MCP token
+  fastify.post(
+    '/mcp-tokens',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Create current user MCP token',
+        body: mcpTokenCreateBodySchema,
+        response: {
+          201: mcpTokenCreateResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const { name } = request.body as { name?: unknown };
+      const nameResult = requireNonEmptyString(name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+      if (nameResult.value.length > 120) return badRequest(reply, 'name is too long');
+
+      const activeTokens = await mcpTokensRepo.listForUser(request.user.id);
+      if (activeTokens.length >= MAX_ACTIVE_MCP_TOKENS_PER_USER) {
+        return reply.code(409).send({ error: 'Maximum active MCP token limit reached' });
+      }
+
+      const rawToken = mcpTokensRepo.generateRawToken();
+      const token = await mcpTokensRepo.createForUser({
+        id: generatePrefixedId('mcp-token'),
+        userId: request.user.id,
+        name: nameResult.value,
+        rawToken,
+      });
+
+      return reply.code(201).send({ token, rawToken });
+    },
+  );
+
+  // DELETE /mcp-tokens/:id - Revoke current user's MCP token
+  fastify.delete(
+    '/mcp-tokens/:id',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Revoke current user MCP token',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        response: {
+          200: messageResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const { id } = request.params as { id?: unknown };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const revoked = await mcpTokensRepo.revokeForUser(idResult.value, request.user.id);
+      if (!revoked) return reply.code(404).send({ error: 'MCP token not found' });
+
+      return { message: 'MCP token revoked' };
     },
   );
 

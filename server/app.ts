@@ -16,6 +16,7 @@ import generalSettingsRoutes from './routes/general-settings.ts';
 import invoicesRoutes from './routes/invoices.ts';
 import ldapRoutes from './routes/ldap.ts';
 import logsRoutes from './routes/logs.ts';
+import mcpRoutes from './routes/mcp.ts';
 import notificationsRoutes from './routes/notifications.ts';
 import productsRoutes from './routes/products.ts';
 import projectsRoutes from './routes/projects.ts';
@@ -134,6 +135,7 @@ export const buildApp = async () => {
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });
   await fastify.register(reportsRoutes, { prefix: '/api/reports' });
   await fastify.register(logsRoutes, { prefix: '/api/logs' });
+  await fastify.register(mcpRoutes, { prefix: '/api/mcp' });
 
   fastify.get(
     '/api/health',

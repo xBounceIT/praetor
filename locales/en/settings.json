@@ -51,6 +51,23 @@
     "passwordMinLength": "New password must be at least 8 characters long",
     "incorrectPassword": "Incorrect current password"
   },
+  "mcp": {
+    "title": "MCP Tokens",
+    "nameLabel": "Token Name",
+    "namePlaceholder": "Claude Desktop, Codex, or another agent",
+    "create": "Create Token",
+    "copy": "Copy",
+    "revoke": "Revoke",
+    "loading": "Loading MCP tokens...",
+    "empty": "No active MCP tokens.",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "rawTokenTitle": "Copy this token now",
+    "rawTokenDescription": "Praetor stores only a hash and cannot show this token again.",
+    "loadFailed": "Failed to load MCP tokens",
+    "createFailed": "Failed to create MCP token",
+    "revokeFailed": "Failed to revoke MCP token"
+  },
   "general": {
     "title": "General Settings",
     "pageTitle": "General Administration",

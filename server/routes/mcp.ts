@@ -1,0 +1,430 @@
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
+import { type CallToolResult, McpServer, type ServerContext } from '@modelcontextprotocol/server';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { authenticateMcpToken, type McpAuthenticatedUser } from '../middleware/mcpAuth.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as notificationsRepo from '../repositories/notificationsRepo.ts';
+import * as projectsRepo from '../repositories/projectsRepo.ts';
+import * as suppliersRepo from '../repositories/suppliersRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
+import {
+  createTimeEntry,
+  deleteTimeEntry,
+  listTimeEntries,
+  TimeEntryServiceError,
+  updateTimeEntry,
+} from '../services/timeEntries.ts';
+import {
+  buildBusinessDataset,
+  determineRequestedSections,
+  getGeneralAiConfig,
+  getReportingRange,
+} from './reports.ts';
+
+const hasPermission = (user: McpAuthenticatedUser, permission: string) =>
+  user.permissions.includes(permission);
+
+const hasAnyPermission = (user: McpAuthenticatedUser, permissions: readonly string[]) =>
+  permissions.some((permission) => hasPermission(user, permission));
+
+const CLIENT_LIST_PERMISSIONS = [
+  'crm.clients.view',
+  'crm.clients_all.view',
+  'timesheets.tracker.view',
+  'timesheets.recurring.view',
+  'projects.manage.view',
+  'projects.tasks.view',
+  'sales.client_quotes.view',
+  'sales.client_offers.view',
+  'accounting.clients_orders.view',
+  'accounting.clients_invoices.view',
+  'catalog.internal_listing.view',
+  'sales.supplier_quotes.view',
+  'administration.user_management.view',
+  'administration.user_management.update',
+] as const;
+
+const SUPPLIER_LIST_PERMISSIONS = [
+  'crm.suppliers.view',
+  'crm.suppliers_all.view',
+  'sales.supplier_quotes.view',
+  'accounting.supplier_orders.view',
+  'accounting.supplier_invoices.view',
+] as const;
+
+const PROJECT_LIST_PERMISSIONS = [
+  'projects.manage.view',
+  'projects.tasks.view',
+  'timesheets.tracker.view',
+  'timesheets.recurring.view',
+] as const;
+
+const TASK_LIST_PERMISSIONS = [
+  'projects.tasks.view',
+  'projects.manage.view',
+  'timesheets.tracker.view',
+  'timesheets.recurring.view',
+] as const;
+
+const enforceAny = (
+  user: McpAuthenticatedUser,
+  permissions: readonly string[],
+): CallToolResult | null =>
+  hasAnyPermission(user, permissions) ? null : toolError('Insufficient permissions');
+
+const textResult = (text: string, structuredContent?: Record<string, unknown>): CallToolResult => ({
+  content: [{ type: 'text', text }],
+  ...(structuredContent ? { structuredContent } : {}),
+});
+
+const jsonResult = (structuredContent: Record<string, unknown>): CallToolResult =>
+  textResult(JSON.stringify(structuredContent, null, 2), structuredContent);
+
+const toolError = (message: string): CallToolResult => ({
+  isError: true,
+  content: [{ type: 'text', text: message }],
+});
+
+const requireUser = (ctx: ServerContext): McpAuthenticatedUser => {
+  const user = (ctx.http?.authInfo?.extra as { user?: McpAuthenticatedUser } | undefined)?.user;
+  if (!user) throw new Error('MCP authentication context is missing');
+  return user;
+};
+
+const enforce = (user: McpAuthenticatedUser, permission: string): CallToolResult | null =>
+  hasPermission(user, permission) ? null : toolError('Insufficient permissions');
+
+const buildServer = () => {
+  const server = new McpServer(
+    { name: 'praetor', version: '0.6.0' },
+    {
+      instructions:
+        'Use Praetor tools to inspect and update ERP data. Tool results are scoped to the authenticated MCP token user and their current Praetor role permissions.',
+    },
+  );
+
+  server.registerTool(
+    'praetor_get_current_user',
+    {
+      title: 'Get Current User',
+      description: 'Return the authenticated Praetor user and granted permissions.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      return jsonResult({ user });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_clients',
+    {
+      title: 'List Clients',
+      description: 'List CRM clients visible to the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, CLIENT_LIST_PERMISSIONS);
+      if (denied) return denied;
+      const canViewClientDetails = hasPermission(user, 'crm.clients.view');
+      const clients = await clientsRepo.list(
+        hasPermission(user, 'crm.clients_all.view')
+          ? { canViewAllClients: true }
+          : { canViewAllClients: false, userId: user.id },
+      );
+      return jsonResult({
+        clients: clients.map((client) =>
+          canViewClientDetails ? client : { id: client.id, name: client.name, description: null },
+        ),
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_suppliers',
+    {
+      title: 'List Suppliers',
+      description: 'List suppliers visible to the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, SUPPLIER_LIST_PERMISSIONS);
+      if (denied) return denied;
+      const suppliers = await suppliersRepo.listAll();
+      return jsonResult({ suppliers });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_projects',
+    {
+      title: 'List Projects',
+      description: 'List projects visible to the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, PROJECT_LIST_PERMISSIONS);
+      if (denied) return denied;
+      const projects = hasPermission(user, 'projects.manage_all.view')
+        ? await projectsRepo.listAll()
+        : await projectsRepo.listForUser(user.id);
+      return jsonResult({ projects });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_tasks',
+    {
+      title: 'List Tasks',
+      description: 'List project tasks visible to the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, TASK_LIST_PERMISSIONS);
+      if (denied) return denied;
+      const tasks = hasPermission(user, 'projects.tasks_all.view')
+        ? await tasksRepo.listAll()
+        : await tasksRepo.listForUser(user.id);
+      return jsonResult({ tasks });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_time_entries',
+    {
+      title: 'List Time Entries',
+      description: 'List time entries visible to the authenticated user.',
+      inputSchema: z.object({
+        userId: z.string().optional(),
+        limit: z.number().int().positive().max(500).optional(),
+        cursor: z.string().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args, ctx) => {
+      const user = requireUser(ctx);
+      try {
+        return jsonResult(await listTimeEntries(user, args));
+      } catch (err) {
+        if (err instanceof TimeEntryServiceError) return toolError(err.message);
+        throw err;
+      }
+    },
+  );
+
+  server.registerTool(
+    'praetor_create_time_entry',
+    {
+      title: 'Create Time Entry',
+      description: 'Create a time entry using the same validation and permissions as the app.',
+      inputSchema: z.object({
+        date: z.string(),
+        clientId: z.string(),
+        clientName: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        task: z.string(),
+        notes: z.string().optional(),
+        duration: z.number().nonnegative().optional(),
+        isPlaceholder: z.boolean().optional(),
+        userId: z.string().optional(),
+        location: z.string().optional(),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async (args, ctx) => {
+      const user = requireUser(ctx);
+      try {
+        return jsonResult({ entry: await createTimeEntry(user, args) });
+      } catch (err) {
+        if (err instanceof TimeEntryServiceError) return toolError(err.message);
+        throw err;
+      }
+    },
+  );
+
+  server.registerTool(
+    'praetor_update_time_entry',
+    {
+      title: 'Update Time Entry',
+      description: 'Update duration, notes, placeholder state, or location for a time entry.',
+      inputSchema: z.object({
+        id: z.string(),
+        duration: z.number().nonnegative().optional(),
+        notes: z.string().nullable().optional(),
+        isPlaceholder: z.boolean().optional(),
+        location: z.string().optional(),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async ({ id, ...patch }, ctx) => {
+      const user = requireUser(ctx);
+      try {
+        return jsonResult({ entry: await updateTimeEntry(user, id, patch) });
+      } catch (err) {
+        if (err instanceof TimeEntryServiceError) return toolError(err.message);
+        throw err;
+      }
+    },
+  );
+
+  server.registerTool(
+    'praetor_delete_time_entry',
+    {
+      title: 'Delete Time Entry',
+      description: 'Delete a time entry visible to the authenticated user.',
+      inputSchema: z.object({ id: z.string() }),
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    async ({ id }, ctx) => {
+      const user = requireUser(ctx);
+      try {
+        return jsonResult(await deleteTimeEntry(user, id));
+      } catch (err) {
+        if (err instanceof TimeEntryServiceError) return toolError(err.message);
+        throw err;
+      }
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_notifications',
+    {
+      title: 'List Notifications',
+      description: 'List notifications for the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforce(user, 'notifications.view');
+      if (denied) return denied;
+      const [notifications, unreadCount] = await Promise.all([
+        notificationsRepo.listForUser(user.id),
+        notificationsRepo.countUnreadForUser(user.id),
+      ]);
+      return jsonResult({ notifications, unreadCount });
+    },
+  );
+
+  server.registerTool(
+    'praetor_mark_notification_read',
+    {
+      title: 'Mark Notification Read',
+      description: 'Mark one notification as read for the authenticated user.',
+      inputSchema: z.object({ id: z.string() }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ id }, ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforce(user, 'notifications.update');
+      if (denied) return denied;
+      const found = await notificationsRepo.markReadForUser(id, user.id);
+      if (!found) return toolError('Notification not found');
+      return jsonResult({ success: true });
+    },
+  );
+
+  server.registerTool(
+    'praetor_delete_notification',
+    {
+      title: 'Delete Notification',
+      description: 'Delete one notification for the authenticated user.',
+      inputSchema: z.object({ id: z.string() }),
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    async ({ id }, ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforce(user, 'notifications.delete');
+      if (denied) return denied;
+      const found = await notificationsRepo.deleteForUser(id, user.id);
+      if (!found) return toolError('Notification not found');
+      return jsonResult({ success: true });
+    },
+  );
+
+  server.registerTool(
+    'praetor_get_reporting_dataset',
+    {
+      title: 'Get Reporting Dataset',
+      description:
+        'Build the same permission-scoped business dataset used by AI Reporting. Optionally pass a query to select relevant sections.',
+      inputSchema: z.object({ query: z.string().optional() }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ query }, ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforce(user, 'reports.ai_reporting.view');
+      if (denied) return denied;
+      const cfg = await getGeneralAiConfig();
+      if (!cfg.enableAiReporting) return toolError('AI Reporting is disabled by administration.');
+      const { fromDate, toDate } = getReportingRange();
+      const requestedSections = query ? determineRequestedSections(query, []) : null;
+      const requestLike = { user, log: { info: () => {} } } as unknown as FastifyRequest;
+      const dataset = await buildBusinessDataset(
+        requestLike,
+        cfg,
+        fromDate,
+        toDate,
+        requestedSections,
+      );
+      return jsonResult(dataset);
+    },
+  );
+
+  return server;
+};
+
+const mcpServer = buildServer();
+
+const sendMethodNotAllowed = (reply: FastifyReply) =>
+  reply.code(405).send({
+    jsonrpc: '2.0',
+    error: { code: -32000, message: 'Method not allowed' },
+    id: null,
+  });
+
+export default async function (fastify: FastifyInstance, _opts: unknown) {
+  fastify.post(
+    '/',
+    {
+      onRequest: [authenticateMcpToken],
+      schema: {
+        hide: true,
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const socket = request.raw.socket as typeof request.raw.socket & {
+        destroySoon?: () => void;
+      };
+      if (socket && typeof socket.destroySoon !== 'function') {
+        socket.destroySoon = () => {
+          if (!socket.destroyed && typeof socket.destroy === 'function') socket.destroy();
+        };
+      }
+
+      const transport = new NodeStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      await mcpServer.connect(transport);
+      reply.raw.on('close', () => {
+        void transport.close().catch((err) => {
+          request.log.warn({ err }, 'Failed to close MCP transport');
+        });
+      });
+      await transport.handleRequest(request.raw, reply.raw, request.body);
+    },
+  );
+
+  fastify.get('/', { schema: { hide: true } }, async (_request, reply) =>
+    sendMethodNotAllowed(reply),
+  );
+  fastify.delete('/', { schema: { hide: true } }, async (_request, reply) =>
+    sendMethodNotAllowed(reply),
+  );
+}
