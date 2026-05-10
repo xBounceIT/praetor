@@ -3,6 +3,7 @@ import {
   applyTheme,
   getBrowserTheme,
   getTheme,
+  THEME_CHANGE_EVENT,
   THEME_MEDIA_QUERY,
   THEME_SCOPE_SELECTOR,
   THEME_STORAGE_KEY,
@@ -59,8 +60,8 @@ const appendThemeScope = () => {
 };
 
 describe('THEMES constant', () => {
-  test('exposes light, dark, and auto themes', () => {
-    expect([...THEMES]).toEqual(['light', 'dark', 'auto']);
+  test('exposes available theme options', () => {
+    expect([...THEMES]).toEqual(['light', 'dark', 'zebra', 'praetor', 'auto']);
   });
 });
 
@@ -140,7 +141,7 @@ describe('applyTheme', () => {
     const scope = appendThemeScope();
     let eventTheme: string | undefined;
     window.addEventListener(
-      'praetor-theme-change',
+      THEME_CHANGE_EVENT,
       (event) => {
         eventTheme = (event as CustomEvent<{ resolvedTheme: string }>).detail.resolvedTheme;
       },
@@ -154,6 +155,24 @@ describe('applyTheme', () => {
     expect(scope.classList.contains('dark')).toBe(true);
     expect(scope.dataset.shadcnTheme).toBe('dark');
     expect(eventTheme).toBe('dark');
+  });
+
+  test('applies zebra as light mode with a dedicated theme token', () => {
+    const scope = appendThemeScope();
+    applyTheme('zebra');
+
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(scope.classList.contains('dark')).toBe(false);
+    expect(scope.dataset.shadcnTheme).toBe('zebra');
+  });
+
+  test('applies praetor as light mode with a dedicated theme token', () => {
+    const scope = appendThemeScope();
+    applyTheme('praetor');
+
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(scope.classList.contains('dark')).toBe(false);
+    expect(scope.dataset.shadcnTheme).toBe('praetor');
   });
 
   test('auto resolves to the browser theme', () => {

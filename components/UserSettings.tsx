@@ -32,10 +32,24 @@ const THEME_OPTION_META: Record<
     inactiveIconClassName: 'fa-solid fa-sun text-sm',
   },
   dark: {
-    activeClassName: 'border-praetor bg-praetor/5',
-    inactiveClassName: 'border-zinc-100 hover:border-praetor/20',
+    activeClassName: 'border-secondary bg-secondary',
+    inactiveClassName: 'border-zinc-100 hover:border-secondary',
     swatchClassName: 'bg-zinc-900 shrink-0 shadow-sm flex items-center justify-center text-white',
     inactiveIconClassName: 'fa-solid fa-moon text-sm',
+  },
+  zebra: {
+    activeClassName: 'border-praetor bg-zinc-50',
+    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
+    swatchClassName:
+      'bg-gradient-to-r from-zinc-950 from-50% to-white to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
+    inactiveIconClassName: 'fa-solid fa-table-columns text-sm bg-white rounded-full p-1',
+  },
+  praetor: {
+    activeClassName: 'border-praetor bg-praetor/5',
+    inactiveClassName: 'border-zinc-100 hover:border-praetor/20',
+    swatchClassName:
+      'bg-gradient-to-r from-[#20293f] from-50% to-white to-50% border border-zinc-200 shrink-0 shadow-sm flex items-center justify-center text-praetor',
+    inactiveIconClassName: 'fa-solid fa-shield-halved text-sm bg-white rounded-full p-1',
   },
   auto: {
     activeClassName: 'border-praetor bg-zinc-50',
@@ -284,7 +298,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {THEMES.map((theme) => {
                 const isSelected = currentTheme === theme;
                 const option = THEME_OPTION_META[theme];

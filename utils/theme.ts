@@ -1,4 +1,4 @@
-export const THEMES = ['light', 'dark', 'auto'] as const;
+export const THEMES = ['light', 'dark', 'zebra', 'praetor', 'auto'] as const;
 
 export type Theme = (typeof THEMES)[number];
 export type ResolvedTheme = Exclude<Theme, 'auto'>;
@@ -16,7 +16,7 @@ export const THEME_CHANGE_EVENT = THEME_CHANGE_EVENT_NAME;
 let removeAutoThemeListener: (() => void) | undefined;
 
 const isTheme = (value: string | null): value is Theme => {
-  return value === 'light' || value === 'dark' || value === 'auto';
+  return THEMES.includes(value as Theme);
 };
 
 export const getTheme = (): Theme => {

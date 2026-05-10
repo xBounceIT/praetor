@@ -26,6 +26,14 @@
       "name": "Scuro",
       "description": "Usa la modalita scura per i componenti shadcn."
     },
+    "zebra": {
+      "name": "Zebra",
+      "description": "Usa la modalita chiara con una barra laterale scura."
+    },
+    "praetor": {
+      "name": "Praetor",
+      "description": "Usa la modalita chiara con una barra laterale scura color Praetor."
+    },
     "auto": {
       "name": "Automatico",
       "description": "Segue automaticamente il tema del browser o del sistema operativo."
