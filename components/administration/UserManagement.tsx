@@ -1102,7 +1102,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <div>
                     <p className="text-sm font-bold text-zinc-700">{t('hr:workforce.disabled')}</p>
                   </div>
-                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} color="red" />
+                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} />
                 </div>
               )}
             </div>

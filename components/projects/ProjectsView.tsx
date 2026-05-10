@@ -955,7 +955,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                               setTempIsDisabled(!tempIsDisabled);
                             }
                           }}
-                          color="red"
                           disabled={isClientDisabled}
                         />
                       </div>
