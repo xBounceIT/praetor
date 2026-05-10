@@ -412,6 +412,16 @@ describe('<StandardTable />', () => {
     await waitFor(() => expect(longHeaderCell.style.minWidth).toBe('200px'));
   });
 
+  test('stored column widths are clamped to the full header label width', async () => {
+    localStorage.setItem('praetor_table_colwidths_role_width', JSON.stringify({ role: 32 }));
+    const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];
+
+    render(<StandardTable<Row> title="Role Width" data={sampleRows} columns={columns} />);
+
+    const headerCell = screen.getByText('Ruolo').closest('th') as HTMLElement;
+    await waitFor(() => expect(Number.parseInt(headerCell.style.minWidth, 10)).toBeGreaterThan(80));
+  });
+
   test('stale stored column widths do not force fixed table layout', () => {
     localStorage.setItem('praetor_table_colwidths_stale_widths', JSON.stringify({ missing: 160 }));
 

@@ -97,6 +97,7 @@ const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
+const HEADER_TEXT_CHAR_WIDTH = 8;
 const ACTION_COLUMN_WIDTH = 80;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const TABLE_CONTROL_BUTTON_CLASSNAME =
@@ -309,24 +310,37 @@ const StandardTable = <T extends object>({
     [columns, hiddenColIds, getColId],
   );
 
+  const getStaticColumnMinWidth = useCallback(
+    (col: Column<T>) => {
+      if (isRowActionColumn(col)) return ACTION_COLUMN_WIDTH;
+      const headerTextWidth = String(col.header).length * HEADER_TEXT_CHAR_WIDTH;
+      return Math.max(
+        DEFAULT_MIN_COL_WIDTH,
+        Math.ceil(headerTextWidth + HEADER_RESIZE_EXTRA_WIDTH),
+      );
+    },
+    [isRowActionColumn],
+  );
+
   const getMeasuredColumnWidth = useCallback(
     (col: Column<T>, label: HTMLElement | undefined, includeRenderedWidth = false) => {
       if (isRowActionColumn(col)) return ACTION_COLUMN_WIDTH;
 
+      const minWidth = getStaticColumnMinWidth(col);
       const labelWidth = Math.max(
         label?.scrollWidth ?? 0,
         label?.getBoundingClientRect().width ?? 0,
       );
-      const minWidth = Math.max(
-        DEFAULT_MIN_COL_WIDTH,
+      const measuredMinWidth = Math.max(
+        minWidth,
         Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
       );
-      if (!includeRenderedWidth) return minWidth;
+      if (!includeRenderedWidth) return measuredMinWidth;
 
       const headerCell = label?.closest('th') as HTMLTableCellElement | null;
-      return Math.max(minWidth, Math.ceil(headerCell?.getBoundingClientRect().width ?? 0));
+      return Math.max(measuredMinWidth, Math.ceil(headerCell?.getBoundingClientRect().width ?? 0));
     },
-    [isRowActionColumn],
+    [getStaticColumnMinWidth, isRowActionColumn],
   );
 
   const measureVisibleColumnWidths = useCallback(
@@ -385,17 +399,26 @@ const StandardTable = <T extends object>({
   }, []);
 
   const getHeaderMinWidth = useCallback(
-    (col: Column<T>) =>
-      isRowActionColumn(col)
-        ? ACTION_COLUMN_WIDTH
-        : (headerMinWidths[getColId(col)] ?? DEFAULT_MIN_COL_WIDTH),
-    [getColId, headerMinWidths, isRowActionColumn],
+    (col: Column<T>) => {
+      const staticMinWidth = getStaticColumnMinWidth(col);
+      return Math.max(headerMinWidths[getColId(col)] ?? 0, staticMinWidth);
+    },
+    [getColId, getStaticColumnMinWidth, headerMinWidths],
   );
 
   const validColumnWidths = useMemo(() => {
     const validIds = new Set((columns ?? []).map((col) => getColId(col)));
     return sanitizeColumnWidths(columnWidths, validIds);
   }, [columns, columnWidths, getColId]);
+
+  const getColumnWidth = useCallback(
+    (col: Column<T>, colId = getColId(col)) => {
+      const storedWidth = validColumnWidths[colId];
+      const minWidth = getHeaderMinWidth(col);
+      return storedWidth == null ? minWidth : Math.max(storedWidth, minWidth);
+    },
+    [getColId, getHeaderMinWidth, validColumnWidths],
+  );
 
   // Rightmost non-sticky column absorbs leftover width. When the last column is
   // sticky-right, this prevents that sticky column from expanding to fill space.
@@ -726,9 +749,9 @@ const StandardTable = <T extends object>({
     return table.getVisibleLeafColumns().reduce((total, column) => {
       const col = colsById.get(column.id);
       if (!col) return total;
-      return total + (validColumnWidths[column.id] ?? getHeaderMinWidth(col));
+      return total + getColumnWidth(col, column.id);
     }, 0);
-  }, [colsById, getHeaderMinWidth, table, usesFixedTableLayout, validColumnWidths]);
+  }, [colsById, getColumnWidth, table, usesFixedTableLayout]);
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -1610,7 +1633,7 @@ const StandardTable = <T extends object>({
                 {table.getVisibleLeafColumns().map((column) => {
                   const col = colsById.get(column.id);
                   if (!col) return null;
-                  const colWidth = validColumnWidths[column.id] ?? getHeaderMinWidth(col);
+                  const colWidth = getColumnWidth(col, column.id);
                   return <col key={column.id} style={{ width: colWidth, minWidth: colWidth }} />;
                 })}
               </colgroup>
@@ -1633,9 +1656,11 @@ const StandardTable = <T extends object>({
                       : isLastColumn
                         ? 'right'
                         : col.align;
+                    const minColumnWidth = getHeaderMinWidth(col);
                     const colWidth =
-                      validColumnWidths[colId] ??
-                      (usesFixedTableLayout || isActionColumn ? getHeaderMinWidth(col) : undefined);
+                      usesFixedTableLayout || isActionColumn
+                        ? getColumnWidth(col, colId)
+                        : undefined;
                     const sorted = header.column.getIsSorted();
                     const stickyBorderClass =
                       isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
@@ -1649,8 +1674,8 @@ const StandardTable = <T extends object>({
                           colWidth
                             ? { width: colWidth, minWidth: colWidth }
                             : isStickyRightColumn
-                              ? { minWidth: '40px', width: 'auto' }
-                              : undefined
+                              ? { minWidth: minColumnWidth, width: 'auto' }
+                              : { minWidth: minColumnWidth }
                         }
                         aria-label={isActionColumn ? col.header : undefined}
                         className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
@@ -1752,11 +1777,11 @@ const StandardTable = <T extends object>({
                           : isLastColumn
                             ? 'right'
                             : col.align;
+                        const minColumnWidth = getHeaderMinWidth(col);
                         const colWidth =
-                          validColumnWidths[colId] ??
-                          (usesFixedTableLayout || isActionColumn
-                            ? getHeaderMinWidth(col)
-                            : undefined);
+                          usesFixedTableLayout || isActionColumn
+                            ? getColumnWidth(col, colId)
+                            : undefined;
                         const stickyBorderClass =
                           isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
                             ? 'border-l border-border'
@@ -1785,8 +1810,8 @@ const StandardTable = <T extends object>({
                               colWidth
                                 ? { width: colWidth, minWidth: colWidth }
                                 : isStickyRightColumn
-                                  ? { minWidth: '40px' }
-                                  : undefined
+                                  ? { minWidth: minColumnWidth }
+                                  : { minWidth: minColumnWidth }
                             }
                             className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} font-normal` : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
