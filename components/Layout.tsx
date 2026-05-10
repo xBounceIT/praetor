@@ -101,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({
   onSwitchRole,
   roles,
   isNotFound,
-  isAiReportingEnabled = true,
+  isAiReportingEnabled = false,
   notifications = [],
   unreadNotificationCount = 0,
   onMarkNotificationAsRead,

@@ -236,6 +236,27 @@ describe('<Layout />', () => {
     expect(tooltipContent?.className).toContain('text-primary-foreground');
   });
 
+  test('AI reporting route is disabled by default while feature settings are unresolved', () => {
+    isMobileViewport = false;
+    const onViewChange = mock(() => {});
+    renderLayout({
+      onViewChange,
+      currentUser: {
+        ...mockUser,
+        permissions: [...(mockUser.permissions ?? []), aiReportingViewPermission],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'modules.reports' }));
+    const aiReportingButton = screen.getByRole('button', { name: 'routes.aiReporting' });
+
+    expect(aiReportingButton).toBeDisabled();
+
+    fireEvent.click(aiReportingButton);
+
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
   test('AI reporting route remains clickable when feature is on', () => {
     isMobileViewport = false;
     const onViewChange = mock(() => {});
