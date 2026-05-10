@@ -48,8 +48,7 @@ const EMPTY_VALUE_SENTINEL = '__praetor_empty_select_value__';
 const toSelectValue = (value: string) => (value === '' ? EMPTY_VALUE_SENTINEL : value);
 const fromSelectValue = (value: string) => (value === EMPTY_VALUE_SENTINEL ? '' : value);
 
-const baseTriggerClassName =
-  'w-full min-w-0 justify-between bg-zinc-50 text-left text-sm font-normal text-foreground border-zinc-200 hover:bg-zinc-50 hover:text-foreground focus:ring-2 focus:ring-praetor';
+const baseTriggerClassName = 'w-full min-w-0 justify-between text-left text-sm font-normal';
 
 const labelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-400';
 
@@ -277,7 +276,7 @@ const SearchableSelectControl = ({
               <CommandEmpty>{t('select.noOptions')}</CommandEmpty>
               <CommandGroup>
                 {isMulti && filteredOptions.length > 1 && (
-                  <div className="flex gap-1 border-b px-1 py-1">
+                  <div className="flex gap-1 border-b border-border px-1 py-1">
                     <Button
                       type="button"
                       variant="secondary"
