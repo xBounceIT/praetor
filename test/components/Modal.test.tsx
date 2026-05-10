@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const Modal = (await import('../../components/shared/Modal')).default;
 
@@ -20,7 +20,34 @@ describe('<Modal />', () => {
       </Modal>,
     );
     expect(screen.getByTestId('modal-content')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(document.body.style.overflow).toBe('hidden');
+  });
+
+  test('focuses the first focusable child when opened', async () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">
+          <input aria-label="Name" />
+        </div>
+      </Modal>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
+  });
+
+  test('prefers data-autofocus over the first focusable child', async () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">
+          <button type="button">First</button>
+          <input aria-label="Preferred" data-autofocus />
+        </div>
+      </Modal>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Preferred')).toHaveFocus());
   });
 
   test('clicking the backdrop calls onClose', () => {
@@ -30,7 +57,7 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByTestId('modal-content').parentElement as HTMLElement;
+    const backdrop = screen.getByRole('dialog');
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -53,7 +80,7 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByTestId('modal-content').parentElement as HTMLElement;
+    const backdrop = screen.getByRole('dialog');
     fireEvent.click(backdrop);
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -98,7 +125,7 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByTestId('modal-content').parentElement as HTMLElement;
+    const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
     expect(backdrop.style.zIndex).toBe('999');
   });
 
@@ -108,7 +135,7 @@ describe('<Modal />', () => {
         <div data-testid="modal-content">Hi</div>
       </Modal>,
     );
-    const backdrop = screen.getByTestId('modal-content').parentElement as HTMLElement;
+    const backdrop = document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement;
     expect(backdrop.className).toContain('custom-backdrop');
   });
 

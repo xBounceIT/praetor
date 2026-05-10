@@ -1,6 +1,7 @@
+import { Dialog as DialogPrimitive } from 'radix-ui';
 import type React from 'react';
-import { useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useRef } from 'react';
+import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -12,6 +13,18 @@ export interface ModalProps {
   backdropClass?: string;
 }
 
+const AUTOFOCUS_SELECTOR = '[data-autofocus]:not([disabled])';
+
+const FOCUSABLE_SELECTOR = [
+  AUTOFOCUS_SELECTOR,
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -21,28 +34,47 @@ const Modal: React.FC<ModalProps> = ({
   closeOnEsc = true,
   backdropClass = 'bg-black/60 backdrop-blur-sm',
 }) => {
-  const handleEscKey = useCallback(
-    (e: KeyboardEvent) => {
-      if (closeOnEsc && e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose, closeOnEsc],
-  );
+  const contentRef = useRef<HTMLDivElement>(null);
+  const focusRunIdRef = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
-      document.addEventListener('keydown', handleEscKey);
       document.body.style.overflow = 'hidden';
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscKey);
+      focusRunIdRef.current += 1;
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleEscKey]);
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  const focusModalContentNow = useCallback(() => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    const focusTarget =
+      content.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR) ??
+      content.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      content;
+    focusTarget.focus();
+  }, []);
+
+  const focusModalContent = useCallback(() => {
+    const focusRunId = focusRunIdRef.current + 1;
+    focusRunIdRef.current = focusRunId;
+    focusModalContentNow();
+
+    queueMicrotask(() => {
+      if (focusRunId !== focusRunIdRef.current) return;
+      focusModalContentNow();
+    });
+  }, [focusModalContentNow]);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose();
+    }
+  };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (closeOnBackdrop && e.target === e.currentTarget) {
@@ -50,15 +82,39 @@ const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div
-      className={`fixed inset-0 flex items-center justify-center p-4 ${backdropClass}`}
-      style={{ zIndex }}
-      onClick={handleBackdropClick}
-    >
-      {children}
-    </div>,
-    document.body,
+  return (
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogPortal>
+        <DialogOverlay className={backdropClass} style={{ zIndex }} />
+        <DialogPrimitive.Content
+          ref={contentRef}
+          aria-label="Dialog"
+          aria-modal="true"
+          aria-describedby={undefined}
+          className="fixed inset-0 flex items-center justify-center p-4 outline-none"
+          style={{ zIndex: zIndex + 1 }}
+          tabIndex={-1}
+          onClick={handleBackdropClick}
+          onEscapeKeyDown={(e) => {
+            if (!closeOnEsc) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            if (!closeOnBackdrop) {
+              e.preventDefault();
+            }
+          }}
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            focusModalContent();
+          }}
+        >
+          <DialogTitle className="sr-only">Dialog</DialogTitle>
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
   );
 };
 
