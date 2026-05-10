@@ -1,6 +1,7 @@
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type ColumnSizingState,
   flexRender,
   functionalUpdate,
   getCoreRowModel,
@@ -90,14 +91,26 @@ const sanitizeColumnWidths = (
   );
 };
 
+const numberRecordsEqual = (a: Record<string, number>, b: Record<string, number>) => {
+  const aEntries = Object.entries(a);
+  const bEntries = Object.entries(b);
+  return aEntries.length === bEntries.length && aEntries.every(([key, value]) => b[key] === value);
+};
+
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
-const HEADER_RESIZE_EXTRA_WIDTH = 64;
-const HEADER_TEXT_CHAR_WIDTH = 8;
+const HEADER_TEXT_CHAR_WIDTH = 9;
+const HEADER_CELL_HORIZONTAL_PADDING = 24;
+const HEADER_RESIZE_GUTTER_WIDTH = 8;
+const HEADER_SORT_BUTTON_HORIZONTAL_PADDING = 16;
+const HEADER_SORT_ICON_WIDTH = 12;
+const HEADER_SORT_ICON_GAP = 4;
+const HEADER_FILTER_BUTTON_WIDTH = 24;
+const HEADER_CONTENT_GAP = 4;
 const ACTION_COLUMN_WIDTH = 80;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const TABLE_CONTROL_BUTTON_CLASSNAME =
@@ -170,7 +183,7 @@ const StandardTable = <T extends object>({
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
   const resizeMinWidthRef = useRef(DEFAULT_MIN_COL_WIDTH);
-  const resizeHasMovedRef = useRef(false);
+  const resizeStartSizingRef = useRef<ColumnSizingState>({});
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [sortState, setSortState] = useState<SortState>(null);
@@ -207,7 +220,7 @@ const StandardTable = <T extends object>({
   // Session-only: column visibility resets on page reload
   const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
 
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
     if (typeof window === 'undefined') return {};
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
     if (saved) {
@@ -312,32 +325,50 @@ const StandardTable = <T extends object>({
 
   const getStaticColumnMinWidth = useCallback(
     (col: Column<T>) => {
-      if (isRowActionColumn(col)) return ACTION_COLUMN_WIDTH;
       const headerTextWidth = String(col.header).length * HEADER_TEXT_CHAR_WIDTH;
+      if (isRowActionColumn(col)) {
+        return Math.max(
+          ACTION_COLUMN_WIDTH,
+          Math.ceil(headerTextWidth + HEADER_CELL_HORIZONTAL_PADDING),
+        );
+      }
+
+      const filterWidth = col.disableFiltering
+        ? 0
+        : HEADER_CONTENT_GAP + HEADER_FILTER_BUTTON_WIDTH;
       return Math.max(
         DEFAULT_MIN_COL_WIDTH,
-        Math.ceil(headerTextWidth + HEADER_RESIZE_EXTRA_WIDTH),
+        Math.ceil(
+          headerTextWidth +
+            HEADER_SORT_BUTTON_HORIZONTAL_PADDING +
+            HEADER_SORT_ICON_GAP +
+            HEADER_SORT_ICON_WIDTH +
+            filterWidth +
+            HEADER_CELL_HORIZONTAL_PADDING +
+            HEADER_RESIZE_GUTTER_WIDTH,
+        ),
       );
     },
     [isRowActionColumn],
   );
 
   const getMeasuredColumnWidth = useCallback(
-    (col: Column<T>, label: HTMLElement | undefined, includeRenderedWidth = false) => {
-      if (isRowActionColumn(col)) return ACTION_COLUMN_WIDTH;
-
+    (col: Column<T>, headerContent: HTMLElement | undefined, includeRenderedWidth = false) => {
       const minWidth = getStaticColumnMinWidth(col);
-      const labelWidth = Math.max(
-        label?.scrollWidth ?? 0,
-        label?.getBoundingClientRect().width ?? 0,
+      const headerChromeWidth = isRowActionColumn(col)
+        ? HEADER_CELL_HORIZONTAL_PADDING
+        : HEADER_CELL_HORIZONTAL_PADDING + HEADER_RESIZE_GUTTER_WIDTH;
+      const headerContentWidth = Math.max(
+        headerContent?.scrollWidth ?? 0,
+        headerContent?.getBoundingClientRect().width ?? 0,
       );
       const measuredMinWidth = Math.max(
         minWidth,
-        Math.ceil(labelWidth + HEADER_RESIZE_EXTRA_WIDTH),
+        Math.ceil(headerContentWidth + headerChromeWidth),
       );
       if (!includeRenderedWidth) return measuredMinWidth;
 
-      const headerCell = label?.closest('th') as HTMLTableCellElement | null;
+      const headerCell = headerContent?.closest('th') as HTMLTableCellElement | null;
       return Math.max(measuredMinWidth, Math.ceil(headerCell?.getBoundingClientRect().width ?? 0));
     },
     [getStaticColumnMinWidth, isRowActionColumn],
@@ -348,9 +379,9 @@ const StandardTable = <T extends object>({
       const container = tableContainerRef.current;
       if (!container) return null;
 
-      const labelsByColumnId = new Map(
-        Array.from(container.querySelectorAll<HTMLElement>('[data-column-header-label]')).map(
-          (element) => [element.getAttribute('data-column-header-label') ?? '', element],
+      const contentByColumnId = new Map(
+        Array.from(container.querySelectorAll<HTMLElement>('[data-column-header-content]')).map(
+          (element) => [element.getAttribute('data-column-header-content') ?? '', element],
         ),
       );
       const next: Record<string, number> = {};
@@ -358,7 +389,7 @@ const StandardTable = <T extends object>({
         const colId = getColId(col);
         next[colId] = getMeasuredColumnWidth(
           col,
-          labelsByColumnId.get(colId),
+          contentByColumnId.get(colId),
           includeRenderedWidth,
         );
       }
@@ -371,32 +402,8 @@ const StandardTable = <T extends object>({
     const next = measureVisibleColumnWidths();
     if (!next) return;
 
-    setHeaderMinWidths((prev) => {
-      const prevEntries = Object.entries(prev);
-      const nextEntries = Object.entries(next);
-      if (
-        prevEntries.length === nextEntries.length &&
-        nextEntries.every(([id, width]) => prev[id] === width)
-      ) {
-        return prev;
-      }
-      return next;
-    });
+    setHeaderMinWidths((prev) => (numberRecordsEqual(prev, next) ? prev : next));
   }, [measureVisibleColumnWidths]);
-
-  const setHeaderMinWidthsIfChanged = useCallback((next: Record<string, number>) => {
-    setHeaderMinWidths((prev) => {
-      const prevEntries = Object.entries(prev);
-      const nextEntries = Object.entries(next);
-      if (
-        prevEntries.length === nextEntries.length &&
-        nextEntries.every(([id, width]) => prev[id] === width)
-      ) {
-        return prev;
-      }
-      return next;
-    });
-  }, []);
 
   const getHeaderMinWidth = useCallback(
     (col: Column<T>) => {
@@ -406,18 +413,29 @@ const StandardTable = <T extends object>({
     [getColId, getStaticColumnMinWidth, headerMinWidths],
   );
 
-  const validColumnWidths = useMemo(() => {
+  const validColumnSizing = useMemo(() => {
     const validIds = new Set((columns ?? []).map((col) => getColId(col)));
-    return sanitizeColumnWidths(columnWidths, validIds);
-  }, [columns, columnWidths, getColId]);
+    return sanitizeColumnWidths(columnSizing, validIds);
+  }, [columns, columnSizing, getColId]);
 
-  const getColumnWidth = useCallback(
-    (col: Column<T>, colId = getColId(col)) => {
-      const storedWidth = validColumnWidths[colId];
-      const minWidth = getHeaderMinWidth(col);
-      return storedWidth == null ? minWidth : Math.max(storedWidth, minWidth);
+  const clampColumnSizing = useCallback(
+    (value: ColumnSizingState) => {
+      const validIds = new Set((columns ?? []).map((col) => getColId(col)));
+      const next = sanitizeColumnWidths(value, validIds);
+      for (const col of columns ?? []) {
+        const colId = getColId(col);
+        if (next[colId] != null) {
+          next[colId] = Math.max(next[colId], getHeaderMinWidth(col));
+        }
+      }
+      return next;
     },
-    [getColId, getHeaderMinWidth, validColumnWidths],
+    [columns, getColId, getHeaderMinWidth],
+  );
+
+  const clampedColumnSizing = useMemo(
+    () => clampColumnSizing(validColumnSizing),
+    [clampColumnSizing, validColumnSizing],
   );
 
   // Rightmost non-sticky column absorbs leftover width. When the last column is
@@ -428,7 +446,7 @@ const StandardTable = <T extends object>({
     }
     return -1;
   }, [visibleColumns]);
-  const usesFixedTableLayout = Object.keys(validColumnWidths).length > 0;
+  const usesFixedTableLayout = Object.keys(clampedColumnSizing).length > 0;
 
   // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
@@ -489,43 +507,52 @@ const StandardTable = <T extends object>({
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
   useEffect(() => {
+    const next = clampColumnSizing(columnSizing);
+    if (!numberRecordsEqual(columnSizing, next)) {
+      setColumnSizing(next);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(next));
+    }
+  }, [clampColumnSizing, columnSizing, title]);
+
+  useEffect(() => {
     if (!resizingColId) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizeStartXRef.current;
+    const getClientX = (event: MouseEvent | TouchEvent) => {
+      if ('touches' in event) return event.touches[0]?.clientX ?? event.changedTouches[0]?.clientX;
+      return event.clientX;
+    };
+    const handleResizeMove = (event: MouseEvent | TouchEvent) => {
+      const clientX = getClientX(event);
+      if (typeof clientX !== 'number') return;
+      const delta = clientX - resizeStartXRef.current;
       if (Math.abs(delta) < 1) return;
       const newWidth = Math.max(resizeMinWidthRef.current, resizeStartWidthRef.current + delta);
-      setColumnWidths((prev) => {
-        const seededWidths = resizeHasMovedRef.current
-          ? prev
-          : { ...prev, ...(measureVisibleColumnWidths(true) ?? {}) };
-        resizeHasMovedRef.current = true;
-        if (prev[resizingColId] === newWidth) return prev;
-        return { ...seededWidths, [resizingColId]: newWidth };
-      });
+      setColumnSizing((prev) =>
+        clampColumnSizing({
+          ...resizeStartSizingRef.current,
+          ...prev,
+          [resizingColId]: newWidth,
+        }),
+      );
     };
-
-    const handleMouseUp = () => {
-      setResizingColId(null);
-      document.body.style.cursor = '';
-      setColumnWidths((prev) => {
-        const validIds = new Set((columns ?? []).map((col) => getColId(col)));
-        const next = sanitizeColumnWidths(prev, validIds);
-        localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(next));
-        return next;
-      });
-    };
-
+    const handleResizeEnd = () => setResizingColId(null);
     document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('touchmove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
+    document.addEventListener('touchend', handleResizeEnd);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('touchmove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.removeEventListener('touchend', handleResizeEnd);
       document.body.style.cursor = '';
     };
-  }, [columns, getColId, measureVisibleColumnWidths, resizingColId, title]);
+  }, [clampColumnSizing, resizingColId]);
 
   useEffect(() => {
     const container = tableContainerRef.current;
@@ -578,6 +605,7 @@ const StandardTable = <T extends object>({
     () =>
       (columns ?? []).map((col) => {
         const colId = getColId(col);
+        const minSize = getHeaderMinWidth(col);
         return {
           id: colId,
           accessorFn: (row) => getValue(row, col),
@@ -595,6 +623,9 @@ const StandardTable = <T extends object>({
               ? col.cell({ getValue: () => value, row, value })
               : (value as ReactNode);
           },
+          size: Math.max(clampedColumnSizing[colId] ?? minSize, minSize),
+          minSize,
+          enableResizing: !isRowActionColumn(col),
           enableSorting: !col.disableSorting,
           enableColumnFilter: !col.disableFiltering,
           enableHiding: !col.hidden,
@@ -623,7 +654,15 @@ const StandardTable = <T extends object>({
           },
         } satisfies ColumnDef<T, unknown>;
       }),
-    [columns, getColId, getValue, formatForFilter],
+    [
+      clampedColumnSizing,
+      columns,
+      getColId,
+      getHeaderMinWidth,
+      getValue,
+      formatForFilter,
+      isRowActionColumn,
+    ],
   );
 
   const sorting = useMemo<SortingState>(
@@ -721,6 +760,16 @@ const StandardTable = <T extends object>({
     [columnVisibility, gearColumns, getColId, sortState, updateActiveViewId],
   );
 
+  const onColumnSizingChange = useCallback(
+    (updater: Updater<ColumnSizingState>) => {
+      setColumnSizing((prev) => {
+        const next = functionalUpdate(updater, clampColumnSizing(prev));
+        return clampColumnSizing(next);
+      });
+    },
+    [clampColumnSizing],
+  );
+
   const table = useReactTable({
     data: data ?? [],
     columns: tanStackColumns,
@@ -728,11 +777,15 @@ const StandardTable = <T extends object>({
     onColumnFiltersChange,
     onPaginationChange,
     onColumnVisibilityChange,
+    onColumnSizingChange,
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
     state: {
       sorting,
       columnFilters,
       pagination,
       columnVisibility,
+      columnSizing: clampedColumnSizing,
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -746,12 +799,8 @@ const StandardTable = <T extends object>({
   const paginatedRows = data ? table.getRowModel().rows : [];
   const fixedTableWidth = useMemo(() => {
     if (!usesFixedTableLayout) return undefined;
-    return table.getVisibleLeafColumns().reduce((total, column) => {
-      const col = colsById.get(column.id);
-      if (!col) return total;
-      return total + getColumnWidth(col, column.id);
-    }, 0);
-  }, [colsById, getColumnWidth, table, usesFixedTableLayout]);
+    return table.getVisibleLeafColumns().reduce((total, column) => total + column.getSize(), 0);
+  }, [table, usesFixedTableLayout]);
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -839,7 +888,7 @@ const StandardTable = <T extends object>({
       return (
         <div key={key} className="flex min-h-7 items-center gap-2 px-2 py-1 text-xs">
           {node}
-          {labelText && <span className="truncate">{labelText}</span>}
+          {labelText && <span className="whitespace-nowrap">{labelText}</span>}
         </div>
       );
     }
@@ -862,7 +911,7 @@ const StandardTable = <T extends object>({
         aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
         data-testid={testId}
         disabled={props.disabled}
-        className="flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+        className="flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
         onClick={(event) => {
           event.stopPropagation();
           props.onClick?.(event);
@@ -871,7 +920,7 @@ const StandardTable = <T extends object>({
         <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(props.children)}`}>
           {props.children}
         </span>
-        {text && <span className="truncate">{text}</span>}
+        {text && <span className="whitespace-nowrap">{text}</span>}
       </button>
     );
   };
@@ -1081,24 +1130,6 @@ const StandardTable = <T extends object>({
     setPasteModalOpen(false);
     setPasteText('');
     setPasteError(null);
-  };
-
-  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const th = e.currentTarget.parentElement as HTMLTableCellElement;
-    const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
-    const measuredMinWidths = measureVisibleColumnWidths();
-    if (measuredMinWidths) setHeaderMinWidthsIfChanged(measuredMinWidths);
-    const resizedColumn = colsById.get(colId);
-    const currentWidth = Math.ceil(th.getBoundingClientRect().width);
-    resizeHasMovedRef.current = false;
-    resizeStartXRef.current = e.clientX;
-    resizeStartWidthRef.current = currentWidth;
-    resizeMinWidthRef.current = resizedColumn
-      ? getMeasuredColumnWidth(resizedColumn, headerLabel ?? undefined)
-      : DEFAULT_MIN_COL_WIDTH;
-    setResizingColId(colId);
   };
 
   const renderToolbarButton = ({
@@ -1631,10 +1662,8 @@ const StandardTable = <T extends object>({
             {usesFixedTableLayout && (
               <colgroup>
                 {table.getVisibleLeafColumns().map((column) => {
-                  const col = colsById.get(column.id);
-                  if (!col) return null;
-                  const colWidth = getColumnWidth(col, column.id);
-                  return <col key={column.id} style={{ width: colWidth, minWidth: colWidth }} />;
+                  const colWidth = column.getSize();
+                  return <col key={column.id} style={{ width: colWidth }} />;
                 })}
               </colgroup>
             )}
@@ -1659,9 +1688,10 @@ const StandardTable = <T extends object>({
                     const minColumnWidth = getHeaderMinWidth(col);
                     const colWidth =
                       usesFixedTableLayout || isActionColumn
-                        ? getColumnWidth(col, colId)
+                        ? Math.max(header.getSize(), minColumnWidth)
                         : undefined;
                     const sorted = header.column.getIsSorted();
+                    const isResizing = resizingColId === colId || header.column.getIsResizing();
                     const stickyBorderClass =
                       isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
                         ? 'border-l border-border'
@@ -1678,14 +1708,15 @@ const StandardTable = <T extends object>({
                               : { minWidth: minColumnWidth }
                         }
                         aria-label={isActionColumn ? col.header : undefined}
-                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
+                        className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : isStickyRightColumn ? 'w-auto' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                       >
                         {isActionColumn ? (
                           <div
+                            data-column-header-content={colId}
                             className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
                           >
                             <span
-                              className="truncate text-sm font-semibold text-foreground"
+                              className="whitespace-nowrap text-sm font-semibold text-foreground"
                               data-column-header-label={colId}
                             >
                               {header.isPlaceholder
@@ -1695,15 +1726,16 @@ const StandardTable = <T extends object>({
                           </div>
                         ) : (
                           <div
+                            data-column-header-content={colId}
                             className={`flex items-center gap-1 ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : 'justify-start'}`}
                           >
                             <button
                               type="button"
                               disabled={!header.column.getCanSort()}
                               onClick={header.column.getToggleSortingHandler()}
-                              className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+                              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
                             >
-                              <span className="truncate" data-column-header-label={colId}>
+                              <span className="whitespace-nowrap" data-column-header-label={colId}>
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
@@ -1733,14 +1765,56 @@ const StandardTable = <T extends object>({
                           <div
                             className="absolute top-0 -right-1 z-10 flex h-full w-2 cursor-col-resize items-center justify-center"
                             data-column-resize-handle={colId}
-                            onMouseDown={(e) => handleResizeStart(e, colId)}
+                            onMouseDown={(event) => {
+                              event.stopPropagation();
+                              const measuredMinWidths = measureVisibleColumnWidths();
+                              if (measuredMinWidths) {
+                                setHeaderMinWidths((prev) =>
+                                  numberRecordsEqual(prev, measuredMinWidths)
+                                    ? prev
+                                    : measuredMinWidths,
+                                );
+                              }
+                              const measuredWidths = measureVisibleColumnWidths(true);
+                              const minWidth = measuredMinWidths?.[colId] ?? minColumnWidth;
+                              resizeStartXRef.current = event.clientX;
+                              resizeStartWidthRef.current = Math.max(
+                                measuredWidths?.[colId] ?? header.getSize(),
+                                minWidth,
+                              );
+                              resizeMinWidthRef.current = minWidth;
+                              resizeStartSizingRef.current = measuredWidths ?? clampedColumnSizing;
+                              setResizingColId(colId);
+                              header.getResizeHandler(document)(event);
+                            }}
+                            onTouchStart={(event) => {
+                              event.stopPropagation();
+                              const measuredMinWidths = measureVisibleColumnWidths();
+                              if (measuredMinWidths) {
+                                setHeaderMinWidths((prev) =>
+                                  numberRecordsEqual(prev, measuredMinWidths)
+                                    ? prev
+                                    : measuredMinWidths,
+                                );
+                              }
+                              const measuredWidths = measureVisibleColumnWidths(true);
+                              const minWidth = measuredMinWidths?.[colId] ?? minColumnWidth;
+                              const clientX = event.touches[0]?.clientX ?? 0;
+                              resizeStartXRef.current = clientX;
+                              resizeStartWidthRef.current = Math.max(
+                                measuredWidths?.[colId] ?? header.getSize(),
+                                minWidth,
+                              );
+                              resizeMinWidthRef.current = minWidth;
+                              resizeStartSizingRef.current = measuredWidths ?? clampedColumnSizing;
+                              setResizingColId(colId);
+                              header.getResizeHandler(document)(event);
+                            }}
                           >
                             <span
                               data-column-resize-line={colId}
                               className={`h-5 w-px rounded-full transition-colors ${
-                                resizingColId === colId
-                                  ? 'bg-primary'
-                                  : 'bg-border group-hover:bg-primary/40'
+                                isResizing ? 'bg-primary' : 'bg-border group-hover:bg-primary/40'
                               }`}
                             />
                           </div>
@@ -1780,7 +1854,7 @@ const StandardTable = <T extends object>({
                         const minColumnWidth = getHeaderMinWidth(col);
                         const colWidth =
                           usesFixedTableLayout || isActionColumn
-                            ? getColumnWidth(col, colId)
+                            ? Math.max(cell.column.getSize(), minColumnWidth)
                             : undefined;
                         const stickyBorderClass =
                           isStickyRightColumn && (!isActionColumn || actionColumnOverlaps)
@@ -1813,7 +1887,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: minColumnWidth }
                                   : { minWidth: minColumnWidth }
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} font-normal` : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} font-normal` : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : ''} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>
@@ -1834,7 +1908,7 @@ const StandardTable = <T extends object>({
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
                                   align="end"
-                                  className="w-36 p-1"
+                                  className="w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
                                   onClick={(event) => event.stopPropagation()}
                                   onDoubleClick={(event) => event.stopPropagation()}
                                 >

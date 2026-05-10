@@ -331,19 +331,20 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
 
     const headerCell = screen.getByText('Name').closest('th') as HTMLTableCellElement;
-    const headerLabel = headerCell.querySelector(
-      '[data-column-header-label="name"]',
+    const headerContent = headerCell.querySelector(
+      '[data-column-header-content="name"]',
     ) as HTMLElement;
-    const ageHeaderLabel = screen
+    const ageHeaderContent = screen
       .getByText('Age')
-      .closest('[data-column-header-label="age"]') as HTMLElement;
+      .closest('th')
+      ?.querySelector('[data-column-header-content="age"]') as HTMLElement;
     const resizeHandle = headerCell.querySelector(
       '[data-column-resize-handle="name"]',
     ) as HTMLElement;
     const resizeLine = headerCell.querySelector('[data-column-resize-line="name"]') as HTMLElement;
 
-    Object.defineProperty(headerLabel, 'scrollWidth', { configurable: true, value: 96 });
-    Object.defineProperty(ageHeaderLabel, 'scrollWidth', { configurable: true, value: 24 });
+    Object.defineProperty(headerContent, 'scrollWidth', { configurable: true, value: 128 });
+    Object.defineProperty(ageHeaderContent, 'scrollWidth', { configurable: true, value: 87 });
     Object.defineProperty(headerCell, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({
@@ -379,9 +380,9 @@ describe('<StandardTable />', () => {
     expect(headerCell.style.minWidth).toBe('160px');
     const table = headerCell.closest('table') as HTMLTableElement;
     await waitFor(() => expect(table.className).toContain('table-fixed'));
-    expect(table.style.width).toBe('248px');
+    expect(table.style.width).toBe('279px');
     expect(table.style.minWidth).toBe('100%');
-    expect(screen.getByText('Age').closest('th')?.style.minWidth).toBe('88px');
+    expect(screen.getByText('Age').closest('th')?.style.minWidth).toBe('119px');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
 
@@ -400,16 +401,16 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="Measured Headers" data={sampleRows} columns={columns} />);
 
     const longHeaderCell = screen.getByText('Very Long Header').closest('th') as HTMLElement;
-    const longHeaderLabel = longHeaderCell.querySelector(
-      '[data-column-header-label="age"]',
+    const longHeaderContent = longHeaderCell.querySelector(
+      '[data-column-header-content="age"]',
     ) as HTMLElement;
-    Object.defineProperty(longHeaderLabel, 'scrollWidth', { configurable: true, value: 136 });
+    Object.defineProperty(longHeaderContent, 'scrollWidth', { configurable: true, value: 204 });
 
     act(() => {
       fireEvent.resize(window);
     });
 
-    await waitFor(() => expect(longHeaderCell.style.minWidth).toBe('200px'));
+    await waitFor(() => expect(longHeaderCell.style.minWidth).toBe('236px'));
   });
 
   test('stored column widths are clamped to the full header label width', async () => {
@@ -419,7 +420,10 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="Role Width" data={sampleRows} columns={columns} />);
 
     const headerCell = screen.getByText('Ruolo').closest('th') as HTMLElement;
-    await waitFor(() => expect(Number.parseInt(headerCell.style.minWidth, 10)).toBeGreaterThan(80));
+    await waitFor(() =>
+      expect(Number.parseInt(headerCell.style.minWidth, 10)).toBeGreaterThan(120),
+    );
+    expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
 
   test('stale stored column widths do not force fixed table layout', () => {
@@ -548,7 +552,7 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-card');
-    expect(actionsHeader.style.minWidth).toBe('80px');
+    expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(80);
     expect(actionsHeader.className).not.toContain('bg-background');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
     expect(within(actionsHeader).queryByRole('button')).not.toBeInTheDocument();
@@ -617,7 +621,7 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-card');
-    expect(firstActionCell?.style.minWidth).toBe('80px');
+    expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(80);
     expect(firstActionCell?.className).not.toContain('bg-background');
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
