@@ -56,7 +56,7 @@ export function AppSidebar({
               size="lg"
               className="cursor-default text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-background">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-background text-sidebar-foreground">
                 <img
                   src={praetorFaviconUrl}
                   alt=""

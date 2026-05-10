@@ -106,7 +106,8 @@ describe('<Layout />', () => {
       '[data-sidebar="menu-button"][data-active="true"]',
     );
     const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
-    const brandLogo = brandButton?.querySelector('svg')?.parentElement;
+    const brandLogoImage = brandButton?.querySelector('img');
+    const brandLogo = brandLogoImage?.parentElement;
     const brandSubtitle = screen.getByText('roles.manager workspace');
     const avatarFallback = screen.getByText('TU');
 
@@ -120,6 +121,8 @@ describe('<Layout />', () => {
     expect(brandLogo?.className).toContain('text-sidebar-foreground');
     expect(brandLogo?.className).not.toContain('text-white');
     expect(brandLogo?.className).not.toContain('bg-praetor');
+    expect(brandLogoImage?.className).toContain('size-full');
+    expect(brandLogoImage?.className).toContain('object-cover');
     expect(brandSubtitle.className).toContain('text-sm');
     expect(brandSubtitle.className).toContain('leading-[var(--text-sm--line-height)]');
     expect(brandSubtitle.className).toContain('text-sidebar-foreground/80');
