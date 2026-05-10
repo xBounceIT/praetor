@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import type { Role, User } from '../../types';
-import { applyTheme } from '../../utils/theme';
+import { applyTheme, THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -86,7 +86,7 @@ describe('<Layout />', () => {
   });
 
   test('main content is scoped to the selected shadcn theme', async () => {
-    localStorage.setItem('praetor_theme', 'dark');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const { container } = renderLayout();
 
     const main = container.querySelector('[data-slot="sidebar-inset"]');
@@ -119,14 +119,16 @@ describe('<Layout />', () => {
     expect(brandLogo?.className).not.toContain('text-white');
     expect(brandLogo?.className).not.toContain('bg-praetor');
     expect(brandSubtitle.className).toContain('text-sm');
+    expect(brandSubtitle.className).toContain('leading-[var(--text-sm--line-height)]');
     expect(brandSubtitle.className).toContain('text-sidebar-foreground/80');
     expect(avatarFallback.className).toContain('text-sm');
+    expect(avatarFallback.className).toContain('leading-[var(--text-sm--line-height)]');
     expect(avatarFallback.className).toContain('text-sidebar-foreground');
     expect(avatarFallback.className).not.toContain('text-white');
   });
 
   test('account dropdown uses the scoped shadcn dark theme and sidebar text tokens', async () => {
-    localStorage.setItem('praetor_theme', 'dark');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();
     const { container } = renderLayout();
 
@@ -149,7 +151,7 @@ describe('<Layout />', () => {
   });
 
   test('open account dropdown updates when shadcn theme changes', async () => {
-    localStorage.setItem('praetor_theme', 'light');
+    localStorage.setItem(THEME_STORAGE_KEY, 'light');
     const user = userEvent.setup();
     renderLayout();
 

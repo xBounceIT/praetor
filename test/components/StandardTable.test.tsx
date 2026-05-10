@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -170,7 +171,7 @@ describe('<StandardTable />', () => {
   });
 
   test('rows-per-page select menu uses the scoped shadcn dark theme', async () => {
-    localStorage.setItem('praetor_theme', 'dark');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
 
@@ -367,6 +368,8 @@ describe('<StandardTable />', () => {
     });
 
     await waitFor(() => expect(document.body.style.cursor).toBe('col-resize'));
+    expect(headerCell.style.width).toBe('');
+    expect(headerCell.closest('table')?.className).not.toContain('table-fixed');
 
     act(() => {
       fireEvent.mouseMove(document, { clientX: 0 });
@@ -566,6 +569,9 @@ describe('<StandardTable />', () => {
       'standard-table-value-cell',
     );
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-sm');
+    expect(screen.getByText('Alice').closest('td')?.className).toContain(
+      'leading-[var(--text-sm--line-height)]',
+    );
     expect(screen.getByText('Active')).toHaveAttribute('data-status-badge');
   });
 
@@ -818,6 +824,8 @@ describe('<StandardTable />', () => {
     expect(previousButton.className).toContain('rounded-lg');
     expect(previousButton.className).toContain('!h-7');
     expect(previousButton.className).toContain('!text-sm');
+    expect(previousButton.className).toContain('!leading-[var(--text-sm--line-height)]');
+    expect(previousButton.className).toContain('!font-normal');
     expect(previousButton.className).toContain('disabled:opacity-50');
     expect(previousButton.className).not.toContain('disabled:opacity-100');
   });
@@ -857,6 +865,8 @@ describe('<StandardTable />', () => {
       expect(button.className).toContain('rounded-lg');
       expect(button.className).toContain('!h-7');
       expect(button.className).toContain('!text-sm');
+      expect(button.className).toContain('!leading-[var(--text-sm--line-height)]');
+      expect(button.className).toContain('!font-normal');
       expect(button.className).not.toContain('focus-visible:border-ring');
     }
 

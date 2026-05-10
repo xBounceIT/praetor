@@ -59,9 +59,9 @@ export function AppSidebar({
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-transparent text-sidebar-foreground">
                 <Clock className="size-4" />
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight text-sidebar-foreground">
+              <div className="grid flex-1 text-left text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground">
                 <span className="truncate font-semibold italic">PRAETOR</span>
-                <span className="truncate text-sm text-sidebar-foreground/80">
+                <span className="truncate text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/80">
                   {roleLabel} {workspaceLabel}
                 </span>
               </div>
@@ -73,7 +73,7 @@ export function AppSidebar({
         <NavMain items={navItems} label={navigationLabel} onViewChange={onViewChange} />
       </SidebarContent>
       <SidebarFooter>
-        <div className="px-2 text-sm text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
+        <div className="px-2 text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
           Praetor v{version}
         </div>
         <NavUser

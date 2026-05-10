@@ -98,7 +98,9 @@ const COPIED_FEEDBACK_DURATION_MS = 1500;
 const DEFAULT_MIN_COL_WIDTH = 40;
 const HEADER_RESIZE_EXTRA_WIDTH = 64;
 const ACTION_COLUMN_WIDTH = 80;
-const TABLE_CONTROL_BUTTON_CLASSNAME = '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !font-bold';
+const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
+const TABLE_CONTROL_BUTTON_CLASSNAME =
+  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-normal';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 
 export type Column<T> = {
@@ -167,6 +169,7 @@ const StandardTable = <T extends object>({
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
   const resizeMinWidthRef = useRef(DEFAULT_MIN_COL_WIDTH);
+  const resizeHasMovedRef = useRef(false);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [sortState, setSortState] = useState<SortState>(null);
@@ -367,6 +370,20 @@ const StandardTable = <T extends object>({
     });
   }, [measureVisibleColumnWidths]);
 
+  const setHeaderMinWidthsIfChanged = useCallback((next: Record<string, number>) => {
+    setHeaderMinWidths((prev) => {
+      const prevEntries = Object.entries(prev);
+      const nextEntries = Object.entries(next);
+      if (
+        prevEntries.length === nextEntries.length &&
+        nextEntries.every(([id, width]) => prev[id] === width)
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
   const getHeaderMinWidth = useCallback(
     (col: Column<T>) =>
       isRowActionColumn(col)
@@ -388,7 +405,7 @@ const StandardTable = <T extends object>({
     }
     return -1;
   }, [visibleColumns]);
-  const usesFixedTableLayout = resizingColId !== null || Object.keys(validColumnWidths).length > 0;
+  const usesFixedTableLayout = Object.keys(validColumnWidths).length > 0;
 
   // Excludes statically hidden filter-only columns; sort/filter still target them via colsById.
   const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
@@ -453,10 +470,15 @@ const StandardTable = <T extends object>({
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizeStartXRef.current;
+      if (Math.abs(delta) < 1) return;
       const newWidth = Math.max(resizeMinWidthRef.current, resizeStartWidthRef.current + delta);
       setColumnWidths((prev) => {
+        const seededWidths = resizeHasMovedRef.current
+          ? prev
+          : { ...prev, ...(measureVisibleColumnWidths(true) ?? {}) };
+        resizeHasMovedRef.current = true;
         if (prev[resizingColId] === newWidth) return prev;
-        return { ...prev, [resizingColId]: newWidth };
+        return { ...seededWidths, [resizingColId]: newWidth };
       });
     };
 
@@ -480,7 +502,7 @@ const StandardTable = <T extends object>({
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
     };
-  }, [columns, getColId, resizingColId, title]);
+  }, [columns, getColId, measureVisibleColumnWidths, resizingColId, title]);
 
   useEffect(() => {
     const container = tableContainerRef.current;
@@ -498,9 +520,6 @@ const StandardTable = <T extends object>({
     const resizeObserver =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(handleResizeLayout) : null;
     resizeObserver?.observe(container);
-    const tableElement = container.querySelector('table');
-    if (tableElement) resizeObserver?.observe(tableElement);
-
     return () => {
       container.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResizeLayout);
@@ -1047,18 +1066,10 @@ const StandardTable = <T extends object>({
     const th = e.currentTarget.parentElement as HTMLTableCellElement;
     const headerLabel = th.querySelector<HTMLElement>('[data-column-header-label]');
     const measuredMinWidths = measureVisibleColumnWidths();
-    if (measuredMinWidths) setHeaderMinWidths(measuredMinWidths);
+    if (measuredMinWidths) setHeaderMinWidthsIfChanged(measuredMinWidths);
     const resizedColumn = colsById.get(colId);
     const currentWidth = Math.ceil(th.getBoundingClientRect().width);
-    if (resizedColumn && currentWidth > 0) {
-      setColumnWidths((prev) => ({
-        ...prev,
-        [colId]: Math.max(
-          getMeasuredColumnWidth(resizedColumn, headerLabel ?? undefined),
-          currentWidth,
-        ),
-      }));
-    }
+    resizeHasMovedRef.current = false;
     resizeStartXRef.current = e.clientX;
     resizeStartWidthRef.current = currentWidth;
     resizeMinWidthRef.current = resizedColumn
@@ -1342,17 +1353,17 @@ const StandardTable = <T extends object>({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <div className="max-h-64 overflow-y-auto">
-                    {table
-                      .getAllColumns()
-                      .filter((column) => column.getCanHide() && colsById.has(column.id))
-                      .map((column) => {
+                    {(() => {
+                      const hideableColumns = table
+                        .getAllColumns()
+                        .filter((column) => column.getCanHide() && colsById.has(column.id));
+                      const visibleHideableColumnCount = table
+                        .getVisibleLeafColumns()
+                        .filter((visibleColumn) => visibleColumn.getCanHide()).length;
+                      return hideableColumns.map((column) => {
                         const sourceColumn = colsById.get(column.id);
                         const isVisible = column.getIsVisible();
-                        const isLastVisible =
-                          table
-                            .getVisibleLeafColumns()
-                            .filter((visibleColumn) => visibleColumn.getCanHide()).length === 1 &&
-                          isVisible;
+                        const isLastVisible = visibleHideableColumnCount === 1 && isVisible;
                         return (
                           <DropdownMenuCheckboxItem
                             key={column.id}
@@ -1367,7 +1378,8 @@ const StandardTable = <T extends object>({
                             <span className="truncate">{sourceColumn?.header ?? column.id}</span>
                           </DropdownMenuCheckboxItem>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -1776,7 +1788,7 @@ const StandardTable = <T extends object>({
                                   ? { minWidth: '40px' }
                                   : undefined
                             }
-                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell text-sm font-normal' : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                            className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} font-normal` : ''} ${usesFixedTableLayout && !isActionColumn ? 'max-w-0 overflow-hidden text-ellipsis' : ''} ${isStickyRightColumn ? 'w-auto text-right' : `${usesFixedTableLayout ? '' : isStretchColumn ? 'w-full' : 'w-px'} align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${isStickyRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                           >
                             {isActionColumn ? (
                               <DropdownMenu>
