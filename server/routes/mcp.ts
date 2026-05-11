@@ -3,9 +3,16 @@ import { type CallToolResult, McpServer, type ServerContext } from '@modelcontex
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { authenticateMcpToken, type McpAuthenticatedUser } from '../middleware/mcpAuth.ts';
+import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
+import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
+import * as supplierInvoicesRepo from '../repositories/supplierInvoicesRepo.ts';
+import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
@@ -17,12 +24,8 @@ import {
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
-import {
-  buildBusinessDataset,
-  determineRequestedSections,
-  getGeneralAiConfig,
-  getReportingRange,
-} from './reports.ts';
+import { isPastLocalDate } from '../utils/date.ts';
+import { normalizeUnitType } from '../utils/unit-type.ts';
 
 const hasPermission = (user: McpAuthenticatedUser, permission: string) =>
   user.permissions.includes(permission);
@@ -80,6 +83,16 @@ const USER_HIERARCHY_PERMISSIONS = [
   'hr.work_units.view',
 ] as const;
 
+const QUOTE_LIST_PERMISSIONS = ['sales.client_quotes.view', 'sales.supplier_quotes.view'] as const;
+const ORDER_LIST_PERMISSIONS = [
+  'accounting.clients_orders.view',
+  'accounting.supplier_orders.view',
+] as const;
+const INVOICE_LIST_PERMISSIONS = [
+  'accounting.clients_invoices.view',
+  'accounting.supplier_invoices.view',
+] as const;
+
 const MAX_BULK_TIME_ENTRY_ITEMS = 100;
 
 const createTimeEntryInputSchema = z.object({
@@ -134,6 +147,30 @@ const requireUser = (ctx: ServerContext): McpAuthenticatedUser => {
 
 const enforce = (user: McpAuthenticatedUser, permission: string): CallToolResult | null =>
   hasPermission(user, permission) ? null : toolError('Insufficient permissions');
+
+const groupBy = <T>(items: T[], getKey: (item: T) => string) => {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const key = getKey(item);
+    const list = grouped.get(key);
+    if (list) list.push(item);
+    else grouped.set(key, [item]);
+  }
+  return grouped;
+};
+
+const isClientQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
+  if (status === 'confirmed') return false;
+  if (!expirationDate) return false;
+  return isPastLocalDate(expirationDate);
+};
+
+const normalizeSupplierQuoteStatus = (status: string) => {
+  if (status === 'received') return 'sent';
+  if (status === 'approved') return 'accepted';
+  if (status === 'rejected') return 'denied';
+  return status;
+};
 
 const canViewAllUsers = (user: McpAuthenticatedUser) =>
   hasPermission(user, 'administration.user_management_all.view') ||
@@ -289,6 +326,161 @@ const buildServer = () => {
         ? await tasksRepo.listAll()
         : await tasksRepo.listForUser(user.id);
       return jsonResult({ tasks });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_quotes',
+    {
+      title: 'List Quotes',
+      description:
+        'List client and supplier quotes visible to the authenticated user based on Praetor permissions.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, QUOTE_LIST_PERMISSIONS);
+      if (denied) return denied;
+
+      const canViewClientQuotes = hasPermission(user, 'sales.client_quotes.view');
+      const canViewSupplierQuotes = hasPermission(user, 'sales.supplier_quotes.view');
+      const [clientQuotes, clientQuoteItems, supplierQuotes, supplierQuoteItems] =
+        await Promise.all([
+          canViewClientQuotes ? clientQuotesRepo.listAll() : Promise.resolve([]),
+          canViewClientQuotes ? clientQuotesRepo.listAllItems() : Promise.resolve([]),
+          canViewSupplierQuotes ? supplierQuotesRepo.listAll() : Promise.resolve([]),
+          canViewSupplierQuotes ? supplierQuotesRepo.listAllItems() : Promise.resolve([]),
+        ]);
+
+      const clientItemsByQuote = groupBy(clientQuoteItems, (item) => item.quoteId);
+      const supplierItemsByQuote = groupBy(supplierQuoteItems, (item) => item.quoteId);
+
+      return jsonResult({
+        clientQuotes: clientQuotes.map((quote) => ({
+          ...quote,
+          items: clientItemsByQuote.get(quote.id) ?? [],
+          isExpired: isClientQuoteExpired(quote.status, quote.expirationDate),
+        })),
+        supplierQuotes: supplierQuotes.map((quote) => ({
+          ...quote,
+          status: normalizeSupplierQuoteStatus(quote.status),
+          items: (supplierItemsByQuote.get(quote.id) ?? []).map((item) => ({
+            ...item,
+            unitType: normalizeUnitType(item.unitType),
+          })),
+        })),
+        scope: {
+          includesClientQuotes: canViewClientQuotes,
+          includesSupplierQuotes: canViewSupplierQuotes,
+        },
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_offers',
+    {
+      title: 'List Offers',
+      description: 'List client offers visible to the authenticated user.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforce(user, 'sales.client_offers.view');
+      if (denied) return denied;
+
+      const [offers, items] = await Promise.all([
+        clientOffersRepo.listAll(),
+        clientOffersRepo.listAllItems(),
+      ]);
+      const itemsByOffer = groupBy(items, (item) => item.offerId);
+
+      return jsonResult({
+        offers: offers.map((offer) => ({
+          ...offer,
+          items: itemsByOffer.get(offer.id) ?? [],
+        })),
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_orders',
+    {
+      title: 'List Orders',
+      description:
+        'List client and supplier orders visible to the authenticated user based on Praetor permissions.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, ORDER_LIST_PERMISSIONS);
+      if (denied) return denied;
+
+      const canViewClientOrders = hasPermission(user, 'accounting.clients_orders.view');
+      const canViewSupplierOrders = hasPermission(user, 'accounting.supplier_orders.view');
+      const [clientOrders, clientOrderItems, supplierOrders, supplierOrderItems] =
+        await Promise.all([
+          canViewClientOrders ? clientsOrdersRepo.listAll() : Promise.resolve([]),
+          canViewClientOrders ? clientsOrdersRepo.listAllItems() : Promise.resolve([]),
+          canViewSupplierOrders ? supplierOrdersRepo.listAll() : Promise.resolve([]),
+          canViewSupplierOrders ? supplierOrdersRepo.listAllItems() : Promise.resolve([]),
+        ]);
+
+      const clientItemsByOrder = groupBy(clientOrderItems, (item) => item.orderId);
+      const supplierItemsByOrder = groupBy(supplierOrderItems, (item) => item.orderId);
+
+      return jsonResult({
+        clientOrders: clientOrders.map((order) => ({
+          ...order,
+          items: clientItemsByOrder.get(order.id) ?? [],
+        })),
+        supplierOrders: supplierOrders.map((order) => ({
+          ...order,
+          items: supplierItemsByOrder.get(order.id) ?? [],
+        })),
+        scope: {
+          includesClientOrders: canViewClientOrders,
+          includesSupplierOrders: canViewSupplierOrders,
+        },
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_invoices',
+    {
+      title: 'List Invoices',
+      description:
+        'List client and supplier invoices visible to the authenticated user based on Praetor permissions.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, INVOICE_LIST_PERMISSIONS);
+      if (denied) return denied;
+
+      const canViewClientInvoices = hasPermission(user, 'accounting.clients_invoices.view');
+      const canViewSupplierInvoices = hasPermission(user, 'accounting.supplier_invoices.view');
+      const [clientInvoices, supplierInvoices, supplierInvoiceItems] = await Promise.all([
+        canViewClientInvoices ? invoicesRepo.listAllWithItems() : Promise.resolve([]),
+        canViewSupplierInvoices ? supplierInvoicesRepo.listAll() : Promise.resolve([]),
+        canViewSupplierInvoices ? supplierInvoicesRepo.listAllItems() : Promise.resolve([]),
+      ]);
+
+      const supplierItemsByInvoice = groupBy(supplierInvoiceItems, (item) => item.invoiceId);
+
+      return jsonResult({
+        clientInvoices,
+        supplierInvoices: supplierInvoices.map((invoice) => ({
+          ...invoice,
+          items: supplierItemsByInvoice.get(invoice.id) ?? [],
+        })),
+        scope: {
+          includesClientInvoices: canViewClientInvoices,
+          includesSupplierInvoices: canViewSupplierInvoices,
+        },
+      });
     },
   );
 
@@ -526,35 +718,6 @@ const buildServer = () => {
       const found = await notificationsRepo.deleteForUser(id, user.id);
       if (!found) return toolError('Notification not found');
       return jsonResult({ success: true });
-    },
-  );
-
-  server.registerTool(
-    'praetor_get_reporting_dataset',
-    {
-      title: 'Get Reporting Dataset',
-      description:
-        'Build the same permission-scoped business dataset used by AI Reporting. Optionally pass a query to select relevant sections.',
-      inputSchema: z.object({ query: z.string().optional() }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ query }, ctx) => {
-      const user = requireUser(ctx);
-      const denied = enforce(user, 'reports.ai_reporting.view');
-      if (denied) return denied;
-      const cfg = await getGeneralAiConfig();
-      if (!cfg.enableAiReporting) return toolError('AI Reporting is disabled by administration.');
-      const { fromDate, toDate } = getReportingRange();
-      const requestedSections = query ? determineRequestedSections(query, []) : null;
-      const requestLike = { user, log: { info: () => {} } } as unknown as FastifyRequest;
-      const dataset = await buildBusinessDataset(
-        requestLike,
-        cfg,
-        fromDate,
-        toDate,
-        requestedSections,
-      );
-      return jsonResult(dataset);
     },
   );
 

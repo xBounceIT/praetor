@@ -29,7 +29,7 @@ Praetor espone un endpoint MCP remoto su `/api/mcp` per agenti compatibili con M
 
 Il token viene mostrato una sola volta al momento della creazione. Praetor conserva solo un hash, quindi revoca e ricrea il token se viene perso.
 
-Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, consuntivi, notifiche e dataset di AI reporting.
+Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, preventivi, offerte, ordini, fatture, consuntivi e notifiche.
 
 Configura il client MCP con l'URL dell'endpoint e l'header:
 
@@ -55,6 +55,10 @@ Strumenti supportati:
 - `praetor_list_suppliers`
 - `praetor_list_projects`
 - `praetor_list_tasks`
+- `praetor_list_quotes`
+- `praetor_list_offers`
+- `praetor_list_orders`
+- `praetor_list_invoices`
 - `praetor_list_time_entries`
 - `praetor_create_time_entry`
 - `praetor_update_time_entry`
@@ -65,7 +69,6 @@ Strumenti supportati:
 - `praetor_list_notifications`
 - `praetor_mark_notification_read`
 - `praetor_delete_notification`
-- `praetor_get_reporting_dataset`
 
 Gli strumenti bulk per i consuntivi accettano fino a 100 elementi per chiamata. Elaborano ogni elemento in modo indipendente e restituiscono un riepilogo con successi ed errori per singolo elemento.
 

@@ -29,7 +29,7 @@ Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol c
 
 The token is shown only once when it is created. Praetor stores only a hash, so revoke and recreate the token if it is lost.
 
-MCP tools always respect the permissions of your current role. The first release includes tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, time entries, notifications, and the AI reporting dataset.
+MCP tools always respect the permissions of your current role. The first release includes tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, quotes, offers, orders, invoices, time entries, and notifications.
 
 Configure the MCP client with the endpoint URL and this header:
 
@@ -55,6 +55,10 @@ Supported tools:
 - `praetor_list_suppliers`
 - `praetor_list_projects`
 - `praetor_list_tasks`
+- `praetor_list_quotes`
+- `praetor_list_offers`
+- `praetor_list_orders`
+- `praetor_list_invoices`
 - `praetor_list_time_entries`
 - `praetor_create_time_entry`
 - `praetor_update_time_entry`
@@ -65,7 +69,6 @@ Supported tools:
 - `praetor_list_notifications`
 - `praetor_mark_notification_read`
 - `praetor_delete_notification`
-- `praetor_get_reporting_dataset`
 
 Bulk time-entry tools accept up to 100 items per call. They process each item independently and return a summary with per-item successes and errors.
 

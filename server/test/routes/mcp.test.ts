@@ -2,30 +2,55 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'b
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { McpAuthenticatedUser } from '../../middleware/mcpAuth.ts';
 import * as realMcpAuth from '../../middleware/mcpAuth.ts';
+import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
+import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
+import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realInvoicesRepo from '../../repositories/invoicesRepo.ts';
 import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
+import * as realSupplierInvoicesRepo from '../../repositories/supplierInvoicesRepo.ts';
+import * as realSupplierOrdersRepo from '../../repositories/supplierOrdersRepo.ts';
+import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
-import * as realReportsRoutes from '../../routes/reports.ts';
 import * as realTimeEntriesService from '../../services/timeEntries.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 const mcpAuthSnap = { ...realMcpAuth };
+const clientOffersRepoSnap = { ...realClientOffersRepo };
+const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const clientsRepoSnap = { ...realClientsRepo };
+const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
+const invoicesRepoSnap = { ...realInvoicesRepo };
 const suppliersRepoSnap = { ...realSuppliersRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
+const supplierInvoicesRepoSnap = { ...realSupplierInvoicesRepo };
+const supplierOrdersRepoSnap = { ...realSupplierOrdersRepo };
+const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const usersRepoSnap = { ...realUsersRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
-const reportsRoutesSnap = { ...realReportsRoutes };
 const timeEntriesServiceSnap = { ...realTimeEntriesService };
 
+const clientOffersListAllMock = mock();
+const clientOffersListAllItemsMock = mock();
+const clientQuotesListAllMock = mock();
+const clientQuotesListAllItemsMock = mock();
 const clientsListMock = mock();
+const clientsOrdersListAllMock = mock();
+const clientsOrdersListAllItemsMock = mock();
+const invoicesListAllWithItemsMock = mock();
 const suppliersListAllMock = mock();
+const supplierInvoicesListAllMock = mock();
+const supplierInvoicesListAllItemsMock = mock();
+const supplierOrdersListAllMock = mock();
+const supplierOrdersListAllItemsMock = mock();
+const supplierQuotesListAllMock = mock();
+const supplierQuotesListAllItemsMock = mock();
 const projectsListAllMock = mock();
 const projectsListForUserMock = mock();
 const tasksListAllMock = mock();
@@ -43,10 +68,6 @@ const listTimeEntriesMock = mock();
 const createTimeEntryMock = mock();
 const updateTimeEntryMock = mock();
 const deleteTimeEntryMock = mock();
-const buildBusinessDatasetMock = mock();
-const determineRequestedSectionsMock = mock();
-const getGeneralAiConfigMock = mock();
-const getReportingRangeMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 let testApp: FastifyInstance;
@@ -82,13 +103,47 @@ beforeAll(async () => {
   mock.module('../../middleware/mcpAuth.ts', () => ({
     authenticateMcpToken: authenticateMcpTokenMock,
   }));
+  mock.module('../../repositories/clientOffersRepo.ts', () => ({
+    ...clientOffersRepoSnap,
+    listAll: clientOffersListAllMock,
+    listAllItems: clientOffersListAllItemsMock,
+  }));
+  mock.module('../../repositories/clientQuotesRepo.ts', () => ({
+    ...clientQuotesRepoSnap,
+    listAll: clientQuotesListAllMock,
+    listAllItems: clientQuotesListAllItemsMock,
+  }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     list: clientsListMock,
   }));
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
+    ...clientsOrdersRepoSnap,
+    listAll: clientsOrdersListAllMock,
+    listAllItems: clientsOrdersListAllItemsMock,
+  }));
+  mock.module('../../repositories/invoicesRepo.ts', () => ({
+    ...invoicesRepoSnap,
+    listAllWithItems: invoicesListAllWithItemsMock,
+  }));
   mock.module('../../repositories/suppliersRepo.ts', () => ({
     ...suppliersRepoSnap,
     listAll: suppliersListAllMock,
+  }));
+  mock.module('../../repositories/supplierInvoicesRepo.ts', () => ({
+    ...supplierInvoicesRepoSnap,
+    listAll: supplierInvoicesListAllMock,
+    listAllItems: supplierInvoicesListAllItemsMock,
+  }));
+  mock.module('../../repositories/supplierOrdersRepo.ts', () => ({
+    ...supplierOrdersRepoSnap,
+    listAll: supplierOrdersListAllMock,
+    listAllItems: supplierOrdersListAllItemsMock,
+  }));
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
+    ...supplierQuotesRepoSnap,
+    listAll: supplierQuotesListAllMock,
+    listAllItems: supplierQuotesListAllItemsMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
@@ -118,12 +173,6 @@ beforeAll(async () => {
     markReadForUser: markNotificationReadForUserMock,
     deleteForUser: deleteNotificationForUserMock,
   }));
-  mock.module('../../routes/reports.ts', () => ({
-    buildBusinessDataset: buildBusinessDatasetMock,
-    determineRequestedSections: determineRequestedSectionsMock,
-    getGeneralAiConfig: getGeneralAiConfigMock,
-    getReportingRange: getReportingRangeMock,
-  }));
   mock.module('../../services/timeEntries.ts', () => ({
     ...timeEntriesServiceSnap,
     listTimeEntries: listTimeEntriesMock,
@@ -137,22 +186,41 @@ beforeAll(async () => {
 
 afterAll(() => {
   mock.module('../../middleware/mcpAuth.ts', () => mcpAuthSnap);
+  mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
+  mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
+  mock.module('../../repositories/invoicesRepo.ts', () => invoicesRepoSnap);
   mock.module('../../repositories/suppliersRepo.ts', () => suppliersRepoSnap);
+  mock.module('../../repositories/supplierInvoicesRepo.ts', () => supplierInvoicesRepoSnap);
+  mock.module('../../repositories/supplierOrdersRepo.ts', () => supplierOrdersRepoSnap);
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
-  mock.module('../../routes/reports.ts', () => reportsRoutesSnap);
   mock.module('../../services/timeEntries.ts', () => timeEntriesServiceSnap);
 });
 
 beforeEach(async () => {
   if (testApp) await testApp.close();
   for (const m of [
+    clientOffersListAllMock,
+    clientOffersListAllItemsMock,
+    clientQuotesListAllMock,
+    clientQuotesListAllItemsMock,
     clientsListMock,
+    clientsOrdersListAllMock,
+    clientsOrdersListAllItemsMock,
+    invoicesListAllWithItemsMock,
     suppliersListAllMock,
+    supplierInvoicesListAllMock,
+    supplierInvoicesListAllItemsMock,
+    supplierOrdersListAllMock,
+    supplierOrdersListAllItemsMock,
+    supplierQuotesListAllMock,
+    supplierQuotesListAllItemsMock,
     projectsListAllMock,
     projectsListForUserMock,
     tasksListAllMock,
@@ -170,17 +238,26 @@ beforeEach(async () => {
     createTimeEntryMock,
     updateTimeEntryMock,
     deleteTimeEntryMock,
-    buildBusinessDatasetMock,
-    determineRequestedSectionsMock,
-    getGeneralAiConfigMock,
-    getReportingRangeMock,
   ]) {
     m.mockReset();
   }
 
   currentPermissions = ['timesheets.tracker.view'];
+  clientOffersListAllMock.mockResolvedValue([]);
+  clientOffersListAllItemsMock.mockResolvedValue([]);
+  clientQuotesListAllMock.mockResolvedValue([]);
+  clientQuotesListAllItemsMock.mockResolvedValue([]);
   clientsListMock.mockResolvedValue([{ id: 'c1', name: 'Client One', description: 'Private' }]);
+  clientsOrdersListAllMock.mockResolvedValue([]);
+  clientsOrdersListAllItemsMock.mockResolvedValue([]);
+  invoicesListAllWithItemsMock.mockResolvedValue([]);
   suppliersListAllMock.mockResolvedValue([]);
+  supplierInvoicesListAllMock.mockResolvedValue([]);
+  supplierInvoicesListAllItemsMock.mockResolvedValue([]);
+  supplierOrdersListAllMock.mockResolvedValue([]);
+  supplierOrdersListAllItemsMock.mockResolvedValue([]);
+  supplierQuotesListAllMock.mockResolvedValue([]);
+  supplierQuotesListAllItemsMock.mockResolvedValue([]);
   projectsListAllMock.mockResolvedValue([]);
   projectsListForUserMock.mockResolvedValue([{ id: 'p1', name: 'Project One', clientId: 'c1' }]);
   tasksListAllMock.mockResolvedValue([]);
@@ -226,10 +303,6 @@ beforeEach(async () => {
   );
   updateTimeEntryMock.mockImplementation((_user, id, patch) => Promise.resolve({ id, ...patch }));
   deleteTimeEntryMock.mockResolvedValue({ message: 'Entry deleted' });
-  getGeneralAiConfigMock.mockResolvedValue({ enableAiReporting: true, currency: 'EUR' });
-  getReportingRangeMock.mockReturnValue({ fromDate: '2026-01-01', toDate: '2026-05-11' });
-  determineRequestedSectionsMock.mockReturnValue(null);
-  buildBusinessDatasetMock.mockResolvedValue({ dataset: {}, metrics: {} });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/mcp');
 });
@@ -294,9 +367,14 @@ describe('/api/mcp', () => {
     const toolNames = toolsBody.result.tools.map((tool: { name: string }) => tool.name);
     expect(toolNames).toContain('praetor_list_clients');
     expect(toolNames).toContain('praetor_get_users_hierarchy');
+    expect(toolNames).toContain('praetor_list_quotes');
+    expect(toolNames).toContain('praetor_list_offers');
+    expect(toolNames).toContain('praetor_list_orders');
+    expect(toolNames).toContain('praetor_list_invoices');
     expect(toolNames).toContain('praetor_bulk_create_time_entries');
     expect(toolNames).toContain('praetor_bulk_update_time_entries');
     expect(toolNames).toContain('praetor_bulk_delete_time_entries');
+    expect(toolNames).not.toContain('praetor_get_reporting_dataset');
 
     const clientsRes = await rpc({
       jsonrpc: '2.0',
@@ -311,6 +389,116 @@ describe('/api/mcp', () => {
       { id: 'c1', name: 'Client One', description: null },
     ]);
     expect(clientsListMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u1' });
+  });
+
+  test('lists permission-scoped quotes, offers, orders, and invoices', async () => {
+    currentPermissions = [
+      'sales.client_quotes.view',
+      'sales.supplier_quotes.view',
+      'sales.client_offers.view',
+      'accounting.clients_orders.view',
+      'accounting.supplier_orders.view',
+      'accounting.clients_invoices.view',
+      'accounting.supplier_invoices.view',
+    ];
+    clientQuotesListAllMock.mockResolvedValue([
+      {
+        id: 'cq-1',
+        clientId: 'c1',
+        clientName: 'Client One',
+        status: 'draft',
+        expirationDate: '2000-01-01',
+      },
+    ]);
+    clientQuotesListAllItemsMock.mockResolvedValue([{ id: 'cqi-1', quoteId: 'cq-1' }]);
+    supplierQuotesListAllMock.mockResolvedValue([
+      { id: 'sq-1', supplierId: 's1', supplierName: 'Supplier One', status: 'received' },
+    ]);
+    supplierQuotesListAllItemsMock.mockResolvedValue([
+      { id: 'sqi-1', quoteId: 'sq-1', unitType: 'days' },
+    ]);
+    clientOffersListAllMock.mockResolvedValue([{ id: 'co-1', clientId: 'c1' }]);
+    clientOffersListAllItemsMock.mockResolvedValue([{ id: 'coi-1', offerId: 'co-1' }]);
+    clientsOrdersListAllMock.mockResolvedValue([{ id: 'ord-1', clientId: 'c1' }]);
+    clientsOrdersListAllItemsMock.mockResolvedValue([{ id: 'ordi-1', orderId: 'ord-1' }]);
+    supplierOrdersListAllMock.mockResolvedValue([{ id: 'sord-1', supplierId: 's1' }]);
+    supplierOrdersListAllItemsMock.mockResolvedValue([{ id: 'sordi-1', orderId: 'sord-1' }]);
+    invoicesListAllWithItemsMock.mockResolvedValue([{ id: 'inv-1', items: [{ id: 'invi-1' }] }]);
+    supplierInvoicesListAllMock.mockResolvedValue([{ id: 'sinv-1', supplierId: 's1' }]);
+    supplierInvoicesListAllItemsMock.mockResolvedValue([{ id: 'sinvi-1', invoiceId: 'sinv-1' }]);
+
+    const quotesRes = await rpc({
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: { name: 'praetor_list_quotes', arguments: {} },
+    });
+    const quotesBody = parseMcpBody(quotesRes.body);
+    expect(quotesBody.result.structuredContent.clientQuotes[0].items).toEqual([
+      { id: 'cqi-1', quoteId: 'cq-1' },
+    ]);
+    expect(quotesBody.result.structuredContent.clientQuotes[0].isExpired).toBe(true);
+    expect(quotesBody.result.structuredContent.supplierQuotes[0].status).toBe('sent');
+    expect(quotesBody.result.structuredContent.supplierQuotes[0].items[0].unitType).toBe('days');
+
+    const offersRes = await rpc({
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'tools/call',
+      params: { name: 'praetor_list_offers', arguments: {} },
+    });
+    expect(parseMcpBody(offersRes.body).result.structuredContent.offers[0].items).toEqual([
+      { id: 'coi-1', offerId: 'co-1' },
+    ]);
+
+    const ordersRes = await rpc({
+      jsonrpc: '2.0',
+      id: 14,
+      method: 'tools/call',
+      params: { name: 'praetor_list_orders', arguments: {} },
+    });
+    const ordersBody = parseMcpBody(ordersRes.body);
+    expect(ordersBody.result.structuredContent.clientOrders[0].items).toEqual([
+      { id: 'ordi-1', orderId: 'ord-1' },
+    ]);
+    expect(ordersBody.result.structuredContent.supplierOrders[0].items).toEqual([
+      { id: 'sordi-1', orderId: 'sord-1' },
+    ]);
+
+    const invoicesRes = await rpc({
+      jsonrpc: '2.0',
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'praetor_list_invoices', arguments: {} },
+    });
+    const invoicesBody = parseMcpBody(invoicesRes.body);
+    expect(invoicesBody.result.structuredContent.clientInvoices).toEqual([
+      { id: 'inv-1', items: [{ id: 'invi-1' }] },
+    ]);
+    expect(invoicesBody.result.structuredContent.supplierInvoices[0].items).toEqual([
+      { id: 'sinvi-1', invoiceId: 'sinv-1' },
+    ]);
+  });
+
+  test('only loads sales documents allowed by current MCP permissions', async () => {
+    currentPermissions = ['sales.supplier_quotes.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 16,
+      method: 'tools/call',
+      params: { name: 'praetor_list_quotes', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.clientQuotes).toEqual([]);
+    expect(body.result.structuredContent.scope).toEqual({
+      includesClientQuotes: false,
+      includesSupplierQuotes: true,
+    });
+    expect(clientQuotesListAllMock).not.toHaveBeenCalled();
+    expect(supplierQuotesListAllMock).toHaveBeenCalled();
   });
 
   test('enforces Praetor permissions inside tools', async () => {
