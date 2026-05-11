@@ -74,7 +74,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
     const entries = makeStubSetter<EntryLike>([]);
     const generateSpy = mock(() => Promise.resolve());
     const handlers = makeTaskHandlers({
-      projectTasks: tasks.get() as never,
+      getProjectTasks: () => tasks.get() as never,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
       generateRecurringEntries: generateSpy,
@@ -90,6 +90,8 @@ describe('makeTaskHandlers.makeRecurring', () => {
     expect(updates.recurrenceStart).toBe('2026-05-01');
     expect(updates.recurrenceEnd).toBe('2026-12-01');
     expect(updates.recurrenceDuration).toBe(8);
+    // generateRecurringEntries is awaited directly (no setTimeout workaround).
+    expect(generateSpy).toHaveBeenCalledTimes(1);
   });
 
   test('editing already-recurring task: clears placeholder entries before update', async () => {
@@ -113,7 +115,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       { id: 'e5', projectId: 'p1', task: 'other-task', isPlaceholder: true }, // different task
     ]);
     const handlers = makeTaskHandlers({
-      projectTasks: tasks.get() as never,
+      getProjectTasks: () => tasks.get() as never,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
       generateRecurringEntries: mock(() => Promise.resolve()),
@@ -145,7 +147,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       { id: 't1', name: 'task-A', projectId: 'p1', isRecurring: false },
     ]);
     const handlers = makeTaskHandlers({
-      projectTasks: tasks.get() as never,
+      getProjectTasks: () => tasks.get() as never,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
       generateRecurringEntries: mock(() => Promise.resolve()),
@@ -158,5 +160,59 @@ describe('makeTaskHandlers.makeRecurring', () => {
     expect(updates.recurrenceEnd).toBeUndefined();
     // recurrenceStart defaults to today (YYYY-MM-DD shape) when omitted.
     expect(updates.recurrenceStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('regression: makeRecurring observes latest projectTasks via getter', async () => {
+    apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, name: 'task-A', projectId: 'p1', ...(updates as object) }),
+    );
+    // Initial: no tasks present. Handler is created with empty list.
+    const tasks = makeStubSetter<TaskLike>([]);
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e1', projectId: 'p1', task: 'task-A', isPlaceholder: true },
+    ]);
+    const handlers = makeTaskHandlers({
+      getProjectTasks: () => tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: entries.setter,
+      generateRecurringEntries: mock(() => Promise.resolve()),
+    });
+
+    // Now state mutates: t1 exists and is already recurring.
+    (tasks.setter as (next: TaskLike[]) => void)([
+      { id: 't1', name: 'task-A', projectId: 'p1', isRecurring: true },
+    ]);
+
+    await handlers.makeRecurring('t1', 'monthly');
+    // Old (snapshot) handler would not see the task and would skip bulkDelete.
+    // With getter, it must observe the updated state and clear placeholders.
+    expect(apiMocks.entriesBulkDelete).toHaveBeenCalledTimes(1);
+  });
+
+  test('regression: recurringAction observes latest projectTasks via getter', async () => {
+    apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, name: 'task-A', projectId: 'p1', ...(updates as object) }),
+    );
+    const tasks = makeStubSetter<TaskLike>([]);
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e1', projectId: 'p1', task: 'task-A', isPlaceholder: true },
+    ]);
+    const handlers = makeTaskHandlers({
+      getProjectTasks: () => tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: entries.setter,
+      generateRecurringEntries: mock(() => Promise.resolve()),
+    });
+
+    // State mutates after factory creation.
+    (tasks.setter as (next: TaskLike[]) => void)([
+      { id: 't1', name: 'task-A', projectId: 'p1', isRecurring: true },
+    ]);
+
+    await handlers.recurringAction('t1', 'stop');
+    expect(apiMocks.tasksUpdate).toHaveBeenCalledTimes(1);
+    // Should clear placeholders because it found the task via the getter.
+    expect(apiMocks.entriesBulkDelete).toHaveBeenCalledTimes(1);
+    expect(entries.get()).toEqual([]);
   });
 });

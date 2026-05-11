@@ -3,18 +3,19 @@ import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
 
 export type EntryHandlersDeps = {
-  currentUser: User | null;
-  viewingUserId: string;
+  getCurrentUser: () => User | null;
+  getViewingUserId: () => string;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
-  const { currentUser, viewingUserId, setEntries } = deps;
+  const { getCurrentUser, getViewingUserId, setEntries } = deps;
 
   const add = async (newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => {
+    const currentUser = getCurrentUser();
     if (!currentUser) return;
     try {
-      const targetUserId = viewingUserId || currentUser.id;
+      const targetUserId = getViewingUserId() || currentUser.id;
       const entry = await api.entries.create({
         ...newEntry,
         userId: targetUserId,
@@ -28,9 +29,10 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   };
 
   const addBulk = async (newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => {
+    const currentUser = getCurrentUser();
     if (!currentUser) return;
     try {
-      const targetUserId = viewingUserId || currentUser.id;
+      const targetUserId = getViewingUserId() || currentUser.id;
       const createdEntries = await Promise.all(
         newEntries.map((entry) =>
           api.entries.create({

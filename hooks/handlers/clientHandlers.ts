@@ -9,14 +9,14 @@ import type {
 } from '../../types';
 
 export type ClientHandlersDeps = {
-  projects: Project[];
+  getProjects: () => Project[];
   setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
 };
 
 export const makeClientHandlers = (deps: ClientHandlersDeps) => {
-  const { projects, setClients, setProjects, setProjectTasks } = deps;
+  const { getProjects, setClients, setProjects, setProjectTasks } = deps;
 
   const add = async (clientData: Partial<Client>) => {
     try {
@@ -41,7 +41,9 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
   const remove = async (id: string) => {
     try {
       await api.clients.delete(id);
-      const projectIdsForClient = projects.filter((p) => p.clientId === id).map((p) => p.id);
+      const projectIdsForClient = getProjects()
+        .filter((p) => p.clientId === id)
+        .map((p) => p.id);
       setClients((prev) => prev.filter((c) => c.id !== id));
       setProjects((prev) => prev.filter((p) => p.clientId !== id));
       setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));

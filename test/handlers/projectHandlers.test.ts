@@ -65,8 +65,8 @@ describe('makeProjectHandlers', () => {
     );
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
-      clientsOrders: [{ id: 'order-1', clientId: 'client-A' } as never],
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [{ id: 'order-1', clientId: 'client-A' } as never],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -90,8 +90,8 @@ describe('makeProjectHandlers', () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const tasks = makeStubSetter<TaskLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
-      clientsOrders: [{ id: 'order-1', clientId: 'c1' } as never],
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [{ id: 'order-1', clientId: 'c1' } as never],
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -106,14 +106,16 @@ describe('makeProjectHandlers', () => {
     expect(tasks.get()).toHaveLength(2);
   });
 
-  test('add with unknown order silently fails', async () => {
+  test('add with unknown order silently fails and reports via onError', async () => {
     const projects = makeStubSetter<ProjectLike>([]);
+    const onError = mock(() => {});
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
-      clientsOrders: [],
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
+      onError,
     });
 
     const originalError = console.error;
@@ -122,6 +124,10 @@ describe('makeProjectHandlers', () => {
       await handlers.add('P', 'unknown-order');
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
+      expect(onError).toHaveBeenCalledTimes(1);
+      const [err, context] = onError.mock.calls[0] as unknown as [Error, string];
+      expect(err.message).toBe('Order not found');
+      expect(context).toBe('add');
     } finally {
       console.error = originalError;
     }
@@ -133,8 +139,8 @@ describe('makeProjectHandlers', () => {
     );
     const tasks = makeStubSetter<TaskLike>([{ id: 't1', projectId: 'p1' }]);
     const handlers = makeProjectHandlers({
-      projects: [],
-      clientsOrders: [],
+      getProjects: () => [],
+      getClientsOrders: () => [],
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -153,8 +159,8 @@ describe('makeProjectHandlers', () => {
       { id: 'p2', clientId: 'c2', color: 'blue' },
     ]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
-      clientsOrders: [],
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -181,8 +187,8 @@ describe('makeProjectHandlers', () => {
     ]);
 
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
-      clientsOrders: [],
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [],
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
@@ -193,5 +199,83 @@ describe('makeProjectHandlers', () => {
     expect(projects.get()).toEqual([{ id: 'p2', clientId: 'c1' }]);
     expect(tasks.get()).toEqual([{ id: 't2', projectId: 'p2' }]);
     expect(entries.get()).toEqual([{ id: 'e2', projectId: 'p2' }]);
+  });
+
+  test('regression: add observes latest clientsOrders via getter', async () => {
+    apiMocks.projectsCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'proj-new', ...(data as object) }),
+    );
+    // Initial state: no orders. Snapshot-based factory would only see empty list
+    // and always throw "Order not found".
+    const orders = makeStubSetter<{ id: string; clientId: string }>([]);
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => orders.get() as never,
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    // State updates after factory construction.
+    (orders.setter as (next: { id: string; clientId: string }[]) => void)([
+      { id: 'order-late', clientId: 'client-Z' },
+    ]);
+
+    await handlers.add('Project Beta', 'order-late');
+    expect(apiMocks.projectsCreate).toHaveBeenCalled();
+    const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.clientId).toBe('client-Z');
+  });
+
+  test('regression: add observes latest projects via getter (color picking)', async () => {
+    apiMocks.projectsCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'proj-new', ...(data as object) }),
+    );
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      getProjects: () => projects.get() as never,
+      getClientsOrders: () => [{ id: 'order-1', clientId: 'c1' }] as never,
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+    // State updates: now projects exist with various colors.
+    (projects.setter as (next: ProjectLike[]) => void)([
+      { id: 'p1', clientId: 'c1', color: 'red' },
+      { id: 'p2', clientId: 'c1', color: 'blue' },
+    ]);
+
+    await handlers.add('Project', 'order-1');
+    expect(apiMocks.projectsCreate).toHaveBeenCalled();
+    const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.color).toBeDefined();
+  });
+
+  test('update invokes onError on api failure', async () => {
+    apiMocks.projectsUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
+    const projects = makeStubSetter<ProjectLike>([{ id: 'p1', clientId: 'c1' }]);
+    const onError = mock(() => {});
+    const originalError = console.error;
+    const originalAlert = globalThis.alert;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
+    try {
+      const handlers = makeProjectHandlers({
+        getProjects: () => projects.get() as never,
+        getClientsOrders: () => [],
+        setProjects: projects.setter,
+        setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+        setEntries: makeStubSetter<EntryLike>([]).setter,
+        onError,
+      });
+      await handlers.update('p1', { color: 'green' });
+      expect(onError).toHaveBeenCalledTimes(1);
+      const [, context] = onError.mock.calls[0] as unknown as [Error, string];
+      expect(context).toBe('update');
+    } finally {
+      console.error = originalError;
+      globalThis.alert = originalAlert;
+    }
   });
 });

@@ -12,15 +12,16 @@ import type {
 } from '../../types';
 
 export type ProjectHandlersDeps = {
-  projects: Project[];
-  clientsOrders: ClientsOrder[];
+  getProjects: () => Project[];
+  getClientsOrders: () => ClientsOrder[];
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
+  onError?: (err: unknown, context: 'add' | 'addTask' | 'update' | 'delete') => void;
 };
 
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
-  const { projects, clientsOrders, setProjects, setProjectTasks, setEntries } = deps;
+  const { getProjects, getClientsOrders, setProjects, setProjectTasks, setEntries, onError } = deps;
 
   const add = async (
     name: string,
@@ -31,11 +32,11 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     billingFrequency?: BillingFrequency,
   ) => {
     try {
-      const order = clientsOrders.find((o) => o.id === orderId);
+      const order = getClientsOrders().find((o) => o.id === orderId);
       if (!order) throw new Error('Order not found');
       const clientId = order.clientId;
 
-      const usedColors = projects.map((p) => p.color);
+      const usedColors = getProjects().map((p) => p.color);
       const availableColors = COLORS.filter((c) => !usedColors.includes(c));
       const color =
         availableColors.length > 0
@@ -75,6 +76,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to add project:', err);
+      onError?.(err, 'add');
     }
   };
 
@@ -105,6 +107,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       setProjectTasks((prev) => [...prev, task]);
     } catch (err) {
       console.error('Failed to add task:', err);
+      onError?.(err, 'addTask');
     }
   };
 
@@ -115,6 +118,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     } catch (err) {
       console.error('Failed to update project:', err);
       alert('Failed to update project');
+      onError?.(err, 'update');
     }
   };
 
@@ -127,6 +131,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     } catch (err) {
       console.error('Failed to delete project:', err);
       alert('Failed to delete project');
+      onError?.(err, 'delete');
     }
   };
 

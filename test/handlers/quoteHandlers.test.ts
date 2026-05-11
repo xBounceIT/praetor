@@ -105,9 +105,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const refreshSupplierQuoteFlow = mock(() => Promise.resolve()) as unknown as () => Promise<void>;
 
   const handlers = makeQuoteHandlers({
-    quotes: quotes.get() as never,
-    clientQuoteFilterId: clientQuoteFilterId.get(),
-    clientOfferFilterId: clientOfferFilterId.get(),
+    getQuotes: () => quotes.get() as never,
+    getClientQuoteFilterId: () => clientQuoteFilterId.get(),
+    getClientOfferFilterId: () => clientOfferFilterId.get(),
     setQuotes: quotes.setter as never,
     setClientOffers: clientOffers.setter as never,
     setClientsOrders: clientsOrders.setter as never,
@@ -480,6 +480,57 @@ describe('makeQuoteHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('regression: updateQuote observes latest quotes via getter', async () => {
+    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object) }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    // Build handlers with empty quotes list initially. After construction,
+    // the parent state populates and includes a non-draft quote.
+    const ctx = buildHandlers();
+    ctx.quotes.setter([
+      { id: 'q1', status: 'rejected', isExpired: true, expirationDate: '2020-01-01' },
+    ] as never);
+
+    // Old (snapshot) handler would not see q1 and would skip the expirationDate
+    // restoration. With getter, it must observe the mutated list.
+    await ctx.handlers.updateQuote('q1', { status: 'draft', isExpired: false } as never);
+    const callArgs = apiMocks.quotesUpdate.mock.calls[0] as [string, Record<string, unknown>];
+    expect(callArgs[1].expirationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('regression: updateQuote observes latest clientQuoteFilterId via getter', async () => {
+    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object) }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    // Build with no filter, then set it after construction.
+    const ctx = buildHandlers({ quotes: [{ id: 'q1', status: 'draft' }] });
+    ctx.clientQuoteFilterId.setter('q1');
+
+    await ctx.handlers.updateQuote('q1', { status: 'sent' } as never);
+    // Should still propagate via the getter, not the captured snapshot.
+    expect(ctx.clientQuoteFilterId.get()).toBe('q1');
+  });
+
+  test('regression: updateClientOffer observes latest clientOfferFilterId via getter', async () => {
+    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object) }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+    ctx.clientOfferFilterId.setter('of-1');
+
+    await ctx.handlers.updateClientOffer('of-1', { status: 'sent' } as never);
+    expect(ctx.clientOfferFilterId.get()).toBe('of-1');
   });
 
   test('createClientsOrderFromOffer swallows refresh errors after success', async () => {

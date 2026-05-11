@@ -50,6 +50,7 @@ import { makeSupplierQuoteHandlers } from './hooks/handlers/supplierQuoteHandler
 import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
+import { useLatestRef } from './hooks/useLatestRef';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type PersonalAccessToken, type Settings } from './services/api';
 import type {
@@ -818,6 +819,18 @@ const App: React.FC = () => {
     [switchRole],
   );
 
+  // Stable getters that always read the latest rendered state. Handler
+  // factories receive these instead of state snapshots, so they aren't rebuilt
+  // on every change and don't capture stale values.
+  const getCurrentUser = useLatestRef(currentUser);
+  const getViewingUserId = useLatestRef(viewingUserId);
+  const getProjects = useLatestRef(projects);
+  const getClientsOrders = useLatestRef(clientsOrders);
+  const getProjectTasks = useLatestRef(projectTasks);
+  const getQuotes = useLatestRef(quotes);
+  const getClientQuoteFilterId = useLatestRef(clientQuoteFilterId);
+  const getClientOfferFilterId = useLatestRef(clientOfferFilterId);
+
   const supplierQuoteHandlers = useMemo(
     () =>
       makeSupplierQuoteHandlers({
@@ -834,9 +847,9 @@ const App: React.FC = () => {
   const quoteHandlers = useMemo(
     () =>
       makeQuoteHandlers({
-        quotes,
-        clientQuoteFilterId,
-        clientOfferFilterId,
+        getQuotes,
+        getClientQuoteFilterId,
+        getClientOfferFilterId,
         setQuotes,
         setClientOffers,
         setClientsOrders,
@@ -847,9 +860,9 @@ const App: React.FC = () => {
         refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
       }),
     [
-      quotes,
-      clientQuoteFilterId,
-      clientOfferFilterId,
+      getQuotes,
+      getClientQuoteFilterId,
+      getClientOfferFilterId,
       supplierQuoteHandlers.refreshSupplierQuoteFlow,
     ],
   );
@@ -857,12 +870,12 @@ const App: React.FC = () => {
   const clientHandlers = useMemo(
     () =>
       makeClientHandlers({
-        projects,
+        getProjects,
         setClients,
         setProjects,
         setProjectTasks,
       }),
-    [projects],
+    [getProjects],
   );
 
   const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), []);
@@ -870,23 +883,23 @@ const App: React.FC = () => {
   const projectHandlers = useMemo(
     () =>
       makeProjectHandlers({
-        projects,
-        clientsOrders,
+        getProjects,
+        getClientsOrders,
         setProjects,
         setProjectTasks,
         setEntries,
       }),
-    [projects, clientsOrders],
+    [getProjects, getClientsOrders],
   );
 
   const entryHandlers = useMemo(
     () =>
       makeEntryHandlers({
-        currentUser,
-        viewingUserId,
+        getCurrentUser,
+        getViewingUserId,
         setEntries,
       }),
-    [currentUser, viewingUserId],
+    [getCurrentUser, getViewingUserId],
   );
 
   const invoiceHandlers = useMemo(() => makeInvoiceHandlers({ setInvoices }), []);
@@ -1864,12 +1877,12 @@ const App: React.FC = () => {
   const taskHandlers = useMemo(
     () =>
       makeTaskHandlers({
-        projectTasks,
+        getProjectTasks,
         setProjectTasks,
         setEntries,
         generateRecurringEntries,
       }),
-    [projectTasks, generateRecurringEntries],
+    [getProjectTasks, generateRecurringEntries],
   );
 
   const handleAddEntry = entryHandlers.add;
