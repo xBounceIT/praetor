@@ -114,6 +114,7 @@
     "hours": "Ore",
     "clientRequired": "Il cliente è obbligatorio",
     "invoiceNumberRequired": "Il numero fattura è obbligatorio",
+    "invoiceNumberAutoPlaceholder": "Generato automaticamente",
     "issueDateRequired": "La data emissione è obbligatoria",
     "dueDateRequired": "La data scadenza è obbligatoria",
     "itemsRequired": "Almeno una voce è obbligatoria",

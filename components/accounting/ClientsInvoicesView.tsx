@@ -103,12 +103,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     [products],
   );
 
-  const generateInvoiceId = () => {
-    const year = new Date().getFullYear();
-    const count = invoices.length + 1;
-    return `INV-${year}-${count.toString().padStart(4, '0')}`;
-  };
-
   const clearItemsError = useCallback(() => {
     if (errors.items) {
       setErrors((prev) => {
@@ -145,7 +139,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     setFormData({
       clientId: '',
       clientName: '',
-      id: generateInvoiceId(),
+      id: '',
       items: [],
       issueDate,
       dueDate: addDaysToDateOnly(issueDate, 30),
@@ -269,7 +263,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) nextErrors.clientId = t('accounting:clientsInvoices.clientRequired');
-    if (!formData.id) {
+    // Invoice ID is server-generated on create; only require it when editing.
+    if (editingInvoice && !formData.id) {
       nextErrors.id = t('accounting:clientsInvoices.invoiceNumberRequired');
     }
     if (!formData.issueDate) {
@@ -521,14 +516,20 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <Input
                       id="client-invoice-number"
                       type="text"
-                      required
+                      required={Boolean(editingInvoice)}
                       value={formData.id || ''}
                       onChange={(event) =>
                         setFormData((prev) => ({ ...prev, id: event.target.value }))
                       }
                       aria-invalid={Boolean(errors.id)}
                       className="font-medium"
-                      placeholder="INV-YYYY-XXXX"
+                      placeholder={
+                        editingInvoice
+                          ? 'INV-YYYY-XXXX'
+                          : t('accounting:clientsInvoices.invoiceNumberAutoPlaceholder', {
+                              defaultValue: 'Auto-generated',
+                            })
+                      }
                     />
                     <FieldError className="text-xs">{errors.id}</FieldError>
                   </Field>
