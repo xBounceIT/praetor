@@ -51,7 +51,9 @@ const getAssignmentsMock = mock();
 
 // tracker catalog repos
 const listClientsMock = mock();
+const listClientsByIdsMock = mock();
 const listProjectsForUserMock = mock();
+const listProjectsByIdsMock = mock();
 const listTasksForUserMock = mock();
 
 // rolesRepo
@@ -103,10 +105,12 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     list: listClientsMock,
+    listByIds: listClientsByIdsMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     listForUser: listProjectsForUserMock,
+    listByIds: listProjectsByIdsMock,
   }));
   mock.module('../../repositories/tasksRepo.ts', () => ({
     ...tasksRepoSnap,
@@ -258,7 +262,9 @@ const allMocks = [
   canManageUserMock,
   getAssignmentsMock,
   listClientsMock,
+  listClientsByIdsMock,
   listProjectsForUserMock,
+  listProjectsByIdsMock,
   listTasksForUserMock,
   rolesFindByIdMock,
   rolesFindExistingIdsMock,
@@ -292,7 +298,9 @@ beforeEach(async () => {
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
   listClientsMock.mockResolvedValue([]);
+  listClientsByIdsMock.mockResolvedValue([]);
   listProjectsForUserMock.mockResolvedValue([]);
+  listProjectsByIdsMock.mockResolvedValue([]);
   listTasksForUserMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
@@ -1183,6 +1191,70 @@ describe('GET /api/users/:id/tracker-catalogs', () => {
 
     expect(res.statusCode).toBe(403);
     expect(listTasksForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 includes parent project and client for task-only assignments', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
+    canManageUserMock.mockResolvedValue(true);
+    listTasksForUserMock.mockResolvedValue([
+      {
+        id: 't-task-only',
+        name: 'Initial Design',
+        projectId: 'p-parent',
+        isDisabled: false,
+      },
+    ]);
+    listProjectsByIdsMock.mockResolvedValue([
+      {
+        id: 'p-parent',
+        name: 'Website Redesign',
+        clientId: 'c-parent',
+        color: '#123456',
+        isDisabled: false,
+        billingType: 'time_and_materials',
+        billingFrequency: 'monthly',
+      },
+    ]);
+    listClientsByIdsMock.mockResolvedValue([
+      {
+        id: 'c-parent',
+        name: 'Acme Corp',
+        isDisabled: false,
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/tracker-catalogs',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listProjectsByIdsMock).toHaveBeenCalledWith(['p-parent']);
+    expect(listClientsByIdsMock).toHaveBeenCalledWith(['c-parent']);
+    expect(JSON.parse(res.body)).toEqual({
+      clients: [{ id: 'c-parent', name: 'Acme Corp', isDisabled: false }],
+      projects: [
+        {
+          id: 'p-parent',
+          name: 'Website Redesign',
+          clientId: 'c-parent',
+          color: '#123456',
+          isDisabled: false,
+          billingType: 'time_and_materials',
+          billingFrequency: 'monthly',
+        },
+      ],
+      projectTasks: [
+        {
+          id: 't-task-only',
+          name: 'Initial Design',
+          projectId: 'p-parent',
+          isDisabled: false,
+        },
+      ],
+    });
   });
 });
 

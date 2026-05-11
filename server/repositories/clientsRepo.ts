@@ -212,6 +212,21 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
   return rows.map(mapClientRow);
 };
 
+export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<Client[]> => {
+  if (ids.length === 0) return [];
+
+  const rows = await executeRows<Record<string, unknown>>(
+    exec,
+    sql`SELECT c.*,
+        NULL::numeric as total_sent_quotes,
+        NULL::numeric as total_accepted_orders
+      FROM clients c
+      WHERE c.id = ANY(${ids})
+      ORDER BY c.name`,
+  );
+  return rows.map(mapClientRow);
+};
+
 export const findContactsForUpdate = async (
   id: string,
   exec: DbExecutor = db,

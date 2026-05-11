@@ -119,6 +119,19 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<Proje
   return rows[0] ? mapRawRow(rows[0]) : null;
 };
 
+export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<Project[]> => {
+  if (ids.length === 0) return [];
+
+  const rows = await executeRows<ProjectRawRow>(
+    exec,
+    sql`SELECT ${projectSelectSql}
+          FROM projects p
+         WHERE p.id = ANY(${ids})
+         ORDER BY p.name`,
+  );
+  return rows.map(mapRawRow);
+};
+
 export const findClientId = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ clientId: projects.clientId })

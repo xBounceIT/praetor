@@ -216,6 +216,21 @@ const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserI
   return usersRepo.canManageUser(targetUserId, request.user?.id ?? '');
 };
 
+const mergeById = <T extends { id: string }>(items: T[], extraItems: T[]) => {
+  const seen = new Set(items.map((item) => item.id));
+  const merged = [...items];
+  for (const item of extraItems) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+  return merged;
+};
+
+const uniqueMissingIds = (ids: string[], existingIds: Set<string>) =>
+  Array.from(new Set(ids.filter((id) => !existingIds.has(id))));
+
 const CREATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
   app_user: 'administration.user_management.create',
   internal: 'hr.internal.create',
@@ -888,11 +903,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      const [clients, projects, projectTasks] = await Promise.all([
+      const [assignedClients, assignedProjects, projectTasks] = await Promise.all([
         clientsRepo.list({ canViewAllClients: false, userId: idResult.value }),
         projectsRepo.listForUser(idResult.value),
         tasksRepo.listForUser(idResult.value),
       ]);
+      const assignedProjectIds = new Set(assignedProjects.map((project) => project.id));
+      const taskParentProjectIds = uniqueMissingIds(
+        projectTasks.map((task) => task.projectId),
+        assignedProjectIds,
+      );
+      const taskParentProjects = await projectsRepo.listByIds(taskParentProjectIds);
+      const projects = mergeById(assignedProjects, taskParentProjects);
+
+      const assignedClientIds = new Set(assignedClients.map((client) => client.id));
+      const parentClientIds = uniqueMissingIds(
+        projects.map((project) => project.clientId),
+        assignedClientIds,
+      );
+      const parentClients = await clientsRepo.listByIds(parentClientIds);
+      const clients = mergeById(assignedClients, parentClients);
 
       return {
         clients: clients.map((client) => ({

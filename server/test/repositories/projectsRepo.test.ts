@@ -93,6 +93,23 @@ describe('listForUser', () => {
   });
 });
 
+describe('listByIds', () => {
+  test('returns mapped projects for the provided ids', async () => {
+    exec.enqueue({ rows: [rawProjectRow] });
+
+    const result = await projectsRepo.listByIds(['p-1'], testDb);
+
+    expect(exec.calls[0].sql).toContain('WHERE p.id = ANY');
+    expect(exec.calls[0].params).toContain('p-1');
+    expect(result[0]).toEqual(mappedRow);
+  });
+
+  test('returns empty array without querying for empty ids', async () => {
+    expect(await projectsRepo.listByIds([], testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
 describe('findClientId', () => {
   test('returns clientId when found', async () => {
     exec.enqueue({ rows: [['c-1']] });
