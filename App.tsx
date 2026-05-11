@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -241,8 +243,13 @@ const TrackerView: React.FC<{
   const isViewingSelf = viewingUserId === currentUser.id;
 
   const userOptions = useMemo(
-    () => availableUsers.map((u) => ({ id: u.id, name: u.name })),
-    [availableUsers],
+    () =>
+      availableUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        badge: u.id === currentUser.id ? t('tracker.you') : undefined,
+      })),
+    [availableUsers, currentUser.id, t],
   );
 
   const activityColumns = useMemo<Column<TimeEntry>[]>(
@@ -380,6 +387,7 @@ const TrackerView: React.FC<{
           onDeleteEntry={onDeleteEntry}
           onUpdateEntry={onUpdateEntry}
           viewingUserId={viewingUserId}
+          currentUserId={currentUser.id}
           availableUsers={availableUsers}
           onViewUserChange={onViewUserChange}
           onAddBulkEntries={onAddBulkEntries}
@@ -407,12 +415,26 @@ const TrackerView: React.FC<{
                     <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-                <div className="w-full sm:w-56 shrink-0">
+                <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+                  <div className="flex min-h-6 items-center justify-between gap-2">
+                    <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+                    {!isViewingSelf && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => onViewUserChange(currentUser.id)}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                        {t('tracker.backToMe')}
+                      </Button>
+                    )}
+                  </div>
                   <SelectControl
                     options={userOptions}
                     value={viewingUserId}
                     onChange={(val) => onViewUserChange(val as string)}
-                    label={t('tracker.switchUserView')}
                     searchable={true}
                   />
                 </div>

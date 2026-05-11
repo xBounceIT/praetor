@@ -44,6 +44,23 @@ describe('<SelectControl />', () => {
     expect(selectContent?.className).toContain('z-[70]');
   });
 
+  test('plain select option with a badge renders the badge inside a flex wrapper that truncates', () => {
+    const badgedOptions = [
+      { id: 'a', name: 'Apple' },
+      { id: 'b', name: 'Banana', badge: 'You' },
+    ];
+    render(<SelectControl options={badgedOptions} value="a" onChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('combobox'));
+
+    const badge = screen.getByText('You');
+    expect(badge).toBeInTheDocument();
+
+    const wrapper = badge.parentElement;
+    expect(wrapper?.className).toContain('min-w-0');
+    expect(wrapper?.className).toContain('flex-1');
+  });
+
   test('plain select shows placeholder when no option is selected', () => {
     render(
       <SelectControl options={options} value="" onChange={() => {}} placeholder="Pick something" />,
