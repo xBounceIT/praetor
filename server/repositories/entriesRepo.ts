@@ -44,14 +44,15 @@ type TimeEntryRow = {
   location: string | null;
   created_at: string | Date | null;
   // Microsecond-precision text rep of created_at - pg returns TIMESTAMP as a JS Date (ms-only),
-  // which would lose precision in the cursor and skip rows at page boundaries. Using ::text keeps
-  // the full Postgres precision for cursor round-trips.
+  // which would lose precision in the cursor and skip rows at page boundaries. Format with to_char
+  // so the output is independent of the session's DateStyle setting (a non-ISO DateStyle would
+  // otherwise emit MM/DD/YYYY... and our cursor validator would reject the API's own cursors).
   created_at_text: string | null;
 };
 
 const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project_id,
   project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at,
-  created_at::text AS created_at_text`;
+  to_char(created_at, 'YYYY-MM-DD HH24:MI:SS.US') AS created_at_text`;
 
 const mapRawRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
