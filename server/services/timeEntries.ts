@@ -73,10 +73,9 @@ export const listTimeEntries = async (
     if (!allowed) fail(403, 'Not authorized to view entries for this user');
   }
 
-  const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
-  if (cursor && !decodedCursor) badRequest('cursor is invalid');
+  const decodedCursor = cursor ? requireValid(entriesRepo.decodeCursor(cursor)) : undefined;
 
-  const options = { limit, cursor: decodedCursor ?? undefined };
+  const options = { limit, cursor: decodedCursor };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll
