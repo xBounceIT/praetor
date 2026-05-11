@@ -41,6 +41,12 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
   authMethod === 'oidc' || authMethod === 'saml';
 
+const sanitizeUsernamePart = (s: string) =>
+  s
+    .normalize('NFD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
 export interface UserManagementProps {
   users: User[];
   clients: Client[];
@@ -1371,8 +1377,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       const val = e.target.value;
                       setNewFirstName(val);
                       if (!usernameManuallyEdited.current) {
-                        const surname = newSurname.trim().toLowerCase().replace(/\s+/g, '');
-                        const first = val.trim().toLowerCase().replace(/\s+/g, '');
+                        const surname = sanitizeUsernamePart(newSurname);
+                        const first = sanitizeUsernamePart(val);
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.firstName || formErrors.general) {
@@ -1397,8 +1403,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       const val = e.target.value;
                       setNewSurname(val);
                       if (!usernameManuallyEdited.current) {
-                        const first = newFirstName.trim().toLowerCase().replace(/\s+/g, '');
-                        const surname = val.trim().toLowerCase().replace(/\s+/g, '');
+                        const first = sanitizeUsernamePart(newFirstName);
+                        const surname = sanitizeUsernamePart(val);
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.surname || formErrors.general) {

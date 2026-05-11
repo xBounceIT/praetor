@@ -22,6 +22,7 @@ const UserManagement = (await import('../../../components/administration/UserMan
 
 const updatePermission = 'administration.user_management.update';
 const deletePermission = 'administration.user_management.delete';
+const createPermission = 'administration.user_management.create';
 
 const users: User[] = [
   {
@@ -183,5 +184,34 @@ describe('<UserManagement />', () => {
     await user.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 
     expect(props.onUpdateUserAuthMethod).toHaveBeenCalledWith('u2', 'local', null);
+  });
+
+  const openCreateUserModal = async () => {
+    const user = userEvent.setup();
+    renderUserManagement({
+      permissions: [updatePermission, deletePermission, createPermission],
+    });
+    await user.click(screen.getByText('hr:workforce.addUser'));
+    const firstNameInput = await screen.findByPlaceholderText('e.g. Alice');
+    const usernameInput = screen.getByPlaceholderText('e.g. alice.smith') as HTMLInputElement;
+    return { user, firstNameInput, usernameInput };
+  };
+
+  test('strips accents and special characters when auto-generating username', async () => {
+    const { user, firstNameInput, usernameInput } = await openCreateUserModal();
+    const surnameInput = screen.getByPlaceholderText('e.g. Smith');
+
+    await user.type(firstNameInput, 'José');
+    await user.type(surnameInput, "O'Brien");
+
+    expect(usernameInput.value).toBe('jose.obrien');
+  });
+
+  test('strips hyphens and inner whitespace from a single name field', async () => {
+    const { user, firstNameInput, usernameInput } = await openCreateUserModal();
+
+    await user.type(firstNameInput, 'Anna-Maria');
+
+    expect(usernameInput.value).toBe('annamaria');
   });
 });
