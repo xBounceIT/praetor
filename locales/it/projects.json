@@ -57,7 +57,7 @@
     "taskName": "Nome Attività",
     "expectedEffort": "Impegno totale (h)",
     "monthlyEffort": "Stima impegno mensile (h)",
-    "billingType": "Tipo di consuntivazione",
+    "billingType": "Consuntivazione",
     "billingFrequency": "Frequenza",
     "billingTypes": {
       "retainer": "Canone",

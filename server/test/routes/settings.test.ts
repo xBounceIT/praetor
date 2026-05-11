@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realMcpTokensRepo from '../../repositories/mcpTokensRepo.ts';
 import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -18,6 +19,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const settingsRepoSnap = { ...realSettingsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
+const mcpTokensRepoSnap = { ...realMcpTokensRepo };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
@@ -29,6 +31,10 @@ const getPasswordHashMock = mock();
 const updatePasswordHashMock = mock();
 const upsertAdminPasswordWarningMock = mock();
 const deleteAdminPasswordWarningMock = mock();
+const listMcpTokensForUserMock = mock();
+const generateRawMcpTokenMock = mock();
+const createMcpTokenForUserMock = mock();
+const revokeMcpTokenForUserMock = mock();
 const bcryptCompareMock = mock();
 const bcryptHashMock = mock();
 
@@ -61,6 +67,13 @@ beforeAll(async () => {
     upsertAdminPasswordWarning: upsertAdminPasswordWarningMock,
     deleteAdminPasswordWarning: deleteAdminPasswordWarningMock,
   }));
+  mock.module('../../repositories/mcpTokensRepo.ts', () => ({
+    ...mcpTokensRepoSnap,
+    listForUser: listMcpTokensForUserMock,
+    generateRawToken: generateRawMcpTokenMock,
+    createForUser: createMcpTokenForUserMock,
+    revokeForUser: revokeMcpTokenForUserMock,
+  }));
   mock.module('bcryptjs', () => ({
     default: { compare: bcryptCompareMock, hash: bcryptHashMock },
     compare: bcryptCompareMock,
@@ -77,6 +90,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
+  mock.module('../../repositories/mcpTokensRepo.ts', () => mcpTokensRepoSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -105,6 +119,10 @@ const allMocks = [
   updatePasswordHashMock,
   upsertAdminPasswordWarningMock,
   deleteAdminPasswordWarningMock,
+  listMcpTokensForUserMock,
+  generateRawMcpTokenMock,
+  createMcpTokenForUserMock,
+  revokeMcpTokenForUserMock,
   bcryptCompareMock,
   bcryptHashMock,
 ];
@@ -118,6 +136,16 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue([]);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
+  listMcpTokensForUserMock.mockResolvedValue([]);
+  generateRawMcpTokenMock.mockReturnValue('praetor_mcp_raw');
+  createMcpTokenForUserMock.mockResolvedValue({
+    id: 'mcp-token-1',
+    name: 'Agent',
+    tokenPrefix: 'praetor_mcp_raw',
+    createdAt: 1000,
+    lastUsedAt: null,
+  });
+  revokeMcpTokenForUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/settings');
 });
@@ -232,6 +260,115 @@ describe('PUT /api/settings', () => {
       payload: { fullName: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('MCP token settings routes', () => {
+  test('GET /api/settings/mcp-tokens returns current user tokens', async () => {
+    listMcpTokensForUserMock.mockResolvedValue([
+      {
+        id: 'mcp-token-1',
+        name: 'Agent',
+        tokenPrefix: 'praetor_mcp_abcd',
+        createdAt: 1000,
+        lastUsedAt: null,
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([
+      {
+        id: 'mcp-token-1',
+        name: 'Agent',
+        tokenPrefix: 'praetor_mcp_abcd',
+        createdAt: 1000,
+        lastUsedAt: null,
+      },
+    ]);
+    expect(listMcpTokensForUserMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('POST /api/settings/mcp-tokens creates token and returns raw token once', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body)).toEqual({
+      token: {
+        id: 'mcp-token-1',
+        name: 'Agent',
+        tokenPrefix: 'praetor_mcp_raw',
+        createdAt: 1000,
+        lastUsedAt: null,
+      },
+      rawToken: 'praetor_mcp_raw',
+    });
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        name: 'Agent',
+        rawToken: 'praetor_mcp_raw',
+      }),
+    );
+  });
+
+  test('POST /api/settings/mcp-tokens rejects when current user has too many active tokens', async () => {
+    listMcpTokensForUserMock.mockResolvedValue(
+      Array.from({ length: 20 }, (_, i) => ({
+        id: `mcp-token-${i}`,
+        name: `Agent ${i}`,
+        tokenPrefix: `praetor_mcp_${i}`,
+        createdAt: 1000 + i,
+        lastUsedAt: null,
+      })),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'One too many' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Maximum active MCP token limit reached',
+    });
+    expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('DELETE /api/settings/mcp-tokens/:id revokes only current user token', async () => {
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/settings/mcp-tokens/mcp-token-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'MCP token revoked' });
+    expect(revokeMcpTokenForUserMock).toHaveBeenCalledWith('mcp-token-1', 'u1');
+  });
+
+  test('DELETE /api/settings/mcp-tokens/:id returns 404 for missing token', async () => {
+    revokeMcpTokenForUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/settings/mcp-tokens/missing',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 });
 

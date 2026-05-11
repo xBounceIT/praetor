@@ -57,7 +57,7 @@
     "taskName": "Task Name",
     "expectedEffort": "Total effort (h)",
     "monthlyEffort": "Estimated monthly effort (h)",
-    "billingType": "Billing type",
+    "billingType": "Billing",
     "billingFrequency": "Frequency",
     "billingTypes": {
       "retainer": "Retainer",

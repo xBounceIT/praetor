@@ -194,8 +194,15 @@
     {
       "idx": 27,
       "version": "7",
-      "when": 1778512482886,
-      "tag": "0027_add_project_task_billing_fields",
+      "when": 1778196941022,
+      "tag": "0027_add_mcp_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778522405231,
+      "tag": "0028_add_project_task_billing_fields",
       "breakpoints": true
     }
   ]

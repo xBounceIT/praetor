@@ -7,6 +7,7 @@ export * from './emailConfig.ts';
 export * from './generalSettings.ts';
 export * from './invoices.ts';
 export * from './ldapConfig.ts';
+export * from './mcpTokens.ts';
 export * from './notifications.ts';
 export * from './offerVersions.ts';
 export * from './orderVersions.ts';
