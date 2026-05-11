@@ -391,7 +391,7 @@ const TrackerView: React.FC<{
           {/* Manager Selection Header */}
           {availableUsers.length > 1 && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-sm border border-zinc-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-100 text-amber-600'}`}
@@ -1959,6 +1959,7 @@ const App: React.FC = () => {
 
   const handleUpdateUser = userHandlers.updateUser;
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
+  const handleUpdateUserAuthMethod = userHandlers.updateUserAuthMethod;
 
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
@@ -2533,9 +2534,11 @@ const App: React.FC = () => {
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
                   onUpdateUserRoles={handleUpdateUserRoles}
+                  onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}
+                  ssoProviders={ssoProviders}
                   currency={getCurrencySymbol(generalSettings.currency)}
                 />
               )}

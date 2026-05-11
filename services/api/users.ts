@@ -1,4 +1,4 @@
-import type { Client, Project, ProjectTask, User } from '../../types';
+import type { Client, Project, ProjectTask, User, UserAuthMethod } from '../../types';
 import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import { fetchApi } from './client';
 import { normalizeClient, normalizeProject, normalizeTask, normalizeUser } from './normalizers';
@@ -66,4 +66,14 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify({ roleIds, primaryRoleId }),
     }),
+
+  updateAuthMethod: (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ): Promise<User> =>
+    fetchApi<User>(`/users/${id}/auth-method`, {
+      method: 'PUT',
+      body: JSON.stringify({ authMethod, authProviderId: authProviderId ?? null }),
+    }).then(normalizeUser),
 };

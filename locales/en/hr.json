@@ -71,7 +71,22 @@
     "primaryRoleHelp": "Primary role is used as the default on login; you can switch roles from the top-right menu.",
     "loadingRoles": "Loading roles...",
     "assignedRolesRequired": "At least one role must be assigned.",
-    "primaryRoleMustBeAssigned": "Primary role must be included in assigned roles."
+    "primaryRoleMustBeAssigned": "Primary role must be included in assigned roles.",
+    "authMethod": {
+      "column": "Authentication",
+      "changeAction": "Change authentication method",
+      "description": "Choose how {{name}} is allowed to sign in.",
+      "methodLabel": "Authentication method",
+      "providerLabel": "SSO provider",
+      "providerPlaceholder": "Select provider",
+      "providerRequired": "Select an SSO provider.",
+      "providerMissing": "provider missing",
+      "noProviders": "No enabled provider is available for this protocol.",
+      "local": "Local",
+      "ldap": "LDAP",
+      "oidc": "OpenID Connect",
+      "saml": "SAML"
+    }
   },
   "workUnits": {
     "title": "Work Units",

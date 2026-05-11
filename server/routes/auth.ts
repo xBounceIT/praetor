@@ -98,33 +98,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      if (user.isDisabled) {
+      if (user.isDisabled || user.employeeType !== 'app_user') {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
+
+      const { authMethod } = user;
 
       // LDAP Authentication
       let ldapAuthSuccess = false;
       let ldapRoleIds: string[] = [];
-      try {
-        const ldapService = (await import('../services/ldap.ts')).default;
-        const ldapAuthResult = await ldapService.authenticateWithProfile(
-          usernameResult.value,
-          passwordResult.value,
-        );
-        ldapAuthSuccess = ldapAuthResult.authenticated;
-        ldapRoleIds = ldapAuthResult.roleIds;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        fastify.log.warn(
-          { username: usernameResult.value, errorMessage },
-          'LDAP auth attempt failed; falling back to local password validation',
-        );
+      if (authMethod === 'ldap') {
+        try {
+          const ldapService = (await import('../services/ldap.ts')).default;
+          const ldapAuthResult = await ldapService.authenticateWithProfile(
+            usernameResult.value,
+            passwordResult.value,
+          );
+          ldapAuthSuccess = ldapAuthResult.authenticated;
+          ldapRoleIds = ldapAuthResult.roleIds;
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          fastify.log.warn(
+            { username: usernameResult.value, errorMessage },
+            'LDAP auth attempt failed',
+          );
+        }
       }
 
       let validPassword = false;
       if (ldapAuthSuccess) {
         validPassword = true;
-      } else if (user.passwordHash) {
+      } else if (authMethod === 'local' && user.passwordHash) {
         validPassword = await bcrypt.compare(passwordResult.value, user.passwordHash);
       }
 

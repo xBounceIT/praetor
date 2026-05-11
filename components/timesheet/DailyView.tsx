@@ -7,7 +7,9 @@ import { buildPermission, hasAnyPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { Button } from '../ui/button';
+import { Field, FieldError, FieldLabel } from '../ui/field';
+import { Input } from '../ui/input';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -75,6 +77,12 @@ const DailyView: React.FC<DailyViewProps> = ({
   const canCreateCustomTask = hasAnyPermission(permissions, [
     buildPermission('projects.tasks', 'create'),
   ]);
+
+  const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
+    handleDurationChange(rawValue.replace(',', '.'));
+  };
 
   // Sync internal date when calendar selection changes
   useEffect(() => {
@@ -284,7 +292,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-zinc-200 p-5">
+    <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-5">
       <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
@@ -392,45 +400,42 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
+          <Field className="min-w-0" data-invalid={!!errors.hours}>
+            <FieldLabel htmlFor="daily-entry-hours">
               {t('entry.hours')} <span className="text-red-500">*</span>
-            </label>
-            <ValidatedNumberInput
+            </FieldLabel>
+            <Input
+              id="daily-entry-hours"
+              type="text"
+              inputMode="decimal"
+              pattern="^[0-9]*([.,][0-9]*)?$"
               value={duration}
-              onValueChange={handleDurationChange}
+              onChange={handleDurationInputChange}
               placeholder="0.0"
-              className={`w-full px-3 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 focus:ring-praetor'}`}
+              aria-invalid={!!errors.hours}
+              className="h-9 min-h-9 max-h-9 rounded-lg py-2"
             />
-            {errors.hours && (
-              <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">
-                {errors.hours}
-              </p>
-            )}
-          </div>
+            <FieldError>{errors.hours}</FieldError>
+          </Field>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
-              {t('entry.notesDescription')}
-            </label>
-            <input
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="daily-entry-notes">{t('entry.notesDescription')}</FieldLabel>
+            <Input
+              id="daily-entry-notes"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
-              className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+              className="h-10 rounded-lg"
             />
-          </div>
+          </Field>
 
           <div className="min-w-0 flex items-end">
-            <button
-              type="submit"
-              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-zinc-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
-            >
+            <Button type="submit" className="h-10 w-full rounded-lg">
               {t('entry.logTime')}
-            </button>
+            </Button>
           </div>
         </div>
 
