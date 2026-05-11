@@ -1751,15 +1751,20 @@ const App: React.FC = () => {
   const handleDeleteNotification = useCallback(async (id: string) => {
     try {
       await api.notifications.delete(id);
-      let wasUnread = false;
+      // Compute both updates inside their own functional setters so neither
+      // depends on a closure variable assigned in a (possibly batched/deferred)
+      // sibling updater. Using a ref to ferry the unread flag between updaters
+      // would also race; instead the count updater consults `notifications`
+      // again via setUnreadNotificationCount's prev arg — but the source of
+      // truth for `isRead` is the notifications array, so look it up there
+      // before issuing the filter.
       setNotifications((prev) => {
         const target = prev.find((n) => n.id === id);
-        wasUnread = !!target && !target.isRead;
+        if (target && !target.isRead) {
+          setUnreadNotificationCount((c) => Math.max(0, c - 1));
+        }
         return prev.filter((n) => n.id !== id);
       });
-      if (wasUnread) {
-        setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
-      }
     } catch (err) {
       console.error('Failed to delete notification:', err);
     }
