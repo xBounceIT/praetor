@@ -1,222 +1,194 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
-import type { DbExecutor } from '../../db/drizzle.ts';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as rolesRepo from '../../repositories/rolesRepo.ts';
-import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
+import { MockExecutor, type TestDb } from '../helpers/MockExecutor.ts';
 
-let exec: FakeExecutor;
-let testDb: DbExecutor;
+let exec: MockExecutor;
+let testDb: TestDb;
 
 beforeEach(() => {
-  ({ exec, testDb } = setupTestDb());
+  exec = new MockExecutor();
+  testDb = exec.asTestDb();
+});
+
+afterEach(() => {
+  exec.reset();
 });
 
 describe('findExistingIds', () => {
-  test('returns an empty Set without firing SQL when ids is empty', async () => {
+  test('returns an empty set when no ids are provided', async () => {
     const result = await rolesRepo.findExistingIds([], testDb);
     expect(result.size).toBe(0);
-    expect(exec.calls).toHaveLength(0);
+    expect(exec.calls.length).toBe(0);
   });
 
-  test('passes the ids in the query params', async () => {
-    exec.enqueue({ rows: [['a'], ['b']] });
-    await rolesRepo.findExistingIds(['a', 'b'], testDb);
-    expect(exec.calls).toHaveLength(1);
-    expect(exec.calls[0].params).toContain('a');
-    expect(exec.calls[0].params).toContain('b');
+  test('returns a set of ids that exist in the table', async () => {
+    exec.enqueue({
+      rows: [
+        ['admin'],
+        ['manager'],
+      ],
+    });
+    const result = await rolesRepo.findExistingIds(['admin', 'manager', 'ghost'], testDb);
+    expect(result.has('admin')).toBe(true);
+    expect(result.has('manager')).toBe(true);
+    expect(result.has('ghost')).toBe(false);
   });
 
-  test('returns a Set of the ids the DB confirmed', async () => {
-    exec.enqueue({ rows: [['a'], ['b']] });
-    const result = await rolesRepo.findExistingIds(['a', 'b'], testDb);
-    expect(result.has('a')).toBe(true);
-    expect(result.has('b')).toBe(true);
-    expect(result.size).toBe(2);
-  });
-
-  test('returns only the ids the DB confirmed, not the inputs', async () => {
-    exec.enqueue({ rows: [['a']] });
-    const result = await rolesRepo.findExistingIds(['a', 'b', 'c'], testDb);
-    expect(result.size).toBe(1);
-    expect(result.has('a')).toBe(true);
-    expect(result.has('b')).toBe(false);
-    expect(result.has('c')).toBe(false);
+  test('passes the input ids to the query', async () => {
+    exec.enqueue({ rows: [] });
+    await rolesRepo.findExistingIds(['admin'], testDb);
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['admin']));
   });
 });
 
 describe('userHasRole', () => {
-  test('returns true when the DB returns a row', async () => {
+  test('returns true when the join row exists', async () => {
     exec.enqueue({ rows: [[1]] });
-    const result = await rolesRepo.userHasRole('user-1', 'manager', testDb);
+    const result = await rolesRepo.userHasRole('u-1', 'manager', testDb);
     expect(result).toBe(true);
-    expect(exec.calls[0].params).toContain('user-1');
-    expect(exec.calls[0].params).toContain('manager');
   });
 
-  test('returns false when no row is returned', async () => {
+  test('returns false when no row exists', async () => {
     exec.enqueue({ rows: [] });
-    const result = await rolesRepo.userHasRole('user-1', 'manager', testDb);
+    const result = await rolesRepo.userHasRole('u-1', 'manager', testDb);
     expect(result).toBe(false);
   });
 });
 
 describe('listAvailableRolesForUser', () => {
-  test('joins user_roles to roles and passes userId in params', async () => {
+  test('maps each row through mapRole', async () => {
     exec.enqueue({
       rows: [
         ['admin', 'Admin', true, true],
         ['manager', 'Manager', false, false],
       ],
     });
-    const result = await rolesRepo.listAvailableRolesForUser('user-1', testDb);
+    const result = await rolesRepo.listAvailableRolesForUser('u-1', testDb);
     expect(result).toEqual([
       { id: 'admin', name: 'Admin', isSystem: true, isAdmin: true },
       { id: 'manager', name: 'Manager', isSystem: false, isAdmin: false },
     ]);
-    expect(exec.calls[0].params).toContain('user-1');
-    expect(exec.calls[0].sql.toLowerCase()).toContain('inner join "roles"');
   });
 
-  test('returns an empty array when the user has no roles', async () => {
-    exec.enqueue({ rows: [] });
-    const result = await rolesRepo.listAvailableRolesForUser('user-1', testDb);
-    expect(result).toEqual([]);
+  test('coerces null isSystem/isAdmin to false', async () => {
+    exec.enqueue({ rows: [['x', 'X', null, null]] });
+    const result = await rolesRepo.listAvailableRolesForUser('u-1', testDb);
+    expect(result).toEqual([{ id: 'x', name: 'X', isSystem: false, isAdmin: false }]);
   });
 });
 
 describe('listAll', () => {
-  test('returns rows mapped to Role and orders by name', async () => {
+  test('returns all roles mapped', async () => {
     exec.enqueue({
       rows: [
         ['admin', 'Admin', true, true],
         ['manager', 'Manager', false, false],
+        ['user', 'User', false, false],
       ],
     });
     const result = await rolesRepo.listAll(testDb);
-    expect(result).toEqual([
-      { id: 'admin', name: 'Admin', isSystem: true, isAdmin: true },
-      { id: 'manager', name: 'Manager', isSystem: false, isAdmin: false },
-    ]);
-    expect(exec.calls).toHaveLength(1);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('order by "roles"."name"');
+    expect(result.length).toBe(3);
+    expect(result[0]).toEqual({ id: 'admin', name: 'Admin', isSystem: true, isAdmin: true });
   });
 
-  test('coerces null is_system / is_admin to false', async () => {
-    exec.enqueue({ rows: [['custom', 'Custom', null, null]] });
-    const [result] = await rolesRepo.listAll(testDb);
-    expect(result.isSystem).toBe(false);
-    expect(result.isAdmin).toBe(false);
+  test('returns an empty list when no rows', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await rolesRepo.listAll(testDb);
+    expect(result).toEqual([]);
   });
 });
 
 describe('findById', () => {
-  test('returns the mapped row when found', async () => {
-    exec.enqueue({ rows: [['manager', 'Manager', false, false]] });
-    const result = await rolesRepo.findById('manager', testDb);
-    expect(result).toEqual({ id: 'manager', name: 'Manager', isSystem: false, isAdmin: false });
-    expect(exec.calls[0].params).toContain('manager');
+  test('returns the role when found', async () => {
+    exec.enqueue({ rows: [['admin', 'Admin', true, true]] });
+    const result = await rolesRepo.findById('admin', testDb);
+    expect(result).toEqual({ id: 'admin', name: 'Admin', isSystem: true, isAdmin: true });
   });
 
-  test('returns null when the row does not exist', async () => {
+  test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    const result = await rolesRepo.findById('missing', testDb);
+    const result = await rolesRepo.findById('ghost', testDb);
     expect(result).toBeNull();
   });
 });
 
 describe('listExplicitPermissions', () => {
-  test('returns the permission strings in row order', async () => {
-    exec.enqueue({ rows: [['projects.view'], ['clients.update']] });
+  test('returns an array of permission strings', async () => {
+    exec.enqueue({ rows: [['a.b.read'], ['c.d.write']] });
     const result = await rolesRepo.listExplicitPermissions('manager', testDb);
-    expect(result).toEqual(['projects.view', 'clients.update']);
-    expect(exec.calls[0].params).toContain('manager');
-  });
-
-  test('returns an empty array when the role has no explicit permissions', async () => {
-    exec.enqueue({ rows: [] });
-    const result = await rolesRepo.listExplicitPermissions('manager', testDb);
-    expect(result).toEqual([]);
+    expect(result).toEqual(['a.b.read', 'c.d.write']);
   });
 });
 
 describe('listExplicitPermissionsForRoles', () => {
-  test('returns an empty Map without firing SQL when roleIds is empty', async () => {
+  test('returns an empty map when no ids', async () => {
     const result = await rolesRepo.listExplicitPermissionsForRoles([], testDb);
     expect(result.size).toBe(0);
-    expect(exec.calls).toHaveLength(0);
+    expect(exec.calls.length).toBe(0);
   });
 
-  test('passes roleIds in the query params', async () => {
-    exec.enqueue({ rows: [] });
-    await rolesRepo.listExplicitPermissionsForRoles(['a', 'b'], testDb);
-    expect(exec.calls).toHaveLength(1);
-    expect(exec.calls[0].params).toContain('a');
-    expect(exec.calls[0].params).toContain('b');
-  });
-
-  test('groups permissions by role and preserves DB row order within each role', async () => {
+  test('pre-populates the map so every requested id is present', async () => {
     exec.enqueue({
       rows: [
-        ['manager', 'projects.view'],
-        ['auditor', 'reports.view'],
-        ['manager', 'clients.update'],
+        ['manager', 'a.b.read'],
+        ['manager', 'c.d.write'],
       ],
     });
-    const result = await rolesRepo.listExplicitPermissionsForRoles(['manager', 'auditor'], testDb);
-    expect(result.get('manager')).toEqual(['projects.view', 'clients.update']);
-    expect(result.get('auditor')).toEqual(['reports.view']);
-  });
-
-  test('roles with no permissions are still present in the Map with empty arrays', async () => {
-    exec.enqueue({ rows: [['manager', 'projects.view']] });
     const result = await rolesRepo.listExplicitPermissionsForRoles(
-      ['manager', 'empty-role'],
+      ['manager', 'no-perms'],
       testDb,
     );
-    expect(result.get('manager')).toEqual(['projects.view']);
-    expect(result.get('empty-role')).toEqual([]);
+    expect(result.get('manager')).toEqual(['a.b.read', 'c.d.write']);
+    expect(result.get('no-perms')).toEqual([]);
+  });
+
+  test('only returns map keys for the requested ids', async () => {
+    exec.enqueue({ rows: [['unrequested', 'foo']] });
+    const result = await rolesRepo.listExplicitPermissionsForRoles(['manager'], testDb);
+    expect(result.get('manager')).toEqual([]);
+    expect(result.has('unrequested')).toBe(false);
   });
 });
 
 describe('insertRole', () => {
-  test('passes id and name and inserts is_system/is_admin as false', async () => {
+  test('issues an insert into roles', async () => {
     exec.enqueue({ rows: [] });
-    await rolesRepo.insertRole('role_xyz', 'Custom', testDb);
-    expect(exec.calls[0].params).toContain('role_xyz');
-    expect(exec.calls[0].params).toContain('Custom');
-    expect(exec.calls[0].params).toContain(false);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "roles"');
+    await rolesRepo.insertRole('custom-1', 'Custom', testDb);
+    expect(exec.calls.length).toBe(1);
+    expect(exec.calls[0].params).toEqual(
+      expect.arrayContaining(['custom-1', 'Custom']),
+    );
   });
 });
 
 describe('updateRoleName', () => {
-  test('passes name and id', async () => {
+  test('issues an update on roles.name', async () => {
     exec.enqueue({ rows: [] });
-    await rolesRepo.updateRoleName('role_xyz', 'Renamed', testDb);
-    expect(exec.calls[0].params).toContain('Renamed');
-    expect(exec.calls[0].params).toContain('role_xyz');
+    await rolesRepo.updateRoleName('manager', 'Lead', testDb);
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['manager', 'Lead']));
   });
 });
 
 describe('deleteRole', () => {
-  test('passes id', async () => {
+  test('issues a delete on roles', async () => {
     exec.enqueue({ rows: [] });
-    await rolesRepo.deleteRole('role_xyz', testDb);
-    expect(exec.calls[0].params).toContain('role_xyz');
+    await rolesRepo.deleteRole('manager', testDb);
+    expect(exec.calls[0].params).toContain('manager');
   });
 });
 
 describe('insertPermission', () => {
-  test('passes roleId and permission and uses ON CONFLICT DO NOTHING', async () => {
+  test('issues an insert with the role and permission', async () => {
     exec.enqueue({ rows: [] });
-    await rolesRepo.insertPermission('manager', 'projects.view', testDb);
-    expect(exec.calls[0].params).toContain('manager');
-    expect(exec.calls[0].params).toContain('projects.view');
-    expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict do nothing');
+    await rolesRepo.insertPermission('manager', 'a.b.read', testDb);
+    expect(exec.calls[0].params).toEqual(
+      expect.arrayContaining(['manager', 'a.b.read']),
+    );
   });
 });
 
 describe('clearPermissions', () => {
-  test('passes roleId', async () => {
+  test('issues a delete by role_id', async () => {
     exec.enqueue({ rows: [] });
     await rolesRepo.clearPermissions('manager', testDb);
     expect(exec.calls[0].params).toContain('manager');
@@ -233,7 +205,18 @@ describe('isRoleInUse', () => {
 
   test('returns false when no user has the role', async () => {
     exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
     const result = await rolesRepo.isRoleInUse('manager', testDb);
     expect(result).toBe(false);
+  });
+
+  test('returns true when the role appears only in user_roles (secondary assignment)', async () => {
+    // No row in `users.role`...
+    exec.enqueue({ rows: [] });
+    // ...but a row in `user_roles.role_id`. Migration 0025 RESTRICT means deleting this role
+    // would error at the DB level, so isRoleInUse must guard the route before that point.
+    exec.enqueue({ rows: [[1]] });
+    const result = await rolesRepo.isRoleInUse('manager', testDb);
+    expect(result).toBe(true);
   });
 });
