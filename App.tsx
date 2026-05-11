@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -407,25 +408,28 @@ const TrackerView: React.FC<{
                     <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-                <div className="flex items-end gap-2 shrink-0">
-                  {!isViewingSelf && (
-                    <Button
-                      onClick={() => onViewUserChange(currentUser.id)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      {t('tracker.backToMe')}
-                    </Button>
-                  )}
-                  <div className="w-full sm:w-56">
-                    <SelectControl
-                      options={userOptions}
-                      value={viewingUserId}
-                      onChange={(val) => onViewUserChange(val as string)}
-                      label={t('tracker.switchUserView')}
-                      searchable={true}
-                    />
+                <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+                  <div className="flex min-h-6 items-center justify-between gap-2">
+                    <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+                    {!isViewingSelf && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => onViewUserChange(currentUser.id)}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                        {t('tracker.backToMe')}
+                      </Button>
+                    )}
                   </div>
+                  <SelectControl
+                    options={userOptions}
+                    value={viewingUserId}
+                    onChange={(val) => onViewUserChange(val as string)}
+                    searchable={true}
+                  />
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -429,30 +430,32 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         </div>
 
         {availableUsers.length > 1 && (
-          <div className="flex items-end gap-2">
-            {currentUserId && viewingUserId !== currentUserId && (
-              <Button
-                onClick={() => onViewUserChange(currentUserId)}
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-              >
-                {t('tracker.backToMe')}
-              </Button>
-            )}
-            <div className="w-64">
-              <SelectControl
-                options={availableUsers.map((u) => ({
-                  id: u.id,
-                  name: u.name,
-                  badge: u.id === currentUserId ? t('tracker.you') : undefined,
-                }))}
-                value={viewingUserId}
-                onChange={(val) => onViewUserChange(val as string)}
-                label={t('weekly.viewingUser')}
-                searchable={true}
-              />
+          <div className="w-64 space-y-1.5">
+            <div className="flex min-h-6 items-center justify-between gap-2">
+              <FieldLabel>{t('weekly.viewingUser')}</FieldLabel>
+              {currentUserId && viewingUserId !== currentUserId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => onViewUserChange(currentUserId)}
+                  className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                  {t('tracker.backToMe')}
+                </Button>
+              )}
             </div>
+            <SelectControl
+              options={availableUsers.map((u) => ({
+                id: u.id,
+                name: u.name,
+                badge: u.id === currentUserId ? t('tracker.you') : undefined,
+              }))}
+              value={viewingUserId}
+              onChange={(val) => onViewUserChange(val as string)}
+              searchable={true}
+            />
           </div>
         )}
       </div>
