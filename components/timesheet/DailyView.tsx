@@ -7,9 +7,9 @@ import { buildPermission, hasAnyPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { Button } from '../ui/button';
 import { Field, FieldError, FieldLabel } from '../ui/field';
+import { Input } from '../ui/input';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -72,6 +72,12 @@ const DailyView: React.FC<DailyViewProps> = ({
   const handleDurationChange = (value: string) => {
     setDuration(value);
     if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
+  };
+
+  const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
+    handleDurationChange(rawValue.replace(',', '.'));
   };
 
   // Sync internal date when calendar selection changes
@@ -341,42 +347,40 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <Field className="min-w-0 gap-1" data-invalid={!!errors.hours}>
-            <FieldLabel className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          <Field className="min-w-0" data-invalid={!!errors.hours}>
+            <FieldLabel htmlFor="daily-entry-hours">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </FieldLabel>
-            <ValidatedNumberInput
+            <Input
+              id="daily-entry-hours"
+              type="text"
+              inputMode="decimal"
+              pattern="^[0-9]*([.,][0-9]*)?$"
               value={duration}
-              onValueChange={handleDurationChange}
+              onChange={handleDurationInputChange}
               placeholder="0.0"
               aria-invalid={!!errors.hours}
-              className="h-9 bg-zinc-50 text-sm font-bold shadow-none"
+              className="h-10 rounded-lg"
             />
-            <FieldError className="text-[10px] font-bold animate-in fade-in">
-              {errors.hours}
-            </FieldError>
+            <FieldError>{errors.hours}</FieldError>
           </Field>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
-              {t('entry.notesDescription')}
-            </label>
-            <input
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="daily-entry-notes">{t('entry.notesDescription')}</FieldLabel>
+            <Input
+              id="daily-entry-notes"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
-              className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+              className="h-10 rounded-lg"
             />
-          </div>
+          </Field>
 
           <div className="min-w-0 flex items-end">
-            <Button
-              type="submit"
-              className="w-full h-10 rounded-lg bg-praetor px-5 text-sm font-bold text-white shadow-md hover:bg-zinc-700 hover:shadow-lg whitespace-nowrap"
-            >
+            <Button type="submit" className="h-10 w-full rounded-lg">
               {t('entry.logTime')}
             </Button>
           </div>
