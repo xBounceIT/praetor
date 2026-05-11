@@ -186,9 +186,9 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   }, [pendingDelete, quoteId, t]);
 
   return (
-    <div className="space-y-3 border-t border-zinc-100 pt-4">
-      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
-        <span className="size-1.5 rounded-full bg-praetor"></span>
+    <div className="space-y-3 border-t border-border pt-4">
+      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+        <span className="size-1.5 rounded-full bg-primary"></span>
         {t('sales:supplierQuotes.attachments.title', { defaultValue: 'Attachments' })}
         <FieldTooltip
           description={t('sales:fieldInfo.attachments', {

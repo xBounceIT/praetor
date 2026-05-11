@@ -43,6 +43,22 @@ describe('sales modal styling', () => {
     ]);
   });
 
+  test('supplier quote attachment section header matches other modal section headers', async () => {
+    const source = await readComponentSource('sales/SupplierQuoteAttachmentsSection.tsx');
+
+    expectSourceContainsAll(source, [
+      '<div className="space-y-3 border-t border-border pt-4">',
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      '<span className="size-1.5 rounded-full bg-primary"></span>',
+      "description={t('sales:fieldInfo.attachments'",
+    ]);
+    expectSourceOmitsAll(source, [
+      '<div className="space-y-3 border-t border-zinc-100 pt-4">',
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">',
+      '<span className="size-1.5 rounded-full bg-praetor"></span>',
+    ]);
+  });
+
   test.each([
     ['quote versions', 'sales/QuoteVersionsPanel.tsx'],
     ['offer versions', 'sales/OfferVersionsPanel.tsx'],
