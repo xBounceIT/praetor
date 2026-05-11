@@ -10,12 +10,15 @@ describe('TasksView modal styling', () => {
     expect(source).toContain("import { Field, FieldLabel } from '@/components/ui/field';");
     expect(source).toContain("import { Input } from '@/components/ui/input';");
     expect(source).toContain("import { Textarea } from '@/components/ui/textarea';");
-    expect(source).toContain('<ModalContent size="lg">');
+    expect(source).toContain("<ModalContent size={editingTask ? 'lg' : '2xl'}>");
     expect(source).toContain('<ModalHeader>');
     expect(source).toContain('<ModalBody className="space-y-6">');
     expect(source).toContain('<ModalFooter className="sm:justify-between">');
     expect(source).toContain('<FieldLabel htmlFor="task-name">');
     expect(source).toContain('<FieldLabel htmlFor="task-description">');
+    expect(source).toContain('<StandardTable<TaskDraftRow>');
+    expect(source).toContain('data={creationTaskRows}');
+    expect(source).toContain('columns={creationTaskColumns}');
     expect(source).toContain('<Input');
     expect(source).toContain('<Textarea');
     expect(source).toContain('variant="outline"');
