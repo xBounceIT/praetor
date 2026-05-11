@@ -94,6 +94,11 @@ import {
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
+import {
+  filterTrackerCatalogs,
+  type TrackerAssignmentState,
+  type TrackerAssignments,
+} from './utils/trackerCatalogs';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -639,11 +644,12 @@ const App: React.FC = () => {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
-  const [viewingUserAssignments, setViewingUserAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  } | null>(null);
+  const [viewingUserAssignmentState, setViewingUserAssignmentState] =
+    useState<TrackerAssignmentState>({
+      userId: '',
+      assignments: null,
+      isLoading: false,
+    });
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
@@ -760,6 +766,7 @@ const App: React.FC = () => {
     setEntries([]);
     entriesStreamTokenRef.current++;
     setWorkUnits([]);
+    setViewingUserAssignmentState({ userId: '', assignments: null, isLoading: false });
   }, [resetModuleLoader]);
 
   const {
@@ -1574,11 +1581,22 @@ const App: React.FC = () => {
     hasLoadedRoles,
   ]);
 
-  // Load entries and assignments when viewing user changes
+  // Load target user assignments when the timesheet user switcher changes.
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
 
+    let isCancelled = false;
+
     const loadAssignments = async () => {
+      if (viewingUserId === currentUser.id) {
+        setViewingUserAssignmentState({
+          userId: viewingUserId,
+          assignments: null,
+          isLoading: false,
+        });
+        return;
+      }
+
       try {
         const canViewAssignments = hasAnyPermission(currentUser.permissions, [
           buildPermission('administration.user_management', 'view'),
@@ -1589,19 +1607,48 @@ const App: React.FC = () => {
           buildPermission('timesheets.tracker_all', 'view'),
         ]);
 
-        // If permitted user is viewing another user, fetch that user's assignments to filter the dropdowns
-        if (canViewAssignments && viewingUserId !== currentUser.id) {
-          const assignments = await api.users.getAssignments(viewingUserId);
-          setViewingUserAssignments(assignments);
-        } else {
-          setViewingUserAssignments(null);
+        setViewingUserAssignmentState({
+          userId: viewingUserId,
+          assignments: null,
+          isLoading: true,
+        });
+
+        if (!canViewAssignments) {
+          if (!isCancelled) {
+            setViewingUserAssignmentState({
+              userId: viewingUserId,
+              assignments: null,
+              isLoading: false,
+            });
+          }
+          return;
+        }
+
+        const assignments = await api.users.getAssignments(viewingUserId);
+        if (!isCancelled) {
+          setViewingUserAssignmentState({
+            userId: viewingUserId,
+            assignments: assignments as TrackerAssignments,
+            isLoading: false,
+          });
         }
       } catch (err) {
         console.error('Failed to load user assignments:', err);
+        if (!isCancelled) {
+          setViewingUserAssignmentState({
+            userId: viewingUserId,
+            assignments: null,
+            isLoading: false,
+          });
+        }
       }
     };
 
     loadAssignments();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser, viewingUserId]);
 
   // Update viewingUserId when currentUser changes
@@ -1795,34 +1842,18 @@ const App: React.FC = () => {
 
   // ... (rest of the logic remains validation which we don't need to change but need for context)
 
-  // Filtered lists for TrackerView
-  const filteredClients = useMemo(() => {
-    const activeClients = clients.filter((c) => !c.isDisabled);
-    if (!viewingUserAssignments) return activeClients;
-    return activeClients.filter((c) => viewingUserAssignments.clientIds.includes(c.id));
-  }, [clients, viewingUserAssignments]);
-
-  const filteredProjects = useMemo(() => {
-    const activeProjects = projects.filter((p) => {
-      if (p.isDisabled) return false;
-      const client = clients.find((c) => c.id === p.clientId);
-      return !client?.isDisabled;
-    });
-    if (!viewingUserAssignments) return activeProjects;
-    return activeProjects.filter((p) => viewingUserAssignments.projectIds.includes(p.id));
-  }, [projects, clients, viewingUserAssignments]);
-
-  const filteredTasks = useMemo(() => {
-    const activeTasks = projectTasks.filter((t) => {
-      if (t.isDisabled) return false;
-      const project = projects.find((p) => p.id === t.projectId);
-      if (!project || project.isDisabled) return false;
-      const client = clients.find((c) => c.id === project.clientId);
-      return !client?.isDisabled;
-    });
-    if (!viewingUserAssignments) return activeTasks;
-    return activeTasks.filter((t) => viewingUserAssignments.taskIds.includes(t.id));
-  }, [projectTasks, projects, clients, viewingUserAssignments]);
+  const trackerCatalogs = useMemo(
+    () =>
+      filterTrackerCatalogs({
+        clients,
+        projects,
+        projectTasks,
+        currentUserId: currentUser?.id ?? '',
+        viewingUserId,
+        assignmentState: viewingUserAssignmentState,
+      }),
+    [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserAssignmentState],
+  );
 
   useEffect(() => {
     if (!currentUser) return;
@@ -2141,9 +2172,9 @@ const App: React.FC = () => {
             {activeView === 'timesheets/tracker' && (
               <TrackerView
                 entries={entries.filter((e) => e.userId === viewingUserId)}
-                clients={filteredClients}
-                projects={filteredProjects}
-                projectTasks={filteredTasks}
+                clients={trackerCatalogs.clients}
+                projects={trackerCatalogs.projects}
+                projectTasks={trackerCatalogs.projectTasks}
                 onAddEntry={handleAddEntry}
                 onDeleteEntry={handleDeleteEntry}
                 onUpdateEntry={handleUpdateEntry}

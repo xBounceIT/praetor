@@ -80,47 +80,88 @@ const DailyView: React.FC<DailyViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, date]);
 
-  // Init client selection when clients load
+  // Keep client selection valid when RBAC-scoped catalogs change.
   useEffect(() => {
-    if (!selectedClientId && clients.length > 0) {
+    if (clients.length === 0) {
+      if (selectedClientId !== '') setSelectedClientId('');
+      return;
+    }
+
+    if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId(clients[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, selectedClientId]);
 
   // Filter projects when client changes
-  const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
+  const filteredProjects = useMemo(
+    () => projects.filter((p) => p.clientId === selectedClientId),
+    [projects, selectedClientId],
+  );
   const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
 
   // Filter tasks when project changes
-  const filteredTasks = projectTasks.filter((t) => t.projectId === selectedProjectId);
+  const filteredTasks = useMemo(
+    () => projectTasks.filter((t) => t.projectId === selectedProjectId),
+    [projectTasks, selectedProjectId],
+  );
   const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
   const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
 
-  // Auto-select first project/task when lists change
+  // Keep project/task selections valid when the selected client or scoped catalogs change.
   useEffect(() => {
-    if (filteredProjects.length > 0) {
-      if (selectedProjectId !== firstFilteredProjectId) {
-        setSelectedProjectId(firstFilteredProjectId);
+    if (filteredProjects.length === 0) {
+      if (selectedProjectId !== '') {
+        setSelectedProjectId('');
       }
-    } else if (selectedProjectId !== '') {
-      setSelectedProjectId('');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredProjects.length, firstFilteredProjectId, selectedProjectId]);
+
+    if (!filteredProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(firstFilteredProjectId);
+    }
+  }, [filteredProjects, firstFilteredProjectId, selectedProjectId]);
 
   useEffect(() => {
-    if (filteredTasks.length > 0) {
-      if (selectedTaskId !== firstFilteredTaskId) {
-        setSelectedTaskName(firstFilteredTaskName);
-        setSelectedTaskId(firstFilteredTaskId);
+    if (filteredTasks.length === 0) {
+      if (selectedTaskId !== '') {
+        setSelectedTaskId('');
       }
-    } else if (selectedTaskId !== '') {
-      setSelectedTaskName('');
-      setSelectedTaskId('');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredTasks.length, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
+
+    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [filteredTasks, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
+
+  useEffect(() => {
+    if (selectedProjectId === '') {
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
+        setSelectedTaskName('');
+        setSelectedTaskId('');
+      }
+      return;
+    }
+
+    if (selectedTaskId && !filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [
+    selectedProjectId,
+    selectedTaskId,
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskName,
+  ]);
+
+  useEffect(() => {
+    if (selectedClientId === '') {
+      setSelectedProjectId('');
+    }
+  }, [selectedClientId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

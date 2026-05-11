@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
@@ -90,13 +90,49 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     weekNote: string;
   };
   const [rows, setRows] = useState<RowData[]>([]);
-  const [prevInitialRows, setPrevInitialRows] = useState<RowData[]>([]);
+  const [prevInitialRowsSignature, setPrevInitialRowsSignature] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [rowErrors, setRowErrors] = useState<
     Record<number, { clientId?: string; projectId?: string; taskName?: string }>
   >({});
+  const createEmptyRow = useCallback((): RowData => {
+    const firstClientId = clients[0]?.id || '';
+    const firstProjectId = projects.find((p) => p.clientId === firstClientId)?.id || '';
+    const firstTaskName =
+      projectTasks.find((task) => task.projectId === firstProjectId)?.name || '';
+
+    return {
+      clientId: firstClientId,
+      projectId: firstProjectId,
+      taskName: firstTaskName,
+      location: defaultLocation,
+      days: {},
+      weekNote: '',
+    };
+  }, [clients, projects, projectTasks, defaultLocation]);
+
+  const sanitizeRow = useCallback(
+    (row: RowData): RowData => {
+      const clientIsValid = clients.some((client) => client.id === row.clientId);
+      const clientId = clientIsValid ? row.clientId : '';
+      const validProjects = projects.filter((project) => project.clientId === clientId);
+      const projectIsValid = validProjects.some((project) => project.id === row.projectId);
+      const projectId = projectIsValid ? row.projectId : '';
+      const validTasks = projectTasks.filter((task) => task.projectId === projectId);
+      const taskIsValid = validTasks.some((task) => task.name === row.taskName);
+      const taskName = taskIsValid ? row.taskName : '';
+
+      return {
+        ...row,
+        clientId,
+        projectId,
+        taskName,
+      };
+    },
+    [clients, projects, projectTasks],
+  );
 
   // Initialize rows from existing entries in this week using useMemo
   const initialRows = useMemo(() => {
@@ -123,25 +159,19 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       }
     });
 
-    const result = Object.values(groups);
+    const result = Object.values(groups).map(sanitizeRow);
     // Add one empty row for new entries
     if (result.length === 0) {
-      result.push({
-        clientId: clients[0]?.id || '',
-        projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
-        taskName: '',
-        location: defaultLocation,
-        days: {},
-        weekNote: '',
-      });
+      result.push(createEmptyRow());
     }
     return result;
-  }, [entries, clients, projects, weekDays, defaultLocation]);
+  }, [entries, weekDays, sanitizeRow, createEmptyRow, defaultLocation]);
+  const initialRowsSignature = JSON.stringify(initialRows);
 
   // Update rows when initialRows changes
   // Update rows when initialRows changes (pattern: adjust state during render)
-  if (initialRows !== prevInitialRows) {
-    setPrevInitialRows(initialRows);
+  if (initialRowsSignature !== prevInitialRowsSignature) {
+    setPrevInitialRowsSignature(initialRowsSignature);
     setRows(initialRows);
     setHasChanges(false);
     setRowErrors({});
@@ -222,17 +252,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   };
 
   const addRow = () => {
-    setRows([
-      ...rows,
-      {
-        clientId: clients[0]?.id || '',
-        projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
-        taskName: '',
-        location: defaultLocation,
-        days: {},
-        weekNote: '',
-      },
-    ]);
+    setRows([...rows, createEmptyRow()]);
     setHasChanges(true);
     // Clear errors for the new row index
     const newRowIndex = rows.length;
@@ -247,14 +267,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     const newRows = rows.filter((_, index) => index !== rowIndex);
     // Ensure at least one row remains
     if (newRows.length === 0) {
-      newRows.push({
-        clientId: clients[0]?.id || '',
-        projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
-        taskName: '',
-        location: defaultLocation,
-        days: {},
-        weekNote: '',
-      });
+      newRows.push(createEmptyRow());
     }
     setRows(newRows);
     setHasChanges(true);
