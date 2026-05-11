@@ -149,9 +149,24 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const { t } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
 
-  const [fullName, setFullName] = useState(settings.fullName);
-  const [email, setEmail] = useState(settings.email);
-  const [language, setLanguage] = useState(settings.language || 'auto');
+  const [fullName, setFullName] = useState(() => settings.fullName);
+  const [email, setEmail] = useState(() => settings.email);
+  const [language, setLanguage] = useState<LanguagePreference>(() => settings.language || 'auto');
+  // settings can arrive after mount (useAuth populates async). Sync from settings while the
+  // field is still untouched, so the form reflects the loaded values without clobbering
+  // in-progress edits once the user starts typing.
+  const fullNameTouched = useRef(false);
+  const emailTouched = useRef(false);
+  const languageTouched = useRef(false);
+  useEffect(() => {
+    if (!fullNameTouched.current) setFullName(settings.fullName);
+  }, [settings.fullName]);
+  useEffect(() => {
+    if (!emailTouched.current) setEmail(settings.email);
+  }, [settings.email]);
+  useEffect(() => {
+    if (!languageTouched.current) setLanguage(settings.language || 'auto');
+  }, [settings.language]);
   const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
 
   const [activeTab, setActiveTab] = useState<
@@ -199,12 +214,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    setFullName(settings.fullName);
-    setEmail(settings.email);
-    setLanguage(settings.language || 'auto');
-  }, [settings]);
-
   useEffect(
     () => () => {
       isMountedRef.current = false;
@@ -216,6 +225,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     translateRef.current = t;
   }, [t]);
 
+  const onGetPersonalAccessTokenRef = useRef(onGetPersonalAccessToken);
+  useEffect(() => {
+    onGetPersonalAccessTokenRef.current = onGetPersonalAccessToken;
+  }, [onGetPersonalAccessToken]);
+
   useEffect(() => {
     if (activeTab !== 'security' || personalAccessToken || tokenLoadInFlightRef.current) return;
 
@@ -224,7 +238,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       setIsLoadingToken(true);
       setTokenError('');
       try {
-        const tokenMetadata = await onGetPersonalAccessToken();
+        const tokenMetadata = await onGetPersonalAccessTokenRef.current();
         if (isMountedRef.current) setPersonalAccessToken(tokenMetadata);
       } catch (err: unknown) {
         console.error('Failed to load personal access token:', err);
@@ -238,7 +252,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     };
 
     void loadToken();
-  }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
+  }, [activeTab, personalAccessToken]);
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
     setCurrentTheme(theme);
@@ -265,6 +279,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const handleLanguageChange = async (lang: LanguagePreference) => {
     applyLanguagePreference(lang);
+    languageTouched.current = true;
     setLanguage(lang);
     try {
       await onUpdate({ fullName, email, language: lang });
@@ -496,7 +511,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   <input
                     type="text"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                      fullNameTouched.current = true;
+                      setFullName(e.target.value);
+                    }}
                     className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
                 </div>
@@ -507,7 +525,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      emailTouched.current = true;
+                      setEmail(e.target.value);
+                    }}
                     className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
                 </div>

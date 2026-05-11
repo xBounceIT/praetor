@@ -2121,7 +2121,6 @@ const App: React.FC = () => {
   if (!currentUser)
     return (
       <Login
-        users={users}
         onLogin={handleLogin}
         logoutReason={logoutReason}
         onClearLogoutReason={clearLogoutReason}

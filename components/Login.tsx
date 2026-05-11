@@ -5,7 +5,6 @@ import api from '../services/api';
 import type { PublicSsoProvider, User } from '../types';
 
 export interface LoginProps {
-  users: User[];
   onLogin: (user: User, token?: string) => void;
   logoutReason?: 'inactivity' | null;
   onClearLogoutReason?: () => void;

@@ -247,3 +247,84 @@ describe('<UserSettings /> MCP tokens', () => {
     await waitFor(() => expect(screen.queryByText('Agent')).not.toBeInTheDocument());
   });
 });
+
+describe('<UserSettings /> Profile tab', () => {
+  test('keeps unsaved fullName edits when the parent re-renders with a new settings object reference', () => {
+    const initialSettings: Settings = {
+      fullName: 'Alice',
+      email: 'alice@example.com',
+      language: 'en',
+    };
+    const { rerender } = render(
+      <UserSettings
+        settings={initialSettings}
+        onUpdate={onUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+    const fullNameInput = screen.getByDisplayValue('Alice') as HTMLInputElement;
+    fireEvent.change(fullNameInput, { target: { value: 'Alice Edited' } });
+    expect(fullNameInput.value).toBe('Alice Edited');
+
+    // Parent re-renders with a fresh object that has the SAME data.
+    rerender(
+      <UserSettings
+        settings={{ ...initialSettings }}
+        onUpdate={onUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+    expect((screen.getByDisplayValue('Alice Edited') as HTMLInputElement).value).toBe(
+      'Alice Edited',
+    );
+  });
+
+  test('syncs the form from settings when it loads asynchronously after mount', () => {
+    const initialSettings: Settings = {
+      fullName: 'placeholder',
+      email: 'placeholder@example.com',
+      language: 'auto',
+    };
+    const props = {
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    } as const;
+    const { rerender } = render(<UserSettings settings={initialSettings} {...props} />);
+
+    // Form mounts with the parent's placeholder values.
+    expect((screen.getByDisplayValue('placeholder') as HTMLInputElement).value).toBe(
+      'placeholder',
+    );
+
+    // Parent finishes loading and passes real settings.
+    rerender(
+      <UserSettings
+        settings={{ fullName: 'Bob', email: 'bob@example.com', language: 'en' }}
+        {...props}
+      />,
+    );
+
+    // Untouched fields should reflect the loaded values.
+    expect((screen.getByDisplayValue('Bob') as HTMLInputElement).value).toBe('Bob');
+    expect(
+      (screen.getByDisplayValue('bob@example.com') as HTMLInputElement).value,
+    ).toBe('bob@example.com');
+  });
+});
