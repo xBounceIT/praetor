@@ -2,6 +2,9 @@ import type { TFunction } from 'i18next';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   Client,
@@ -30,7 +33,16 @@ import {
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -53,8 +65,7 @@ export interface ClientsOrdersViewProps {
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
-const compactInputClass =
-  'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
+const compactInputClass = 'h-9 text-center font-medium';
 
 const pillBadgeClass =
   'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
@@ -684,499 +695,506 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeEditModal}>
-        <div className="flex items-start gap-4 max-w-full">
-          <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6">
-              <h3 className="flex items-center gap-3 text-xl font-semibold text-zinc-800">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-praetor">
-                  <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
-                </div>
-                {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
-              </h3>
-              <button
-                onClick={closeEditModal}
-                className="flex size-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
+        <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+          <ModalContent size="full" className="max-h-[90vh]">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <ModalHeader>
+                <ModalTitle className="gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                    <i
+                      className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
+                </ModalTitle>
+                <ModalCloseButton onClick={closeEditModal} />
+              </ModalHeader>
 
-            <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
-              {previewVersion && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 bg-amber-50">
-                  <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
-                    <i className="fa-solid fa-clock-rotate-left"></i>
-                    {t('accounting:clientsOrders.versionHistory.previewBanner', {
-                      date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                      defaultValue: 'Previewing version from {{date}}',
-                    })}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleClearPreview}
-                    className="text-xs font-bold text-amber-800 hover:underline whitespace-nowrap"
-                  >
-                    {t('accounting:clientsOrders.versionHistory.backToCurrent', {
-                      defaultValue: 'Back to current',
-                    })}
-                  </button>
-                </div>
-              )}
-              {editingOrder && editingOrder.status !== 'draft' && (
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                  <span className="text-amber-700 text-xs font-bold">
-                    {t('accounting:clientsOrders.readOnlyStatus', {
-                      status: getOrderStatusLabel(editingOrder.status, t),
-                    })}
-                  </span>
-                </div>
-              )}
-              {/* Linked Offer Info */}
-              {formData.linkedOfferId && (
-                <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                      <i className="fa-solid fa-link"></i>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-zinc-900">
-                        {t('accounting:clientsOrders.linkedOffer', {
-                          defaultValue: 'Linked Offer',
-                        })}
-                      </div>
-                      <div className="text-xs text-praetor">
-                        {t('accounting:clientsOrders.linkedOfferInfo', {
-                          number: formData.linkedOfferId,
-                          defaultValue: 'Offer #{{number}}',
-                        })}
-                      </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">
-                        {t('accounting:clientsOrders.offerDetailsReadOnly', {
-                          defaultValue: '(Order details are read-only)',
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  {onViewOffer && formData.linkedOfferId && (
-                    <button
+              <ModalBody className="flex-1 space-y-5">
+                {previewVersion && (
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                      {t('accounting:clientsOrders.versionHistory.previewBanner', {
+                        date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                        defaultValue: 'Previewing version from {{date}}',
+                      })}
+                    </span>
+                    <Button
                       type="button"
-                      onClick={() => onViewOffer(formData.linkedOfferId as string)}
-                      className="text-xs font-bold text-praetor hover:text-zinc-800 hover:underline"
+                      variant="link"
+                      size="sm"
+                      onClick={handleClearPreview}
+                      className="h-auto px-0 text-amber-700 dark:text-amber-300"
                     >
-                      {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Order Details */}
-              <div className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
-                  <span className="size-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsOrders.orderDetails')}
-                </h4>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-zinc-500">
-                      {t('accounting:clientsOrders.client')}
-                    </label>
-                    <SelectControl
-                      options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                      value={formData.clientId || ''}
-                      onChange={(val) => handleClientChange(val as string)}
-                      placeholder={t('sales:clientQuotes.selectAClient')}
-                      searchable={true}
-                      disabled={isReadOnly}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                    />
-                    {errors.clientId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                      {t('accounting:clientsOrders.versionHistory.backToCurrent', {
+                        defaultValue: 'Back to current',
+                      })}
+                    </Button>
+                  </div>
+                )}
+                {editingOrder && editingOrder.status !== 'draft' && (
+                  <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      {t('accounting:clientsOrders.readOnlyStatus', {
+                        status: getOrderStatusLabel(editingOrder.status, t),
+                      })}
+                    </span>
+                  </div>
+                )}
+                {/* Linked Offer Info */}
+                {formData.linkedOfferId && (
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                        <i className="fa-solid fa-link" aria-hidden="true"></i>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">
+                          {t('accounting:clientsOrders.linkedOffer', {
+                            defaultValue: 'Linked Offer',
+                          })}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {t('accounting:clientsOrders.linkedOfferInfo', {
+                            number: formData.linkedOfferId,
+                            defaultValue: 'Offer #{{number}}',
+                          })}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                          {t('accounting:clientsOrders.offerDetailsReadOnly', {
+                            defaultValue: '(Order details are read-only)',
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    {onViewOffer && formData.linkedOfferId && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => onViewOffer(formData.linkedOfferId as string)}
+                        className="px-0"
+                      >
+                        {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
+                      </Button>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-zinc-500">
-                      {t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' })}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 font-bold">
-                      {editingOrder?.id || '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-zinc-500">
-                      {t('accounting:clientsOrders.paymentTerms')}
-                    </label>
-                    <SelectControl
-                      options={paymentTermsOptions}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          paymentTerms: val as ClientsOrder['paymentTerms'],
-                        }))
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="ml-1 text-xs font-bold text-zinc-500">
-                      {t('accounting:clientsOrders.paymentDueDate', {
-                        defaultValue: 'Payment due date',
-                      })}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 font-bold">
-                      {computeDueDate(editingOrder?.createdAt, formData.paymentTerms, t)}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {/* Products */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-praetor">
-                    <span className="size-1.5 rounded-full bg-praetor"></span>
-                    {t('sales:clientQuotes.productsServices')}
+                {/* Order Details */}
+                <div className="space-y-2">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsOrders.orderDetails')}
                   </h4>
-                  <button
-                    type="button"
-                    onClick={addProductRow}
-                    disabled={isReadOnly}
-                    className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
-                  </button>
-                </div>
-                {errors.items && (
-                  <p className="ml-1 -mt-2 text-[10px] font-bold text-red-500">{errors.items}</p>
-                )}
-
-                {formData.items && formData.items.length > 0 && (
-                  <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                      <div className="col-span-2">
-                        {t('accounting:clientsOrders.supplierOrderColumn', {
-                          defaultValue: 'Supplier Order',
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Field data-invalid={Boolean(errors.clientId)}>
+                      <SelectControl
+                        id="client-order-client"
+                        options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                        value={formData.clientId || ''}
+                        onChange={(val) => handleClientChange(val as string)}
+                        label={t('accounting:clientsOrders.client')}
+                        placeholder={t('sales:clientQuotes.selectAClient')}
+                        searchable={true}
+                        disabled={isReadOnly}
+                        buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
+                      />
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
+                    </Field>
+                    <Field>
+                      <FieldLabel>
+                        {t('accounting:clientsOrders.orderNumber', {
+                          defaultValue: 'Order Number',
                         })}
+                      </FieldLabel>
+                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+                        {editingOrder?.id || '-'}
                       </div>
-                      <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
-                      <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
-                      <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
-                      <div className="col-span-1 text-center">
-                        {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+                    </Field>
+                    <Field>
+                      <SelectControl
+                        id="client-order-payment-terms"
+                        options={paymentTermsOptions}
+                        value={formData.paymentTerms || 'immediate'}
+                        onChange={(val) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            paymentTerms: val as ClientsOrder['paymentTerms'],
+                          }))
+                        }
+                        label={t('accounting:clientsOrders.paymentTerms')}
+                        searchable={false}
+                        disabled={isReadOnly}
+                        buttonClassName="h-9"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>
+                        {t('accounting:clientsOrders.paymentDueDate', {
+                          defaultValue: 'Payment due date',
+                        })}
+                      </FieldLabel>
+                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+                        {computeDueDate(editingOrder?.createdAt, formData.paymentTerms, t)}
                       </div>
-                      <div className="col-span-1 text-center whitespace-nowrap">
-                        {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-                      </div>
-                      <div className="col-span-1 text-center">
-                        {t('sales:clientQuotes.marginLabel')}
-                      </div>
-                      <div className="col-span-2 pr-2 text-right">
-                        {t('crm:internalListing.salePrice')}
-                      </div>
-                    </div>
-                    <div className="w-8 shrink-0"></div>
+                    </Field>
                   </div>
-                )}
+                </div>
 
-                {formData.items && formData.items.length > 0 ? (
-                  <div className="space-y-3">
-                    {formData.items.map((item, index) => {
-                      const product = products.find((p) => p.id === item.productId);
-                      const { unitCost, molPercentage, lineCost, quantity } = getItemPricingContext(
-                        item,
-                        DEFAULT_UNIT_TYPE,
-                      );
-                      const salePrice = Number(item.unitPrice || 0);
-                      const lineSalePrice = salePrice * quantity;
-                      const margin = lineSalePrice - lineCost;
-                      const isSupply = product?.type === 'supply';
+                {/* Products */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('sales:clientQuotes.productsServices')}
+                    </h4>
+                    <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
+                      <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                      {t('sales:clientQuotes.addProduct')}
+                    </Button>
+                  </div>
+                  <FieldError className="-mt-2 text-xs">{errors.items}</FieldError>
 
-                      const handleCostChange = (value: string) => {
-                        if (isReadOnly) return;
-                        setFormData(
-                          makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-                        );
-                      };
+                  {formData.items && formData.items.length > 0 && (
+                    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+                      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        <div className="col-span-2">
+                          {t('accounting:clientsOrders.supplierOrderColumn', {
+                            defaultValue: 'Supplier Order',
+                          })}
+                        </div>
+                        <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
+                        <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
+                        <div className="col-span-1 text-center">
+                          {t('crm:internalListing.cost')}
+                        </div>
+                        <div className="col-span-1 text-center">
+                          {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+                        </div>
+                        <div className="col-span-1 text-center whitespace-nowrap">
+                          {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+                        </div>
+                        <div className="col-span-1 text-center">
+                          {t('sales:clientQuotes.marginLabel')}
+                        </div>
+                        <div className="col-span-2 pr-2 text-right">
+                          {t('crm:internalListing.salePrice')}
+                        </div>
+                      </div>
+                      <div className="w-8 shrink-0"></div>
+                    </div>
+                  )}
 
-                      const handleMolChange = (value: string) => {
-                        if (isReadOnly) return;
-                        setFormData(
-                          makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-                        );
-                      };
+                  {formData.items && formData.items.length > 0 ? (
+                    <div className="space-y-3">
+                      {formData.items.map((item, index) => {
+                        const product = products.find((p) => p.id === item.productId);
+                        const { unitCost, molPercentage, lineCost, quantity } =
+                          getItemPricingContext(item, DEFAULT_UNIT_TYPE);
+                        const salePrice = Number(item.unitPrice || 0);
+                        const lineSalePrice = salePrice * quantity;
+                        const margin = lineSalePrice - lineCost;
+                        const isSupply = product?.type === 'supply';
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3"
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
-                              <div className="space-y-1 lg:col-span-2 min-w-0">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('accounting:clientsOrders.supplierOrderColumn', {
-                                    defaultValue: 'Supplier Order',
-                                  })}
-                                </label>
-                                <div className="flex items-center min-h-[42px] px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg">
-                                  {item.supplierSaleId ? (
-                                    <span className="text-xs font-semibold text-zinc-700 truncate">
-                                      {item.supplierSaleSupplierName ?? '-'} · {item.supplierSaleId}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-zinc-400">
-                                      {t('accounting:clientsOrders.noSupplierOrder', {
-                                        defaultValue: 'No supplier order',
-                                      })}
-                                    </span>
-                                  )}
+                        const handleCostChange = (value: string) => {
+                          if (isReadOnly) return;
+                          setFormData(
+                            makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+                          );
+                        };
+
+                        const handleMolChange = (value: string) => {
+                          if (isReadOnly) return;
+                          setFormData(
+                            makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+                          );
+                        };
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
+                          >
+                            <div className="flex items-start gap-2 lg:items-center">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center">
+                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('accounting:clientsOrders.supplierOrderColumn', {
+                                      defaultValue: 'Supplier Order',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
+                                    {item.supplierSaleId ? (
+                                      <span className="truncate text-xs font-medium text-foreground">
+                                        {item.supplierSaleSupplierName ?? '-'} ·{' '}
+                                        {item.supplierSaleId}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        {t('accounting:clientsOrders.noSupplierOrder', {
+                                          defaultValue: 'No supplier order',
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="space-y-1 lg:col-span-2 min-w-0">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('sales:clientQuotes.productsServices')}
-                                </label>
-                                <SelectControl
-                                  options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                  value={item.productId}
-                                  onChange={(val) =>
-                                    updateProductRow(index, 'productId', val as string)
-                                  }
-                                  placeholder={t('sales:clientQuotes.selectProduct')}
-                                  searchable={true}
-                                  disabled={isReadOnly}
-                                  buttonClassName="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-                                />
-                              </div>
-                              <div className="space-y-1 lg:col-span-2">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('sales:clientQuotes.qty')}
-                                </label>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="0.01"
-                                    min="0"
-                                    required
-                                    placeholder="Qty"
-                                    value={item.quantity}
-                                    onValueChange={(value) => {
-                                      const parsed = parseFloat(value);
-                                      updateProductRow(
-                                        index,
-                                        'quantity',
-                                        value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                      );
-                                    }}
-                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-zinc-50 disabled:text-zinc-400 flex-1"
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <UnitTypeSelector
-                                    value={(item.unitType || DEFAULT_UNIT_TYPE) as SupplierUnitType}
-                                    onChange={(val) => handleUnitTypeChange(index, val)}
-                                    isSupply={isSupply}
-                                    quantity={Number(item.quantity) || 0}
-                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                    i18nPrefix="sales:clientQuotes"
+                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.productsServices')}
+                                  </FieldLabel>
+                                  <SelectControl
+                                    options={activeProducts.map((p) => ({
+                                      id: p.id,
+                                      name: p.name,
+                                    }))}
+                                    value={item.productId}
+                                    onChange={(val) =>
+                                      updateProductRow(index, 'productId', val as string)
+                                    }
+                                    placeholder={t('sales:clientQuotes.selectProduct')}
+                                    searchable={true}
+                                    disabled={isReadOnly}
+                                    buttonClassName="h-9"
                                   />
                                 </div>
-                              </div>
-                              <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('crm:internalListing.cost')}
-                                </label>
-                                <div className="flex flex-col items-center justify-center min-h-[42px] gap-1">
-                                  {item.supplierQuoteItemId && (
-                                    <span className={`${pillBadgeClass} bg-emerald-600`}>
-                                      {t('sales:clientQuotes.supplierQuoteBadge')}
-                                    </span>
-                                  )}
-                                  {item.supplierSaleId && (
-                                    <span className={`${pillBadgeClass} bg-blue-600`}>
-                                      {t('accounting:clientsOrders.supplierOrderBadge', {
-                                        defaultValue: 'Supplier order',
-                                      })}
-                                    </span>
-                                  )}
-                                  <div className="flex items-center gap-1">
+                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.qty')}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center gap-1">
                                     <ValidatedNumberInput
-                                      value={unitCost}
-                                      formatDecimals={2}
-                                      onValueChange={handleCostChange}
+                                      step="0.01"
+                                      min="0"
+                                      required
+                                      placeholder="Qty"
+                                      value={item.quantity}
+                                      onValueChange={(value) => {
+                                        const parsed = parseFloat(value);
+                                        updateProductRow(
+                                          index,
+                                          'quantity',
+                                          value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                        );
+                                      }}
+                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                      className="flex-1 text-center"
+                                    />
+                                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                      /
+                                    </span>
+                                    <UnitTypeSelector
+                                      value={
+                                        (item.unitType || DEFAULT_UNIT_TYPE) as SupplierUnitType
+                                      }
+                                      onChange={(val) => handleUnitTypeChange(index, val)}
+                                      isSupply={isSupply}
+                                      quantity={Number(item.quantity) || 0}
+                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                      i18nPrefix="sales:clientQuotes"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('crm:internalListing.cost')}
+                                  </FieldLabel>
+                                  <div className="flex min-h-9 flex-col items-center justify-center gap-1">
+                                    {item.supplierQuoteItemId && (
+                                      <span className={`${pillBadgeClass} bg-emerald-600`}>
+                                        {t('sales:clientQuotes.supplierQuoteBadge')}
+                                      </span>
+                                    )}
+                                    {item.supplierSaleId && (
+                                      <span className={`${pillBadgeClass} bg-blue-600`}>
+                                        {t('accounting:clientsOrders.supplierOrderBadge', {
+                                          defaultValue: 'Supplier order',
+                                        })}
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1">
+                                      <ValidatedNumberInput
+                                        value={unitCost}
+                                        formatDecimals={2}
+                                        onValueChange={handleCostChange}
+                                        disabled={isReadOnly}
+                                        className={compactInputClass}
+                                      />
+                                      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                        {currency}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-center gap-1">
+                                    <ValidatedNumberInput
+                                      value={molPercentage}
+                                      formatDecimals={1}
+                                      onValueChange={handleMolChange}
                                       disabled={isReadOnly}
                                       className={compactInputClass}
                                     />
-                                    <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                      {currency}
+                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                      %
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.totalCost', {
+                                      defaultValue: 'Total cost',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-center">
+                                    <span className="whitespace-nowrap text-xs font-semibold text-foreground">
+                                      {lineCost.toFixed(2)} {currency}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.marginLabel')}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-center">
+                                    <span className="text-xs font-bold text-emerald-600">
+                                      {margin.toFixed(2)} {currency}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('crm:internalListing.salePrice')}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
+                                    <span className="text-sm font-semibold text-foreground">
+                                      {lineSalePrice.toFixed(2)} {currency}
                                     </span>
                                   </div>
                                 </div>
                               </div>
-                              <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
-                                </label>
-                                <div className="flex items-center justify-center min-h-[42px] gap-1">
-                                  <ValidatedNumberInput
-                                    value={molPercentage}
-                                    formatDecimals={1}
-                                    onValueChange={handleMolChange}
-                                    disabled={isReadOnly}
-                                    className={compactInputClass}
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    %
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('sales:clientQuotes.totalCost', {
-                                    defaultValue: 'Total cost',
-                                  })}
-                                </label>
-                                <div className="flex items-center justify-center min-h-[42px]">
-                                  <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-                                    {lineCost.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-1 lg:col-span-1">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('sales:clientQuotes.marginLabel')}
-                                </label>
-                                <div className="flex items-center justify-center min-h-[42px]">
-                                  <span className="text-xs font-bold text-emerald-600">
-                                    {margin.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-1 lg:col-span-2">
-                                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 lg:hidden">
-                                  {t('crm:internalListing.salePrice')}
-                                </label>
-                                <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
-                                  <span className="text-sm font-semibold text-zinc-800">
-                                    {lineSalePrice.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => removeProductRow(index)}
+                                disabled={isReadOnly}
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                <span className="sr-only">{t('common:buttons.delete')}</span>
+                              </Button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => removeProductRow(index)}
-                              disabled={isReadOnly}
-                              className="rounded-lg p-2 text-zinc-400 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border-2 border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400">
-                    {t('sales:clientQuotes.noProductsAdded')}
-                  </div>
-                )}
-              </div>
-
-              {/* Notes & Cost Summary */}
-              <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 md:flex-row">
-                <div className="md:w-2/3 space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-zinc-500">
-                    {t('accounting:clientsOrders.notes')}
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={formData.notes}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                    placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                    disabled={isReadOnly}
-                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all disabled:bg-zinc-50 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                  />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                      {t('sales:clientQuotes.noProductsAdded')}
+                    </div>
+                  )}
                 </div>
 
-                <div className="md:w-1/3">
-                  {(() => {
-                    const { subtotal, discountAmount, total, margin, marginPercentage } =
-                      calculatePricingTotals(
-                        formData.items || [],
-                        formData.discount || 0,
-                        DEFAULT_UNIT_TYPE,
-                        formData.discountType || 'percentage',
-                      );
-                    return (
-                      <CostSummaryPanel
-                        currency={currency}
-                        subtotal={subtotal}
-                        total={total}
-                        subtotalLabel={t('sales:clientQuotes.subtotal', {
-                          defaultValue: 'Subtotal',
-                        })}
-                        totalLabel={t('sales:clientQuotes.totalLabel')}
-                        globalDiscount={{
-                          label: t('sales:clientQuotes.globalDiscount', {
-                            defaultValue: 'Global Discount',
-                          }),
-                          value: formData.discount || 0,
-                          type: formData.discountType || 'percentage',
-                          onChange: (value) => {
-                            const parsed = parseNumberInputValue(value);
-                            setFormData((prev) => ({ ...prev, discount: parsed }));
-                          },
-                          onTypeChange: (type) =>
-                            setFormData((prev) => ({ ...prev, discountType: type })),
-                          disabled: isReadOnly,
-                        }}
-                        discountRow={
-                          discountAmount > 0
-                            ? {
-                                label: t('sales:clientOffers.discountAmount', {
-                                  value: formatDiscountValue(
-                                    formData.discount ?? 0,
-                                    formData.discountType ?? 'percentage',
-                                    currency,
-                                  ),
-                                }),
-                                amount: discountAmount,
-                              }
-                            : undefined
-                        }
-                        margin={{
-                          label: `${t('sales:clientQuotes.marginLabel')} (${marginPercentage.toFixed(1)}%)`,
-                          amount: margin,
-                        }}
-                      />
-                    );
-                  })()}
-                </div>
-              </div>
+                {/* Notes & Cost Summary */}
+                <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+                  <Field className="md:w-2/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('accounting:clientsOrders.notes')}
+                    </h4>
+                    <FieldLabel htmlFor="client-order-notes" className="sr-only">
+                      {t('accounting:clientsOrders.notes')}
+                    </FieldLabel>
+                    <Textarea
+                      id="client-order-notes"
+                      rows={4}
+                      value={formData.notes}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
+                      disabled={isReadOnly}
+                      className="min-h-28 resize-none"
+                    />
+                  </Field>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="rounded-xl px-6 py-3 font-bold text-zinc-500 hover:bg-zinc-50"
-                >
+                  <div className="space-y-2 md:w-1/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('accounting:clientsOrders.summary', { defaultValue: 'Summary' })}
+                    </h4>
+                    {(() => {
+                      const { subtotal, discountAmount, total, margin, marginPercentage } =
+                        calculatePricingTotals(
+                          formData.items || [],
+                          formData.discount || 0,
+                          DEFAULT_UNIT_TYPE,
+                          formData.discountType || 'percentage',
+                        );
+                      return (
+                        <CostSummaryPanel
+                          currency={currency}
+                          subtotal={subtotal}
+                          total={total}
+                          subtotalLabel={t('sales:clientQuotes.subtotal', {
+                            defaultValue: 'Subtotal',
+                          })}
+                          totalLabel={t('sales:clientQuotes.totalLabel')}
+                          globalDiscount={{
+                            label: t('sales:clientQuotes.globalDiscount', {
+                              defaultValue: 'Global Discount',
+                            }),
+                            value: formData.discount || 0,
+                            type: formData.discountType || 'percentage',
+                            onChange: (value) => {
+                              const parsed = parseNumberInputValue(value);
+                              setFormData((prev) => ({ ...prev, discount: parsed }));
+                            },
+                            onTypeChange: (type) =>
+                              setFormData((prev) => ({ ...prev, discountType: type })),
+                            disabled: isReadOnly,
+                          }}
+                          discountRow={
+                            discountAmount > 0
+                              ? {
+                                  label: t('sales:clientOffers.discountAmount', {
+                                    value: formatDiscountValue(
+                                      formData.discount ?? 0,
+                                      formData.discountType ?? 'percentage',
+                                      currency,
+                                    ),
+                                  }),
+                                  amount: discountAmount,
+                                }
+                              : undefined
+                          }
+                          margin={{
+                            label: `${t('sales:clientQuotes.marginLabel')} (${marginPercentage.toFixed(1)}%)`,
+                            amount: margin,
+                          }}
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+              </ModalBody>
+
+              <ModalFooter>
+                <Button type="button" variant="outline" onClick={closeEditModal}>
                   {t('common:buttons.cancel')}
-                </button>
+                </Button>
                 {!previewVersion && (
-                  <button
-                    type="submit"
-                    disabled={isReadOnly}
-                    className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <Button type="submit" disabled={isReadOnly}>
                     {t('accounting:clientsOrders.updateOrder')}
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </ModalFooter>
             </form>
-          </div>
+          </ModalContent>
           {editingOrder?.id && (
             <OrderVersionsPanel
               orderId={editingOrder.id}
@@ -1190,36 +1208,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600">
-            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-          </div>
-          <h3 className="text-lg font-semibold text-zinc-800">
-            {t('accounting:clientsOrders.deleteOrderTitle')}
-          </h3>
-          <p className="text-sm text-zinc-500">
-            {t('accounting:clientsOrders.deleteOrderConfirm', {
-              clientName: orderToDelete?.clientName,
-            })}
-          </p>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-zinc-500 hover:bg-zinc-50"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
-            >
-              {t('common:buttons.delete')}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title={t('accounting:clientsOrders.deleteOrderTitle')}
+        description={t('accounting:clientsOrders.deleteOrderConfirm', {
+          clientName: orderToDelete?.clientName,
+        })}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">

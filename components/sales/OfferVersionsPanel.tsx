@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clientOffersApi } from '../../services/api/clientOffers';
 import type { ClientOffer, OfferVersion, OfferVersionRow } from '../../types';
-import { formatInsertDateTime } from '../../utils/date';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import { VersionHistoryPanel } from '../shared/VersionHistoryPanel';
 
 interface OfferVersionsPanelProps {
   offerId: string;
@@ -83,86 +83,26 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
 
   return (
     <>
-      <div className="hidden 2xl:flex w-72 max-h-[90vh] flex-col flex-shrink-0 rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
-        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-zinc-800 flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left text-praetor"></i>
-            {t('clientOffers.versionHistory.title')}
-          </h4>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
-            {rows.length}
-          </span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {isLoading && (
-            <div className="p-6 text-xs text-zinc-400 text-center">
-              <i className="fa-solid fa-spinner fa-spin"></i>
-            </div>
-          )}
-          {error && !isLoading && (
-            <div className="m-3 p-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg">
-              {error}
-            </div>
-          )}
-          {!isLoading && !error && rows.length === 0 && (
-            <div className="p-6 text-xs text-zinc-400 text-center leading-relaxed">
-              {t('clientOffers.versionHistory.empty')}
-            </div>
-          )}
-          {!isLoading && !error && rows.length > 0 && (
-            <ul className="divide-y divide-zinc-100">
-              {rows.map((row) => {
-                const selected = row.id === selectedVersionId;
-                return (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelect(row)}
-                      className={`w-full text-left px-4 py-3 hover:bg-zinc-50 transition-colors flex flex-col gap-1 ${
-                        selected ? 'bg-praetor/5 border-l-4 border-praetor pl-3' : ''
-                      }`}
-                    >
-                      <span className="text-xs font-bold text-zinc-700">
-                        {formatInsertDateTime(row.createdAt, i18n.language)}
-                      </span>
-                      <span
-                        className={`text-[9px] font-black uppercase tracking-wider ${
-                          row.reason === 'restore' ? 'text-amber-600' : 'text-zinc-400'
-                        }`}
-                      >
-                        {row.reason === 'restore'
-                          ? t('clientOffers.versionHistory.reasonRestore')
-                          : t('clientOffers.versionHistory.reasonUpdate')}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-        {selectedVersionId && (
-          <div className="border-t border-zinc-100 p-3 space-y-2 bg-zinc-50/50">
-            <button
-              type="button"
-              onClick={onClearPreview}
-              className="w-full py-2 text-xs font-bold text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
-            >
-              <i className="fa-solid fa-arrow-left mr-1.5"></i>
-              {t('clientOffers.versionHistory.backToCurrent')}
-            </button>
-            <button
-              type="button"
-              disabled={Boolean(disabled) || restoreInFlight}
-              onClick={() => setConfirmOpen(true)}
-              className="w-full py-2 bg-praetor text-white text-xs font-bold rounded-lg shadow-md shadow-zinc-200 hover:bg-zinc-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <i className="fa-solid fa-rotate-left mr-1.5"></i>
-              {t('clientOffers.versionHistory.restoreButton')}
-            </button>
-          </div>
-        )}
-      </div>
+      <VersionHistoryPanel
+        rows={rows}
+        selectedVersionId={selectedVersionId}
+        isLoading={isLoading}
+        error={error}
+        locale={i18n.language}
+        disabled={disabled}
+        restoreInFlight={restoreInFlight}
+        labels={{
+          title: t('clientOffers.versionHistory.title'),
+          empty: t('clientOffers.versionHistory.empty'),
+          reasonRestore: t('clientOffers.versionHistory.reasonRestore'),
+          reasonUpdate: t('clientOffers.versionHistory.reasonUpdate'),
+          backToCurrent: t('clientOffers.versionHistory.backToCurrent'),
+          restoreButton: t('clientOffers.versionHistory.restoreButton'),
+        }}
+        onSelect={handleSelect}
+        onClearPreview={onClearPreview}
+        onRestore={() => setConfirmOpen(true)}
+      />
       <DeleteConfirmModal
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}

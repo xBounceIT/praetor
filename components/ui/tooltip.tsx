@@ -23,14 +23,12 @@ type TooltipProps = React.ComponentProps<typeof TooltipPrimitive.Root> & {
 
 function Tooltip({ disabled = false, open, ...props }: TooltipProps) {
   return (
-    <TooltipProvider>
-      <TooltipPrimitive.Root
-        key={disabled ? 'disabled' : 'enabled'}
-        data-slot="tooltip"
-        open={disabled ? false : open}
-        {...props}
-      />
-    </TooltipProvider>
+    <TooltipPrimitive.Root
+      key={disabled ? 'disabled' : 'enabled'}
+      data-slot="tooltip"
+      open={disabled ? false : open}
+      {...props}
+    />
   );
 }
 

@@ -1,7 +1,13 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { Client, ClientsOrder } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -79,5 +85,53 @@ describe('<ClientsOrdersView />', () => {
 
     expect(screen.getByText('Helios Energy Services')).toBeInTheDocument();
     expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
+  });
+
+  test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      "import { Button } from '@/components/ui/button';",
+      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+      "import { Textarea } from '@/components/ui/textarea';",
+      '<ModalContent size="full"',
+      '<ModalHeader>',
+      '<ModalBody className="flex-1 space-y-5">',
+      '<ModalFooter>',
+      'id="client-order-client"',
+      'id="client-order-notes"',
+      "summary', { defaultValue: 'Summary' })",
+      '<DeleteConfirmModal',
+    ]);
+    expectSourceOmitsAll(source, [
+      'rounded-2xl bg-white',
+      'shadow-lg shadow-zinc-200',
+      '<textarea',
+    ]);
+  });
+
+  test('product rows align modal controls to the native shadcn control height', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex items-start gap-2 lg:items-center"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center"',
+      'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
+      'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
+      'className="flex h-9 items-center gap-1"',
+      'className="flex h-9 items-center justify-center gap-1"',
+      'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
+    ]);
+  });
+
+  test('notes section header matches other modal section headers', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      '<span className="size-1.5 rounded-full bg-primary"></span>',
+      '<FieldLabel htmlFor="client-order-notes" className="sr-only">',
+      'id="client-order-notes"',
+    ]);
   });
 });

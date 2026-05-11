@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FieldTooltip from '../../components/shared/FieldTooltip';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { applyTheme, THEME_STORAGE_KEY } from '../../utils/theme';
 
 afterEach(() => {
@@ -12,12 +18,14 @@ afterEach(() => {
 
 const renderTooltip = () =>
   render(
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button">trigger</button>
-      </TooltipTrigger>
-      <TooltipContent>Tip text</TooltipContent>
-    </Tooltip>,
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button">trigger</button>
+        </TooltipTrigger>
+        <TooltipContent>Tip text</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>,
   );
 
 const findTooltipContent = async () => {
@@ -87,7 +95,9 @@ describe('<Tooltip />', () => {
 
   test('renders FieldTooltip content with native tooltip primitives', async () => {
     const { container } = render(
-      <FieldTooltip description="Current field status" status="Active" />,
+      <TooltipProvider>
+        <FieldTooltip description="Current field status" status="Active" />
+      </TooltipProvider>,
     );
     const trigger = container.querySelector('span');
     expect(trigger).toBeInTheDocument();
@@ -96,5 +106,14 @@ describe('<Tooltip />', () => {
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Current field status');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Status: Active');
+  });
+
+  test('uses one app-level TooltipProvider instead of wrapping every tooltip root', async () => {
+    const tooltipSource = await readFile('components/ui/tooltip.tsx', 'utf8');
+    const entrySource = await readFile('index.tsx', 'utf8');
+
+    expect(entrySource).toContain('<TooltipProvider>');
+    expect(tooltipSource).not.toContain('<TooltipProvider>');
+    expect(tooltipSource).toContain('<TooltipPrimitive.Root');
   });
 });

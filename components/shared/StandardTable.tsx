@@ -47,9 +47,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Textarea } from '../ui/textarea';
 import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
@@ -67,6 +69,16 @@ import {
   type SortState,
 } from './customViewHelpers';
 import Modal from './Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from './ModalLayout';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from './tableControlStyles';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -117,8 +129,6 @@ const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
 const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
-const TABLE_CONTROL_BUTTON_CLASSNAME =
-  '!h-7 !gap-1.5 !rounded-lg !px-2 !text-sm !leading-[var(--text-sm--line-height)] !font-medium';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -158,6 +168,8 @@ export type StandardTableProps<T extends object = object> = {
   footerClassName?: string;
   children?: ReactNode;
   emptyState?: ReactNode;
+  isLoading?: boolean;
+  loadingState?: ReactNode;
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
@@ -179,6 +191,8 @@ const StandardTable = <T extends object>({
   footerClassName,
   children,
   emptyState,
+  isLoading = false,
+  loadingState,
   data,
   columns,
   defaultRowsPerPage = 10,
@@ -197,6 +211,8 @@ const StandardTable = <T extends object>({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
+  const [openActionMenuRowId, setOpenActionMenuRowId] = useState<string | null>(null);
+  const [openContextMenuRowId, setOpenContextMenuRowId] = useState<string | null>(null);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
@@ -373,7 +389,8 @@ const StandardTable = <T extends object>({
     [clampColumnSizing, validColumnSizing],
   );
 
-  const usesFixedTableLayout = Boolean(columns && data);
+  const shouldRenderTable = Boolean(columns && data && !isLoading);
+  const usesFixedTableLayout = shouldRenderTable;
 
   // Excludes statically hidden filter-only columns and row actions; sort/filter
   // still target hidden filter-only columns via colsById.
@@ -644,7 +661,7 @@ const StandardTable = <T extends object>({
   );
 
   const table = useReactTable({
-    data: data ?? [],
+    data: shouldRenderTable ? (data ?? []) : [],
     columns: tanStackColumns,
     onSortingChange,
     onColumnFiltersChange,
@@ -666,10 +683,10 @@ const StandardTable = <T extends object>({
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const processedRows = data ? table.getPrePaginationRowModel().rows : [];
-  const totalItems = data ? processedRows.length : externalTotalCount || 0;
-  const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
-  const paginatedRows = data ? table.getRowModel().rows : [];
+  const processedRows = shouldRenderTable ? table.getPrePaginationRowModel().rows : [];
+  const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
+  const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
+  const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
   const hasTrailingActionColumn =
     visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
   const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;
@@ -691,7 +708,7 @@ const StandardTable = <T extends object>({
   // instead of re-scanning the full dataset on every header re-render.
   const filterOptionsByCol = useMemo(() => {
     const m = new Map<string, string[]>();
-    if (!data || !columns) return m;
+    if (!shouldRenderTable || !data || !columns) return m;
     for (const col of columns) {
       if (col.disableFiltering) continue;
       const values = new Set<string>();
@@ -701,7 +718,7 @@ const StandardTable = <T extends object>({
       m.set(getColId(col), Array.from(values).sort());
     }
     return m;
-  }, [data, columns, getValue, formatForFilter, getColId]);
+  }, [shouldRenderTable, data, columns, getValue, formatForFilter, getColId]);
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
@@ -821,6 +838,8 @@ const StandardTable = <T extends object>({
         className={ACTION_MENU_BUTTON_CLASSNAME}
         onClick={(event) => {
           event.stopPropagation();
+          setOpenActionMenuRowId(null);
+          setOpenContextMenuRowId(null);
           props.onClick?.(event);
         }}
       >
@@ -1618,7 +1637,7 @@ const StandardTable = <T extends object>({
         ref={tableContainerRef}
         className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
       >
-        {columns && data ? (
+        {shouldRenderTable ? (
           <Table
             className="table-fixed text-left"
             style={
@@ -1810,6 +1829,8 @@ const StandardTable = <T extends object>({
                   const rowActionMenuItems = hasActionMenuItems(rowActionContent)
                     ? renderActionMenuItems(rowActionContent)
                     : null;
+                  const isActionMenuOpen = openActionMenuRowId === tableRow.id;
+                  const isContextMenuOpen = openContextMenuRowId === tableRow.id;
                   const rowElement = (
                     <TableRow
                       key={tableRow.id}
@@ -1847,13 +1868,12 @@ const StandardTable = <T extends object>({
                           | null
                           | undefined;
                         const cellContent =
-                          isActionColumn && col.cell
-                            ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                            : flexRender(cell.column.columnDef.cell, cell.getContext());
-                        const actionMenuItems =
-                          isActionColumn && hasActionMenuItems(cellContent)
-                            ? renderActionMenuItems(cellContent)
-                            : null;
+                          isActionColumn && cell.id === rowActionCell?.id
+                            ? rowActionContent
+                            : col.cell
+                              ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                              : flexRender(cell.column.columnDef.cell, cell.getContext());
+                        const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
                         return (
                           <Fragment key={cell.id}>
                             {shouldAnchorTrailingActionColumn && isActionColumn && (
@@ -1873,7 +1893,12 @@ const StandardTable = <T extends object>({
                             >
                               {isActionColumn ? (
                                 actionMenuItems ? (
-                                  <DropdownMenu>
+                                  <DropdownMenu
+                                    open={isActionMenuOpen}
+                                    onOpenChange={(open) =>
+                                      setOpenActionMenuRowId(open ? tableRow.id : null)
+                                    }
+                                  >
                                     <DropdownMenuTrigger asChild>
                                       <Button
                                         type="button"
@@ -1889,17 +1914,19 @@ const StandardTable = <T extends object>({
                                         ></i>
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                      align="end"
-                                      data-standard-table-action-menu="true"
-                                      className={ACTION_MENU_CONTENT_CLASSNAME}
-                                      onClick={(event) => event.stopPropagation()}
-                                      onDoubleClick={(event) => event.stopPropagation()}
-                                    >
-                                      <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                                        {actionMenuItems}
-                                      </div>
-                                    </DropdownMenuContent>
+                                    {isActionMenuOpen && (
+                                      <DropdownMenuContent
+                                        align="end"
+                                        data-standard-table-action-menu="true"
+                                        className={ACTION_MENU_CONTENT_CLASSNAME}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onDoubleClick={(event) => event.stopPropagation()}
+                                      >
+                                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>
+                                          {actionMenuItems}
+                                        </div>
+                                      </DropdownMenuContent>
+                                    )}
                                   </DropdownMenu>
                                 ) : null
                               ) : (
@@ -1913,16 +1940,21 @@ const StandardTable = <T extends object>({
                   );
 
                   return rowActionMenuItems ? (
-                    <ContextMenu key={tableRow.id}>
+                    <ContextMenu
+                      key={tableRow.id}
+                      onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}
+                    >
                       <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
-                      <ContextMenuContent
-                        data-standard-table-action-menu="true"
-                        className={ACTION_MENU_CONTENT_CLASSNAME}
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
-                      </ContextMenuContent>
+                      {isContextMenuOpen && (
+                        <ContextMenuContent
+                          data-standard-table-action-menu="true"
+                          className={ACTION_MENU_CONTENT_CLASSNAME}
+                          onClick={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                        >
+                          <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
+                        </ContextMenuContent>
+                      )}
                     </ContextMenu>
                   ) : (
                     rowElement
@@ -1944,7 +1976,7 @@ const StandardTable = <T extends object>({
             </TableBody>
           </Table>
         ) : (
-          children
+          (loadingState ?? children)
         )}
       </div>
 
@@ -1977,60 +2009,53 @@ const StandardTable = <T extends object>({
       )}
 
       {data && columns && pasteModalOpen && (
-        <Modal isOpen={pasteModalOpen} onClose={closePasteModal}>
-          <div className="w-full max-w-md rounded-md border border-border bg-card shadow-lg animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 className="flex items-center gap-2 text-lg font-semibold">
+        <Modal isOpen={pasteModalOpen} onClose={closePasteModal} ariaLabel={null}>
+          <ModalContent size="md">
+            <ModalHeader>
+              <ModalTitle>
                 <i className="fa-solid fa-file-import text-primary"></i>
                 {t('table.pasteViewTitle')}
-              </h3>
-              <button
-                type="button"
-                onClick={closePasteModal}
-                className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-3">
-              <p className="text-xs text-muted-foreground">{t('table.pasteViewDescription')}</p>
-              <textarea
-                value={pasteText}
-                onChange={(e) => {
-                  setPasteText(e.target.value);
-                  if (pasteError) setPasteError(null);
-                }}
-                placeholder={t('table.pasteViewPlaceholder')}
-                rows={6}
-                className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-              {pasteError && (
-                <div role="alert" className="text-[11px] text-red-500">
-                  {pasteError}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="rounded-lg"
-                onClick={closePasteModal}
-              >
+              </ModalTitle>
+              <ModalCloseButton onClick={closePasteModal} />
+            </ModalHeader>
+            <ModalBody className="space-y-3">
+              <ModalDescription>{t('table.pasteViewDescription')}</ModalDescription>
+              <Field data-invalid={Boolean(pasteError)}>
+                <FieldLabel htmlFor="custom-view-import-payload" className="sr-only">
+                  {t('table.pasteViewTitle')}
+                </FieldLabel>
+                <Textarea
+                  id="custom-view-import-payload"
+                  value={pasteText}
+                  onChange={(e) => {
+                    setPasteText(e.target.value);
+                    if (pasteError) setPasteError(null);
+                  }}
+                  placeholder={t('table.pasteViewPlaceholder')}
+                  rows={6}
+                  aria-invalid={Boolean(pasteError)}
+                  className="resize-y font-mono text-xs"
+                />
+                {pasteError && (
+                  <FieldError role="alert" className="text-xs">
+                    {pasteError}
+                  </FieldError>
+                )}
+              </Field>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={closePasteModal}>
                 {t('table.cancel')}
               </Button>
               <Button
                 type="button"
-                size="sm"
-                className="rounded-lg"
                 onClick={submitPasteImport}
                 disabled={pasteText.trim().length === 0}
               >
                 {t('table.importView')}
               </Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalContent>
         </Modal>
       )}
     </div>

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { render } from '../../helpers/render';
 
 installI18nMock();
 

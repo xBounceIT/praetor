@@ -1,6 +1,10 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
@@ -11,8 +15,17 @@ import type {
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -726,36 +739,29 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageTypesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                <i className="fa-solid fa-tags"></i>
-              </div>
+        <ModalContent size="2xl">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-tags" aria-hidden="true"></i>
+              </span>
               {t('crm:internalListing.manageTypes')}
-            </h3>
-            <button
-              onClick={() => setIsManageTypesModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
+            </ModalTitle>
+            <ModalCloseButton onClick={() => setIsManageTypesModalOpen(false)} />
+          </ModalHeader>
 
-          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+          <ModalBody className="max-h-[60vh] space-y-4">
             {/* Add/Edit Type Form */}
-            <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('crm:internalListing.typeName')}
-                </label>
+                <FieldLabel>{t('crm:internalListing.typeName')}</FieldLabel>
                 <div className="flex gap-2">
-                  <input
+                  <Input
                     type="text"
                     value={newTypeName}
                     onChange={(e) => setNewTypeName(e.target.value)}
                     placeholder={t('crm:internalListing.typeNamePlaceholder')}
-                    className="flex-1 text-sm px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className="flex-1"
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
                   />
                   <SelectControl
@@ -775,24 +781,22 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
               <div className="flex justify-end gap-2">
                 {editingType && (
-                  <button
-                    onClick={handleCancelTypeEdit}
-                    className="px-4 py-2 text-sm font-bold text-zinc-500 hover:bg-zinc-100 rounded-xl transition-colors"
-                  >
+                  <Button type="button" variant="outline" onClick={handleCancelTypeEdit}>
                     {t('common:buttons.cancel')}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  type="button"
                   onClick={handleSaveType}
                   disabled={isSavingType || !newTypeName.trim()}
-                  className="w-28 px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-28"
                 >
                   {isSavingType
                     ? t('common:buttons.saving')
                     : editingType
                       ? t('common:buttons.update')
                       : t('common:buttons.add')}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -908,8 +912,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 ]}
               />
             )}
-          </div>
-        </div>
+          </ModalBody>
+        </ModalContent>
       </Modal>
 
       {/* Manage Categories Modal */}
@@ -918,35 +922,27 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageCategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                <i className="fa-solid fa-folder-tree"></i>
-              </div>
+        <ModalContent size="2xl">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-folder-tree" aria-hidden="true"></i>
+              </span>
               {t('crm:internalListing.manageCategories')}
-            </h3>
-            <button
-              onClick={() => setIsManageCategoriesModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
+            </ModalTitle>
+            <ModalCloseButton onClick={() => setIsManageCategoriesModalOpen(false)} />
+          </ModalHeader>
 
-          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+          <ModalBody className="max-h-[60vh] space-y-4">
             {/* Add/Edit Category Form */}
-            <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('crm:internalListing.categoryName')}
-                </label>
-                <input
+                <FieldLabel>{t('crm:internalListing.categoryName')}</FieldLabel>
+                <Input
                   type="text"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder={t('crm:internalListing.categoryNamePlaceholder')}
-                  className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
                 />
               </div>
@@ -955,24 +951,21 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
               <div className="flex justify-end gap-2">
                 {editingCategory && (
-                  <button
-                    onClick={handleCancelCategoryEdit}
-                    className="px-4 py-2 text-sm font-bold text-zinc-500 hover:bg-zinc-100 rounded-xl transition-colors"
-                  >
+                  <Button type="button" variant="outline" onClick={handleCancelCategoryEdit}>
                     {t('common:buttons.cancel')}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  type="button"
                   onClick={handleSaveCategory}
                   disabled={isSavingCategory || !newCategoryName.trim()}
-                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingCategory
                     ? t('common:buttons.saving')
                     : editingCategory
                       ? t('common:buttons.update')
                       : t('common:buttons.add')}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1064,8 +1057,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 ]}
               />
             )}
-          </div>
-        </div>
+          </ModalBody>
+        </ModalContent>
       </Modal>
 
       {/* Manage Subcategories Modal */}
@@ -1074,36 +1067,30 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageSubcategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-8 bg-zinc-100 rounded-lg flex items-center justify-center text-praetor">
-                <i className="fa-solid fa-folder-open"></i>
-              </div>
+        <ModalContent size="2xl">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-folder-open" aria-hidden="true"></i>
+              </span>
               {t('crm:internalListing.manageSubcategories')}
-              <span className="text-sm font-normal text-zinc-500">({formData.category})</span>
-            </h3>
-            <button
-              onClick={() => setIsManageSubcategoriesModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
+              <span className="text-sm font-normal text-muted-foreground">
+                ({formData.category})
+              </span>
+            </ModalTitle>
+            <ModalCloseButton onClick={() => setIsManageSubcategoriesModalOpen(false)} />
+          </ModalHeader>
 
-          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+          <ModalBody className="max-h-[60vh] space-y-4">
             {/* Add/Edit Subcategory Form */}
-            <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('crm:internalListing.subcategoryName')}
-                </label>
-                <input
+                <FieldLabel>{t('crm:internalListing.subcategoryName')}</FieldLabel>
+                <Input
                   type="text"
                   value={newSubcategoryName}
                   onChange={(e) => setNewSubcategoryName(e.target.value)}
                   placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
-                  className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveSubcategory()}
                 />
               </div>
@@ -1114,24 +1101,21 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
               <div className="flex justify-end gap-2">
                 {editingSubcategory && (
-                  <button
-                    onClick={handleCancelSubcategoryEdit}
-                    className="px-4 py-2 text-sm font-bold text-zinc-500 hover:bg-zinc-100 rounded-xl transition-colors"
-                  >
+                  <Button type="button" variant="outline" onClick={handleCancelSubcategoryEdit}>
                     {t('common:buttons.cancel')}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  type="button"
                   onClick={handleSaveSubcategory}
                   disabled={isSavingSubcategory || !newSubcategoryName.trim()}
-                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingSubcategory
                     ? t('common:buttons.saving')
                     : editingSubcategory
                       ? t('common:buttons.update')
                       : t('common:buttons.add')}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1223,317 +1207,279 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 ]}
               />
             )}
-          </div>
-        </div>
+          </ModalBody>
+        </ModalContent>
       </Modal>
 
       {/* Add/Edit Product Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingProduct
-                ? t('crm:internalListing.editProductTitle')
-                : t('crm:internalListing.addProductTitle')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="2xl" className="max-h-[90vh]">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingProduct
+                  ? t('crm:internalListing.editProductTitle')
+                  : t('crm:internalListing.addProductTitle')}
+              </ModalTitle>
+              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-            {serverError && (
-              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-3">
-                <i className="fa-solid fa-triangle-exclamation"></i>
-                {serverError}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-praetor"></span>
-                {t('crm:internalListing.productDetails')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.productName')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, name: e.target.value }));
-                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                    }}
-                    placeholder={t('crm:internalListing.productNamePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>
-                  )}
+            <ModalBody className="flex-1 space-y-8">
+              {serverError && (
+                <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-bold text-destructive">
+                  <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                  {serverError}
                 </div>
+              )}
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.productCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.productCode}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, productCode: e.target.value }));
-                      if (errors.productCode) setErrors((prev) => ({ ...prev, productCode: '' }));
-                    }}
-                    placeholder={t('common:form.placeholderCode')}
-                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.productCode ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                  />
-                  {errors.productCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                      {errors.productCode}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('crm:internalListing.productDetails')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.productName')}</FieldLabel>
+                    <Input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, name: e.target.value }));
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                      }}
+                      placeholder={t('crm:internalListing.productNamePlaceholder')}
+                      className={errors.name ? 'border-destructive' : undefined}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.productCode')}</FieldLabel>
+                    <Input
+                      type="text"
+                      value={formData.productCode}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, productCode: e.target.value }));
+                        if (errors.productCode) setErrors((prev) => ({ ...prev, productCode: '' }));
+                      }}
+                      placeholder={t('common:form.placeholderCode')}
+                      className={errors.productCode ? 'border-destructive' : undefined}
+                    />
+                    {errors.productCode && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                        {errors.productCode}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-zinc-400 ml-1">
+                      {t('crm:internalListing.productCodeHint')}
                     </p>
-                  )}
-                  <p className="text-[10px] text-zinc-400 ml-1">
-                    {t('crm:internalListing.productCodeHint')}
-                  </p>
-                </div>
-
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.description')}
-                  </label>
-                  <textarea
-                    value={formData.description || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder={t('crm:internalListing.productDescriptionPlaceholder')}
-                    rows={2}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-zinc-500">
-                      {t('crm:internalListing.type')}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleOpenManageTypes}
-                      className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
-                    >
-                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                    </button>
                   </div>
-                  <SelectControl
-                    options={typeOptions}
-                    value={formData.type || (productTypes[0]?.name ?? '')}
-                    onChange={(val) => handleTypeChange(val as string)}
-                    searchable={false}
-                    buttonClassName={
-                      errors.type
-                        ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
-                        : 'py-2.5 text-sm'
-                    }
-                  />
-                  {errors.type && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>
-                  )}
-                </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-zinc-500">
-                      {t('crm:internalListing.category')}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleOpenManageCategories}
-                      className="text-[10px] font-black text-praetor hover:text-zinc-700 uppercase tracking-tighter flex items-center gap-1"
-                    >
-                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                    </button>
+                  <div className="col-span-full space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.description')}</FieldLabel>
+                    <Textarea
+                      value={formData.description || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                      }
+                      placeholder={t('crm:internalListing.productDescriptionPlaceholder')}
+                      rows={2}
+                      className="resize-none"
+                    />
                   </div>
-                  <SelectControl
-                    options={categoryOptions}
-                    value={formData.category || ''}
-                    onChange={(val) => {
-                      setSubcategories([]);
-                      setFormData((prev) => ({
-                        ...prev,
-                        category: val as string,
-                        subcategory: '',
-                      }));
-                    }}
-                    placeholder={t('crm:internalListing.selectOption')}
-                    searchable={true}
-                  />
-                </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-zinc-500">
-                      {t('crm:internalListing.subcategory')}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleOpenManageSubcategories}
+                  <div className="space-y-1.5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
+                      <FieldLabel>{t('crm:internalListing.type')}</FieldLabel>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={handleOpenManageTypes}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
+                        {t('common:buttons.manage')}
+                      </Button>
+                    </div>
+                    <SelectControl
+                      options={typeOptions}
+                      value={formData.type || (productTypes[0]?.name ?? '')}
+                      onChange={(val) => handleTypeChange(val as string)}
+                      searchable={false}
+                      buttonClassName={
+                        errors.type
+                          ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
+                          : 'py-2.5 text-sm'
+                      }
+                    />
+                    {errors.type && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
+                      <FieldLabel>{t('crm:internalListing.category')}</FieldLabel>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={handleOpenManageCategories}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
+                        {t('common:buttons.manage')}
+                      </Button>
+                    </div>
+                    <SelectControl
+                      options={categoryOptions}
+                      value={formData.category || ''}
+                      onChange={(val) => {
+                        setSubcategories([]);
+                        setFormData((prev) => ({
+                          ...prev,
+                          category: val as string,
+                          subcategory: '',
+                        }));
+                      }}
+                      placeholder={t('crm:internalListing.selectOption')}
+                      searchable={true}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
+                      <FieldLabel>{t('crm:internalListing.subcategory')}</FieldLabel>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={handleOpenManageSubcategories}
+                        disabled={!formData.category}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
+                        {t('common:buttons.manage')}
+                      </Button>
+                    </div>
+                    <SelectControl
+                      options={subcategoryOptions}
+                      value={formData.subcategory || ''}
+                      onChange={(val) =>
+                        setFormData((prev) => ({ ...prev, subcategory: val as string }))
+                      }
+                      placeholder={
+                        !formData.category
+                          ? t('crm:internalListing.selectCategoryFirst')
+                          : t('crm:internalListing.selectOption')
+                      }
+                      searchable={true}
                       disabled={!formData.category}
-                      className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-zinc-300 cursor-not-allowed' : 'text-praetor hover:text-zinc-700'}`}
-                    >
-                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                    </button>
-                  </div>
-                  <SelectControl
-                    options={subcategoryOptions}
-                    value={formData.subcategory || ''}
-                    onChange={(val) =>
-                      setFormData((prev) => ({ ...prev, subcategory: val as string }))
-                    }
-                    placeholder={
-                      !formData.category
-                        ? t('crm:internalListing.selectCategoryFirst')
-                        : t('crm:internalListing.selectOption')
-                    }
-                    searchable={true}
-                    disabled={!formData.category}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-praetor"></span>
-                {t('crm:internalListing.pricingAndUnit')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.cost')}
-                    <span className="text-zinc-400 font-semibold">
-                      /
-                      {formData.costUnit === 'hours'
-                        ? t('crm:internalListing.hour')
-                        : t('crm:internalListing.unit')}
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <ValidatedNumberInput
-                      value={formData.costo ?? ''}
-                      formatDecimals={2}
-                      onValueChange={handleNumericValueChange('costo')}
-                      className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                     />
-                  </div>
-                  {errors.costo && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costo}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.mol')}
-                  </label>
-                  <div className="flex gap-2">
-                    <ValidatedNumberInput
-                      value={formData.molPercentage ?? ''}
-                      formatDecimals={2}
-                      onValueChange={handleNumericValueChange('molPercentage')}
-                      className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                    />
-                  </div>
-                  {errors.molPercentage && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                      {errors.molPercentage}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.salePriceCalculated')}
-                  </label>
-                  <div className="w-full text-sm px-4 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-zinc-600 font-semibold">
-                    {pricing
-                      ? `${calcProductSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
-                      : '--'}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:internalListing.marginCalculated')}
-                  </label>
-                  <div className="w-full text-sm px-4 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-emerald-600 font-semibold">
-                    {pricing
-                      ? `${calcMargine(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
-                      : '--'}
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-between pt-8 border-t border-zinc-100 mt-4">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-10 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
-              >
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('crm:internalListing.pricingAndUnit')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <FieldLabel>
+                      {t('crm:internalListing.cost')}
+                      <span className="text-zinc-400 font-semibold">
+                        /
+                        {formData.costUnit === 'hours'
+                          ? t('crm:internalListing.hour')
+                          : t('crm:internalListing.unit')}
+                      </span>
+                    </FieldLabel>
+                    <div className="flex gap-2">
+                      <ValidatedNumberInput
+                        value={formData.costo ?? ''}
+                        formatDecimals={2}
+                        onValueChange={handleNumericValueChange('costo')}
+                        className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
+                      />
+                    </div>
+                    {errors.costo && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costo}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.mol')}</FieldLabel>
+                    <div className="flex gap-2">
+                      <ValidatedNumberInput
+                        value={formData.molPercentage ?? ''}
+                        formatDecimals={2}
+                        onValueChange={handleNumericValueChange('molPercentage')}
+                        className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
+                      />
+                    </div>
+                    {errors.molPercentage && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                        {errors.molPercentage}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.salePriceCalculated')}</FieldLabel>
+                    <div className="w-full rounded-md border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+                      {pricing
+                        ? `${calcProductSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
+                        : '--'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <FieldLabel>{t('crm:internalListing.marginCalculated')}</FieldLabel>
+                    <div className="w-full rounded-md border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-emerald-600">
+                      {pricing
+                        ? `${calcMargine(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
+                        : '--'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="px-12 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
-              >
+              </Button>
+              <Button type="submit">
                 {editingProduct
                   ? t('crm:internalListing.updateProduct')
                   : t('crm:internalListing.saveProduct')}
-              </button>
-            </div>
+              </Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
-                {t('crm:internalListing.deleteProductTitle')}
-              </h3>
-              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-                {t('crm:internalListing.deleteConfirm', { productName: productToDelete?.name })}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('crm:internalListing.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title={t('crm:internalListing.deleteProductTitle')}
+        description={t('crm:internalListing.deleteConfirm', {
+          productName: productToDelete?.name,
+        })}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

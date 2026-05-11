@@ -38,6 +38,7 @@
     "status": "Stato",
     "discount": "Sconto (%)",
     "subtotal": "Imponibile",
+    "summary": "Riepilogo",
     "total": "Totale",
     "margin": "Margine",
     "orderNumber": "Numero ordine",
@@ -118,6 +119,7 @@
     "itemsRequired": "Almeno una voce è obbligatoria",
     "notes": "Note",
     "costSummary": "Riepilogo Costi",
+    "summary": "Riepilogo",
     "deleteTitle": "Eliminare fattura?",
     "deleteMessage": "Sei sicuro di voler eliminare la fattura {{invoiceNumber}}? Questa azione non può essere annullata.",
     "notesPlaceholder": "Note aggiuntive..."
@@ -150,6 +152,7 @@
     "orderDetails": "Dettagli Ordine",
     "items": "Articoli",
     "subtotal": "Subtotale",
+    "summary": "Riepilogo",
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
@@ -182,6 +185,7 @@
     "invoiceDetails": "Dettagli Fattura",
     "items": "Articoli",
     "subtotal": "Subtotale",
+    "summary": "Riepilogo",
     "statusDraft": "Bozza",
     "statusSent": "Inviata",
     "statusPaid": "Pagata",

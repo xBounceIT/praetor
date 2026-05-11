@@ -12,6 +12,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -30,6 +31,7 @@ export interface Option {
 }
 
 export interface SelectControlProps {
+  id?: string;
   options: Option[];
   value: string | string[];
   onChange: (value: string | string[]) => void;
@@ -49,8 +51,6 @@ const toSelectValue = (value: string) => (value === '' ? EMPTY_VALUE_SENTINEL : 
 const fromSelectValue = (value: string) => (value === EMPTY_VALUE_SENTINEL ? '' : value);
 
 const baseTriggerClassName = 'w-full min-w-0 justify-between text-left text-sm font-normal';
-
-const labelClassName = 'mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-400';
 
 const getSingleSelectedOption = (options: Option[], value: string | string[]) => {
   if (Array.isArray(value)) return undefined;
@@ -75,9 +75,9 @@ const getMultiButtonLabel = ({
   return `${selectedOptions.length} ${t('select.selected').toLowerCase()}`;
 };
 
-const SelectLabel = ({ label }: { label?: string }) => {
+const SelectLabel = ({ id, label }: { id?: string; label?: string }) => {
   if (!label) return null;
-  return <label className={labelClassName}>{label}</label>;
+  return <FieldLabel htmlFor={id}>{label}</FieldLabel>;
 };
 
 const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label: string }) => {
@@ -107,6 +107,7 @@ const PlainSelectControl = ({
   className,
   disabled,
   displayValue,
+  id,
   label,
   onChange,
   options,
@@ -121,14 +122,14 @@ const PlainSelectControl = ({
   const selectValue = selectedOption ? toSelectValue(stringValue) : undefined;
 
   return (
-    <div className={cn('relative min-w-0', className)}>
-      <SelectLabel label={label} />
+    <Field className={cn('relative min-w-0', className)}>
+      <SelectLabel id={id} label={label} />
       <Select
         disabled={disabled}
         value={selectValue}
         onValueChange={(next) => onChange(fromSelectValue(next))}
       >
-        <SelectTrigger className={cn(baseTriggerClassName, buttonClassName)}>
+        <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
           {displayValue ? (
             <TriggerLabel isPlaceholder={!hasSelection} label={labelText} />
           ) : (
@@ -145,7 +146,7 @@ const PlainSelectControl = ({
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </Field>
   );
 };
 
@@ -154,6 +155,7 @@ const SearchableSelectControl = ({
   className,
   disabled,
   displayValue,
+  id,
   isMulti = false,
   label,
   onChange,
@@ -223,12 +225,13 @@ const SearchableSelectControl = ({
   };
 
   return (
-    <div className={cn('relative min-w-0', className)}>
-      <SelectLabel label={label} />
+    <Field className={cn('relative min-w-0', className)}>
+      <SelectLabel id={id} label={label} />
       <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
+            id={id}
             variant="outline"
             disabled={disabled}
             aria-expanded={open}
@@ -317,7 +320,7 @@ const SearchableSelectControl = ({
           </Command>
         </PopoverContent>
       </Popover>
-    </div>
+    </Field>
   );
 };
 
