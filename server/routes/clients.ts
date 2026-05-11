@@ -293,6 +293,42 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
+// Schema-compliant projection used for the list endpoint when the caller has a non-CRM
+// permission (timesheets / projects / sales) that lets them know which clients exist but
+// not their CRM detail. Mirrors every field declared in `clientSchema` so Fastify's
+// response serializer never sees an undefined property.
+const toRestrictedClient = (client: clientsRepo.Client): clientsRepo.Client => ({
+  id: client.id,
+  name: client.name,
+  description: null,
+  isDisabled: client.isDisabled,
+  type: client.type,
+  contacts: [],
+  contactName: null,
+  clientCode: null,
+  email: null,
+  phone: null,
+  address: null,
+  addressCountry: null,
+  addressState: null,
+  addressCap: null,
+  addressProvince: null,
+  addressCivicNumber: null,
+  addressLine: null,
+  atecoCode: null,
+  website: null,
+  sector: null,
+  numberOfEmployees: null,
+  revenue: null,
+  fiscalCode: null,
+  officeCountRange: null,
+  vatNumber: null,
+  taxCode: null,
+  createdAt: client.createdAt,
+  totalSentQuotes: 0,
+  totalAcceptedOrders: 0,
+});
+
 const canAccessClient = (
   request: FastifyRequest,
   clientId: string,
@@ -344,7 +380,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
-      const canViewClientDetails = hasPermission(request, 'crm.clients.view');
+      const canViewClientDetails = hasPermission(request, 'crm.clients.view') || canViewAllClients;
 
       const clients = await clientsRepo.list(
         canViewAllClients
@@ -352,16 +388,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : { canViewAllClients: false, userId: request.user.id },
       );
 
-      return clients.map((client) => {
-        if (!canViewClientDetails) {
-          return {
-            id: client.id,
-            name: client.name,
-            description: null,
-          };
-        }
-        return client;
-      });
+      if (canViewClientDetails) return clients;
+      // Caller has a non-CRM permission (timesheets/projects/sales) that lets them see clients
+      // exist but not their CRM detail. The restricted shape still has to include every field
+      // declared in `clientSchema` or fast-json-stringify writes `undefined`s into the response.
+      return clients.map(toRestrictedClient);
     },
   );
 
@@ -497,41 +528,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Client ID already exists');
       }
 
-      const id = 'c-' + Date.now();
+      // `Date.now()` collides for concurrent requests in the same millisecond, which the old
+      // PK collision error then mis-labelled as "Fiscal code already exists". UUID-suffixed IDs
+      // eliminate the collision; the `clients_pkey` branch below remains as a defensive net.
+      const id = generatePrefixedId('c');
       const contactsValue = contactsResult.value;
       const primaryFromContacts = buildPrimaryFieldsFromContacts(contactsValue);
 
       try {
-        const client = await clientsRepo.create({
-          id,
-          name: nameResult.value,
-          type: typeof type === 'string' && type ? type : 'company',
-          contacts: contactsValue,
-          contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
-          clientCode: clientCodeResult.value,
-          email: explicitEmailResult.value ?? primaryFromContacts.email,
-          phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
-          address: addressResult.value,
-          addressCountry: addressCountryResult.value,
-          addressState: addressStateResult.value,
-          addressCap: addressCapResult.value,
-          addressProvince: addressProvinceResult.value,
-          addressCivicNumber: addressCivicNumberResult.value,
-          addressLine: addressLineResult.value,
-          description: descriptionResult.value,
-          atecoCode: atecoCodeResult.value,
-          website: websiteResult.value,
-          sector: sectorResult.value,
-          numberOfEmployees: numberOfEmployeesResult.value,
-          revenue: revenueResult.value,
-          fiscalCode: resolvedFiscalCode,
-          officeCountRange: officeCountRangeResult.value,
+        // Wrap create + both assignment writes in a single transaction so an assignment
+        // failure rolls back the client row instead of leaving it orphaned.
+        const client = await withDbTransaction(async (tx) => {
+          const created = await clientsRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              type: typeof type === 'string' && type ? type : 'company',
+              contacts: contactsValue,
+              contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
+              clientCode: clientCodeResult.value,
+              email: explicitEmailResult.value ?? primaryFromContacts.email,
+              phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
+              address: addressResult.value,
+              addressCountry: addressCountryResult.value,
+              addressState: addressStateResult.value,
+              addressCap: addressCapResult.value,
+              addressProvince: addressProvinceResult.value,
+              addressCivicNumber: addressCivicNumberResult.value,
+              addressLine: addressLineResult.value,
+              description: descriptionResult.value,
+              atecoCode: atecoCodeResult.value,
+              website: websiteResult.value,
+              sector: sectorResult.value,
+              numberOfEmployees: numberOfEmployeesResult.value,
+              revenue: revenueResult.value,
+              fiscalCode: resolvedFiscalCode,
+              officeCountRange: officeCountRangeResult.value,
+            },
+            tx,
+          );
+
+          if (request.user?.id) {
+            await userAssignmentsRepo.assignClientToUser(request.user.id, id, undefined, tx);
+          }
+          await userAssignmentsRepo.assignClientToTopManagers(id, tx);
+          return created;
         });
 
-        if (request.user?.id) {
-          await userAssignmentsRepo.assignClientToUser(request.user.id, id);
-        }
-        await userAssignmentsRepo.assignClientToTopManagers(id);
         await logAudit({
           request,
           action: 'client.created',
@@ -546,6 +589,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup) {
+          if (dup.constraint === 'clients_pkey') {
+            return badRequest(reply, 'Client ID conflict, please retry');
+          }
           if (dup.constraint === 'idx_clients_fiscal_code_unique') {
             return badRequest(reply, 'Fiscal code already exists');
           }
