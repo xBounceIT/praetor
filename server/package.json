@@ -2,11 +2,11 @@
   "name": "praetor-server",
   "version": "0.6.0",
   "description": "Praetor API Server",
-  "main": "dist/index.ts",
+  "main": "index.ts",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "bun run dist/index.js",
+    "start": "bun run index.ts",
     "dev": "bun --watch index.ts",
     "test:integration": "bun test ./test/integration",
     "seed:demo": "bun run scripts/seed-demo.ts",

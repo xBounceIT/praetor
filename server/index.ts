@@ -1,12 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import buildApp from './app.ts';
 import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
-import { runDrizzleMigrations } from './db/migrationsRunner.ts';
-import { verifyDbReadiness } from './db/readiness.ts';
+import { prepareDatabaseForStartup } from './db/startup.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
   INSECURE_DEFAULT_ENCRYPTION_KEYS,
@@ -16,9 +12,6 @@ import {
 
 const PORT = Number(process.env.PORT ?? 3001);
 const logger = createChildLogger({ module: 'startup' });
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const schemaPath = join(__dirname, 'db', 'schema.sql');
 
 const fastify = await buildApp();
 
@@ -38,16 +31,6 @@ const assertSecureRuntimeConfig = () => {
   if (errors.length > 0) {
     throw new Error(errors.join(' '));
   }
-};
-
-const applyHistoricalSchemaBootstrap = async () => {
-  if (!existsSync(schemaPath)) {
-    throw new Error(`Schema file not found at ${schemaPath}`);
-  }
-
-  const schemaSql = readFileSync(schemaPath, 'utf8');
-  await query(schemaSql);
-  logger.info('Historical schema bootstrap applied');
 };
 
 const shutdown = async (signal: string) => {
@@ -87,9 +70,7 @@ try {
   }
   if (dbReady) logger.info('PostgreSQL ready');
 
-  await applyHistoricalSchemaBootstrap();
-  await runDrizzleMigrations();
-  const readiness = await verifyDbReadiness();
+  const readiness = await prepareDatabaseForStartup();
   logger.info(
     {
       appliedMigrations: readiness.appliedMigrations,
