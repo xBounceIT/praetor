@@ -108,4 +108,18 @@ describe('<ClientsOrdersView />', () => {
       '<textarea',
     ]);
   });
+
+  test('product rows align modal controls to the native shadcn control height', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex items-start gap-2 lg:items-center"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center"',
+      'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
+      'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
+      'className="flex h-9 items-center gap-1"',
+      'className="flex h-9 items-center justify-center gap-1"',
+      'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
+    ]);
+  });
 });

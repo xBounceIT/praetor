@@ -918,15 +918,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             key={item.id}
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
-                            <div className="flex items-start gap-2">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
-                                <div className="space-y-1 lg:col-span-2 min-w-0">
+                            <div className="flex items-start gap-2 lg:items-center">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center">
+                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
                                       defaultValue: 'Supplier Order',
                                     })}
                                   </FieldLabel>
-                                  <div className="flex min-h-[42px] items-center rounded-md border border-border bg-background px-3 py-2">
+                                  <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
                                     {item.supplierSaleId ? (
                                       <span className="truncate text-xs font-medium text-foreground">
                                         {item.supplierSaleSupplierName ?? '-'} ·{' '}
@@ -941,7 +941,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     )}
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-2 min-w-0">
+                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.productsServices')}
                                   </FieldLabel>
@@ -960,11 +960,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     buttonClassName="h-9"
                                   />
                                 </div>
-                                <div className="space-y-1 lg:col-span-2">
+                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.qty')}
                                   </FieldLabel>
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex h-9 items-center gap-1">
                                     <ValidatedNumberInput
                                       step="0.01"
                                       min="0"
@@ -997,11 +997,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     />
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-1">
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('crm:internalListing.cost')}
                                   </FieldLabel>
-                                  <div className="flex flex-col items-center justify-center min-h-[42px] gap-1">
+                                  <div className="flex min-h-9 flex-col items-center justify-center gap-1">
                                     {item.supplierQuoteItemId && (
                                       <span className={`${pillBadgeClass} bg-emerald-600`}>
                                         {t('sales:clientQuotes.supplierQuoteBadge')}
@@ -1028,11 +1028,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     </div>
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-1">
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                                   </FieldLabel>
-                                  <div className="flex items-center justify-center min-h-[42px] gap-1">
+                                  <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       value={molPercentage}
                                       formatDecimals={1}
@@ -1045,33 +1045,33 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     </span>
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-1">
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.totalCost', {
                                       defaultValue: 'Total cost',
                                     })}
                                   </FieldLabel>
-                                  <div className="flex items-center justify-center min-h-[42px]">
+                                  <div className="flex h-9 items-center justify-center">
                                     <span className="whitespace-nowrap text-xs font-semibold text-foreground">
                                       {lineCost.toFixed(2)} {currency}
                                     </span>
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-1">
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.marginLabel')}
                                   </FieldLabel>
-                                  <div className="flex items-center justify-center min-h-[42px]">
+                                  <div className="flex h-9 items-center justify-center">
                                     <span className="text-xs font-bold text-emerald-600">
                                       {margin.toFixed(2)} {currency}
                                     </span>
                                   </div>
                                 </div>
-                                <div className="space-y-1 lg:col-span-2">
+                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('crm:internalListing.salePrice')}
                                   </FieldLabel>
-                                  <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-zinc-700">
+                                  <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
                                     <span className="text-sm font-semibold text-foreground">
                                       {lineSalePrice.toFixed(2)} {currency}
                                     </span>
