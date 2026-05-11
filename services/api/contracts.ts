@@ -11,6 +11,14 @@ export interface Settings {
   language?: 'en' | 'it' | 'auto';
 }
 
+export interface PersonalAccessToken {
+  tokenPrefix: string;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+  token?: string;
+}
+
 export type ReportChatStreamStartEvent = {
   sessionId: string;
   messageId: string;

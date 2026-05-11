@@ -1,6 +1,6 @@
 {
-  "id": "4fb91f28-35df-452c-a1d5-71346ec99eea",
-  "prevId": "d111f233-8e39-498a-b132-e2362ebad50d",
+  "id": "0e5398bd-82fa-4150-ad5b-f279ed593b8a",
+  "prevId": "4fb91f28-35df-452c-a1d5-71346ec99eea",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1849,6 +1849,84 @@
           "value": "\"order_versions\".\"reason\" IN ('update', 'restore')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.personal_access_tokens": {
+      "name": "personal_access_tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_prefix": {
+          "name": "token_prefix",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "personal_access_tokens_user_id_users_id_fk": {
+          "name": "personal_access_tokens_user_id_users_id_fk",
+          "tableFrom": "personal_access_tokens",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "personal_access_tokens_user_id_unique": {
+          "name": "personal_access_tokens_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["user_id"]
+        },
+        "personal_access_tokens_token_hash_unique": {
+          "name": "personal_access_tokens_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": ["token_hash"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.internal_product_categories": {
@@ -5961,9 +6039,38 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'app_user'"
+        },
+        "auth_method": {
+          "name": "auth_method",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'local'"
+        },
+        "auth_provider_id": {
+          "name": "auth_provider_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_users_auth_provider_id": {
+          "name": "idx_users_auth_provider_id",
+          "columns": [
+            {
+              "expression": "auth_provider_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "users_role_roles_id_fk": {
           "name": "users_role_roles_id_fk",
@@ -5972,6 +6079,15 @@
           "columnsFrom": ["role"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "users_auth_provider_id_sso_providers_id_fk": {
+          "name": "users_auth_provider_id_sso_providers_id_fk",
+          "tableFrom": "users",
+          "tableTo": "sso_providers",
+          "columnsFrom": ["auth_provider_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -5988,6 +6104,10 @@
         "users_employee_type_check": {
           "name": "users_employee_type_check",
           "value": "\"users\".\"employee_type\" IN ('app_user', 'internal', 'external')"
+        },
+        "users_auth_method_check": {
+          "name": "users_auth_method_check",
+          "value": "\"users\".\"auth_method\" IN ('local', 'ldap', 'oidc', 'saml')"
         }
       },
       "isRLSEnabled": false
@@ -6145,84 +6265,6 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.personal_access_tokens": {
-      "name": "personal_access_tokens",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_prefix": {
-          "name": "token_prefix",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "personal_access_tokens_user_id_users_id_fk": {
-          "name": "personal_access_tokens_user_id_users_id_fk",
-          "tableFrom": "personal_access_tokens",
-          "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "personal_access_tokens_user_id_unique": {
-          "name": "personal_access_tokens_user_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["user_id"]
-        },
-        "personal_access_tokens_token_hash_unique": {
-          "name": "personal_access_tokens_token_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": ["token_hash"]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

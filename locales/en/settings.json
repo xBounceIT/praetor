@@ -77,6 +77,28 @@
     "createFailed": "Failed to create MCP token",
     "revokeFailed": "Failed to revoke MCP token"
   },
+  "security": {
+    "title": "Security",
+    "tokenLoadFailed": "Failed to load personal access token",
+    "tokenRenewFailed": "Failed to renew personal access token",
+    "copyFailed": "Unable to copy token",
+    "neverUsed": "Never used",
+    "personalAccessToken": {
+      "title": "Personal Access Token",
+      "description": "Use this token with the API to act as your user account and inherit your current permissions.",
+      "tokenLabel": "API Token",
+      "loading": "Loading token...",
+      "copy": "Copy",
+      "copied": "Copied",
+      "renew": "Renew token",
+      "renewing": "Renewing...",
+      "visibleOnce": "Copy this token now. It will not be shown again after you leave this page.",
+      "masked": "The full token is hidden. Renew it to generate and copy a new one.",
+      "createdAt": "Created",
+      "updatedAt": "Last renewed",
+      "lastUsedAt": "Last used"
+    }
+  },
   "general": {
     "title": "General Settings",
     "pageTitle": "General Administration",
