@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
+import { hashPersonalAccessToken } from '../../utils/personal-access-token.ts';
 import {
   installAuthMiddlewareMock,
   restoreAuthMiddlewareMock,
@@ -19,6 +21,7 @@ import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const auditSnap = { ...realAudit };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
@@ -29,6 +32,8 @@ const externalAuthSnap = { ...realExternalAuth };
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+const findPersonalAccessTokenByHashMock = mock();
+const markPersonalAccessTokenUsedMock = mock();
 
 // Auth route deps
 const findLoginUserByUsernameMock = mock();
@@ -59,6 +64,11 @@ beforeAll(async () => {
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+    findByTokenHash: findPersonalAccessTokenByHashMock,
+    markUsed: markPersonalAccessTokenUsedMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -86,6 +96,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
@@ -117,6 +128,8 @@ const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
+  findPersonalAccessTokenByHashMock,
+  markPersonalAccessTokenUsedMock,
   findLoginUserByUsernameMock,
   listAvailableRolesForUserMock,
   logAuditMock,
@@ -135,6 +148,15 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
+  findPersonalAccessTokenByHashMock.mockResolvedValue({
+    userId: 'u1',
+    tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+    tokenPrefix: 'praetor_pat_valid',
+    createdAt: new Date('2026-05-11T08:00:00.000Z'),
+    updatedAt: new Date('2026-05-11T09:00:00.000Z'),
+    lastUsedAt: null,
+  });
+  markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
   listAvailableRolesForUserMock.mockResolvedValue(HAPPY_ROLES);
   logAuditMock.mockImplementation(async () => undefined);
 
@@ -461,6 +483,21 @@ describe('POST /api/auth/switch-role', () => {
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('403 rejects personal access tokens because role switching is session-only', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/switch-role',
+      headers: { authorization: 'Bearer praetor_pat_valid-token' },
+      payload: { roleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Session authentication required' });
+    expect(res.headers['x-auth-token']).toBeUndefined();
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(userHasRoleMock).toHaveBeenCalledTimes(1);
   });
 
   test('400 whitespace-only roleId', async () => {

@@ -240,6 +240,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const roleIdResult = requireNonEmptyString(roleId, 'roleId');
       if (!roleIdResult.ok) return badRequest(reply, roleIdResult.message);
 
+      if (request.auth?.source === 'personalAccessToken') {
+        return reply.code(403).send({ error: 'Session authentication required' });
+      }
+
       const userId = request.user?.id;
       if (!userId) return reply.code(401).send({ error: 'Authentication required' });
 
