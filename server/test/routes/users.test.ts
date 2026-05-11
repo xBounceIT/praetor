@@ -1564,9 +1564,16 @@ describe('POST /api/users/:id/assignments', () => {
     expect(filterAssignedClientIdsMock).toHaveBeenCalledWith(MANAGER_USER.id, ['c-out']);
   });
 
-  test('403 scoped manager cannot clear assignments with an empty array', async () => {
+  test('200 scoped manager clears clientIds with an empty array (clear-all is not view-all)', async () => {
+    // Regression: previously ensureSubmittedAssignmentsInScope rejected empty arrays from
+    // anyone without `crm.clients_all.view`, blocking the legitimate "clear my assignments"
+    // request. The route already requires `hr.employee_assignments.update`, so an empty
+    // array is just a clear intent and must be allowed through. We don't need to call the
+    // scope filter because there's nothing to filter.
     findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
     getRolePermissionsMock.mockResolvedValue(['hr.employee_assignments.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    userHasTopManagerRoleMock.mockResolvedValue(false);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -1575,8 +1582,56 @@ describe('POST /api/users/:id/assignments', () => {
       payload: { clientIds: [] },
     });
 
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserClientsMock).toHaveBeenCalled();
+    const [userIdArg, clientIdsArg] = replaceUserClientsMock.mock.calls[0];
+    expect(userIdArg).toBe(MANAGER_USER.id);
+    expect(clientIdsArg).toEqual([]);
+    // The scope filter is intentionally skipped for empty arrays - there's nothing to filter.
+    expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 scoped manager clears projectIds and taskIds with empty arrays', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.employee_assignments.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    userHasTopManagerRoleMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${MANAGER_USER.id}/assignments`,
+      headers: managerAuth(),
+      payload: { projectIds: [], taskIds: [] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserProjectsMock).toHaveBeenCalled();
+    expect(replaceUserProjectsMock.mock.calls[0][0]).toBe(MANAGER_USER.id);
+    expect(replaceUserProjectsMock.mock.calls[0][1]).toEqual([]);
+    expect(replaceUserTasksMock).toHaveBeenCalled();
+    expect(replaceUserTasksMock.mock.calls[0][0]).toBe(MANAGER_USER.id);
+    expect(replaceUserTasksMock.mock.calls[0][1]).toEqual([]);
+    expect(filterAssignedProjectIdsMock).not.toHaveBeenCalled();
+    expect(filterAssignedTaskIdsMock).not.toHaveBeenCalled();
+  });
+
+  test('403 scoped manager still cannot assign clients outside scope when mixing with empty arrays', async () => {
+    // Defense-in-depth: clearing one list with `[]` must NOT bypass the scope check for
+    // populated lists in the same request.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.employee_assignments.update']);
+    filterAssignedProjectIdsMock.mockResolvedValue(new Set());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${MANAGER_USER.id}/assignments`,
+      headers: managerAuth(),
+      payload: { clientIds: [], projectIds: ['p-out'] },
+    });
+
     expect(res.statusCode).toBe(403);
     expect(replaceUserClientsMock).not.toHaveBeenCalled();
-    expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
+    expect(replaceUserProjectsMock).not.toHaveBeenCalled();
+    expect(filterAssignedProjectIdsMock).toHaveBeenCalledWith(MANAGER_USER.id, ['p-out']);
   });
 });

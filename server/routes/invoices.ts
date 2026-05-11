@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
-import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { computeInvoiceTotals } from '../utils/invoice-math.ts';
@@ -263,14 +263,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [requirePermission('accounting.clients_invoices.create')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_invoices.create'),
+      ],
       schema: {
         tags: ['invoices'],
         summary: 'Create invoice',
         body: invoiceCreateBodySchema,
         response: {
           201: invoiceSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -391,7 +394,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [requirePermission('accounting.clients_invoices.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_invoices.update'),
+      ],
       schema: {
         tags: ['invoices'],
         summary: 'Update invoice',
@@ -399,7 +405,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: invoiceUpdateBodySchema,
         response: {
           200: invoiceSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -583,14 +589,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [requirePermission('accounting.clients_invoices.delete')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_invoices.delete'),
+      ],
       schema: {
         tags: ['invoices'],
         summary: 'Delete invoice',
         params: idParamSchema,
         response: {
           204: { type: 'null' },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

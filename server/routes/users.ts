@@ -293,20 +293,21 @@ const ensureSubmittedAssignmentsInScope = async (
   const userId = request.user?.id;
   if (!userId || hasPermission(request, 'administration.user_management_all.view')) return true;
 
-  if (clientIds && !hasPermission(request, 'crm.clients_all.view')) {
-    if (clientIds.length === 0) return false;
+  // Empty arrays are a legitimate "clear all my assignments" intent, not a request to view
+  // everyone's data. The outer route already requires `hr.employee_assignments.update`, so
+  // we let empty arrays through without an _all.view scope check. Non-empty arrays still
+  // need filtering: each id has to be inside the actor's assigned scope.
+  if (clientIds && clientIds.length > 0 && !hasPermission(request, 'crm.clients_all.view')) {
     const allowed = await userAssignmentsRepo.filterAssignedClientIds(userId, clientIds);
     if (clientIds.some((id) => !allowed.has(id))) return false;
   }
 
-  if (projectIds && !hasPermission(request, 'projects.manage_all.view')) {
-    if (projectIds.length === 0) return false;
+  if (projectIds && projectIds.length > 0 && !hasPermission(request, 'projects.manage_all.view')) {
     const allowed = await userAssignmentsRepo.filterAssignedProjectIds(userId, projectIds);
     if (projectIds.some((id) => !allowed.has(id))) return false;
   }
 
-  if (taskIds && !hasPermission(request, 'projects.tasks_all.view')) {
-    if (taskIds.length === 0) return false;
+  if (taskIds && taskIds.length > 0 && !hasPermission(request, 'projects.tasks_all.view')) {
     const allowed = await userAssignmentsRepo.filterAssignedTaskIds(userId, taskIds);
     if (taskIds.some((id) => !allowed.has(id))) return false;
   }
@@ -560,9 +561,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
 
-      if (id === request.user?.id) {
+      if (id === request.user.id) {
         return badRequest(reply, 'Cannot delete your own account');
       }
 
@@ -619,6 +621,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
       const { name, email, isDisabled, costPerHour, role } = request.body as {
         name?: string;
@@ -668,15 +671,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (
         targetEmployeeType === 'app_user' &&
         !hasPermission(request, 'administration.user_management_all.view') &&
-        idResult.value !== request.user?.id &&
-        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+        idResult.value !== request.user.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user.id))
       ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       let roleValue: string | null = null;
       if (role !== undefined) {
-        if (idResult.value === request.user?.id) {
+        if (idResult.value === request.user.id) {
           return reply.code(403).send({ error: 'Cannot change your own role' });
         }
         const roleResult = requireNonEmptyString(role, 'role');
@@ -690,7 +693,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fields.role = roleValue;
       }
 
-      if (idResult.value === request.user?.id && isDisabled === true) {
+      if (idResult.value === request.user.id && isDisabled === true) {
         return badRequest(reply, 'Cannot disable your own account');
       }
 
@@ -791,6 +794,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
       const { authMethod, authProviderId } = request.body as {
         authMethod?: unknown;
@@ -816,12 +820,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       if (
         !hasPermission(request, 'administration.user_management_all.view') &&
-        idResult.value !== request.user?.id &&
-        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+        idResult.value !== request.user.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user.id))
       ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
-      if (idResult.value === request.user?.id) {
+      if (idResult.value === request.user.id) {
         return badRequest(reply, 'Cannot change your own authentication method');
       }
 
@@ -920,11 +924,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (idResult.value === request.user?.id) {
+      if (idResult.value === request.user.id) {
         return reply.code(403).send({ error: 'Cannot change your own role' });
       }
 
@@ -1088,6 +1093,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { id } = request.params as { id: string };
       const { clientIds, projectIds, taskIds } = request.body as {
         clientIds?: string[];
@@ -1097,8 +1103,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (!canViewAllUsers(request) && idResult.value !== request.user?.id) {
-        if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
+      if (!canViewAllUsers(request) && idResult.value !== request.user.id) {
+        if (!(await usersRepo.canManageUser(idResult.value, request.user.id))) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
       }
