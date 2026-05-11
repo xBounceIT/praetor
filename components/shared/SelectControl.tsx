@@ -122,7 +122,7 @@ const PlainSelectControl = ({
   const selectValue = selectedOption ? toSelectValue(stringValue) : undefined;
 
   return (
-    <Field className={cn('relative min-w-0 gap-1.5', className)}>
+    <Field className={cn('relative min-w-0', className)}>
       <SelectLabel id={id} label={label} />
       <Select
         disabled={disabled}
@@ -225,7 +225,7 @@ const SearchableSelectControl = ({
   };
 
   return (
-    <Field className={cn('relative min-w-0 gap-1.5', className)}>
+    <Field className={cn('relative min-w-0', className)}>
       <SelectLabel id={id} label={label} />
       <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
         <PopoverTrigger asChild>

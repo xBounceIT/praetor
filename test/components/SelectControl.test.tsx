@@ -13,6 +13,15 @@ const options = [
 ];
 
 describe('<SelectControl />', () => {
+  test('uses native shadcn Field spacing so labels align with adjacent inputs', async () => {
+    const source = await Bun.file(
+      new URL('../../components/shared/SelectControl.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain("Field className={cn('relative min-w-0', className)}");
+    expect(source).not.toContain("Field className={cn('relative min-w-0 gap-1.5'");
+  });
+
   test('plain select displays the selected value and calls onChange', () => {
     const onChange = mock((_value: string | string[]) => {});
     render(<SelectControl options={options} value="b" onChange={onChange} />);
