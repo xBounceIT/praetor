@@ -7,7 +7,7 @@ const fetchMock = mock(
 );
 globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-const { fetchApi, fetchApiStream, getAuthToken, setAuthToken } = await import(
+const { ApiError, fetchApi, fetchApiStream, getAuthToken, isApiError, setAuthToken } = await import(
   '../../services/api/client'
 );
 
@@ -115,11 +115,24 @@ describe('services/api/client', () => {
       await fetchApi('/get');
     });
 
-    test('error response with body.message throws Error with that message', async () => {
+    test('error response with body.message throws ApiError with that message + status', async () => {
       fetchMock.mockImplementationOnce(async () =>
         buildResponse({ status: 400, json: () => ({ message: 'Bad input' }) }),
       );
-      await expect(fetchApi('/bad')).rejects.toThrow('Bad input');
+      const error = await fetchApi('/bad').catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(isApiError(error)).toBe(true);
+      expect((error as InstanceType<typeof ApiError>).message).toBe('Bad input');
+      expect((error as InstanceType<typeof ApiError>).statusCode).toBe(400);
+    });
+
+    test('isApiError returns false for network errors (TypeError)', async () => {
+      fetchMock.mockImplementationOnce(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      const error = await fetchApi('/down').catch((err: unknown) => err);
+      expect(isApiError(error)).toBe(false);
+      expect(error).toBeInstanceOf(TypeError);
     });
 
     test('error response with body.error throws Error with that message', async () => {

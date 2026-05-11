@@ -15,6 +15,24 @@ export const getAuthToken = () => authToken;
 
 export const getApiBase = () => API_BASE;
 
+/**
+ * Error thrown by `fetchApi` when an HTTP request reaches the server but the
+ * response status is not OK. `statusCode` mirrors `response.status`, letting
+ * callers distinguish real auth failures (401/403) from transient server
+ * problems (5xx). Network failures still surface as plain `TypeError`s.
+ */
+export class ApiError extends Error {
+  readonly statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+  }
+}
+
+export const isApiError = (err: unknown): err is ApiError => err instanceof ApiError;
+
 export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
   const headers: HeadersInit = {
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -34,7 +52,7 @@ export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.message || error.error || `HTTP ${response.status}`);
+    throw new ApiError(error.message || error.error || `HTTP ${response.status}`, response.status);
   }
 
   if (response.status === 204) {

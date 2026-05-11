@@ -37,6 +37,7 @@ const markPersonalAccessTokenUsedMock = mock();
 
 // Auth route deps
 const findLoginUserByUsernameMock = mock();
+const findByIdMock = mock();
 const listAvailableRolesForUserMock = mock();
 const logAuditMock = mock(async () => undefined);
 
@@ -54,6 +55,7 @@ beforeAll(async () => {
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
     findLoginUserByUsername: findLoginUserByUsernameMock,
+    findById: findByIdMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -120,6 +122,26 @@ const LOGIN_USER = {
   authProviderId: null,
 };
 
+// What usersRepo.findById returns: the full canonical user row exposed by the
+// auth endpoints. This must include the fields that drove issue 31 (email,
+// costPerHour, employeeType, authMethod).
+const HAPPY_FULL_USER = {
+  id: 'u1',
+  name: 'Alice',
+  username: 'alice',
+  email: 'alice@example.com',
+  role: 'manager',
+  avatarInitials: 'AL',
+  costPerHour: 42.5,
+  isDisabled: false,
+  employeeType: 'app_user' as const,
+  hasTopManagerRole: false,
+  isAdminOnly: false,
+  authMethod: 'local' as const,
+  authProviderId: null,
+  authProviderName: null,
+};
+
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view', 'timesheets.tracker.create'];
 
 const HAPPY_ROLES = [
@@ -134,6 +156,7 @@ const allMocks = [
   findPersonalAccessTokenByHashMock,
   markPersonalAccessTokenUsedMock,
   findLoginUserByUsernameMock,
+  findByIdMock,
   listAvailableRolesForUserMock,
   logAuditMock,
   bcryptCompareMock,
@@ -149,6 +172,7 @@ beforeEach(async () => {
 
   // Defaults: happy auth path for /me and /switch-role
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
+  findByIdMock.mockResolvedValue(HAPPY_FULL_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
   findPersonalAccessTokenByHashMock.mockResolvedValue({
@@ -206,6 +230,15 @@ describe('POST /api/auth/login', () => {
       username: 'alice',
       role: 'manager',
       avatarInitials: 'AL',
+      email: 'alice@example.com',
+      costPerHour: 42.5,
+      isDisabled: false,
+      employeeType: 'app_user',
+      authMethod: 'local',
+      authProviderId: null,
+      authProviderName: null,
+      hasTopManagerRole: false,
+      isAdminOnly: false,
       permissions: HAPPY_PERMISSIONS,
       availableRoles: HAPPY_ROLES,
     });
@@ -322,6 +355,8 @@ describe('POST /api/auth/login', () => {
     expect(body.user.availableRoles).toEqual([
       { id: 'manager', name: 'manager', isSystem: false, isAdmin: false },
     ]);
+    // Canonical fields still populated even when availableRoles falls back.
+    expect(body.user.email).toBe('alice@example.com');
   });
 
   test('401 user not found', async () => {
@@ -420,7 +455,7 @@ describe('POST /api/auth/login', () => {
 });
 
 describe('GET /api/auth/me', () => {
-  test('200 returns current user with availableRoles', async () => {
+  test('200 returns canonical current user with email, costPerHour, employeeType', async () => {
     const res = await testApp.inject({
       method: 'GET',
       url: '/api/auth/me',
@@ -435,9 +470,30 @@ describe('GET /api/auth/me', () => {
       username: 'alice',
       role: 'manager',
       avatarInitials: 'AL',
+      email: 'alice@example.com',
+      costPerHour: 42.5,
+      isDisabled: false,
+      employeeType: 'app_user',
+      authMethod: 'local',
+      authProviderId: null,
+      authProviderName: null,
+      hasTopManagerRole: false,
+      isAdminOnly: false,
       permissions: HAPPY_PERMISSIONS,
       availableRoles: HAPPY_ROLES,
     });
+  });
+
+  test('401 when the underlying user record is missing', async () => {
+    findByIdMock.mockResolvedValue(null);
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: authHeader('u1'),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'User not found' });
   });
 
   test('200 sets x-auth-token sliding-window header', async () => {
@@ -481,6 +537,11 @@ describe('POST /api/auth/switch-role', () => {
     const body = JSON.parse(res.body);
     expect(body.user.role).toBe('admin');
     expect(body.user.permissions).toEqual(['admin.everything']);
+    // Canonical fields are part of the response shape, not invented by the client.
+    expect(body.user.email).toBe('alice@example.com');
+    expect(body.user.costPerHour).toBe(42.5);
+    expect(body.user.employeeType).toBe('app_user');
+    expect(body.user.authMethod).toBe('local');
 
     // Header rotation
     const headerToken = res.headers['x-auth-token'];

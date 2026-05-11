@@ -1,5 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
+import type { UpdateTimeEntryInput } from '../../services/api/entries';
 import type { TimeEntry, User } from '../../types';
 
 export type EntryHandlersDeps = {
@@ -56,7 +57,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
   };
 
-  const update = async (id: string, updates: Partial<TimeEntry>) => {
+  const update = async (id: string, updates: UpdateTimeEntryInput) => {
     try {
       const updated = await api.entries.update(id, updates);
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));

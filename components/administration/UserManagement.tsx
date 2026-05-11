@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { usersApi } from '../../services/api/users';
+import { type UpdateUserInput, usersApi } from '../../services/api/users';
 import type {
   Client,
   Project,
@@ -54,7 +54,7 @@ export interface UserManagementProps {
     email?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
-  onUpdateUser: (id: string, updates: Partial<User>) => void;
+  onUpdateUser: (id: string, updates: UpdateUserInput) => void;
   onUpdateUserRoles: (id: string, roleIds: string[], primaryRoleId: string) => Promise<void>;
   onUpdateUserAuthMethod: (
     id: string,
@@ -555,7 +555,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         return;
       }
 
-      const updates: Partial<User> = {
+      const updates: UpdateUserInput = {
         name: buildFullName(editFirstName, editSurname),
         email: editEmail.trim(),
         isDisabled: editIsDisabled,

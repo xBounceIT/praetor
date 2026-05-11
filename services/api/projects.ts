@@ -26,13 +26,13 @@ export const projectsApi = {
       body: JSON.stringify(updates),
     }).then(normalizeProject),
 
-  delete: (id: string): Promise<void> => fetchApi(`/projects/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> => fetchApi<void>(`/projects/${id}`, { method: 'DELETE' }),
 
   getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
-    fetchApi(`/projects/${id}/users`, { signal }),
+    fetchApi<string[]>(`/projects/${id}/users`, { signal }),
 
   updateUsers: (id: string, userIds: string[]): Promise<void> =>
-    fetchApi(`/projects/${id}/users`, {
+    fetchApi<void>(`/projects/${id}/users`, {
       method: 'POST',
       body: JSON.stringify({ userIds }),
     }),

@@ -12,6 +12,7 @@ import {
   normalizeProject,
   normalizeQuote,
   normalizeQuoteItem,
+  normalizeSupplier,
   normalizeSupplierInvoice,
   normalizeSupplierInvoiceItem,
   normalizeSupplierQuote,
@@ -36,6 +37,7 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  Supplier,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -447,6 +449,56 @@ describe('normalizeUser', () => {
   test('accepts "external" employeeType', () => {
     const input = make<User>(baseUser, { employeeType: 'external' });
     expect(normalizeUser(input).employeeType).toBe('external');
+  });
+});
+
+describe('normalizeSupplier', () => {
+  const baseSupplier: Supplier = { id: 's-1', name: 'SupplierCo' };
+
+  test('coerces null optional fields to undefined and isDisabled to boolean', () => {
+    const input = make<Supplier>(baseSupplier, {
+      isDisabled: 0,
+      supplierCode: null,
+      contactName: null,
+      email: null,
+      phone: null,
+      address: null,
+      vatNumber: null,
+      taxCode: null,
+      paymentTerms: null,
+      notes: null,
+    });
+    const result = normalizeSupplier(input);
+    expect(result.isDisabled).toBe(false);
+    expect(result.supplierCode).toBeUndefined();
+    expect(result.contactName).toBeUndefined();
+    expect(result.email).toBeUndefined();
+    expect(result.phone).toBeUndefined();
+    expect(result.address).toBeUndefined();
+    expect(result.vatNumber).toBeUndefined();
+    expect(result.taxCode).toBeUndefined();
+    expect(result.paymentTerms).toBeUndefined();
+    expect(result.notes).toBeUndefined();
+  });
+
+  test('preserves populated fields', () => {
+    const input: Supplier = {
+      id: 's-1',
+      name: 'SupplierCo',
+      isDisabled: true,
+      supplierCode: 'S001',
+      contactName: 'Jane',
+      email: 'jane@s.com',
+      phone: '555',
+      address: 'addr',
+      vatNumber: 'V1',
+      taxCode: 'T1',
+      paymentTerms: '30gg',
+      notes: 'note',
+      createdAt: 1234,
+    };
+    const result = normalizeSupplier(input);
+    expect(result).toEqual(input);
   });
 });
 

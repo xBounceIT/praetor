@@ -18,6 +18,15 @@ const authUserSchema = {
     username: { type: 'string' },
     role: { type: 'string' },
     avatarInitials: { type: 'string' },
+    email: { type: 'string' },
+    costPerHour: { type: 'number' },
+    isDisabled: { type: 'boolean' },
+    employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
+    authProviderId: { type: ['string', 'null'] },
+    authProviderName: { type: ['string', 'null'] },
+    hasTopManagerRole: { type: 'boolean' },
+    isAdminOnly: { type: 'boolean' },
     permissions: { type: 'array', items: { type: 'string' } },
     availableRoles: {
       type: 'array',
@@ -33,7 +42,19 @@ const authUserSchema = {
       },
     },
   },
-  required: ['id', 'name', 'username', 'role', 'avatarInitials', 'permissions', 'availableRoles'],
+  required: [
+    'id',
+    'name',
+    'username',
+    'role',
+    'avatarInitials',
+    'email',
+    'costPerHour',
+    'employeeType',
+    'authMethod',
+    'permissions',
+    'availableRoles',
+  ],
 } as const;
 
 const loginBodySchema = {
@@ -61,6 +82,40 @@ const loginResponseSchema = {
   },
   required: ['token', 'user'],
 } as const;
+
+type AvailableRole = { id: string; name: string; isSystem: boolean; isAdmin: boolean };
+type CanonicalAuthUser = usersRepo.UserListRow & {
+  permissions: string[];
+  availableRoles: AvailableRole[];
+};
+
+// When the user has no explicit role assignments yet, synthesize a single
+// "available role" from the effective role so the client always has at least
+// one entry to render (matches the historical /login fallback).
+const fallbackAvailableRoles = (effectiveRole: string): AvailableRole[] => [
+  { id: effectiveRole, name: effectiveRole, isSystem: false, isAdmin: effectiveRole === 'admin' },
+];
+
+const buildCanonicalAuthUser = async (
+  userId: string,
+  effectiveRole: string,
+  permissions: string[],
+): Promise<CanonicalAuthUser | null> => {
+  const [fullUser, availableRoles] = await Promise.all([
+    usersRepo.findById(userId),
+    rolesRepo.listAvailableRolesForUser(userId),
+  ]);
+
+  if (!fullUser) return null;
+
+  return {
+    ...fullUser,
+    role: effectiveRole,
+    permissions,
+    availableRoles:
+      availableRoles.length > 0 ? availableRoles : fallbackAvailableRoles(effectiveRole),
+  };
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
@@ -155,30 +210,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
         userId: user.id,
       });
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(user.id);
-      const effectiveAvailableRoles =
-        availableRoles.length > 0
-          ? availableRoles
-          : [
-              {
-                id: user.role,
-                name: user.role,
-                isSystem: false,
-                isAdmin: user.role === 'admin',
-              },
-            ];
+
+      const canonicalUser = await buildCanonicalAuthUser(user.id, user.role, permissions);
+      if (!canonicalUser) {
+        return reply.code(500).send({ error: 'Authenticated user not found' });
+      }
 
       return {
         token,
-        user: {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          role: user.role,
-          avatarInitials: user.avatarInitials,
-          permissions,
-          availableRoles: effectiveAvailableRoles,
-        },
+        user: canonicalUser,
       };
     },
   );
@@ -197,30 +237,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      const availableRoles = request.user?.id
-        ? await rolesRepo.listAvailableRolesForUser(request.user.id)
-        : [];
-      const effectiveAvailableRoles =
-        availableRoles.length > 0
-          ? availableRoles
-          : [
-              {
-                id: request.user?.role as string,
-                name: request.user?.role as string,
-                isSystem: false,
-                isAdmin: request.user?.role === 'admin',
-              },
-            ];
-      return {
-        id: request.user?.id,
-        name: request.user?.name,
-        username: request.user?.username,
-        role: request.user?.role,
-        avatarInitials: request.user?.avatarInitials,
-        permissions: request.user?.permissions || [],
-        availableRoles: effectiveAvailableRoles,
-      };
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const role = request.user?.role;
+      if (!userId || !role) {
+        return reply.code(401).send({ error: 'Authentication required' });
+      }
+      const canonicalUser = await buildCanonicalAuthUser(
+        userId,
+        role,
+        request.user?.permissions ?? [],
+      );
+      if (!canonicalUser) {
+        return reply.code(401).send({ error: 'User not found' });
+      }
+      return canonicalUser;
     },
   );
 
@@ -257,18 +288,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const permissions = await getRolePermissions(roleIdResult.value);
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(userId);
-      const effectiveAvailableRoles =
-        availableRoles.length > 0
-          ? availableRoles
-          : [
-              {
-                id: roleIdResult.value,
-                name: roleIdResult.value,
-                isSystem: false,
-                isAdmin: roleIdResult.value === 'admin',
-              },
-            ];
       const token = generateToken(
         userId,
         request.auth?.sessionStart ?? Date.now(),
@@ -289,17 +308,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
+      const canonicalUser = await buildCanonicalAuthUser(userId, roleIdResult.value, permissions);
+      if (!canonicalUser) {
+        return reply.code(401).send({ error: 'User not found' });
+      }
+
       return {
         token,
-        user: {
-          id: userId,
-          name: request.user?.name,
-          username: request.user?.username,
-          role: roleIdResult.value,
-          avatarInitials: request.user?.avatarInitials,
-          permissions,
-          availableRoles: effectiveAvailableRoles,
-        },
+        user: canonicalUser,
       };
     },
   );

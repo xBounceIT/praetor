@@ -15,6 +15,7 @@ import type {
   Quote,
   QuoteItem,
   RoleSummary,
+  Supplier,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -171,6 +172,20 @@ export const normalizeProduct = (p: Product): Product => ({
   ...p,
   costo: Number(p.costo || 0),
   molPercentage: Number(p.molPercentage || 0),
+});
+
+export const normalizeSupplier = (s: Supplier): Supplier => ({
+  ...s,
+  isDisabled: !!s.isDisabled,
+  supplierCode: s.supplierCode ?? undefined,
+  contactName: s.contactName ?? undefined,
+  email: s.email ?? undefined,
+  phone: s.phone ?? undefined,
+  address: s.address ?? undefined,
+  vatNumber: s.vatNumber ?? undefined,
+  taxCode: s.taxCode ?? undefined,
+  paymentTerms: s.paymentTerms ?? undefined,
+  notes: s.notes ?? undefined,
 });
 
 export const normalizeProject = (p: Project): Project => ({

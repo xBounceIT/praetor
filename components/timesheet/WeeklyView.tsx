@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { UpdateTimeEntryInput } from '../../services/api/entries';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
 import SelectControl from '../shared/SelectControl';
@@ -14,7 +15,7 @@ export interface WeeklyViewProps {
   projectTasks: ProjectTask[];
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   onDeleteEntry: (id: string) => void;
-  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
+  onUpdateEntry: (id: string, updates: UpdateTimeEntryInput) => void;
   viewingUserId: string;
   availableUsers: User[];
   onViewUserChange: (id: string) => void;
@@ -350,16 +351,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               location: row.location,
             });
           } else {
-            // Handle update if needed? User didn't explicitly ask for editing existing in weekly view,
-            // but it's part of a full mirror. Let's stick to the core request first.
+            // Server only persists the mutable subset (duration/notes/location/
+            // isPlaceholder). Project/client/task changes are silently dropped
+            // server-side, so we don't ship them here - we'd need a
+            // delete-and-recreate flow to support that.
             onUpdateEntry(data.id, {
               duration: data.duration,
               notes: data.note || row.weekNote,
-              task: row.taskName,
-              projectId: row.projectId,
-              clientId: row.clientId,
-              clientName: client?.name || 'Unknown',
-              projectName: project?.name || 'General',
               location: row.location,
             });
           }
