@@ -55,10 +55,12 @@ const onRenewPersonalAccessToken = mock(() =>
   Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_new-secret' }),
 );
 
-const renderSettings = (overrides: {
-  onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
-  onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
-} = {}) =>
+const renderSettings = (
+  overrides: {
+    onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
+    onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
+  } = {},
+) =>
   render(
     <UserSettings
       settings={settings}
