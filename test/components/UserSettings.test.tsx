@@ -32,7 +32,7 @@ const onCreateMcpToken = mock((_name: string) =>
   Promise.resolve({
     token: {
       id: 'mcp-token-2',
-      name: 'Codex',
+      name: 'External Agent',
       tokenPrefix: 'praetor_mcp_efgh',
       createdAt: 2000,
       lastUsedAt: null,
@@ -77,7 +77,7 @@ describe('<UserSettings /> MCP tokens', () => {
     expect(screen.getByText(/praetor_mcp_abcd/)).toBeInTheDocument();
   });
 
-  test('shows the MCP endpoint URL and Codex setup prompt', async () => {
+  test('shows the MCP endpoint URL and agent setup prompt', async () => {
     renderSettings();
 
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
@@ -97,13 +97,13 @@ describe('<UserSettings /> MCP tokens', () => {
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
 
     fireEvent.change(await screen.findByPlaceholderText('mcp.namePlaceholder'), {
-      target: { value: 'Codex' },
+      target: { value: 'External Agent' },
     });
     fireEvent.click(screen.getByRole('button', { name: /mcp.create/ }));
 
-    await waitFor(() => expect(onCreateMcpToken).toHaveBeenCalledWith('Codex'));
+    await waitFor(() => expect(onCreateMcpToken).toHaveBeenCalledWith('External Agent'));
     expect(await screen.findByText('praetor_mcp_raw_secret')).toBeInTheDocument();
-    expect(await screen.findByText('Codex')).toBeInTheDocument();
+    expect(await screen.findByText('External Agent')).toBeInTheDocument();
     expect((screen.getByLabelText('mcp.promptLabel') as HTMLTextAreaElement).value).toContain(
       'praetor_mcp_raw_secret',
     );

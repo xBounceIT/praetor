@@ -162,7 +162,7 @@ export const createTimeEntry = async (
     task,
     taskId: resolvedTaskId,
     notes: typeof input.notes === 'string' ? input.notes : null,
-    duration: duration || 0,
+    duration: duration ?? 0,
     hourlyCost,
     isPlaceholder: parseBoolean(input.isPlaceholder),
     location,
@@ -246,8 +246,8 @@ export const bulkDeleteTimeEntries = async (
   const projectId = requireValid(requireNonEmptyString(input.projectId, 'projectId'));
   const task = requireValid(requireNonEmptyString(input.task, 'task'));
 
-  const futureOnlyValue = parseQueryBoolean(input.futureOnly) || false;
-  const placeholderOnlyValue = parseQueryBoolean(input.placeholderOnly) || false;
+  const futureOnlyValue = parseQueryBoolean(input.futureOnly) ?? false;
+  const placeholderOnlyValue = parseQueryBoolean(input.placeholderOnly) ?? false;
   const restrictToManagerScopeOf = hasPermission(actor, 'timesheets.tracker_all.view')
     ? undefined
     : actor.id;

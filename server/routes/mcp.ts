@@ -95,6 +95,17 @@ const requireUser = (ctx: ServerContext): McpAuthenticatedUser => {
 const enforce = (user: McpAuthenticatedUser, permission: string): CallToolResult | null =>
   hasPermission(user, permission) ? null : toolError('Insufficient permissions');
 
+const runTimeEntryTool = async (
+  operation: () => Promise<Record<string, unknown>>,
+): Promise<CallToolResult> => {
+  try {
+    return jsonResult(await operation());
+  } catch (err) {
+    if (err instanceof TimeEntryServiceError) return toolError(err.message);
+    throw err;
+  }
+};
+
 const buildServer = () => {
   const server = new McpServer(
     { name: 'praetor', version: '0.6.0' },
@@ -208,12 +219,7 @@ const buildServer = () => {
     },
     async (args, ctx) => {
       const user = requireUser(ctx);
-      try {
-        return jsonResult(await listTimeEntries(user, args));
-      } catch (err) {
-        if (err instanceof TimeEntryServiceError) return toolError(err.message);
-        throw err;
-      }
+      return runTimeEntryTool(async () => ({ ...(await listTimeEntries(user, args)) }));
     },
   );
 
@@ -239,12 +245,7 @@ const buildServer = () => {
     },
     async (args, ctx) => {
       const user = requireUser(ctx);
-      try {
-        return jsonResult({ entry: await createTimeEntry(user, args) });
-      } catch (err) {
-        if (err instanceof TimeEntryServiceError) return toolError(err.message);
-        throw err;
-      }
+      return runTimeEntryTool(async () => ({ entry: await createTimeEntry(user, args) }));
     },
   );
 
@@ -264,12 +265,7 @@ const buildServer = () => {
     },
     async ({ id, ...patch }, ctx) => {
       const user = requireUser(ctx);
-      try {
-        return jsonResult({ entry: await updateTimeEntry(user, id, patch) });
-      } catch (err) {
-        if (err instanceof TimeEntryServiceError) return toolError(err.message);
-        throw err;
-      }
+      return runTimeEntryTool(async () => ({ entry: await updateTimeEntry(user, id, patch) }));
     },
   );
 
@@ -283,12 +279,7 @@ const buildServer = () => {
     },
     async ({ id }, ctx) => {
       const user = requireUser(ctx);
-      try {
-        return jsonResult(await deleteTimeEntry(user, id));
-      } catch (err) {
-        if (err instanceof TimeEntryServiceError) return toolError(err.message);
-        throw err;
-      }
+      return runTimeEntryTool(async () => ({ ...(await deleteTimeEntry(user, id)) }));
     },
   );
 
