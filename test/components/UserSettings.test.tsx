@@ -54,6 +54,26 @@ const renderSettings = () =>
     />,
   );
 
+const installUnavailableClipboard = (execCommand: () => boolean) => {
+  const originalClipboard = navigator.clipboard;
+  const originalExecCommand = Object.getOwnPropertyDescriptor(document, 'execCommand');
+
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+  Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+
+  return () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    if (originalExecCommand) {
+      Object.defineProperty(document, 'execCommand', originalExecCommand);
+    } else {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  };
+};
+
 describe('<UserSettings /> MCP tokens', () => {
   beforeEach(() => {
     for (const m of [
@@ -109,29 +129,43 @@ describe('<UserSettings /> MCP tokens', () => {
     );
   });
 
-  test('copies MCP values when navigator.clipboard is unavailable', async () => {
-    const originalClipboard = navigator.clipboard;
-    const originalExecCommand = Object.getOwnPropertyDescriptor(document, 'execCommand');
+  test('copies MCP values when navigator.clipboard is unavailable and shows success feedback', async () => {
     const execCommand = mock(() => true);
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+    const restoreClipboard = installUnavailableClipboard(execCommand);
 
     try {
       renderSettings();
       fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
-      fireEvent.click(await screen.findByRole('button', { name: /mcp.copyUrl/ }));
+      const copyButton = await screen.findByRole('button', { name: /mcp.copyUrl/ });
+      fireEvent.click(copyButton);
 
       expect(execCommand).toHaveBeenCalledWith('copy');
+      await waitFor(() =>
+        expect(
+          copyButton.querySelector('[data-copy-feedback-icon="check"][data-visible="true"]'),
+        ).toBeTruthy(),
+      );
     } finally {
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: originalClipboard,
-      });
-      if (originalExecCommand) {
-        Object.defineProperty(document, 'execCommand', originalExecCommand);
-      } else {
-        Reflect.deleteProperty(document, 'execCommand');
-      }
+      restoreClipboard();
+    }
+  });
+
+  test('does not show MCP copy success feedback when copying fails', async () => {
+    const execCommand = mock(() => false);
+    const restoreClipboard = installUnavailableClipboard(execCommand);
+
+    try {
+      renderSettings();
+      fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+      const copyButton = await screen.findByRole('button', { name: /mcp.copyUrl/ });
+      fireEvent.click(copyButton);
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(
+        copyButton.querySelector('[data-copy-feedback-icon="check"][data-visible="true"]'),
+      ).toBeNull();
+    } finally {
+      restoreClipboard();
     }
   });
 

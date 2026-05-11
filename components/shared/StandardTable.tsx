@@ -52,6 +52,7 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Textarea } from '../ui/textarea';
+import { AnimatedCopyIcon } from './AnimatedCopyIcon';
 import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
@@ -1567,10 +1568,11 @@ const StandardTable = <T extends object>({
                                     }}
                                     className="size-7 justify-center p-0"
                                   >
-                                    <i
-                                      className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
-                                      aria-hidden="true"
-                                    ></i>
+                                    <AnimatedCopyIcon
+                                      copied={isCopied}
+                                      className="size-3"
+                                      copiedClassName="text-emerald-600"
+                                    />
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     aria-label={t('table.deleteView')}

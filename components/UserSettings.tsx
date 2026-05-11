@@ -1,4 +1,4 @@
-import { Check, Contrast, Copy, type LucideIcon, Moon, Sun, SunMoon, Trash2 } from 'lucide-react';
+import { Check, Contrast, type LucideIcon, Moon, Sun, SunMoon, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ import type { CreatedMcpToken, McpToken, Settings } from '../services/api';
 import { writeTextToClipboard } from '../utils/clipboard';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
+import { AnimatedCopyIcon } from './shared/AnimatedCopyIcon';
 
 export interface UserSettingsProps {
   settings: Settings;
@@ -35,6 +36,9 @@ export interface UserSettingsProps {
 
 type LanguagePreference = NonNullable<Settings['language']>;
 type ThemeSwatchVariant = 'default' | 'praetor';
+type McpCopyTarget = 'endpoint-url' | 'setup-prompt' | 'raw-token';
+
+const COPIED_FEEDBACK_DURATION_MS = 1500;
 
 const THEME_OPTION_META: Record<
   Theme,
@@ -159,6 +163,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [isLoadingMcpTokens, setIsLoadingMcpTokens] = useState(false);
   const [isCreatingMcpToken, setIsCreatingMcpToken] = useState(false);
   const [revokingMcpTokenId, setRevokingMcpTokenId] = useState<string | null>(null);
+  const [copiedMcpTarget, setCopiedMcpTarget] = useState<McpCopyTarget | null>(null);
+  const copiedMcpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mcpEndpointUrl = useMemo(getMcpEndpointUrl, []);
   const mcpSetupPrompt = useMemo(
     () =>
@@ -185,6 +191,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   useEffect(() => {
     tRef.current = t;
   }, [t]);
+
+  useEffect(
+    () => () => {
+      if (copiedMcpTimeoutRef.current) clearTimeout(copiedMcpTimeoutRef.current);
+    },
+    [],
+  );
 
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
@@ -302,17 +315,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
-  const copyRawMcpToken = async () => {
-    if (!rawMcpToken) return;
-    await writeTextToClipboard(rawMcpToken);
-  };
+  const copyMcpValue = async (target: McpCopyTarget, value: string) => {
+    if (!value) return;
+    const didCopy = await writeTextToClipboard(value);
+    if (!didCopy) return;
 
-  const copyMcpEndpointUrl = async () => {
-    await writeTextToClipboard(mcpEndpointUrl);
-  };
-
-  const copyMcpSetupPrompt = async () => {
-    await writeTextToClipboard(mcpSetupPrompt);
+    setCopiedMcpTarget(target);
+    if (copiedMcpTimeoutRef.current) clearTimeout(copiedMcpTimeoutRef.current);
+    copiedMcpTimeoutRef.current = setTimeout(() => {
+      setCopiedMcpTarget((currentTarget) => (currentTarget === target ? null : currentTarget));
+    }, COPIED_FEEDBACK_DURATION_MS);
   };
 
   const hasChanges =
@@ -687,8 +699,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               <FieldLabel htmlFor="mcp-endpoint-url">{t('mcp.urlLabel')}</FieldLabel>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
                 <Input id="mcp-endpoint-url" readOnly value={mcpEndpointUrl} />
-                <Button type="button" variant="outline" onClick={copyMcpEndpointUrl}>
-                  <Copy aria-hidden="true" className="size-4" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void copyMcpValue('endpoint-url', mcpEndpointUrl)}
+                >
+                  <AnimatedCopyIcon copied={copiedMcpTarget === 'endpoint-url'} />
                   {t('mcp.copyUrl')}
                 </Button>
               </div>
@@ -704,8 +720,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 className="min-h-44 resize-y font-mono text-xs"
               />
               <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={copyMcpSetupPrompt}>
-                  <Copy aria-hidden="true" className="size-4" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void copyMcpValue('setup-prompt', mcpSetupPrompt)}
+                >
+                  <AnimatedCopyIcon copied={copiedMcpTarget === 'setup-prompt'} />
                   {t('mcp.copyPrompt')}
                 </Button>
               </div>
@@ -754,12 +774,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   </div>
                   <Button
                     type="button"
-                    onClick={copyRawMcpToken}
+                    onClick={() => void copyMcpValue('raw-token', rawMcpToken)}
                     variant="outline"
                     size="sm"
                     className="shrink-0"
                   >
-                    <Copy aria-hidden="true" className="size-3.5" />
+                    <AnimatedCopyIcon
+                      copied={copiedMcpTarget === 'raw-token'}
+                      className="size-3.5"
+                    />
                     {t('mcp.copy')}
                   </Button>
                 </div>

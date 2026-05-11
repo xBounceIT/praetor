@@ -1419,6 +1419,39 @@ describe('<StandardTable />', () => {
     expect(payload.hiddenColIds).toEqual(['age']);
     expect(payload.sortState).toEqual({ colId: 'name', px: 'asc' });
     expect(payload.filterState).toEqual({ name: ['Alice'] });
+    expect(screen.getByLabelText('table.viewCopied')).toBeInTheDocument();
+    expect(
+      screen
+        .getByLabelText('table.viewCopied')
+        .querySelector('[data-copy-feedback-icon="check"][data-visible="true"]'),
+    ).toBeTruthy();
+  });
+
+  test('does not show saved view copy feedback when clipboard export fails', async () => {
+    writeClipboardSpy.mockResolvedValueOnce(false);
+    const seeded = [
+      {
+        id: 'vexp-fail',
+        name: 'Exportable',
+        hiddenColIds: ['age'],
+        sortState: { colId: 'name', px: 'asc' },
+        filterState: { name: ['Alice'] },
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_exportfailtest', JSON.stringify(seeded));
+
+    render(<StandardTable<Row> title="ExportFailTest" data={sampleRows} columns={sampleColumns} />);
+    await openCustomViews();
+
+    const exportBtns = screen.getAllByLabelText('table.exportView');
+    await act(async () => {
+      fireEvent.click(exportBtns[0].closest('[role="menuitem"]') ?? exportBtns[0]);
+      await Promise.resolve();
+    });
+
+    expect(writeClipboardSpy).toHaveBeenCalled();
+    expect(screen.queryByLabelText('table.viewCopied')).not.toBeInTheDocument();
+    expect(screen.getByText('table.viewCopyFailed')).toBeInTheDocument();
   });
 
   test('importing via paste modal adds a new view to localStorage', async () => {

@@ -9,6 +9,7 @@ import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { writeTextToClipboard } from '../../utils/clipboard';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import { AnimatedCopyIcon } from '../shared/AnimatedCopyIcon';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
@@ -1455,12 +1456,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                         }
                                         className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
                                       >
-                                        <i
-                                          className={
-                                            copiedMessageId === userMessage.id
-                                              ? 'fa-solid fa-check text-green-500'
-                                              : 'fa-regular fa-copy'
-                                          }
+                                        <AnimatedCopyIcon
+                                          copied={copiedMessageId === userMessage.id}
+                                          className="size-4"
+                                          copiedClassName="text-green-500"
                                         />
                                       </button>
                                     </span>
@@ -1643,12 +1642,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                             defaultValue: 'Copy table',
                                           })}
                                         >
-                                          <i
-                                            className={
-                                              copied
-                                                ? 'fa-solid fa-check text-green-500'
-                                                : 'fa-regular fa-copy'
-                                            }
+                                          <AnimatedCopyIcon
+                                            copied={copied}
+                                            className="size-3.5"
+                                            copiedClassName="text-green-500"
                                           />
                                         </button>
                                       </div>
@@ -1737,12 +1734,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                         defaultValue: 'Copy',
                                       })}
                                     >
-                                      <i
-                                        className={
-                                          copiedMessageId === assistantMessage.id
-                                            ? 'fa-solid fa-check text-green-500'
-                                            : 'fa-regular fa-copy'
-                                        }
+                                      <AnimatedCopyIcon
+                                        copied={copiedMessageId === assistantMessage.id}
+                                        className="size-4"
+                                        copiedClassName="text-green-500"
                                       />
                                     </button>
                                   </span>
