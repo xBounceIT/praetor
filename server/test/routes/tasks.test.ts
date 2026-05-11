@@ -312,12 +312,13 @@ describe('POST /api/tasks', () => {
         billingType: 'time_and_materials',
         billingFrequency: 'monthly',
       }),
+      undefined,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1');
-    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1');
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
+    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1', undefined, undefined);
     expect(assignTaskToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1');
-    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1');
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
+    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1', undefined);
     expect(assignTaskToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.created', entityType: 'task' }),
@@ -360,7 +361,46 @@ describe('POST /api/tasks', () => {
         billingType: 'retainer',
         billingFrequency: 'one_time',
       }),
+      undefined,
     );
+  });
+
+  test('201: create + assignments run inside one withDbTransaction', async () => {
+    createMock.mockResolvedValue(SAMPLE_TASK);
+    findClientIdMock.mockResolvedValue('c-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'Implement feature', projectId: 'p-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // Atomic create: a single transaction wraps the task insert + cascade assignments
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('500: assignment failure rolls back task create (no audit, no 201)', async () => {
+    createMock.mockResolvedValue(SAMPLE_TASK);
+    findClientIdMock.mockResolvedValue('c-1');
+    // Simulate an assignment failure inside the transaction; on the old code the task row was
+    // already persisted before the assignments ran. The fix wraps everything in a transaction
+    // so the error must surface and no audit log is emitted.
+    assignTaskToTopManagersMock.mockImplementation(async () => {
+      throw new Error('assignment failed');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'Implement feature', projectId: 'p-1' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('201: recurring task without recurrenceStart defaults to today', async () => {
@@ -685,6 +725,27 @@ describe('PUT /api/tasks/:id', () => {
         recurrenceDuration: 2,
       }),
     );
+  });
+
+  test('200: forwards validated (trimmed) recurrenceEnd to repo, not raw input', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_TASK, isRecurring: true });
+
+    // parseDateString trims the raw string via isNonEmptyString. The old code passed
+    // the untrimmed raw value to the UPDATE; the fix passes the trimmed parser result.
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { recurrenceStart: '  2025-01-01  ', recurrenceEnd: '  2025-12-31  ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [, patch] = updateMock.mock.calls[0] as [
+      string,
+      { recurrenceStart: unknown; recurrenceEnd: unknown },
+    ];
+    expect(patch.recurrenceStart).toBe('2025-01-01');
+    expect(patch.recurrenceEnd).toBe('2025-12-31');
   });
 
   test('200: isDisabled=true → task.disabled audit', async () => {
