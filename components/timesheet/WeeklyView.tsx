@@ -31,6 +31,18 @@ const toLocalISOString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
+  const d = new Date(date);
+  const day = d.getDay();
+  // Sunday-first: shift back by `day` days. Monday-first: shift back by `day - 1`
+  // days, except for Sunday (day === 0) which should jump back 6 days.
+  const diff =
+    startOfWeek === 'Sunday' ? d.getDate() - day : d.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(d.setDate(diff));
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
 const WeeklyView: React.FC<WeeklyViewProps> = ({
   entries,
   clients,
@@ -42,19 +54,15 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   viewingUserId,
   availableUsers,
   onViewUserChange,
+  startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
   defaultLocation = 'remote',
 }) => {
   const { t, i18n } = useTranslation('timesheets');
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-    const start = new Date(d.setDate(diff));
-    start.setHours(0, 0, 0, 0);
-    return start;
-  });
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    getWeekStart(new Date(), startOfWeek),
+  );
 
   const weekDays = useMemo(() => {
     return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
@@ -411,14 +419,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             <i className="fa-solid fa-chevron-right"></i>
           </button>
           <button
-            onClick={() => {
-              const d = new Date();
-              const day = d.getDay();
-              const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-              const start = new Date(d.setDate(diff));
-              start.setHours(0, 0, 0, 0);
-              setCurrentWeekStart(start);
-            }}
+            onClick={() => setCurrentWeekStart(getWeekStart(new Date(), startOfWeek))}
             className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest ml-2 px-3 py-1.5 rounded-full transition-colors"
           >
             {t('weekly.goToToday')}
