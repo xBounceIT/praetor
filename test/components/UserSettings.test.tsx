@@ -107,6 +107,26 @@ describe('<UserSettings /> MCP tokens', () => {
     );
   });
 
+  test('copies MCP values when navigator.clipboard is unavailable', async () => {
+    const originalClipboard = navigator.clipboard;
+    const execCommand = mock(() => true);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+
+    try {
+      renderSettings();
+      fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /mcp.copyUrl/ }));
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: originalClipboard,
+      });
+    }
+  });
+
   test('revokes a token from the list', async () => {
     renderSettings();
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));

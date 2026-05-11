@@ -111,6 +111,24 @@ const McpIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const copyTextToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+};
+
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
   isLoading = false,
@@ -292,15 +310,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const copyRawMcpToken = async () => {
     if (!rawMcpToken) return;
-    await navigator.clipboard.writeText(rawMcpToken);
+    await copyTextToClipboard(rawMcpToken);
   };
 
   const copyMcpEndpointUrl = async () => {
-    await navigator.clipboard.writeText(mcpEndpointUrl);
+    await copyTextToClipboard(mcpEndpointUrl);
   };
 
   const copyMcpSetupPrompt = async () => {
-    await navigator.clipboard.writeText(mcpSetupPrompt);
+    await copyTextToClipboard(mcpSetupPrompt);
   };
 
   const hasChanges =
