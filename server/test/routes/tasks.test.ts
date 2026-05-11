@@ -45,6 +45,7 @@ const sumHoursByProjectsMock = mock();
 
 // projectsRepo
 const findClientIdMock = mock();
+const findBillingByIdMock = mock();
 
 // userAssignmentsRepo mocks
 const assignClientToUserMock = mock(async () => undefined);
@@ -93,6 +94,7 @@ beforeAll(async () => {
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     findClientId: findClientIdMock,
+    findBillingById: findBillingByIdMock,
   }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
@@ -164,6 +166,9 @@ const SAMPLE_TASK = {
   notes: null,
   isDisabled: false,
   createdAt: 1_700_000_000_000,
+  billingType: 'time_and_materials',
+  billingFrequency: 'monthly',
+  monthlyEffort: 0,
 };
 
 const allMocks = [
@@ -181,6 +186,7 @@ const allMocks = [
   addUserAssignmentsMock,
   sumHoursByProjectsMock,
   findClientIdMock,
+  findBillingByIdMock,
   assignClientToUserMock,
   assignProjectToUserMock,
   assignTaskToUserMock,
@@ -210,6 +216,10 @@ beforeEach(async () => {
   assignTaskToTopManagersMock.mockImplementation(async () => undefined);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isTaskAssignedToUserMock.mockResolvedValue(true);
+  findBillingByIdMock.mockResolvedValue({
+    billingType: 'time_and_materials',
+    billingFrequency: 'monthly',
+  });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/tasks');
 });
@@ -297,7 +307,10 @@ describe('POST /api/tasks', () => {
         recurrenceStart: null,
         recurrenceDuration: 0,
         expectedEffort: 0,
+        monthlyEffort: 0,
         revenue: 0,
+        billingType: 'time_and_materials',
+        billingFrequency: 'monthly',
       }),
     );
     expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1');
@@ -327,7 +340,10 @@ describe('POST /api/tasks', () => {
         recurrenceStart: '2025-06-01',
         recurrenceDuration: 1,
         expectedEffort: 10,
+        monthlyEffort: 4,
         revenue: 100,
+        billingType: 'retainer',
+        billingFrequency: 'one_time',
       },
     });
 
@@ -339,7 +355,10 @@ describe('POST /api/tasks', () => {
         recurrenceStart: '2025-06-01',
         recurrenceDuration: 1,
         expectedEffort: 10,
+        monthlyEffort: 4,
         revenue: 100,
+        billingType: 'retainer',
+        billingFrequency: 'one_time',
       }),
     );
   });
@@ -421,6 +440,30 @@ describe('POST /api/tasks', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/recurrenceStart must be in YYYY-MM-DD format/);
+  });
+
+  test('400: invalid billing type', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', billingType: 'mixed' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+  });
+
+  test('400: negative monthly effort', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', monthlyEffort: -1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/monthlyEffort must be zero or positive/);
   });
 
   test('400: ForeignKeyError mapped to 400', async () => {
@@ -590,13 +633,27 @@ describe('PUT /api/tasks/:id', () => {
       method: 'PUT',
       url: '/api/tasks/t-1',
       headers: authHeader(),
-      payload: { name: 'Renamed', expectedEffort: 5, revenue: 10 },
+      payload: {
+        name: 'Renamed',
+        expectedEffort: 5,
+        monthlyEffort: 2,
+        revenue: 10,
+        billingType: 'retainer',
+        billingFrequency: 'one_time',
+      },
     });
 
     expect(res.statusCode).toBe(200);
     expect(updateMock).toHaveBeenCalledWith(
       't-1',
-      expect.objectContaining({ name: 'Renamed', expectedEffort: 5, revenue: 10 }),
+      expect.objectContaining({
+        name: 'Renamed',
+        expectedEffort: 5,
+        monthlyEffort: 2,
+        revenue: 10,
+        billingType: 'retainer',
+        billingFrequency: 'one_time',
+      }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'task.updated' }));
   });

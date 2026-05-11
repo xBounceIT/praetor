@@ -8,7 +8,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
-import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
+import type {
+  BillingFrequency,
+  Client,
+  ClientsOrder,
+  Project,
+  ProjectTask,
+  Role,
+  StoredBillingType,
+  User,
+} from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -45,6 +54,9 @@ const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 type DraftTask = {
   _id: string;
   name: string;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
+  monthlyEffort: string;
   expectedEffort: string;
   revenue: string;
   notes: string;
@@ -52,10 +64,23 @@ type DraftTask = {
 
 export type DraftTaskInput = {
   name: string;
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
+  monthlyEffort?: number;
   expectedEffort?: number;
   revenue?: number;
   notes?: string;
 };
+
+const billingTypeOptions = [
+  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
+  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
+];
+
+const billingFrequencyOptions = [
+  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
+  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
+];
 
 export interface ProjectsViewProps {
   projects: Project[];
@@ -71,6 +96,8 @@ export interface ProjectsViewProps {
     orderId: string,
     description?: string,
     tasks?: DraftTaskInput[],
+    billingType?: StoredBillingType,
+    billingFrequency?: BillingFrequency,
   ) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
@@ -79,6 +106,10 @@ export interface ProjectsViewProps {
     projectId: string,
     recurringConfig?: RecurringConfig,
     description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
   ) => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onDeleteTask: (id: string) => void | Promise<void>;
@@ -138,6 +169,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(COLORS[0]);
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
+  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
+  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Draft tasks state (create modal only)
@@ -245,6 +278,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setColor(COLORS[0]);
     setHexInput(COLORS[0]);
     setTempIsDisabled(false);
+    setBillingType('time_and_materials');
+    setBillingFrequency('monthly');
     setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
@@ -260,6 +295,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setColor(project.color);
     setHexInput(project.color);
     setTempIsDisabled(project.isDisabled || false);
+    const storedBillingType =
+      project.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+    setBillingType(storedBillingType);
+    setBillingFrequency(
+      storedBillingType === 'time_and_materials'
+        ? 'monthly'
+        : (project.billingFrequency ?? 'monthly'),
+    );
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
@@ -324,17 +367,29 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         description,
         color,
         isDisabled: tempIsDisabled,
+        billingType,
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
       });
     } else {
       const taskInputs: DraftTaskInput[] = draftTasks
         .filter((t) => t.name.trim())
         .map((t) => ({
           name: t.name.trim(),
+          billingType: t.billingType,
+          billingFrequency: t.billingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
+          monthlyEffort: t.monthlyEffort ? parseFloat(t.monthlyEffort) : undefined,
           expectedEffort: t.expectedEffort ? parseFloat(t.expectedEffort) : undefined,
           revenue: t.revenue ? parseFloat(t.revenue) : undefined,
           notes: t.notes.trim() || undefined,
         }));
-      onAddProject(name, orderId, description, taskInputs.length > 0 ? taskInputs : undefined);
+      onAddProject(
+        name,
+        orderId,
+        description,
+        taskInputs.length > 0 ? taskInputs : undefined,
+        billingType,
+        billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      );
     }
     closeModal();
   };
@@ -368,6 +423,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       {
         _id: String(Date.now() + Math.random()),
         name: '',
+        billingType,
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+        monthlyEffort: '',
         expectedEffort: '',
         revenue: '',
         notes: '',
@@ -376,7 +434,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   };
 
   const updateDraftTask = (id: string, field: keyof Omit<DraftTask, '_id'>, value: string) => {
-    setDraftTasks((prev) => prev.map((t) => (t._id === id ? { ...t, [field]: value } : t)));
+    setDraftTasks((prev) =>
+      prev.map((t) => {
+        if (t._id !== id) return t;
+        if (field === 'billingType') {
+          const nextBillingType = value as StoredBillingType;
+          return {
+            ...t,
+            billingType: nextBillingType,
+            billingFrequency:
+              nextBillingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
+          };
+        }
+        return { ...t, [field]: value };
+      }),
+    );
   };
 
   const removeDraftTask = (id: string) => {
@@ -427,6 +499,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     [tasks, editingProject],
   );
 
+  const translatedBillingTypeOptions = billingTypeOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
+  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
+  const formatBillingType = (value: Project['billingType'] | ProjectTask['billingType']) =>
+    value === 'mixed'
+      ? t('projects:projects.billingTypes.mixed')
+      : (translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-');
+  const formatBillingFrequency = (value: BillingFrequency | undefined) =>
+    translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-';
+
   const existingTaskColumns: Column<ProjectTask>[] = [
     {
       header: t('projects:projects.taskName'),
@@ -441,6 +528,77 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           onChange={(e) => setTaskFieldValue(row.id, 'name', e.target.value)}
           onBlur={() => commitTaskField(row, 'name', (v) => v.trim() || row.name)}
           className="h-8 min-w-[120px] text-xs"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.billingType'),
+      id: 'billingType',
+      accessorKey: 'billingType',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <SelectControl
+          options={translatedBillingTypeOptions}
+          value={row.billingType ?? 'time_and_materials'}
+          onChange={(val) => {
+            const nextBillingType = val as StoredBillingType;
+            onUpdateTask(row.id, {
+              billingType: nextBillingType,
+              billingFrequency:
+                nextBillingType === 'time_and_materials' ? 'monthly' : row.billingFrequency,
+            });
+          }}
+          disabled={!canUpdateTasks}
+          className="min-w-[140px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.billingFrequency'),
+      id: 'billingFrequency',
+      accessorKey: 'billingFrequency',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <SelectControl
+          options={
+            row.billingType === 'retainer'
+              ? translatedBillingFrequencyOptions
+              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
+          }
+          value={
+            row.billingType === 'time_and_materials'
+              ? 'monthly'
+              : (row.billingFrequency ?? 'monthly')
+          }
+          onChange={(val) => onUpdateTask(row.id, { billingFrequency: val as BillingFrequency })}
+          disabled={!canUpdateTasks || row.billingType === 'time_and_materials'}
+          className="min-w-[120px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.monthlyEffort'),
+      id: 'monthlyEffort',
+      accessorKey: 'monthlyEffort',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          type="number"
+          min="0"
+          step="1"
+          disabled={!canUpdateTasks}
+          value={getTaskFieldValue(row.id, 'monthlyEffort', String(row.monthlyEffort ?? ''))}
+          placeholder="0"
+          onKeyDown={(e) => {
+            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+          }}
+          onChange={(e) => setTaskFieldValue(row.id, 'monthlyEffort', e.target.value)}
+          onBlur={() => commitTaskField(row, 'monthlyEffort', (v) => (v ? parseFloat(v) : 0))}
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -584,6 +742,64 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => updateDraftTask(row._id, 'name', e.target.value)}
           className="h-8 min-w-[120px] text-xs"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.billingType'),
+      id: 'billingType',
+      accessorKey: 'billingType',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <SelectControl
+          options={translatedBillingTypeOptions}
+          value={row.billingType}
+          onChange={(val) => updateDraftTask(row._id, 'billingType', val as string)}
+          className="min-w-[140px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.billingFrequency'),
+      id: 'billingFrequency',
+      accessorKey: 'billingFrequency',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <SelectControl
+          options={
+            row.billingType === 'retainer'
+              ? translatedBillingFrequencyOptions
+              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
+          }
+          value={row.billingType === 'time_and_materials' ? 'monthly' : row.billingFrequency}
+          onChange={(val) => updateDraftTask(row._id, 'billingFrequency', val as string)}
+          disabled={row.billingType === 'time_and_materials'}
+          className="min-w-[120px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.monthlyEffort'),
+      id: 'monthlyEffort',
+      accessorKey: 'monthlyEffort',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          type="number"
+          min="0"
+          step="1"
+          required
+          value={row.monthlyEffort}
+          placeholder="0"
+          onKeyDown={(e) => {
+            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+          }}
+          onChange={(e) => updateDraftTask(row._id, 'monthlyEffort', e.target.value)}
+          className="h-8 min-w-[80px] text-xs"
         />
       ),
     },
@@ -815,6 +1031,39 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       className="min-h-20 resize-none"
                     />
                   </Field>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SelectControl
+                      id="project-billing-type"
+                      options={translatedBillingTypeOptions}
+                      value={billingType}
+                      onChange={(val) => {
+                        const nextBillingType = val as StoredBillingType;
+                        setBillingType(nextBillingType);
+                        if (nextBillingType === 'time_and_materials')
+                          setBillingFrequency('monthly');
+                      }}
+                      label={t('projects:projects.billingType')}
+                      searchable={false}
+                      buttonClassName="h-9"
+                    />
+                    <SelectControl
+                      id="project-billing-frequency"
+                      options={
+                        billingType === 'retainer'
+                          ? translatedBillingFrequencyOptions
+                          : translatedBillingFrequencyOptions.filter(
+                              (option) => option.id === 'monthly',
+                            )
+                      }
+                      value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                      onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                      label={t('projects:projects.billingFrequency')}
+                      disabled={billingType === 'time_and_materials'}
+                      searchable={false}
+                      buttonClassName="h-9"
+                    />
+                  </div>
 
                   {/* Tasks section (create only) */}
                   {!editingProject && (
@@ -1107,6 +1356,26 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
+              ),
+            },
+            {
+              header: t('projects:projects.billingType'),
+              id: 'billingType',
+              accessorFn: (row) => formatBillingType(row.billingType),
+              cell: ({ row }) => (
+                <span className="text-xs font-bold text-zinc-600">
+                  {formatBillingType(row.billingType)}
+                </span>
+              ),
+            },
+            {
+              header: t('projects:projects.billingFrequency'),
+              id: 'billingFrequency',
+              accessorFn: (row) => formatBillingFrequency(row.billingFrequency),
+              cell: ({ row }) => (
+                <span className="text-xs text-zinc-500">
+                  {row.billingType === 'mixed' ? '-' : formatBillingFrequency(row.billingFrequency)}
+                </span>
               ),
             },
             {

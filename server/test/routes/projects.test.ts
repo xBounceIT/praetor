@@ -150,6 +150,8 @@ const SAMPLE_PROJECT = {
   isDisabled: false,
   createdAt: 1_700_000_000_000,
   orderId: null,
+  billingType: 'time_and_materials',
+  billingFrequency: 'monthly',
 };
 
 const allMocks = [
@@ -339,6 +341,18 @@ describe('POST /api/projects', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/color must be a valid hex color/);
+  });
+
+  test('400: invalid billing type', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', billingType: 'mixed' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
   });
 
   test('400: ForeignKeyError mapped to 400', async () => {

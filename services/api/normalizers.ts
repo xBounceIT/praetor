@@ -1,4 +1,5 @@
 import type {
+  BillingFrequency,
   Client,
   ClientOffer,
   ClientOfferItem,
@@ -9,6 +10,7 @@ import type {
   Invoice,
   InvoiceItem,
   Product,
+  Project,
   ProjectTask,
   Quote,
   QuoteItem,
@@ -160,6 +162,11 @@ export const normalizeProduct = (p: Product): Product => ({
   molPercentage: Number(p.molPercentage || 0),
 });
 
+export const normalizeProject = (p: Project): Project => ({
+  ...p,
+  ...normalizeProjectBilling(p.billingType, p.billingFrequency),
+});
+
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   ...normalizePricingItemFields(item),
   note: item.note || '',
@@ -202,8 +209,34 @@ export const normalizeTask = (t: ProjectTask): ProjectTask => ({
   ...t,
   recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
   expectedEffort: t.expectedEffort !== undefined ? Number(t.expectedEffort) : undefined,
+  monthlyEffort: t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined,
   revenue: t.revenue !== undefined ? Number(t.revenue) : undefined,
+  ...normalizeTaskBilling(t.billingType, t.billingFrequency),
 });
+
+const normalizeProjectBilling = (
+  billingType: Project['billingType'] | undefined,
+  billingFrequency: BillingFrequency | undefined,
+): Required<Pick<Project, 'billingType' | 'billingFrequency'>> => {
+  const resolvedBillingType = billingType ?? 'time_and_materials';
+  return {
+    billingType: resolvedBillingType,
+    billingFrequency:
+      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+  };
+};
+
+const normalizeTaskBilling = (
+  billingType: ProjectTask['billingType'] | undefined,
+  billingFrequency: BillingFrequency | undefined,
+): Required<Pick<ProjectTask, 'billingType' | 'billingFrequency'>> => {
+  const resolvedBillingType = billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+  return {
+    billingType: resolvedBillingType,
+    billingFrequency:
+      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+  };
+};
 
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
   ...s,

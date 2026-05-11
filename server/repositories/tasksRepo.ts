@@ -3,6 +3,13 @@ import { alias } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
+import {
+  type BillingFrequency,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  type StoredBillingType,
+} from '../utils/billing.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
@@ -19,10 +26,13 @@ export type Task = {
   recurrenceEnd: string | undefined;
   recurrenceDuration: number;
   expectedEffort: number | undefined;
+  monthlyEffort: number | undefined;
   revenue: number | undefined;
   notes: string | undefined;
   isDisabled: boolean;
   createdAt: number;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
 };
 
 const mapRow = (row: typeof tasks.$inferSelect): Task => ({
@@ -37,10 +47,13 @@ const mapRow = (row: typeof tasks.$inferSelect): Task => ({
   recurrenceEnd: normalizeNullableDateOnly(row.recurrenceEnd, 'task.recurrenceEnd') ?? undefined,
   recurrenceDuration: parseDbNumber(row.recurrenceDuration, 0),
   expectedEffort: parseDbNumber(row.expectedEffort, undefined),
+  monthlyEffort: parseDbNumber(row.monthlyEffort, undefined),
   revenue: parseDbNumber(row.revenue, undefined),
   notes: row.notes ?? undefined,
   isDisabled: row.isDisabled ?? false,
   createdAt: row.createdAt?.getTime() ?? 0,
+  billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
+  billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
@@ -61,10 +74,13 @@ export const listForUser = async (userId: string, exec: DbExecutor = db): Promis
       recurrenceEnd: tasks.recurrenceEnd,
       recurrenceDuration: tasks.recurrenceDuration,
       expectedEffort: tasks.expectedEffort,
+      monthlyEffort: tasks.monthlyEffort,
       revenue: tasks.revenue,
       notes: tasks.notes,
       isDisabled: tasks.isDisabled,
       createdAt: tasks.createdAt,
+      billingType: tasks.billingType,
+      billingFrequency: tasks.billingFrequency,
     })
     .from(tasks)
     .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
@@ -83,9 +99,12 @@ export type NewTask = {
   recurrenceStart: string | null;
   recurrenceDuration: number;
   expectedEffort: number;
+  monthlyEffort: number;
   revenue: number;
   notes: string | null;
   isDisabled: boolean;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
 };
 
 export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task> => {
@@ -102,9 +121,12 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
         recurrenceStart: task.recurrenceStart,
         recurrenceDuration: numericForDb(task.recurrenceDuration),
         expectedEffort: numericForDb(task.expectedEffort),
+        monthlyEffort: numericForDb(task.monthlyEffort),
         revenue: numericForDb(task.revenue),
         notes: task.notes,
         isDisabled: task.isDisabled,
+        billingType: task.billingType,
+        billingFrequency: normalizeBillingFrequency(task.billingType, task.billingFrequency),
       })
       .returning();
     return mapRow(rows[0]);
@@ -124,8 +146,11 @@ export type TaskUpdate = {
   recurrenceDuration?: number | null;
   isDisabled?: boolean;
   expectedEffort?: number | null;
+  monthlyEffort?: number | null;
   revenue?: number | null;
   notes?: string | null;
+  billingType?: StoredBillingType | null;
+  billingFrequency?: BillingFrequency | null;
 };
 
 export const update = async (
@@ -146,8 +171,23 @@ export const update = async (
     set.recurrenceDuration = numericForDb(patch.recurrenceDuration);
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
   if (patch.expectedEffort !== undefined) set.expectedEffort = numericForDb(patch.expectedEffort);
+  if (patch.monthlyEffort !== undefined) set.monthlyEffort = numericForDb(patch.monthlyEffort);
   if (patch.revenue !== undefined) set.revenue = numericForDb(patch.revenue);
   if (patch.notes !== undefined) set.notes = patch.notes;
+  if (patch.billingType !== undefined) {
+    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+    set.billingType = nextBillingType;
+    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
+  } else if (patch.billingFrequency !== undefined) {
+    const currentRows = await exec
+      .select({ billingType: tasks.billingType })
+      .from(tasks)
+      .where(eq(tasks.id, id));
+    set.billingFrequency = normalizeBillingFrequency(
+      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
+      patch.billingFrequency,
+    );
+  }
 
   if (Object.keys(set).length === 0) {
     // No fields to update. Routes rely on this branch to return the current row when called

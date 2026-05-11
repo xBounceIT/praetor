@@ -9,6 +9,7 @@ import {
   normalizeInvoice,
   normalizeInvoiceItem,
   normalizeProduct,
+  normalizeProject,
   normalizeQuote,
   normalizeQuoteItem,
   normalizeSupplierInvoice,
@@ -31,6 +32,7 @@ import type {
   Invoice,
   InvoiceItem,
   Product,
+  Project,
   ProjectTask,
   Quote,
   QuoteItem,
@@ -659,15 +661,17 @@ describe('normalizeTimeEntry', () => {
 describe('normalizeTask', () => {
   const baseTask: ProjectTask = { id: 't-1', name: 'Test task', projectId: 'pr-1' };
 
-  test('parses recurrenceDuration, expectedEffort, and revenue', () => {
+  test('parses recurrenceDuration, expectedEffort, monthlyEffort, and revenue', () => {
     const task = make<ProjectTask>(baseTask, {
       recurrenceDuration: '7',
       expectedEffort: '8',
+      monthlyEffort: '3',
       revenue: '100',
     });
     const result = normalizeTask(task);
     expect(result.recurrenceDuration).toBe(7);
     expect(result.expectedEffort).toBe(8);
+    expect(result.monthlyEffort).toBe(3);
     expect(result.revenue).toBe(100);
   });
 
@@ -675,14 +679,70 @@ describe('normalizeTask', () => {
     const result = normalizeTask(baseTask);
     expect(result.recurrenceDuration).toBe(0);
     expect(result.expectedEffort).toBeUndefined();
+    expect(result.monthlyEffort).toBeUndefined();
     expect(result.revenue).toBeUndefined();
+    expect(result.billingType).toBe('time_and_materials');
+    expect(result.billingFrequency).toBe('monthly');
   });
 
-  test('coerces 0 expectedEffort and 0 revenue (defined → Number)', () => {
-    const task = make<ProjectTask>(baseTask, { expectedEffort: 0, revenue: 0 });
+  test('coerces 0 effort and revenue fields (defined → Number)', () => {
+    const task = make<ProjectTask>(baseTask, { expectedEffort: 0, monthlyEffort: 0, revenue: 0 });
     const result = normalizeTask(task);
     expect(result.expectedEffort).toBe(0);
+    expect(result.monthlyEffort).toBe(0);
     expect(result.revenue).toBe(0);
+  });
+
+  test('normalizes time and materials frequency to monthly', () => {
+    const task = make<ProjectTask>(baseTask, {
+      billingType: 'time_and_materials',
+      billingFrequency: 'one_time',
+    });
+    expect(normalizeTask(task).billingFrequency).toBe('monthly');
+  });
+
+  test('normalizes legacy partial billing payloads to time and materials monthly', () => {
+    const task = make<ProjectTask>(baseTask, { billingFrequency: 'one_time' });
+    expect(normalizeTask(task)).toMatchObject({
+      billingType: 'time_and_materials',
+      billingFrequency: 'monthly',
+    });
+  });
+
+  test('does not preserve mixed billing type on tasks', () => {
+    const task = make<ProjectTask>(baseTask, {
+      billingType: 'mixed',
+      billingFrequency: 'one_time',
+    });
+    expect(normalizeTask(task)).toMatchObject({
+      billingType: 'time_and_materials',
+      billingFrequency: 'monthly',
+    });
+  });
+});
+
+describe('normalizeProject', () => {
+  const baseProject: Project = {
+    id: 'p-1',
+    name: 'Project',
+    clientId: 'c-1',
+    color: '#3b82f6',
+  };
+
+  test('normalizes legacy partial billing payloads to time and materials monthly', () => {
+    const project = make<Project>(baseProject, { billingFrequency: 'one_time' });
+    expect(normalizeProject(project)).toMatchObject({
+      billingType: 'time_and_materials',
+      billingFrequency: 'monthly',
+    });
+  });
+
+  test('preserves derived mixed billing type on projects', () => {
+    const project = make<Project>(baseProject, { billingType: 'mixed' });
+    expect(normalizeProject(project)).toMatchObject({
+      billingType: 'mixed',
+      billingFrequency: 'monthly',
+    });
   });
 });
 
