@@ -308,14 +308,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
           return (
             <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
+              {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
         },
         filterFormat: (value) => {
           const timestamp = typeof value === 'number' ? value : Number(value);
           if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-          return formatInsertDate(timestamp);
+          return formatInsertDate(timestamp, i18n.language);
         },
       },
       {
@@ -590,6 +590,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       t,
       isHistoryRow,
       hasOrderForQuote,
+      i18n.language,
     ],
   );
 

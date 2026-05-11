@@ -696,7 +696,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           }
           return (
             <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
+              {formatInsertDate(row.createdAt, language)}
             </span>
           );
         },
@@ -705,7 +705,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           if (!Number.isFinite(timestamp) || timestamp <= 0) {
             return '-';
           }
-          return formatInsertDate(timestamp);
+          return formatInsertDate(timestamp, language);
         },
       },
       {

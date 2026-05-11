@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen } from '@testing-library/react';
+import enTimesheets from '../../locales/en/timesheets.json';
+import itTimesheets from '../../locales/it/timesheets.json';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -7,9 +9,17 @@ installI18nMock();
 const Calendar = (await import('../../components/shared/Calendar')).default;
 
 describe('<Calendar />', () => {
-  test('renders Italian day headers in Monday-first order', () => {
+  test('renders day-of-week header keys in Monday-first order', () => {
     render(<Calendar startOfWeek="Monday" />);
-    const headers = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+    const headers = [
+      'calendar.daysShort.mon',
+      'calendar.daysShort.tue',
+      'calendar.daysShort.wed',
+      'calendar.daysShort.thu',
+      'calendar.daysShort.fri',
+      'calendar.daysShort.sat',
+      'calendar.daysShort.sun',
+    ];
     headers.forEach((h) => {
       expect(screen.getByText(h)).toBeInTheDocument();
     });
@@ -17,9 +27,9 @@ describe('<Calendar />', () => {
 
   test('Sunday-first order swaps headers', () => {
     render(<Calendar startOfWeek="Sunday" />);
-    const headers = screen.getAllByText(/^(Lun|Mar|Mer|Gio|Ven|Sab|Dom)$/);
-    expect(headers[0].textContent).toBe('Dom');
-    expect(headers[6].textContent).toBe('Sab');
+    const headers = screen.getAllByText(/^calendar\.daysShort\.(mon|tue|wed|thu|fri|sat|sun)$/);
+    expect(headers[0].textContent).toBe('calendar.daysShort.sun');
+    expect(headers[6].textContent).toBe('calendar.daysShort.sat');
   });
 
   test('clicking a non-weekend day calls onDateSelect', () => {
@@ -112,23 +122,38 @@ describe('<Calendar />', () => {
     expect(secondEnd).toMatch(/^\d{4}-\d{2}-05$/);
   });
 
-  test('Today button selects today in single mode', () => {
+  test('Today button uses translation key and selects today in single mode', () => {
     const onDateSelect = mock((_d: string) => {});
     render(<Calendar onDateSelect={onDateSelect} startOfWeek="Monday" allowWeekendSelection />);
-    fireEvent.click(screen.getByText('Oggi'));
+    const todayButton = screen.getByText('calendar.today');
+    expect(todayButton).toBeInTheDocument();
+    fireEvent.click(todayButton);
     expect(onDateSelect).toHaveBeenCalled();
     const arg = onDateSelect.mock.calls[0][0] as string;
     expect(arg).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  test('header month label uses a translation key, not a hardcoded Italian month', () => {
+    render(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
+    // March → calendar.months.march
+    expect(screen.getByText('calendar.months.march')).toBeInTheDocument();
+    // No hardcoded Italian month strings should leak through.
+    expect(screen.queryByText('Marzo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Gennaio')).not.toBeInTheDocument();
+  });
+
   test('month picker opens on click and selects a month', () => {
     render(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
-    // Click the month-name button in the header (March in Italian = "Marzo")
-    fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated names — click "Mag" for May
-    fireEvent.click(screen.getByText('Mag'));
-    // Header should now show full name "Maggio"
-    expect(screen.getByText('Maggio')).toBeInTheDocument();
+    // The header shows the month-name translation key.
+    fireEvent.click(screen.getByText('calendar.months.march'));
+    // Picker rows are the first 3 chars of each translation key — all start with "cal",
+    // so the picker has 12 buttons that each say "cal".
+    const pickerButtons = screen.getAllByText('cal');
+    expect(pickerButtons).toHaveLength(12);
+    // Click May (index 4)
+    fireEvent.click(pickerButtons[4]);
+    // Header should now show the May key
+    expect(screen.getByText('calendar.months.may')).toBeInTheDocument();
   });
 
   test('mousedown outside container closes the open picker', () => {
@@ -138,13 +163,13 @@ describe('<Calendar />', () => {
         <Calendar selectedDate="2024-03-15" startOfWeek="Monday" />
       </div>,
     );
-    fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated month names — "Apr" appears only when picker is open
-    expect(screen.getByText('Apr')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('calendar.months.march'));
+    // Picker open → 12 "cal" abbreviated buttons in DOM
+    expect(screen.getAllByText('cal')).toHaveLength(12);
 
     fireEvent.mouseDown(screen.getByTestId('outside'));
-    // Picker now closed: "Apr" should no longer be in DOM
-    expect(screen.queryByText('Apr')).not.toBeInTheDocument();
+    // Picker now closed: no "cal" abbreviations remain
+    expect(screen.queryByText('cal')).not.toBeInTheDocument();
   });
 
   test('Italian holiday Jan 1 marks day as forbidden in single mode', () => {
@@ -163,5 +188,65 @@ describe('<Calendar />', () => {
     const jan1Button = day1Buttons.find((btn) => btn?.disabled);
     expect(jan1Button).toBeDefined();
     expect(jan1Button).toBeDisabled();
+  });
+
+  describe('translation key coverage (it / en locales)', () => {
+    test('Italian locale defines every month and short-day name used by Calendar', () => {
+      const months = itTimesheets.calendar.months as Record<string, string>;
+      expect(months.january).toBe('Gennaio');
+      expect(months.february).toBe('Febbraio');
+      expect(months.march).toBe('Marzo');
+      expect(months.april).toBe('Aprile');
+      expect(months.may).toBe('Maggio');
+      expect(months.june).toBe('Giugno');
+      expect(months.july).toBe('Luglio');
+      expect(months.august).toBe('Agosto');
+      expect(months.september).toBe('Settembre');
+      expect(months.october).toBe('Ottobre');
+      expect(months.november).toBe('Novembre');
+      expect(months.december).toBe('Dicembre');
+
+      const days = itTimesheets.calendar.daysShort as Record<string, string>;
+      expect(days.mon).toBe('Lun');
+      expect(days.tue).toBe('Mar');
+      expect(days.wed).toBe('Mer');
+      expect(days.thu).toBe('Gio');
+      expect(days.fri).toBe('Ven');
+      expect(days.sat).toBe('Sab');
+      expect(days.sun).toBe('Dom');
+
+      expect(itTimesheets.calendar.today).toBe('Oggi');
+      expect(itTimesheets.calendar.saturday).toBe('Sabato');
+      expect(itTimesheets.calendar.sunday).toBe('Domenica');
+    });
+
+    test('English locale defines every month and short-day name used by Calendar', () => {
+      const months = enTimesheets.calendar.months as Record<string, string>;
+      expect(months.january).toBe('January');
+      expect(months.february).toBe('February');
+      expect(months.march).toBe('March');
+      expect(months.april).toBe('April');
+      expect(months.may).toBe('May');
+      expect(months.june).toBe('June');
+      expect(months.july).toBe('July');
+      expect(months.august).toBe('August');
+      expect(months.september).toBe('September');
+      expect(months.october).toBe('October');
+      expect(months.november).toBe('November');
+      expect(months.december).toBe('December');
+
+      const days = enTimesheets.calendar.daysShort as Record<string, string>;
+      expect(days.mon).toBe('Mon');
+      expect(days.tue).toBe('Tue');
+      expect(days.wed).toBe('Wed');
+      expect(days.thu).toBe('Thu');
+      expect(days.fri).toBe('Fri');
+      expect(days.sat).toBe('Sat');
+      expect(days.sun).toBe('Sun');
+
+      expect(enTimesheets.calendar.today).toBe('Today');
+      expect(enTimesheets.calendar.saturday).toBe('Saturday');
+      expect(enTimesheets.calendar.sunday).toBe('Sunday');
+    });
   });
 });

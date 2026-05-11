@@ -88,7 +88,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-  const { t } = useTranslation(['projects', 'common', 'form']);
+  const { t, i18n } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasPermission(
     permissions,
     buildPermission('projects.manage', 'create'),
@@ -1071,7 +1071,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               accessorFn: (row) => row.createdAt ?? 0,
               cell: ({ row }) => (
                 <span className="text-xs text-slate-500 whitespace-nowrap">
-                  {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+                  {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
                 </span>
               ),
             },

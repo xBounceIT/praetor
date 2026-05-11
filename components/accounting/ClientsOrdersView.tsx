@@ -415,14 +415,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
           return (
             <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
+              {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
         },
         filterFormat: (value: unknown) => {
           const timestamp = typeof value === 'number' ? value : Number(value);
           if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-          return formatInsertDate(timestamp);
+          return formatInsertDate(timestamp, i18n.language);
         },
       },
       {
@@ -667,7 +667,16 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [currency, onUpdateClientsOrder, onViewOffer, t, confirmDelete, openEditModal, orderPricingMap],
+    [
+      currency,
+      onUpdateClientsOrder,
+      onViewOffer,
+      t,
+      confirmDelete,
+      openEditModal,
+      orderPricingMap,
+      i18n.language,
+    ],
   );
 
   return (

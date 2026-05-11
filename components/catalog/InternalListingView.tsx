@@ -64,7 +64,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onRenameInternalSubcategory,
   onDeleteInternalSubcategory,
 }) => {
-  const { t } = useTranslation(['crm', 'common']);
+  const { t, i18n } = useTranslation(['crm', 'common']);
 
   // Product Types State
   const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
@@ -1556,10 +1556,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             accessorFn: (row) => row.createdAt ?? 0,
             cell: ({ value }) => (
               <span className="text-xs text-slate-500 whitespace-nowrap">
-                {formatInsertDate(value as number | null)}
+                {formatInsertDate(value as number | null, i18n.language)}
               </span>
             ),
-            filterFormat: (value) => formatInsertDate(value as number | null),
+            filterFormat: (value) => formatInsertDate(value as number | null, i18n.language),
           },
           {
             header: t('common:labels.name'),

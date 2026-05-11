@@ -6,6 +6,25 @@ import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date'
 import { isItalianHoliday } from '../../utils/holidays';
 import Tooltip from './Tooltip';
 
+const MONTH_KEYS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+] as const;
+
+// Day keys run Mon→Sun; rotation handled at render time per `startOfWeek`.
+const DAY_KEYS_MONDAY_FIRST = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const DAY_KEYS_SUNDAY_FIRST = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
 export interface CalendarProps {
   // Original props
   selectedDate?: string;
@@ -90,25 +109,9 @@ const Calendar: React.FC<CalendarProps> = ({
     return totals;
   }, [entries]);
 
-  const monthNames = [
-    'Gennaio',
-    'Febbraio',
-    'Marzo',
-    'Aprile',
-    'Maggio',
-    'Giugno',
-    'Luglio',
-    'Agosto',
-    'Settembre',
-    'Ottobre',
-    'Novembre',
-    'Dicembre',
-  ];
-
-  const dayHeaders =
-    startOfWeek === 'Monday'
-      ? ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
-      : ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const monthNames = MONTH_KEYS.map((m) => t(`calendar.months.${m}`));
+  const dayHeaderKeys = startOfWeek === 'Monday' ? DAY_KEYS_MONDAY_FIRST : DAY_KEYS_SUNDAY_FIRST;
+  const dayHeaders = dayHeaderKeys.map((d) => t(`calendar.daysShort.${d}`));
 
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
@@ -167,7 +170,12 @@ const Calendar: React.FC<CalendarProps> = ({
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
     const isForbidden = !allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday;
     const holidayLabel =
-      holidayName || (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '');
+      holidayName ||
+      (isSunday
+        ? t('calendar.sunday')
+        : isSaturday && treatSaturdayAsHoliday
+          ? t('calendar.saturday')
+          : '');
 
     days.push(
       <Tooltip key={d} label={holidayLabel} disabled={!holidayLabel} wrapperClassName="w-full">
@@ -338,7 +346,7 @@ const Calendar: React.FC<CalendarProps> = ({
               isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
             }`}
           >
-            Oggi
+            {t('calendar.today')}
           </button>
           <button
             type="button"

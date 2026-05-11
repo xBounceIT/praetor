@@ -40,7 +40,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   onDeleteSupplier,
   permissions,
 }) => {
-  const { t } = useTranslation(['crm', 'common']);
+  const { t, i18n } = useTranslation(['crm', 'common']);
   const canCreateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'create'));
   const canUpdateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'update'));
   const canDeleteSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'delete'));
@@ -216,7 +216,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
           }
           return (
             <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
+              {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
         },
@@ -225,7 +225,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
           if (!Number.isFinite(timestamp) || timestamp <= 0) {
             return '-';
           }
-          return formatInsertDate(timestamp);
+          return formatInsertDate(timestamp, i18n.language);
         },
       },
       {
@@ -353,6 +353,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       confirmDelete,
       supplierOrders,
       currency,
+      i18n.language,
     ],
   );
 
