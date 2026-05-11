@@ -235,7 +235,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className={`bg-white rounded-3xl border border-zinc-200 shadow-sm w-full relative ${
+      className={`bg-white rounded-lg border border-zinc-200 shadow-sm w-full relative ${
         isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
       }`}
       ref={containerRef}
@@ -276,7 +276,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
           {/* Month Picker Overlay */}
           {isMonthPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-xl p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
               {monthNames.map((mName, idx) => (
                 <button
                   key={mName}
@@ -301,7 +301,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
           {/* Year Picker Overlay */}
           {isYearPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-xl p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
               {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
                 <button
                   key={y}

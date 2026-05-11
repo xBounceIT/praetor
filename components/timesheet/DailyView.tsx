@@ -8,6 +8,8 @@ import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { Button } from '../ui/button';
+import { Field, FieldError, FieldLabel } from '../ui/field';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -339,22 +341,21 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase tracking-wider">
+          <Field className="min-w-0 gap-1" data-invalid={!!errors.hours}>
+            <FieldLabel className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
-            </label>
+            </FieldLabel>
             <ValidatedNumberInput
               value={duration}
               onValueChange={handleDurationChange}
               placeholder="0.0"
-              className={`w-full px-3 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 focus:ring-praetor'}`}
+              aria-invalid={!!errors.hours}
+              className="h-9 bg-zinc-50 text-sm font-bold shadow-none"
             />
-            {errors.hours && (
-              <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">
-                {errors.hours}
-              </p>
-            )}
-          </div>
+            <FieldError className="text-[10px] font-bold animate-in fade-in">
+              {errors.hours}
+            </FieldError>
+          </Field>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
@@ -372,12 +373,12 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0 flex items-end">
-            <button
+            <Button
               type="submit"
-              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-zinc-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
+              className="w-full h-10 rounded-lg bg-praetor px-5 text-sm font-bold text-white shadow-md hover:bg-zinc-700 hover:shadow-lg whitespace-nowrap"
             >
               {t('entry.logTime')}
-            </button>
+            </Button>
           </div>
         </div>
 
