@@ -852,7 +852,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                     id="task-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="-"
+                    placeholder={t('common:form.placeholderNotes')}
                     rows={3}
                     className="min-h-20 resize-none"
                   />

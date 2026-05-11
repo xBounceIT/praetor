@@ -56,7 +56,7 @@
     "addTaskRow": "Add Task",
     "taskName": "Task Name",
     "expectedEffort": "Total effort (h)",
-    "monthlyEffort": "Estimated monthly effort (h)",
+    "monthlyEffort": "Monthly effort (h)",
     "billingType": "Billing",
     "billingFrequency": "Frequency",
     "billingTypes": {

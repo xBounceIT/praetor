@@ -56,7 +56,7 @@
     "addTaskRow": "Aggiungi Attività",
     "taskName": "Nome Attività",
     "expectedEffort": "Impegno totale (h)",
-    "monthlyEffort": "Stima impegno mensile (h)",
+    "monthlyEffort": "Impegno mensile (h)",
     "billingType": "Consuntivazione",
     "billingFrequency": "Frequenza",
     "billingTypes": {
