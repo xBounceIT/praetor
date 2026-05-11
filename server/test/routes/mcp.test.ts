@@ -7,6 +7,8 @@ import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts'
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
+import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realReportsRoutes from '../../routes/reports.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
@@ -15,6 +17,8 @@ const clientsRepoSnap = { ...realClientsRepo };
 const suppliersRepoSnap = { ...realSuppliersRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
+const usersRepoSnap = { ...realUsersRepo };
+const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const reportsRoutesSnap = { ...realReportsRoutes };
 
@@ -24,6 +28,11 @@ const projectsListAllMock = mock();
 const projectsListForUserMock = mock();
 const tasksListAllMock = mock();
 const tasksListForUserMock = mock();
+const usersListAllForAdminMock = mock();
+const usersListScopedForManagerMock = mock();
+const workUnitsListAllMock = mock();
+const workUnitsListManagedByMock = mock();
+const workUnitsListUserIdsByUnitIdsMock = mock();
 const notificationsListForUserMock = mock();
 const notificationsCountUnreadForUserMock = mock();
 const markNotificationReadForUserMock = mock();
@@ -85,6 +94,17 @@ beforeAll(async () => {
     listAll: tasksListAllMock,
     listForUser: tasksListForUserMock,
   }));
+  mock.module('../../repositories/usersRepo.ts', () => ({
+    ...usersRepoSnap,
+    listAllForAdmin: usersListAllForAdminMock,
+    listScopedForManager: usersListScopedForManagerMock,
+  }));
+  mock.module('../../repositories/workUnitsRepo.ts', () => ({
+    ...workUnitsRepoSnap,
+    listAll: workUnitsListAllMock,
+    listManagedBy: workUnitsListManagedByMock,
+    listUserIdsByUnitIds: workUnitsListUserIdsByUnitIdsMock,
+  }));
   mock.module('../../repositories/notificationsRepo.ts', () => ({
     ...notificationsRepoSnap,
     listForUser: notificationsListForUserMock,
@@ -108,6 +128,8 @@ afterAll(() => {
   mock.module('../../repositories/suppliersRepo.ts', () => suppliersRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
+  mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
+  mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('../../routes/reports.ts', () => reportsRoutesSnap);
 });
@@ -121,6 +143,11 @@ beforeEach(async () => {
     projectsListForUserMock,
     tasksListAllMock,
     tasksListForUserMock,
+    usersListAllForAdminMock,
+    usersListScopedForManagerMock,
+    workUnitsListAllMock,
+    workUnitsListManagedByMock,
+    workUnitsListUserIdsByUnitIdsMock,
     notificationsListForUserMock,
     notificationsCountUnreadForUserMock,
     markNotificationReadForUserMock,
@@ -140,6 +167,37 @@ beforeEach(async () => {
   projectsListForUserMock.mockResolvedValue([{ id: 'p1', name: 'Project One', clientId: 'c1' }]);
   tasksListAllMock.mockResolvedValue([]);
   tasksListForUserMock.mockResolvedValue([{ id: 't1', name: 'Task One', projectId: 'p1' }]);
+  usersListAllForAdminMock.mockResolvedValue([]);
+  usersListScopedForManagerMock.mockResolvedValue([
+    {
+      id: 'u1',
+      name: 'Alice',
+      username: 'alice',
+      email: 'alice@example.com',
+      role: 'user',
+      avatarInitials: 'AL',
+      costPerHour: 42,
+      isDisabled: false,
+      employeeType: 'app_user',
+      hasTopManagerRole: false,
+      isAdminOnly: false,
+    },
+  ]);
+  workUnitsListAllMock.mockResolvedValue([]);
+  workUnitsListManagedByMock.mockResolvedValue([
+    {
+      id: 'wu1',
+      name: 'Engineering',
+      description: null,
+      managers: [{ id: 'u1', name: 'Alice' }],
+      isDisabled: false,
+      userCount: 2,
+    },
+  ]);
+  workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([
+    { workUnitId: 'wu1', userId: 'u1' },
+    { workUnitId: 'wu1', userId: 'u2' },
+  ]);
   notificationsListForUserMock.mockResolvedValue([]);
   notificationsCountUnreadForUserMock.mockResolvedValue(0);
   markNotificationReadForUserMock.mockResolvedValue(true);
@@ -195,9 +253,9 @@ describe('/api/mcp', () => {
     const toolsRes = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     expect(toolsRes.statusCode).toBe(200);
     const toolsBody = parseMcpBody(toolsRes.body);
-    expect(toolsBody.result.tools.map((tool: { name: string }) => tool.name)).toContain(
-      'praetor_list_clients',
-    );
+    const toolNames = toolsBody.result.tools.map((tool: { name: string }) => tool.name);
+    expect(toolNames).toContain('praetor_list_clients');
+    expect(toolNames).toContain('praetor_get_users_hierarchy');
 
     const clientsRes = await rpc({
       jsonrpc: '2.0',
@@ -229,5 +287,139 @@ describe('/api/mcp', () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0].text).toBe('Insufficient permissions');
     expect(clientsListMock).not.toHaveBeenCalled();
+  });
+
+  test('returns permission-scoped users hierarchy with protected fields masked', async () => {
+    currentPermissions = ['timesheets.tracker.view', 'hr.work_units.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.users).toEqual([
+      {
+        id: 'u1',
+        name: 'Alice',
+        username: 'alice',
+        email: '',
+        role: 'user',
+        avatarInitials: 'AL',
+        costPerHour: 0,
+        isDisabled: false,
+        employeeType: 'app_user',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+    ]);
+    expect(body.result.structuredContent.workUnits).toEqual([
+      {
+        id: 'wu1',
+        name: 'Engineering',
+        description: null,
+        managers: [{ id: 'u1', name: 'Alice' }],
+        isDisabled: false,
+        userCount: 2,
+        userIds: ['u1', 'u2'],
+      },
+    ]);
+    expect(body.result.structuredContent.scope).toEqual({
+      canViewAllUsers: false,
+      canViewAllWorkUnits: false,
+      canViewWorkUnits: true,
+      includesCosts: false,
+      includesEmails: false,
+    });
+    expect(usersListScopedForManagerMock).toHaveBeenCalledWith('u1', {
+      canViewManagedUsers: true,
+      canViewInternal: false,
+      canViewExternal: false,
+    });
+    expect(workUnitsListManagedByMock).toHaveBeenCalledWith('u1');
+    expect(workUnitsListUserIdsByUnitIdsMock).toHaveBeenCalledWith(['wu1']);
+    expect(usersListAllForAdminMock).not.toHaveBeenCalled();
+    expect(workUnitsListAllMock).not.toHaveBeenCalled();
+  });
+
+  test('returns all users and work units when hierarchy permissions allow it', async () => {
+    currentPermissions = [
+      'administration.user_management_all.view',
+      'hr.work_units.view',
+      'hr.work_units_all.view',
+      'hr.costs.view',
+    ];
+    usersListAllForAdminMock.mockResolvedValue([
+      {
+        id: 'u2',
+        name: 'Bob',
+        username: 'bob',
+        email: 'bob@example.com',
+        role: 'manager',
+        avatarInitials: 'BO',
+        costPerHour: 84,
+        isDisabled: false,
+        employeeType: 'internal',
+        hasTopManagerRole: true,
+        isAdminOnly: false,
+      },
+    ]);
+    workUnitsListAllMock.mockResolvedValue([
+      {
+        id: 'wu-all',
+        name: 'Operations',
+        description: 'Ops',
+        managers: [{ id: 'u2', name: 'Bob' }],
+        isDisabled: false,
+        userCount: 1,
+      },
+    ]);
+    workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([{ workUnitId: 'wu-all', userId: 'u2' }]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.users[0].email).toBe('bob@example.com');
+    expect(body.result.structuredContent.users[0].costPerHour).toBe(84);
+    expect(body.result.structuredContent.workUnits[0].userIds).toEqual(['u2']);
+    expect(body.result.structuredContent.scope).toEqual({
+      canViewAllUsers: true,
+      canViewAllWorkUnits: true,
+      canViewWorkUnits: true,
+      includesCosts: true,
+      includesEmails: true,
+    });
+    expect(usersListAllForAdminMock).toHaveBeenCalled();
+    expect(usersListScopedForManagerMock).not.toHaveBeenCalled();
+    expect(workUnitsListAllMock).toHaveBeenCalled();
+    expect(workUnitsListManagedByMock).not.toHaveBeenCalled();
+  });
+
+  test('enforces Praetor permissions for users hierarchy', async () => {
+    currentPermissions = [];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toBe('Insufficient permissions');
+    expect(usersListScopedForManagerMock).not.toHaveBeenCalled();
+    expect(workUnitsListManagedByMock).not.toHaveBeenCalled();
+    expect(workUnitsListUserIdsByUnitIdsMock).not.toHaveBeenCalled();
   });
 });

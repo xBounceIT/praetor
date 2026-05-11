@@ -8,6 +8,8 @@ import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
+import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
   createTimeEntry,
   deleteTimeEntry,
@@ -67,6 +69,17 @@ const TASK_LIST_PERMISSIONS = [
   'timesheets.recurring.view',
 ] as const;
 
+const USER_HIERARCHY_PERMISSIONS = [
+  'administration.user_management.view',
+  'administration.user_management_all.view',
+  'hr.internal.view',
+  'hr.external.view',
+  'timesheets.tracker.view',
+  'projects.manage.view',
+  'projects.tasks.view',
+  'hr.work_units.view',
+] as const;
+
 const enforceAny = (
   user: McpAuthenticatedUser,
   permissions: readonly string[],
@@ -94,6 +107,26 @@ const requireUser = (ctx: ServerContext): McpAuthenticatedUser => {
 
 const enforce = (user: McpAuthenticatedUser, permission: string): CallToolResult | null =>
   hasPermission(user, permission) ? null : toolError('Insufficient permissions');
+
+const canViewAllUsers = (user: McpAuthenticatedUser) =>
+  hasPermission(user, 'administration.user_management_all.view') ||
+  hasPermission(user, 'hr.work_units_all.view');
+
+const canViewUserEmails = (user: McpAuthenticatedUser) =>
+  hasPermission(user, 'administration.user_management_all.view') ||
+  hasPermission(user, 'administration.user_management.view');
+
+const canViewAllWorkUnits = (user: McpAuthenticatedUser) =>
+  hasPermission(user, 'hr.work_units_all.view');
+
+const maskUser = (
+  user: usersRepo.UserListRow,
+  options: { canViewCosts: boolean; canViewEmails: boolean },
+) => ({
+  ...user,
+  email: options.canViewEmails ? user.email : '',
+  costPerHour: options.canViewCosts ? user.costPerHour : 0,
+});
 
 const runTimeEntryTool = async (
   operation: () => Promise<Record<string, unknown>>,
@@ -202,6 +235,68 @@ const buildServer = () => {
         ? await tasksRepo.listAll()
         : await tasksRepo.listForUser(user.id);
       return jsonResult({ tasks });
+    },
+  );
+
+  server.registerTool(
+    'praetor_get_users_hierarchy',
+    {
+      title: 'Get Users Hierarchy',
+      description:
+        'Return permission-scoped users and visible work-unit hierarchy, including managers and member user IDs.',
+      annotations: { readOnlyHint: true },
+    },
+    async (ctx) => {
+      const user = requireUser(ctx);
+      const denied = enforceAny(user, USER_HIERARCHY_PERMISSIONS);
+      if (denied) return denied;
+
+      const users = canViewAllUsers(user)
+        ? await usersRepo.listAllForAdmin()
+        : await usersRepo.listScopedForManager(user.id, {
+            canViewManagedUsers:
+              hasPermission(user, 'timesheets.tracker.view') ||
+              hasPermission(user, 'hr.work_units.view') ||
+              hasPermission(user, 'administration.user_management.view'),
+            canViewInternal: hasPermission(user, 'hr.internal.view'),
+            canViewExternal: hasPermission(user, 'hr.external.view'),
+          });
+
+      const visibleWorkUnits = hasPermission(user, 'hr.work_units.view')
+        ? canViewAllWorkUnits(user)
+          ? await workUnitsRepo.listAll()
+          : await workUnitsRepo.listManagedBy(user.id)
+        : [];
+
+      const memberRows = await workUnitsRepo.listUserIdsByUnitIds(
+        visibleWorkUnits.map((unit) => unit.id),
+      );
+      const userIdsByWorkUnit = new Map<string, string[]>();
+      for (const row of memberRows) {
+        const current = userIdsByWorkUnit.get(row.workUnitId) ?? [];
+        current.push(row.userId);
+        userIdsByWorkUnit.set(row.workUnitId, current);
+      }
+
+      return jsonResult({
+        users: users.map((entry) =>
+          maskUser(entry, {
+            canViewCosts: hasPermission(user, 'hr.costs.view'),
+            canViewEmails: canViewUserEmails(user),
+          }),
+        ),
+        workUnits: visibleWorkUnits.map((unit) => ({
+          ...unit,
+          userIds: userIdsByWorkUnit.get(unit.id) ?? [],
+        })),
+        scope: {
+          canViewAllUsers: canViewAllUsers(user),
+          canViewAllWorkUnits: canViewAllWorkUnits(user),
+          canViewWorkUnits: hasPermission(user, 'hr.work_units.view'),
+          includesCosts: hasPermission(user, 'hr.costs.view'),
+          includesEmails: canViewUserEmails(user),
+        },
+      });
     },
   );
 

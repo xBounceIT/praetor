@@ -29,7 +29,7 @@ Praetor espone un endpoint MCP remoto su `/api/mcp` per agenti compatibili con M
 
 Il token viene mostrato una sola volta al momento della creazione. Praetor conserva solo un hash, quindi revoca e ricrea il token se viene perso.
 
-Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, clienti, fornitori, progetti, attività, consuntivi, notifiche e dataset di AI reporting.
+Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, consuntivi, notifiche e dataset di AI reporting.
 
 Configura il client MCP con l'URL dell'endpoint e l'header:
 
@@ -50,6 +50,7 @@ Per collegare un agente esterno:
 Strumenti supportati:
 
 - `praetor_get_current_user`
+- `praetor_get_users_hierarchy`
 - `praetor_list_clients`
 - `praetor_list_suppliers`
 - `praetor_list_projects`

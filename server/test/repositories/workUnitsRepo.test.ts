@@ -197,6 +197,33 @@ describe('findUserIds', () => {
   });
 });
 
+describe('listUserIdsByUnitIds', () => {
+  test('skips query when unitIds is empty', async () => {
+    const result = await workUnitsRepo.listUserIdsByUnitIds([], testDb);
+    expect(result).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('binds unitIds as a text array and returns unit/user pairs', async () => {
+    exec.enqueue({
+      rows: [
+        { workUnitId: 'wu-1', userId: 'u-1' },
+        { workUnitId: 'wu-2', userId: 'u-2' },
+      ],
+    });
+
+    const result = await workUnitsRepo.listUserIdsByUnitIds(['wu-1', 'wu-2'], testDb);
+
+    expect(result).toEqual([
+      { workUnitId: 'wu-1', userId: 'u-1' },
+      { workUnitId: 'wu-2', userId: 'u-2' },
+    ]);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from user_work_units');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('any(');
+    expect(exec.calls[0].params).toContainEqual(['wu-1', 'wu-2']);
+  });
+});
+
 describe('findNameById', () => {
   test('returns name when found', async () => {
     exec.enqueue({ rows: [['Eng']] });
