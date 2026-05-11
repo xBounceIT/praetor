@@ -19,9 +19,8 @@ describe('ProjectsView mixed billing edit behavior', () => {
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
 
-    expect(source).toContain(
-      "if (editingProject.billingType !== 'mixed' || projectBillingChanged)",
-    );
+    expect(source).toContain("if (displayProjectBillingType !== 'mixed' || projectBillingChanged)");
+    expect(source).toContain('const getDerivedProjectBillingType = (project: Project)');
     expect(source.match(/setProjectBillingChanged\(true\)/g) ?? []).toHaveLength(2);
   });
 });
