@@ -76,7 +76,7 @@ describe('makeClientHandlers', () => {
     );
     const clients = makeStubSetter<ClientLike>([{ id: 'c1' }]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -91,7 +91,7 @@ describe('makeClientHandlers', () => {
   test('add rethrows on api error', async () => {
     apiMocks.clientsCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: makeStubSetter<ClientLike>([]).setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -108,7 +108,7 @@ describe('makeClientHandlers', () => {
       { id: 'c2', name: 'Beta' },
     ]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -134,7 +134,7 @@ describe('makeClientHandlers', () => {
     ]);
 
     const handlers = makeClientHandlers({
-      projects: projects.get() as never,
+      getProjects: () => projects.get() as never,
       setClients: clients.setter,
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
@@ -157,7 +157,7 @@ describe('makeClientHandlers', () => {
     );
     const clients = makeStubSetter<ClientLike>([{ id: 'c-old' }]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -175,7 +175,7 @@ describe('makeClientHandlers', () => {
   test('createProfileOption rethrows on api error', async () => {
     apiMocks.clientsCreateProfileOption.mockImplementation(() => Promise.reject(new Error('nope')));
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: makeStubSetter<ClientLike>([]).setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -192,7 +192,7 @@ describe('makeClientHandlers', () => {
     );
     const clients = makeStubSetter<ClientLike>([{ id: 'c-stale' }]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -214,5 +214,36 @@ describe('makeClientHandlers', () => {
     });
     await expect(handlers.deleteProfileOption('industry' as never, 'po-2')).rejects.toThrow('nope');
     expect(apiMocks.clientsList).not.toHaveBeenCalled();
+  });
+
+  test('regression: delete observes latest projects via getter when cleaning tasks', async () => {
+    apiMocks.clientsDelete.mockImplementation(() => Promise.resolve());
+    // Initial state has no projects. After construction, projects load.
+    const clients = makeStubSetter<ClientLike>([{ id: 'c1' }]);
+    const projects = makeStubSetter<ProjectLike>([]);
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't-old', projectId: 'p1' },
+      { id: 't-keep', projectId: 'p2' },
+    ]);
+
+    const handlers = makeClientHandlers({
+      getProjects: () => projects.get() as never,
+      setClients: clients.setter,
+      setProjects: projects.setter,
+      setProjectTasks: tasks.setter,
+    });
+
+    // Now projects load AFTER the factory was created.
+    (projects.setter as (next: ProjectLike[]) => void)([
+      { id: 'p1', clientId: 'c1' },
+      { id: 'p2', clientId: 'c2' },
+    ]);
+
+    await handlers.delete('c1');
+
+    // With the stale-snapshot bug, projectIdsForClient would have been [], so
+    // tasks would not be cleaned. With the getter, t-old (project p1, client c1)
+    // should be removed and t-keep should remain.
+    expect(tasks.get()).toEqual([{ id: 't-keep', projectId: 'p2' }]);
   });
 });

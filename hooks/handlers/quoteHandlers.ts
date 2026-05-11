@@ -5,9 +5,9 @@ import { getLocalDateString } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
 
 export type QuoteHandlersDeps = {
-  quotes: Quote[];
-  clientQuoteFilterId: string | null;
-  clientOfferFilterId: string | null;
+  getQuotes: () => Quote[];
+  getClientQuoteFilterId: () => string | null;
+  getClientOfferFilterId: () => string | null;
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
   setClientOffers: React.Dispatch<React.SetStateAction<ClientOffer[]>>;
   setClientsOrders: React.Dispatch<React.SetStateAction<ClientsOrder[]>>;
@@ -20,9 +20,9 @@ export type QuoteHandlersDeps = {
 
 export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const {
-    quotes,
-    clientQuoteFilterId,
-    clientOfferFilterId,
+    getQuotes,
+    getClientQuoteFilterId,
+    getClientOfferFilterId,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -64,7 +64,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      const currentQuote = quotes.find((quote) => quote.id === id);
+      const currentQuote = getQuotes().find((quote) => quote.id === id);
       const isRestore = Boolean(
         updates.status === 'draft' &&
           updates.isExpired === false &&
@@ -76,7 +76,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         : updates;
 
       const updated = await api.quotes.update(id, updatesWithRestore);
-      if (clientQuoteFilterId === id) {
+      if (getClientQuoteFilterId() === id) {
         setClientQuoteFilterId(updated.id);
       }
       await refreshClientQuoteFlow();
@@ -97,7 +97,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const updateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       const updated = await api.clientOffers.update(id, updates);
-      if (clientOfferFilterId === id) {
+      if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
       await refreshClientQuoteFlow();

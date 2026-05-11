@@ -68,8 +68,8 @@ describe('makeEntryHandlers', () => {
   test('add returns early when no current user', async () => {
     const entries = makeStubSetter<EntryLike>([]);
     const handlers = makeEntryHandlers({
-      currentUser: null,
-      viewingUserId: '',
+      getCurrentUser: () => null,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -84,8 +84,8 @@ describe('makeEntryHandlers', () => {
     );
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 500 }]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u-current', costPerHour: 50 } as never,
-      viewingUserId: 'u-viewing',
+      getCurrentUser: () => ({ id: 'u-current', costPerHour: 50 }) as never,
+      getViewingUserId: () => 'u-viewing',
       setEntries: entries.setter,
     });
 
@@ -104,8 +104,8 @@ describe('makeEntryHandlers', () => {
       Promise.resolve({ id: 'e-new', createdAt: 1, ...(data as object) }),
     );
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u-current', costPerHour: 0 } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u-current', costPerHour: 0 }) as never,
+      getViewingUserId: () => '',
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
@@ -119,8 +119,8 @@ describe('makeEntryHandlers', () => {
     apiMocks.entriesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 1 }]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u', costPerHour: 10 } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u', costPerHour: 10 }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -136,8 +136,8 @@ describe('makeEntryHandlers', () => {
   test('addBulk returns early when no current user', async () => {
     const entries = makeStubSetter<EntryLike>([]);
     const handlers = makeEntryHandlers({
-      currentUser: null,
-      viewingUserId: '',
+      getCurrentUser: () => null,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -157,8 +157,8 @@ describe('makeEntryHandlers', () => {
     });
     const entries = makeStubSetter<EntryLike>([{ id: 'e0', createdAt: 50 }]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u1', costPerHour: 25 } as never,
-      viewingUserId: 'u2',
+      getCurrentUser: () => ({ id: 'u1', costPerHour: 25 }) as never,
+      getViewingUserId: () => 'u2',
       setEntries: entries.setter,
     });
 
@@ -173,8 +173,8 @@ describe('makeEntryHandlers', () => {
     apiMocks.entriesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const entries = makeStubSetter<EntryLike>([]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u', costPerHour: 0 } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u', costPerHour: 0 }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -194,8 +194,8 @@ describe('makeEntryHandlers', () => {
       { id: 'e2', createdAt: 2 },
     ]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u' } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u' }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -208,8 +208,8 @@ describe('makeEntryHandlers', () => {
     apiMocks.entriesDelete.mockImplementation(() => Promise.reject(new Error('nope')));
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 1 }]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u' } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u' }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -231,8 +231,8 @@ describe('makeEntryHandlers', () => {
       { id: 'e2', createdAt: 2, task: 'B' },
     ]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u' } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u' }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -245,8 +245,8 @@ describe('makeEntryHandlers', () => {
     apiMocks.entriesUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 1, task: 'A' }]);
     const handlers = makeEntryHandlers({
-      currentUser: { id: 'u' } as never,
-      viewingUserId: '',
+      getCurrentUser: () => ({ id: 'u' }) as never,
+      getViewingUserId: () => '',
       setEntries: entries.setter,
     });
 
@@ -257,5 +257,52 @@ describe('makeEntryHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('add observes latest viewingUserId via getter (regression: stale closure)', async () => {
+    apiMocks.entriesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'e-new', createdAt: 0, ...(data as object) }),
+    );
+    let viewingUserId = 'u-A';
+    let currentUser = { id: 'u-current', costPerHour: 10 } as { id: string; costPerHour: number };
+    const handlers = makeEntryHandlers({
+      getCurrentUser: () => currentUser as never,
+      getViewingUserId: () => viewingUserId,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    // Initial state: manager is viewing user A.
+    await handlers.add({ task: 'first' } as never);
+    expect((apiMocks.entriesCreate.mock.calls[0][0] as Record<string, unknown>).userId).toBe('u-A');
+
+    // Manager switches to view user B; cost-per-hour can also change.
+    viewingUserId = 'u-B';
+    currentUser = { id: 'u-current', costPerHour: 99 };
+
+    await handlers.add({ task: 'second' } as never);
+    const secondCall = apiMocks.entriesCreate.mock.calls[1][0] as Record<string, unknown>;
+    expect(secondCall.userId).toBe('u-B');
+    expect(secondCall.hourlyCost).toBe(99);
+  });
+
+  test('addBulk observes latest viewingUserId via getter (regression: stale closure)', async () => {
+    let counter = 0;
+    apiMocks.entriesCreate.mockImplementation((data: unknown) => {
+      counter += 1;
+      return Promise.resolve({ id: `e-${counter}`, createdAt: counter, ...(data as object) });
+    });
+    let viewingUserId = 'u-A';
+    const handlers = makeEntryHandlers({
+      getCurrentUser: () => ({ id: 'mgr', costPerHour: 0 }) as never,
+      getViewingUserId: () => viewingUserId,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    viewingUserId = 'u-B';
+    await handlers.addBulk([{ task: 'a' } as never, { task: 'b' } as never]);
+    const calls = apiMocks.entriesCreate.mock.calls.map(
+      (c) => (c[0] as Record<string, unknown>).userId,
+    );
+    expect(calls).toEqual(['u-B', 'u-B']);
   });
 });
