@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
-import { buildPermission, hasAnyPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
@@ -74,6 +74,8 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
   };
 
+  const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+
   const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
     if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
@@ -88,47 +90,100 @@ const DailyView: React.FC<DailyViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, date]);
 
-  // Init client selection when clients load
+  // Keep client selection valid when RBAC-scoped catalogs change.
   useEffect(() => {
-    if (!selectedClientId && clients.length > 0) {
+    if (clients.length === 0) {
+      if (selectedClientId !== '') setSelectedClientId('');
+      return;
+    }
+
+    if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId(clients[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, selectedClientId]);
 
   // Filter projects when client changes
-  const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
+  const filteredProjects = useMemo(
+    () => projects.filter((p) => p.clientId === selectedClientId),
+    [projects, selectedClientId],
+  );
   const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
 
   // Filter tasks when project changes
-  const filteredTasks = projectTasks.filter((t) => t.projectId === selectedProjectId);
+  const filteredTasks = useMemo(
+    () => projectTasks.filter((t) => t.projectId === selectedProjectId),
+    [projectTasks, selectedProjectId],
+  );
   const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
   const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
 
-  // Auto-select first project/task when lists change
+  // Keep project/task selections valid when the selected client or scoped catalogs change.
   useEffect(() => {
-    if (filteredProjects.length > 0) {
-      if (selectedProjectId !== firstFilteredProjectId) {
-        setSelectedProjectId(firstFilteredProjectId);
+    if (filteredProjects.length === 0) {
+      if (selectedProjectId !== '') {
+        setSelectedProjectId('');
       }
-    } else if (selectedProjectId !== '') {
-      setSelectedProjectId('');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredProjects.length, firstFilteredProjectId, selectedProjectId]);
+
+    if (!filteredProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(firstFilteredProjectId);
+    }
+  }, [filteredProjects, firstFilteredProjectId, selectedProjectId]);
 
   useEffect(() => {
-    if (filteredTasks.length > 0) {
-      if (selectedTaskId !== firstFilteredTaskId) {
-        setSelectedTaskName(firstFilteredTaskName);
-        setSelectedTaskId(firstFilteredTaskId);
+    if (filteredTasks.length === 0) {
+      if (selectedTaskName === 'custom' && canCreateCustomTask && selectedProjectId !== '') {
+        return;
       }
-    } else if (selectedTaskId !== '') {
-      setSelectedTaskName('');
-      setSelectedTaskId('');
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
+        setSelectedTaskId('');
+        setSelectedTaskName('');
+      }
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredTasks.length, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
+
+    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskId,
+    selectedTaskName,
+    canCreateCustomTask,
+    selectedProjectId,
+  ]);
+
+  useEffect(() => {
+    if (selectedProjectId === '') {
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
+        setSelectedTaskName('');
+        setSelectedTaskId('');
+      }
+      return;
+    }
+
+    if (selectedTaskId && !filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [
+    selectedProjectId,
+    selectedTaskId,
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskName,
+  ]);
+
+  useEffect(() => {
+    if (selectedClientId === '') {
+      setSelectedProjectId('');
+    }
+  }, [selectedClientId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,10 +278,6 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (Number.isNaN(val) || val <= 0) return false;
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
-
-  const canCreateCustomTask = hasAnyPermission(permissions, [
-    buildPermission('projects.tasks', 'create'),
-  ]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));

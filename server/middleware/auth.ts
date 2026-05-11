@@ -3,7 +3,12 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
-import { getRolePermissions } from '../utils/permissions.ts';
+import {
+  equivalentPermissionsFor,
+  getRolePermissions,
+  type PermissionAction,
+  type PermissionResource,
+} from '../utils/permissions.ts';
 import { hashPersonalAccessToken, isPersonalAccessToken } from '../utils/personal-access-token.ts';
 import {
   INSECURE_DEFAULT_JWT_SECRETS,
@@ -185,6 +190,9 @@ export const requireAnyPermission = (...permissions: string[]) => {
   };
 };
 
+export const requireScopedPermission = (resource: PermissionResource, action: PermissionAction) =>
+  requireAnyPermission(...equivalentPermissionsFor(resource, action));
+
 export const generateToken = (
   userId: string,
   sessionStart: number = Date.now(),
@@ -200,5 +208,6 @@ export default {
   requireRole,
   requirePermission,
   requireAnyPermission,
+  requireScopedPermission,
   generateToken,
 };

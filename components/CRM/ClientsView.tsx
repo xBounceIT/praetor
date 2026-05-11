@@ -15,7 +15,7 @@ import type {
   ClientProfileOptionsByCategory,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -183,9 +183,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   permissions,
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
-  const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
-  const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
-  const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
+  const canCreateClients = hasScopedActionPermission(permissions, 'crm.clients', 'create');
+  const canUpdateClients = hasScopedActionPermission(permissions, 'crm.clients', 'update');
+  const canDeleteClients = hasScopedActionPermission(permissions, 'crm.clients', 'delete');
 
   const { language } = i18n;
 

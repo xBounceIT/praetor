@@ -4,6 +4,9 @@ export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
+export type StoredBillingType = 'retainer' | 'time_and_materials';
+export type BillingType = StoredBillingType | 'mixed';
+export type BillingFrequency = 'monthly' | 'one_time';
 
 export interface RoleSummary {
   id: string;
@@ -149,6 +152,8 @@ export interface Project {
   isDisabled?: boolean;
   createdAt?: number;
   orderId?: string;
+  billingType?: BillingType;
+  billingFrequency?: BillingFrequency;
 }
 
 export interface ProjectTask {
@@ -162,10 +167,13 @@ export interface ProjectTask {
   recurrenceEnd?: string;
   recurrenceDuration?: number;
   expectedEffort?: number;
+  monthlyEffort?: number;
   revenue?: number;
   notes?: string;
   isDisabled?: boolean;
   createdAt?: number;
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
 }
 
 export interface TimeEntry {

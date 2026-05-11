@@ -1,6 +1,7 @@
-import type { User, UserAuthMethod } from '../../types';
+import type { Client, Project, ProjectTask, User, UserAuthMethod } from '../../types';
+import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import { fetchApi } from './client';
-import { normalizeUser } from './normalizers';
+import { normalizeClient, normalizeProject, normalizeTask, normalizeUser } from './normalizers';
 
 export const usersApi = {
   list: (): Promise<User[]> => fetchApi<User[]>('/users').then((users) => users.map(normalizeUser)),
@@ -24,6 +25,17 @@ export const usersApi = {
     id: string,
   ): Promise<{ clientIds: string[]; projectIds: string[]; taskIds: string[] }> =>
     fetchApi(`/users/${id}/assignments`),
+
+  getTrackerCatalogs: (id: string): Promise<TrackerCatalogs> =>
+    fetchApi<{
+      clients: Client[];
+      projects: Project[];
+      projectTasks: ProjectTask[];
+    }>(`/users/${id}/tracker-catalogs`).then((catalogs) => ({
+      clients: catalogs.clients.map(normalizeClient),
+      projects: catalogs.projects.map(normalizeProject),
+      projectTasks: catalogs.projectTasks.map(normalizeTask),
+    })),
 
   updateAssignments: (
     id: string,

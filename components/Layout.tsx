@@ -40,7 +40,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { cn } from '@/lib/utils';
 import type { Notification, User as PraetorUser, Role, View } from '../types';
-import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
+import { buildPermission, hasPermission, hasViewAccess } from '../utils/permissions';
 import { applyTheme, getTheme } from '../utils/theme';
 import NotificationBell from './shared/NotificationBell';
 
@@ -291,8 +291,7 @@ const Layout: React.FC<LayoutProps> = ({
       for (const route of module.routes) {
         if (route.view === activeView) matchedRoute = route;
 
-        const permission = VIEW_PERMISSION_MAP[route.view];
-        if (!permission || !hasPermission(currentUser.permissions, permission)) continue;
+        if (!hasViewAccess(currentUser.permissions, route.view)) continue;
         const isDisabledAiReporting =
           route.view === 'reports/ai-reporting' && !isAiReportingEnabled;
 
