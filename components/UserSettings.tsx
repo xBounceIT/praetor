@@ -1,17 +1,12 @@
-import {
-  Check,
-  Contrast,
-  Copy,
-  KeyRound,
-  type LucideIcon,
-  Moon,
-  Sun,
-  SunMoon,
-  Trash2,
-} from 'lucide-react';
+import { Check, Contrast, Copy, type LucideIcon, Moon, Sun, SunMoon, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { siModelcontextprotocol } from 'simple-icons';
+import { Button } from '@/components/ui/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
@@ -99,6 +94,23 @@ const formatTokenDate = (value: number | null) => {
   }).format(new Date(value));
 };
 
+const getMcpEndpointUrl = () => {
+  if (typeof window === 'undefined') return '/api/mcp';
+  const origin = window.location.origin;
+  if (!origin || origin === 'null') return '/api/mcp';
+  try {
+    return new URL('/api/mcp', origin).toString();
+  } catch {
+    return '/api/mcp';
+  }
+};
+
+const McpIcon = ({ className }: { className?: string }) => (
+  <svg aria-hidden="true" className={className} role="img" viewBox="0 0 24 24" fill="currentColor">
+    <path d={siModelcontextprotocol.path} />
+  </svg>
+);
+
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
   isLoading = false,
@@ -136,6 +148,21 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [isLoadingMcpTokens, setIsLoadingMcpTokens] = useState(false);
   const [isCreatingMcpToken, setIsCreatingMcpToken] = useState(false);
   const [revokingMcpTokenId, setRevokingMcpTokenId] = useState<string | null>(null);
+  const mcpEndpointUrl = useMemo(getMcpEndpointUrl, []);
+  const mcpSetupPrompt = useMemo(
+    () =>
+      [
+        'Configure Praetor as an MCP server for this Codex workspace.',
+        '',
+        `MCP server URL: ${mcpEndpointUrl}`,
+        `Authorization bearer token: ${rawMcpToken || '<paste your Praetor MCP token here>'}`,
+        'Transport: Streamable HTTP',
+        'Server name: praetor',
+        '',
+        'Use the bearer token only for the MCP server connection. After configuring it, call the Praetor MCP server initialize and tools/list methods to verify the connection.',
+      ].join('\n'),
+    [mcpEndpointUrl, rawMcpToken],
+  );
 
   useEffect(() => {
     setFullName(settings.fullName);
@@ -268,6 +295,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     await navigator.clipboard.writeText(rawMcpToken);
   };
 
+  const copyMcpEndpointUrl = async () => {
+    await navigator.clipboard.writeText(mcpEndpointUrl);
+  };
+
+  const copyMcpSetupPrompt = async () => {
+    await navigator.clipboard.writeText(mcpSetupPrompt);
+  };
+
   const hasChanges =
     fullName !== settings.fullName ||
     email !== settings.email ||
@@ -339,7 +374,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           onClick={() => setActiveTab('mcp')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'mcp' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
-          <KeyRound aria-hidden="true" className="inline size-4 mr-2 align-[-2px]" />
+          <McpIcon className="inline size-4 mr-2 align-[-2px]" />
           {t('mcp.title')}
           {activeTab === 'mcp' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
@@ -623,71 +658,100 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'mcp' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <KeyRound aria-hidden="true" className="size-4 text-praetor" />
-            <h3 className="font-semibold text-zinc-800">{t('mcp.title')}</h3>
+        <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-6 py-4">
+            <McpIcon className="size-4 text-praetor" />
+            <h3 className="font-semibold text-foreground">{t('mcp.title')}</h3>
           </div>
           <div className="p-6 space-y-6">
             {mcpError && (
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
                 <i className="fa-solid fa-circle-exclamation"></i>
                 {mcpError}
               </div>
             )}
 
+            <Field>
+              <FieldLabel htmlFor="mcp-endpoint-url">{t('mcp.urlLabel')}</FieldLabel>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                <Input id="mcp-endpoint-url" readOnly value={mcpEndpointUrl} />
+                <Button type="button" variant="outline" onClick={copyMcpEndpointUrl}>
+                  <Copy aria-hidden="true" className="size-4" />
+                  {t('mcp.copyUrl')}
+                </Button>
+              </div>
+              <FieldDescription>{t('mcp.urlDescription')}</FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="mcp-setup-prompt">{t('mcp.promptLabel')}</FieldLabel>
+              <Textarea
+                id="mcp-setup-prompt"
+                readOnly
+                value={mcpSetupPrompt}
+                className="min-h-44 resize-y font-mono text-xs"
+              />
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={copyMcpSetupPrompt}>
+                  <Copy aria-hidden="true" className="size-4" />
+                  {t('mcp.copyPrompt')}
+                </Button>
+              </div>
+              <FieldDescription>{t('mcp.promptDescription')}</FieldDescription>
+            </Field>
+
             <form
               onSubmit={handleCreateMcpToken}
-              className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3"
+              className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]"
             >
-              <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                  {t('mcp.nameLabel')}
-                </label>
-                <input
+              <Field>
+                <FieldLabel htmlFor="mcp-token-name">{t('mcp.nameLabel')}</FieldLabel>
+                <Input
+                  id="mcp-token-name"
                   type="text"
                   value={mcpTokenName}
                   onChange={(e) => setMcpTokenName(e.target.value)}
-                  className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   placeholder={t('mcp.namePlaceholder')}
                   maxLength={120}
                 />
-              </div>
-              <button
+              </Field>
+              <Button
                 type="submit"
                 disabled={isCreatingMcpToken || !mcpTokenName.trim()}
-                className={`self-end px-6 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                  isCreatingMcpToken || !mcpTokenName.trim()
-                    ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                    : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                }`}
+                className="self-end"
               >
                 {isCreatingMcpToken ? (
                   <i className="fa-solid fa-circle-notch fa-spin"></i>
                 ) : (
-                  <KeyRound aria-hidden="true" className="size-4" />
+                  <McpIcon className="size-4" />
                 )}
                 {t('mcp.create')}
-              </button>
+              </Button>
             </form>
 
             {rawMcpToken && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-bold text-amber-900">{t('mcp.rawTokenTitle')}</p>
-                    <p className="text-xs text-amber-800 mt-1">{t('mcp.rawTokenDescription')}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {t('mcp.rawTokenTitle')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('mcp.rawTokenDescription')}
+                    </p>
                   </div>
-                  <button
+                  <Button
                     type="button"
                     onClick={copyRawMcpToken}
-                    className="shrink-0 px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 text-xs font-bold flex items-center gap-2 hover:bg-amber-100"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
                   >
                     <Copy aria-hidden="true" className="size-3.5" />
                     {t('mcp.copy')}
-                  </button>
+                  </Button>
                 </div>
-                <code className="mt-3 block rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs text-zinc-800 break-all">
+                <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
                   {rawMcpToken}
                 </code>
               </div>
@@ -700,28 +764,29 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   {t('mcp.loading')}
                 </div>
               ) : mcpTokens.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-sm text-zinc-500">
+                <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
                   {t('mcp.empty')}
                 </div>
               ) : (
                 mcpTokens.map((token) => (
                   <div
                     key={token.id}
-                    className="rounded-xl border border-zinc-200 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center"
                   >
                     <div>
-                      <p className="font-semibold text-zinc-800">{token.name}</p>
-                      <p className="text-xs text-zinc-500 mt-1">
+                      <p className="font-semibold text-foreground">{token.name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
                         {token.tokenPrefix}... · {t('mcp.created')}{' '}
                         {formatTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
                         {formatTokenDate(token.lastUsedAt)}
                       </p>
                     </div>
-                    <button
+                    <Button
                       type="button"
+                      variant="destructive"
+                      size="sm"
                       onClick={() => void handleRevokeMcpToken(token.id)}
                       disabled={revokingMcpTokenId === token.id}
-                      className="px-3 py-2 rounded-lg border border-red-100 bg-red-50 text-red-600 text-xs font-bold flex items-center justify-center gap-2 hover:bg-red-100 disabled:opacity-60"
                     >
                       {revokingMcpTokenId === token.id ? (
                         <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -729,7 +794,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                         <Trash2 aria-hidden="true" className="size-3.5" />
                       )}
                       {t('mcp.revoke')}
-                    </button>
+                    </Button>
                   </div>
                 ))
               )}

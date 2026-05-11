@@ -53,6 +53,12 @@
   },
   "mcp": {
     "title": "Token MCP",
+    "urlLabel": "URL server MCP",
+    "urlDescription": "Usa questo endpoint Streamable HTTP quando aggiungi Praetor a un client MCP esterno.",
+    "copyUrl": "Copia URL",
+    "promptLabel": "Prompt di configurazione Codex",
+    "promptDescription": "Crea un token, poi incolla questo prompt in Codex o in un altro agente per configurare Praetor automaticamente.",
+    "copyPrompt": "Copia prompt",
     "nameLabel": "Nome Token",
     "namePlaceholder": "Claude Desktop, Codex o un altro agente",
     "create": "Crea Token",

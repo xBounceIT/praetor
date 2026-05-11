@@ -77,6 +77,19 @@ describe('<UserSettings /> MCP tokens', () => {
     expect(screen.getByText(/praetor_mcp_abcd/)).toBeInTheDocument();
   });
 
+  test('shows the MCP endpoint URL and Codex setup prompt', async () => {
+    renderSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+
+    const endpointUrl = screen.getByLabelText('mcp.urlLabel') as HTMLInputElement;
+    expect(endpointUrl.value).toContain('/api/mcp');
+
+    const setupPrompt = screen.getByLabelText('mcp.promptLabel') as HTMLTextAreaElement;
+    expect(setupPrompt.value).toContain('MCP server URL:');
+    expect(setupPrompt.value).toContain('<paste your Praetor MCP token here>');
+  });
+
   test('creates a token and displays the raw token once', async () => {
     renderSettings();
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
@@ -89,6 +102,9 @@ describe('<UserSettings /> MCP tokens', () => {
     await waitFor(() => expect(onCreateMcpToken).toHaveBeenCalledWith('Codex'));
     expect(await screen.findByText('praetor_mcp_raw_secret')).toBeInTheDocument();
     expect(await screen.findByText('Codex')).toBeInTheDocument();
+    expect((screen.getByLabelText('mcp.promptLabel') as HTMLTextAreaElement).value).toContain(
+      'praetor_mcp_raw_secret',
+    );
   });
 
   test('revokes a token from the list', async () => {
