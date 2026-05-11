@@ -114,6 +114,7 @@
     "hours": "Hours",
     "clientRequired": "Client is required",
     "invoiceNumberRequired": "Invoice number is required",
+    "invoiceNumberAutoPlaceholder": "Auto-generated on save",
     "issueDateRequired": "Issue date is required",
     "dueDateRequired": "Due date is required",
     "itemsRequired": "At least one item is required",

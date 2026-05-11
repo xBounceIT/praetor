@@ -4,6 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { normalizeClientOfferItem } from '../../services/api/normalizers';
@@ -232,8 +239,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
-  const [searchTerm, _setSearchTerm] = useState('');
-  const [filterStatus, _setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1544,6 +1551,44 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
             </HeaderAddButton>
           )}
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder={t('sales:clientOffers.searchPlaceholder', {
+              defaultValue: 'Search by client or offer code...',
+            })}
+            aria-label={t('sales:clientOffers.searchPlaceholder', {
+              defaultValue: 'Search by client or offer code...',
+            })}
+            className="sm:max-w-xs"
+          />
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger
+              className="sm:w-56"
+              aria-label={t('sales:clientOffers.filterByStatus', {
+                defaultValue: 'Filter by status',
+              })}
+            >
+              <SelectValue
+                placeholder={t('sales:clientOffers.filterByStatus', {
+                  defaultValue: 'Filter by status',
+                })}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                {t('sales:clientOffers.allStatuses', { defaultValue: 'All statuses' })}
+              </SelectItem>
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
