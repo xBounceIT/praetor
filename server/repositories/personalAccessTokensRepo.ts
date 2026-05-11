@@ -20,15 +20,6 @@ const TOKEN_PROJECTION = {
   lastUsedAt: personalAccessTokens.lastUsedAt,
 } as const;
 
-const mapRow = (row: PersonalAccessTokenRecord): PersonalAccessTokenRecord => ({
-  userId: row.userId,
-  tokenHash: row.tokenHash,
-  tokenPrefix: row.tokenPrefix,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  lastUsedAt: row.lastUsedAt,
-});
-
 export const findByUserId = async (
   userId: string,
   exec: DbExecutor = db,
@@ -37,7 +28,7 @@ export const findByUserId = async (
     .select(TOKEN_PROJECTION)
     .from(personalAccessTokens)
     .where(eq(personalAccessTokens.userId, userId));
-  return rows[0] ? mapRow(rows[0]) : null;
+  return rows[0] ?? null;
 };
 
 export const findByTokenHash = async (
@@ -48,7 +39,7 @@ export const findByTokenHash = async (
     .select(TOKEN_PROJECTION)
     .from(personalAccessTokens)
     .where(eq(personalAccessTokens.tokenHash, tokenHash));
-  return rows[0] ? mapRow(rows[0]) : null;
+  return rows[0] ?? null;
 };
 
 export const createForUserIfMissing = async (
@@ -63,7 +54,7 @@ export const createForUserIfMissing = async (
     .onConflictDoNothing({ target: personalAccessTokens.userId })
     .returning(TOKEN_PROJECTION);
 
-  if (inserted[0]) return { record: mapRow(inserted[0]), created: true };
+  if (inserted[0]) return { record: inserted[0], created: true };
 
   const existing = await findByUserId(userId, exec);
   if (!existing) {
@@ -91,7 +82,7 @@ export const renewForUser = async (
       },
     })
     .returning(TOKEN_PROJECTION);
-  return mapRow(rows[0]);
+  return rows[0];
 };
 
 export const markUsed = async (tokenHash: string, exec: DbExecutor = db): Promise<void> => {
