@@ -68,13 +68,14 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
 
   const deleteUser = async (id: string) => {
     try {
+      await api.users.delete(id);
       if (viewingUserId === id) {
         setViewingUserId(currentUser?.id || '');
       }
-      await api.users.delete(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
+      alert('Failed to delete user: ' + (err as Error).message);
     }
   };
 

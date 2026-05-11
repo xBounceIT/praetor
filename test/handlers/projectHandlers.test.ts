@@ -102,7 +102,7 @@ describe('makeProjectHandlers', () => {
     expect(tasks.get()).toHaveLength(2);
   });
 
-  test('add with unknown order silently fails', async () => {
+  test('add with unknown order surfaces error to user', async () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
@@ -113,13 +113,46 @@ describe('makeProjectHandlers', () => {
     });
 
     const originalError = console.error;
+    const originalAlert = globalThis.alert;
     console.error = mock(() => {}) as unknown as typeof console.error;
+    const alertMock = mock((_msg?: string) => {});
+    globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
       await handlers.add('P', 'unknown-order');
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
+      expect(alertMock).toHaveBeenCalledTimes(1);
+      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('Order not found');
     } finally {
       console.error = originalError;
+      globalThis.alert = originalAlert;
+    }
+  });
+
+  test('add surfaces api error to user', async () => {
+    apiMocks.projectsCreate.mockImplementation(() => Promise.reject(new Error('api down')));
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      projects: projects.get() as never,
+      clientsOrders: [{ id: 'order-1', clientId: 'c1' } as never],
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    const originalError = console.error;
+    const originalAlert = globalThis.alert;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    const alertMock = mock((_msg?: string) => {});
+    globalThis.alert = alertMock as unknown as typeof globalThis.alert;
+    try {
+      await handlers.add('P', 'order-1');
+      expect(projects.get()).toEqual([]);
+      expect(alertMock).toHaveBeenCalledTimes(1);
+      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');
+    } finally {
+      console.error = originalError;
+      globalThis.alert = originalAlert;
     }
   });
 
