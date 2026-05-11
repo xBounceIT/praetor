@@ -19,6 +19,32 @@ describe('<Modal />', () => {
     expect(screen.queryByTestId('modal-content')).toBeNull();
   });
 
+  test('does not evaluate lazy children while closed', () => {
+    const renderChildren = mock(() => <div data-testid="modal-content">Hi</div>);
+
+    render(
+      <Modal isOpen={false} onClose={() => {}}>
+        {renderChildren}
+      </Modal>,
+    );
+
+    expect(renderChildren).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('modal-content')).toBeNull();
+  });
+
+  test('evaluates lazy children when opened', () => {
+    const renderChildren = mock(() => <div data-testid="modal-content">Hi</div>);
+
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        {renderChildren}
+      </Modal>,
+    );
+
+    expect(renderChildren).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('modal-content')).toBeInTheDocument();
+  });
+
   test('renders children inside a portal when isOpen is true', () => {
     render(
       <Modal isOpen={true} onClose={() => {}}>

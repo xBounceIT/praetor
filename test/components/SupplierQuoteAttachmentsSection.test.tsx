@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SupplierQuoteAttachment } from '../../types';
+import { render } from '../helpers/render';
 
 // Stable t/i18n references - components that put `t` in useEffect dep arrays would otherwise
 // loop forever in tests because every render produces a fresh `t` identity.

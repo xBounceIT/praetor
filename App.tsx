@@ -607,6 +607,7 @@ const App: React.FC = () => {
   const {
     loadedModules,
     moduleLoadErrors,
+    isModuleLoading,
     loadDatasets,
     markModuleLoaded,
     recordFailures,
@@ -2032,6 +2033,11 @@ const App: React.FC = () => {
 
   const activeModule = activeView === '404' ? null : getModuleFromView(activeView);
   const activeModuleLoadFailures = activeModule ? (moduleLoadErrors[activeModule] ?? []) : [];
+  const isActiveModulePending = Boolean(
+    activeModule &&
+      activeModule !== 'settings' &&
+      (!loadedModules.has(activeModule) || isModuleLoading(activeModule)),
+  );
   const reportsSettingsFailed =
     activeView === 'reports/ai-reporting' &&
     !hasLoadedGeneralSettings &&
@@ -2096,6 +2102,13 @@ const App: React.FC = () => {
       >
         {!isRouteAccessible ? (
           <NotFound onReturn={handleNotFoundReturn} />
+        ) : isActiveModulePending ? (
+          <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+            <div className="text-center">
+              <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">Loading…</p>
+            </div>
+          </div>
         ) : (
           <>
             {activeModuleLoadFailures.length > 0 && (

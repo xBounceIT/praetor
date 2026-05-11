@@ -19,6 +19,8 @@ describe('useModuleLoader', () => {
     const { result } = renderHook(() => useModuleLoader());
     expect(result.current.loadedModules.size).toBe(0);
     expect(result.current.moduleLoadErrors).toEqual({});
+    expect(result.current.loadingModules.size).toBe(0);
+    expect(result.current.isModuleLoading('crm')).toBe(false);
   });
 
   test('loadDatasets filters by enabled and applies fulfilled results', async () => {
@@ -84,6 +86,39 @@ describe('useModuleLoader', () => {
     expect(applyOk).toHaveBeenCalledWith('ok-data');
     expect(applyFail).not.toHaveBeenCalled();
     expect(consoleErrorMock).toHaveBeenCalled();
+  });
+
+  test('loadDatasets tracks module loading until requests settle', async () => {
+    const { result } = renderHook(() => useModuleLoader());
+    const apply = mock((_data: unknown) => {});
+    let resolveLoad!: (value: string) => void;
+    const pendingLoad = new Promise<string>((resolve) => {
+      resolveLoad = resolve;
+    });
+
+    let failuresPromise!: Promise<string[]>;
+    act(() => {
+      failuresPromise = result.current.loadDatasets('crm', [
+        {
+          dataset: 'clients',
+          enabled: true,
+          load: () => pendingLoad,
+          apply,
+        },
+      ]);
+    });
+
+    expect(result.current.loadingModules.has('crm')).toBe(true);
+    expect(result.current.isModuleLoading('crm')).toBe(true);
+
+    await act(async () => {
+      resolveLoad('clients-data');
+      expect(await failuresPromise).toEqual([]);
+    });
+
+    expect(apply).toHaveBeenCalledWith('clients-data');
+    expect(result.current.loadingModules.has('crm')).toBe(false);
+    expect(result.current.isModuleLoading('crm')).toBe(false);
   });
 
   test('loadDatasets returns empty when no requests are enabled', async () => {
@@ -155,5 +190,6 @@ describe('useModuleLoader', () => {
     });
     expect(result.current.loadedModules.size).toBe(0);
     expect(result.current.moduleLoadErrors).toEqual({});
+    expect(result.current.loadingModules.size).toBe(0);
   });
 });

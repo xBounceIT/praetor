@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { Client, ClientsOrder } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,

@@ -20,6 +20,7 @@ export const listRequest = <T>(
 export function useModuleLoader() {
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [moduleLoadErrors, setModuleLoadErrors] = useState<ModuleLoadErrors>({});
+  const [loadingModules, setLoadingModules] = useState<Set<string>>(new Set());
 
   const loadDatasets = useCallback(
     // biome-ignore lint/suspicious/noExplicitAny: heterogeneous array - each request's T is internally consistent.
@@ -27,24 +28,38 @@ export function useModuleLoader() {
       const activeRequests = requests.filter((request) => request.enabled);
       if (activeRequests.length === 0) return [];
 
-      const results = await Promise.allSettled(activeRequests.map((request) => request.load()));
-      const failures: string[] = [];
-
-      results.forEach((result, index) => {
-        const request = activeRequests[index];
-        if (result.status === 'fulfilled') {
-          request.apply(result.value);
-          return;
-        }
-
-        failures.push(request.dataset);
-        console.error(
-          `Failed to load ${moduleName} dataset "${request.dataset}": ${getErrorMessage(result.reason)}`,
-          result.reason,
-        );
+      setLoadingModules((prev) => {
+        const next = new Set(prev);
+        next.add(moduleName);
+        return next;
       });
 
-      return failures;
+      try {
+        const results = await Promise.allSettled(activeRequests.map((request) => request.load()));
+        const failures: string[] = [];
+
+        results.forEach((result, index) => {
+          const request = activeRequests[index];
+          if (result.status === 'fulfilled') {
+            request.apply(result.value);
+            return;
+          }
+
+          failures.push(request.dataset);
+          console.error(
+            `Failed to load ${moduleName} dataset "${request.dataset}": ${getErrorMessage(result.reason)}`,
+            result.reason,
+          );
+        });
+
+        return failures;
+      } finally {
+        setLoadingModules((prev) => {
+          const next = new Set(prev);
+          next.delete(moduleName);
+          return next;
+        });
+      }
     },
     [],
   );
@@ -72,11 +87,19 @@ export function useModuleLoader() {
   const reset = useCallback(() => {
     setLoadedModules(new Set());
     setModuleLoadErrors({});
+    setLoadingModules(new Set());
   }, []);
+
+  const isModuleLoading = useCallback(
+    (moduleName: string) => loadingModules.has(moduleName),
+    [loadingModules],
+  );
 
   return {
     loadedModules,
     moduleLoadErrors,
+    loadingModules,
+    isModuleLoading,
     loadDatasets,
     markModuleLoaded,
     recordFailures,

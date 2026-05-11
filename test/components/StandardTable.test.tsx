@@ -1,6 +1,15 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { RenderOptions, RenderResult } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
 
@@ -16,11 +25,20 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
   reason: 'unavailable',
 });
 
-const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
+const { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } = await import(
+  '../../components/ui/tooltip'
+);
 const { useState } = await import('react');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
+
+const render = (ui: ReactNode, options?: RenderOptions): RenderResult => {
+  const result = rtlRender(<TooltipProvider>{ui}</TooltipProvider>, options);
+  const rerender = (nextUi: ReactNode) =>
+    result.rerender(<TooltipProvider>{nextUi}</TooltipProvider>);
+  return { ...result, rerender };
+};
 
 type Row = { id: string; name: string; age: number };
 
@@ -778,6 +796,28 @@ describe('<StandardTable />', () => {
     expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
   });
 
+  test('action cells render once per visible row before a menu opens', () => {
+    const actionCell = mock(({ row }: { row: Row }) => (
+      <button type="button" aria-label={`Edit ${row.name}`} data-testid={`action-${row.id}`}>
+        X
+      </button>
+    ));
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: actionCell,
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+
+    expect(actionCell).toHaveBeenCalledTimes(sampleRows.length);
+    expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
+  });
+
   test('modal table cell editing keeps focus across multiple keystrokes', async () => {
     const user = userEvent.setup();
 
@@ -1440,6 +1480,21 @@ describe('<StandardTable />', () => {
       </StandardTable>,
     );
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  test('renders loadingState instead of the table when isLoading is true', () => {
+    render(
+      <StandardTable<Row>
+        title="Loading"
+        data={sampleRows}
+        columns={sampleColumns}
+        isLoading
+        loadingState={<div data-testid="loading-state">Loading rows…</div>}
+      />,
+    );
+
+    expect(screen.getByTestId('loading-state')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 

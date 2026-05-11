@@ -20,7 +20,7 @@ import { ModalThemeContext } from './ModalThemeContext';
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  children: React.ReactNode;
+  children: React.ReactNode | (() => React.ReactNode);
   ariaLabel?: string | null;
   zIndex?: number;
   closeOnBackdrop?: boolean;
@@ -101,10 +101,11 @@ const Modal: React.FC<ModalProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const focusRunIdRef = useRef(0);
   const resolvedTheme = useResolvedShadcnTheme();
-  const normalizedChildren = useMemo(
-    () => (isOpen ? Children.map(children, renderWithShadcnFormPrimitives) : null),
-    [children, isOpen],
-  );
+  const normalizedChildren = useMemo(() => {
+    if (!isOpen) return null;
+    const content = typeof children === 'function' ? children() : children;
+    return Children.map(content, renderWithShadcnFormPrimitives);
+  }, [children, isOpen]);
 
   useEffect(() => {
     if (isOpen) {

@@ -311,136 +311,140 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} ariaLabel={null}>
-      <ModalContent size="2xl" className="max-h-[85vh]">
-        <ModalHeader>
-          <div>
-            <ModalTitle>{t('assignment.title')}</ModalTitle>
-            <ModalDescription>
-              {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
-            </ModalDescription>
-          </div>
-          <ModalCloseButton onClick={handleClose} />
-        </ModalHeader>
-
-        <div className="p-4 border-b border-border bg-background">
-          <div className="relative">
-            <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
-            <Input
-              type="text"
-              placeholder={t('assignment.searchUsers')}
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              disabled={loadState !== 'ready'}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        <ModalBody className="flex-1 overflow-hidden flex flex-col bg-muted/30 p-0">
-          {loadState === 'loading' ? (
-            <div className="flex items-center justify-center py-16 flex-1">
-              <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+      {() => (
+        <ModalContent size="2xl" className="max-h-[85vh]">
+          <ModalHeader>
+            <div>
+              <ModalTitle>{t('assignment.title')}</ModalTitle>
+              <ModalDescription>
+                {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
+              </ModalDescription>
             </div>
-          ) : loadState === 'error' ? (
-            <div className="flex items-center justify-center py-16 flex-1">
-              <div className="max-w-sm text-center space-y-4">
-                <div className="size-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
-                  <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-bold text-zinc-800">{t('assignment.loadFailed')}</p>
-                  <p className="text-sm text-zinc-500">{t('assignment.loadRetryHint')}</p>
-                </div>
-                <Button type="button" onClick={load} variant="outline">
-                  <i className="fa-solid fa-rotate-right"></i>
-                  {t('buttons.refresh')}
-                </Button>
+            <ModalCloseButton onClick={handleClose} />
+          </ModalHeader>
+
+          <div className="p-4 border-b border-border bg-background">
+            <div className="relative">
+              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
+              <Input
+                type="text"
+                placeholder={t('assignment.searchUsers')}
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                disabled={loadState !== 'ready'}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <ModalBody className="flex-1 overflow-hidden flex flex-col bg-muted/30 p-0">
+            {loadState === 'loading' ? (
+              <div className="flex items-center justify-center py-16 flex-1">
+                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
               </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex gap-0 overflow-hidden p-4">
-              <div className="flex-1 flex flex-col min-w-0">
-                <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
-                  {t('assignment.availableUsers')}
-                  <span className="ml-2 text-zinc-300 font-normal">({availableUsers.length})</span>
-                </h4>
-                <div className="flex-1 overflow-y-auto pr-2">
-                  {renderUserList(
-                    availableUsers,
-                    selectedAvailableIds,
-                    toggleAvailableSelection,
-                    moveToAssigned,
-                    t('assignment.noUsersToAssign'),
-                  )}
-                </div>
-                <div className="pt-3 mt-2 border-t border-zinc-200/60">
-                  <Button
-                    type="button"
-                    onClick={assignSelected}
-                    disabled={disabled || selectedAvailableIds.size === 0}
-                    className="w-full"
-                  >
-                    {t('assignment.assignSelected')}
-                    <i className="fa-solid fa-angles-right text-xs"></i>
-                    {selectedAvailableIds.size > 0 && (
-                      <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
-                        {selectedAvailableIds.size}
-                      </span>
-                    )}
+            ) : loadState === 'error' ? (
+              <div className="flex items-center justify-center py-16 flex-1">
+                <div className="max-w-sm text-center space-y-4">
+                  <div className="size-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-zinc-800">{t('assignment.loadFailed')}</p>
+                    <p className="text-sm text-zinc-500">{t('assignment.loadRetryHint')}</p>
+                  </div>
+                  <Button type="button" onClick={load} variant="outline">
+                    <i className="fa-solid fa-rotate-right"></i>
+                    {t('buttons.refresh')}
                   </Button>
                 </div>
               </div>
-
-              <div className="flex items-center justify-center px-3 shrink-0">
-                <div className="flex flex-col items-center gap-3 text-zinc-300">
-                  <i className="fa-solid fa-right-left text-lg"></i>
-                </div>
-              </div>
-
-              <div className="flex-1 flex flex-col min-w-0">
-                <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
-                  {t('assignment.assignedUsers')}
-                  <span className="ml-2 text-zinc-300 font-normal">({assignedUsers.length})</span>
-                </h4>
-                <div className="flex-1 overflow-y-auto pr-2">
-                  {renderUserList(
-                    assignedUsers,
-                    selectedAssignedIds,
-                    toggleAssignedSelection,
-                    moveToAvailable,
-                    t('assignment.noUsersAssigned'),
-                  )}
-                </div>
-                <div className="pt-3 mt-2 border-t border-zinc-200/60">
-                  <Button
-                    type="button"
-                    onClick={unassignSelected}
-                    disabled={disabled || selectedAssignedIds.size === 0}
-                    className="w-full"
-                  >
-                    <i className="fa-solid fa-angles-left text-xs"></i>
-                    {t('assignment.unassignSelected')}
-                    {selectedAssignedIds.size > 0 && (
-                      <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
-                        {selectedAssignedIds.size}
-                      </span>
+            ) : (
+              <div className="flex-1 flex gap-0 overflow-hidden p-4">
+                <div className="flex-1 flex flex-col min-w-0">
+                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
+                    {t('assignment.availableUsers')}
+                    <span className="ml-2 text-zinc-300 font-normal">
+                      ({availableUsers.length})
+                    </span>
+                  </h4>
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {renderUserList(
+                      availableUsers,
+                      selectedAvailableIds,
+                      toggleAvailableSelection,
+                      moveToAssigned,
+                      t('assignment.noUsersToAssign'),
                     )}
-                  </Button>
+                  </div>
+                  <div className="pt-3 mt-2 border-t border-zinc-200/60">
+                    <Button
+                      type="button"
+                      onClick={assignSelected}
+                      disabled={disabled || selectedAvailableIds.size === 0}
+                      className="w-full"
+                    >
+                      {t('assignment.assignSelected')}
+                      <i className="fa-solid fa-angles-right text-xs"></i>
+                      {selectedAvailableIds.size > 0 && (
+                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
+                          {selectedAvailableIds.size}
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center px-3 shrink-0">
+                  <div className="flex flex-col items-center gap-3 text-zinc-300">
+                    <i className="fa-solid fa-right-left text-lg"></i>
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col min-w-0">
+                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
+                    {t('assignment.assignedUsers')}
+                    <span className="ml-2 text-zinc-300 font-normal">({assignedUsers.length})</span>
+                  </h4>
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {renderUserList(
+                      assignedUsers,
+                      selectedAssignedIds,
+                      toggleAssignedSelection,
+                      moveToAvailable,
+                      t('assignment.noUsersAssigned'),
+                    )}
+                  </div>
+                  <div className="pt-3 mt-2 border-t border-zinc-200/60">
+                    <Button
+                      type="button"
+                      onClick={unassignSelected}
+                      disabled={disabled || selectedAssignedIds.size === 0}
+                      className="w-full"
+                    >
+                      <i className="fa-solid fa-angles-left text-xs"></i>
+                      {t('assignment.unassignSelected')}
+                      {selectedAssignedIds.size > 0 && (
+                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
+                          {selectedAssignedIds.size}
+                        </span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </ModalBody>
+            )}
+          </ModalBody>
 
-        <ModalFooter>
-          <Button type="button" variant="outline" onClick={handleClose}>
-            {t('buttons.cancel')}
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={disabled || loadState !== 'ready'}>
-            {t('buttons.save')}
-          </Button>
-        </ModalFooter>
-      </ModalContent>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={handleClose}>
+              {t('buttons.cancel')}
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={disabled || loadState !== 'ready'}>
+              {t('buttons.save')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      )}
     </Modal>
   );
 };

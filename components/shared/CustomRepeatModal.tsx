@@ -50,52 +50,54 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
-      <ModalContent size="sm" onClick={(e) => e.stopPropagation()}>
-        <ModalHeader>
-          <div>
-            <ModalTitle>
-              <i className="fa-solid fa-calendar-days text-praetor"></i>
-              {t('recurring.customRepeatTitle')}
-            </ModalTitle>
-            <ModalDescription>{t('recurring.customRepeatSubtitle')}</ModalDescription>
-          </div>
-        </ModalHeader>
+      {() => (
+        <ModalContent size="sm" onClick={(e) => e.stopPropagation()}>
+          <ModalHeader>
+            <div>
+              <ModalTitle>
+                <i className="fa-solid fa-calendar-days text-praetor"></i>
+                {t('recurring.customRepeatTitle')}
+              </ModalTitle>
+              <ModalDescription>{t('recurring.customRepeatSubtitle')}</ModalDescription>
+            </div>
+          </ModalHeader>
 
-        <ModalBody className="space-y-6">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              {t('recurring.every')}
-            </span>
-            <div className="flex-1">
+          <ModalBody className="space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                {t('recurring.every')}
+              </span>
+              <div className="flex-1">
+                <SelectControl
+                  options={occurrenceOptions}
+                  value={type}
+                  onChange={(val) => setType(val as typeof type)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <SelectControl
-                options={occurrenceOptions}
-                value={type}
-                onChange={(val) => setType(val as typeof type)}
+                label={t('recurring.dayOfWeek')}
+                options={days}
+                value={dayOfWeek.toString()}
+                onChange={(val) => setDayOfWeek(parseInt(val as string, 10))}
                 className="w-full"
               />
             </div>
-          </div>
+          </ModalBody>
 
-          <div className="space-y-2">
-            <SelectControl
-              label={t('recurring.dayOfWeek')}
-              options={days}
-              value={dayOfWeek.toString()}
-              onChange={(val) => setDayOfWeek(parseInt(val as string, 10))}
-              className="w-full"
-            />
-          </div>
-        </ModalBody>
-
-        <ModalFooter className="grid grid-cols-2 sm:flex">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {t('recurring.cancel')}
-          </Button>
-          <Button type="button" onClick={handleSave}>
-            {t('recurring.setPattern')}
-          </Button>
-        </ModalFooter>
-      </ModalContent>
+          <ModalFooter className="grid grid-cols-2 sm:flex">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('recurring.cancel')}
+            </Button>
+            <Button type="button" onClick={handleSave}>
+              {t('recurring.setPattern')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      )}
     </Modal>
   );
 };

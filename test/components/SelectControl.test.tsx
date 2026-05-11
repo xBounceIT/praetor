@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { installI18nMock } from '../helpers/i18n';
+import { render } from '../helpers/render';
 
 installI18nMock();
 

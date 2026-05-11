@@ -665,322 +665,328 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <ModalContent size="2xl">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingProject
-                  ? t('projects:projects.editProject')
-                  : t('projects:projects.createNewProject')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeModal} />
-            </ModalHeader>
+        {() => (
+          <ModalContent size="2xl">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+              <ModalHeader>
+                <ModalTitle className="gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                    <i
+                      className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  {editingProject
+                    ? t('projects:projects.editProject')
+                    : t('projects:projects.createNewProject')}
+                </ModalTitle>
+                <ModalCloseButton onClick={closeModal} />
+              </ModalHeader>
 
-            <ModalBody className="space-y-6">
-              {editingProject?.orderId && (
-                <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                      <i className="fa-solid fa-link" aria-hidden="true"></i>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-foreground">
-                        {t('projects:projects.linkedOrder')}
+              <ModalBody className="space-y-6">
+                {editingProject?.orderId && (
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                        <i className="fa-solid fa-link" aria-hidden="true"></i>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatOrderId(editingProject.orderId)}
-                      </div>
-                    </div>
-                  </div>
-                  {onViewOrder && (
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={() => onViewOrder(editingProject?.orderId ?? '')}
-                      className="px-0"
-                    >
-                      {t('projects:projects.viewOrder')}
-                    </Button>
-                  )}
-                </div>
-              )}
-              <div className="space-y-4">
-                {/* Order selector (create only) / Client selector (edit only) */}
-                {editingProject ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-client"
-                        options={clientOptions}
-                        value={clientId}
-                        onChange={(val) => {
-                          setClientId(val as string);
-                          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                        }}
-                        label={t('projects:projects.client')}
-                        placeholder={t('projects:projects.selectClient')}
-                        searchable={true}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.clientId}</FieldError>
-                    </div>
-                    <Field data-invalid={Boolean(errors.name)}>
-                      <FieldLabel htmlFor="project-name">{t('projects:projects.name')}</FieldLabel>
-                      <Input
-                        id="project-name"
-                        type="text"
-                        value={name}
-                        aria-invalid={Boolean(errors.name)}
-                        onChange={(e) => {
-                          setName(e.target.value);
-                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                        }}
-                        placeholder={t('projects:projects.projectNamePlaceholder')}
-                      />
-                      <FieldError className="text-xs">{errors.name}</FieldError>
-                    </Field>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-order"
-                        options={orderOptions}
-                        value={orderId}
-                        onChange={(val) => {
-                          setOrderId(val as string);
-                          if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
-                        }}
-                        label={t('projects:projects.order')}
-                        placeholder={t('projects:projects.selectOrder')}
-                        searchable={true}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.orderId}</FieldError>
-                      {selectedOrder && (
-                        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                          <i
-                            className="fa-solid fa-building text-xs text-muted-foreground"
-                            aria-hidden="true"
-                          ></i>
-                          <span className="text-xs text-muted-foreground">
-                            {t('projects:projects.inheritedClientLabel')}:
-                          </span>
-                          <span className="text-xs font-medium text-foreground">
-                            {selectedOrder.clientName}
-                          </span>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">
+                          {t('projects:projects.linkedOrder')}
                         </div>
-                      )}
+                        <div className="text-xs text-muted-foreground">
+                          {formatOrderId(editingProject.orderId)}
+                        </div>
+                      </div>
                     </div>
-                    <Field data-invalid={Boolean(errors.name)}>
-                      <FieldLabel htmlFor="project-name">{t('projects:projects.name')}</FieldLabel>
-                      <Input
-                        id="project-name"
-                        type="text"
-                        value={name}
-                        aria-invalid={Boolean(errors.name)}
-                        onChange={(e) => {
-                          setName(e.target.value);
-                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                        }}
-                        placeholder={t('projects:projects.projectNamePlaceholder')}
-                      />
-                      <FieldError className="text-xs">{errors.name}</FieldError>
-                    </Field>
+                    {onViewOrder && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => onViewOrder(editingProject?.orderId ?? '')}
+                        className="px-0"
+                      >
+                        {t('projects:projects.viewOrder')}
+                      </Button>
+                    )}
                   </div>
                 )}
+                <div className="space-y-4">
+                  {/* Order selector (create only) / Client selector (edit only) */}
+                  {editingProject ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <SelectControl
+                          id="project-client"
+                          options={clientOptions}
+                          value={clientId}
+                          onChange={(val) => {
+                            setClientId(val as string);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                          }}
+                          label={t('projects:projects.client')}
+                          placeholder={t('projects:projects.selectClient')}
+                          searchable={true}
+                          buttonClassName="h-9"
+                        />
+                        <FieldError className="text-xs">{errors.clientId}</FieldError>
+                      </div>
+                      <Field data-invalid={Boolean(errors.name)}>
+                        <FieldLabel htmlFor="project-name">
+                          {t('projects:projects.name')}
+                        </FieldLabel>
+                        <Input
+                          id="project-name"
+                          type="text"
+                          value={name}
+                          aria-invalid={Boolean(errors.name)}
+                          onChange={(e) => {
+                            setName(e.target.value);
+                            if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                          }}
+                          placeholder={t('projects:projects.projectNamePlaceholder')}
+                        />
+                        <FieldError className="text-xs">{errors.name}</FieldError>
+                      </Field>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <SelectControl
+                          id="project-order"
+                          options={orderOptions}
+                          value={orderId}
+                          onChange={(val) => {
+                            setOrderId(val as string);
+                            if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                          }}
+                          label={t('projects:projects.order')}
+                          placeholder={t('projects:projects.selectOrder')}
+                          searchable={true}
+                          buttonClassName="h-9"
+                        />
+                        <FieldError className="text-xs">{errors.orderId}</FieldError>
+                        {selectedOrder && (
+                          <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                            <i
+                              className="fa-solid fa-building text-xs text-muted-foreground"
+                              aria-hidden="true"
+                            ></i>
+                            <span className="text-xs text-muted-foreground">
+                              {t('projects:projects.inheritedClientLabel')}:
+                            </span>
+                            <span className="text-xs font-medium text-foreground">
+                              {selectedOrder.clientName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <Field data-invalid={Boolean(errors.name)}>
+                        <FieldLabel htmlFor="project-name">
+                          {t('projects:projects.name')}
+                        </FieldLabel>
+                        <Input
+                          id="project-name"
+                          type="text"
+                          value={name}
+                          aria-invalid={Boolean(errors.name)}
+                          onChange={(e) => {
+                            setName(e.target.value);
+                            if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                          }}
+                          placeholder={t('projects:projects.projectNamePlaceholder')}
+                        />
+                        <FieldError className="text-xs">{errors.name}</FieldError>
+                      </Field>
+                    </div>
+                  )}
 
-                <Field>
-                  <FieldLabel htmlFor="project-description">
-                    {t('projects:projects.description')}
-                  </FieldLabel>
-                  <Textarea
-                    id="project-description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder={t('projects:projects.descriptionPlaceholder')}
-                    rows={3}
-                    className="min-h-20 resize-none"
-                  />
-                </Field>
-
-                {/* Tasks section (create only) */}
-                {!editingProject && (
-                  <div className="space-y-2">
-                    <StandardTable<DraftTask>
-                      title={t('projects:projects.projectTasks')}
-                      data={draftTasks}
-                      columns={draftTaskColumns}
-                      defaultRowsPerPage={5}
-                      emptyState={
-                        <span className="text-xs italic text-muted-foreground">
-                          {t('projects:projects.noTasksAdded')}
-                        </span>
-                      }
-                      headerAction={
-                        <Button
-                          type="button"
-                          onClick={addDraftTask}
-                          size="sm"
-                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                        >
-                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                          {t('projects:projects.addTaskRow')}
-                        </Button>
-                      }
+                  <Field>
+                    <FieldLabel htmlFor="project-description">
+                      {t('projects:projects.description')}
+                    </FieldLabel>
+                    <Textarea
+                      id="project-description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder={t('projects:projects.descriptionPlaceholder')}
+                      rows={3}
+                      className="min-h-20 resize-none"
                     />
-                  </div>
-                )}
+                  </Field>
 
-                {/* Tasks section (edit only) */}
-                {editingProject && (
-                  <div className="space-y-2">
-                    <StandardTable<ProjectTask>
-                      title={t('projects:projects.projectTasks')}
-                      data={editingProjectTasks}
-                      columns={existingTaskColumns}
-                      defaultRowsPerPage={5}
-                      emptyState={
-                        <span className="text-xs italic text-muted-foreground">
-                          {t('projects:projects.noTasksAdded')}
-                        </span>
-                      }
-                      headerAction={
-                        canCreateTasks ? (
+                  {/* Tasks section (create only) */}
+                  {!editingProject && (
+                    <div className="space-y-2">
+                      <StandardTable<DraftTask>
+                        title={t('projects:projects.projectTasks')}
+                        data={draftTasks}
+                        columns={draftTaskColumns}
+                        defaultRowsPerPage={5}
+                        emptyState={
+                          <span className="text-xs italic text-muted-foreground">
+                            {t('projects:projects.noTasksAdded')}
+                          </span>
+                        }
+                        headerAction={
                           <Button
                             type="button"
-                            onClick={handleAddExistingTask}
+                            onClick={addDraftTask}
                             size="sm"
                             className={TABLE_CONTROL_BUTTON_CLASSNAME}
                           >
                             <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
                             {t('projects:projects.addTaskRow')}
                           </Button>
-                        ) : undefined
-                      }
-                    />
-                  </div>
-                )}
-
-                <Field>
-                  <FieldLabel>{t('projects:projects.color')}</FieldLabel>
-                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
-                    {COLORS.map((c) => (
-                      <Tooltip key={c}>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => {
-                                setColor(c);
-                                setHexInput(c);
-                              }}
-                              className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
-                              style={{ backgroundColor: c }}
-                            />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{c}</TooltipContent>
-                      </Tooltip>
-                    ))}
-                    <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
-                      <Input
-                        type="color"
-                        value={color}
-                        onFocus={() => {
-                          skipPickerRef.current = false;
-                        }}
-                        onChange={(e) => {
-                          if (skipPickerRef.current) return;
-                          setColor(e.target.value);
-                          setHexInput(e.target.value);
-                        }}
-                        className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
-                      />
-                      <Input
-                        type="text"
-                        value={hexInput}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setHexInput(val);
-                          if (isValidHex(val)) {
-                            setColor(val);
-                          }
-                        }}
-                        onBlur={commitHexInput}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            commitHexInput();
-                          }
-                        }}
-                        placeholder="#000000"
-                        className="h-8 w-[90px] font-mono text-xs tabular-nums"
+                        }
                       />
                     </div>
-                  </div>
-                </Field>
+                  )}
 
-                {editingProject && (
-                  <Field>
-                    {(() => {
-                      const client = clients.find((c: Client) => c.id === clientId);
-                      const isClientDisabled = client?.isDisabled || false;
-                      const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
-
-                      return (
-                        <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                          <div>
-                            <p
-                              className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
+                  {/* Tasks section (edit only) */}
+                  {editingProject && (
+                    <div className="space-y-2">
+                      <StandardTable<ProjectTask>
+                        title={t('projects:projects.projectTasks')}
+                        data={editingProjectTasks}
+                        columns={existingTaskColumns}
+                        defaultRowsPerPage={5}
+                        emptyState={
+                          <span className="text-xs italic text-muted-foreground">
+                            {t('projects:projects.noTasksAdded')}
+                          </span>
+                        }
+                        headerAction={
+                          canCreateTasks ? (
+                            <Button
+                              type="button"
+                              onClick={handleAddExistingTask}
+                              size="sm"
+                              className={TABLE_CONTROL_BUTTON_CLASSNAME}
                             >
-                              {t('projects:projects.projectDisabled')}
-                            </p>
-                            {isClientDisabled && (
-                              <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                                <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
-                                {t('projects:projects.inheritedFromDisabledClient', {
-                                  clientName: client?.name,
-                                })}
-                              </p>
-                            )}
-                          </div>
-                          <Toggle
-                            checked={isCurrentlyDisabled}
-                            onChange={() => {
-                              if (!isClientDisabled) {
-                                setTempIsDisabled(!tempIsDisabled);
-                              }
-                            }}
-                            disabled={isClientDisabled}
-                          />
-                        </div>
-                      );
-                    })()}
-                  </Field>
-                )}
-              </div>
-            </ModalBody>
+                              <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                              {t('projects:projects.addTaskRow')}
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    </div>
+                  )}
 
-            <ModalFooter className="sm:justify-between">
-              <Button type="button" variant="outline" onClick={closeModal}>
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={!canSubmit}>
-                {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
+                  <Field>
+                    <FieldLabel>{t('projects:projects.color')}</FieldLabel>
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+                      {COLORS.map((c) => (
+                        <Tooltip key={c}>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => {
+                                  setColor(c);
+                                  setHexInput(c);
+                                }}
+                                className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
+                                style={{ backgroundColor: c }}
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{c}</TooltipContent>
+                        </Tooltip>
+                      ))}
+                      <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
+                        <Input
+                          type="color"
+                          value={color}
+                          onFocus={() => {
+                            skipPickerRef.current = false;
+                          }}
+                          onChange={(e) => {
+                            if (skipPickerRef.current) return;
+                            setColor(e.target.value);
+                            setHexInput(e.target.value);
+                          }}
+                          className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
+                        />
+                        <Input
+                          type="text"
+                          value={hexInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHexInput(val);
+                            if (isValidHex(val)) {
+                              setColor(val);
+                            }
+                          }}
+                          onBlur={commitHexInput}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitHexInput();
+                            }
+                          }}
+                          placeholder="#000000"
+                          className="h-8 w-[90px] font-mono text-xs tabular-nums"
+                        />
+                      </div>
+                    </div>
+                  </Field>
+
+                  {editingProject && (
+                    <Field>
+                      {(() => {
+                        const client = clients.find((c: Client) => c.id === clientId);
+                        const isClientDisabled = client?.isDisabled || false;
+                        const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
+
+                        return (
+                          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                            <div>
+                              <p
+                                className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
+                              >
+                                {t('projects:projects.projectDisabled')}
+                              </p>
+                              {isClientDisabled && (
+                                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                                  {t('projects:projects.inheritedFromDisabledClient', {
+                                    clientName: client?.name,
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                            <Toggle
+                              checked={isCurrentlyDisabled}
+                              onChange={() => {
+                                if (!isClientDisabled) {
+                                  setTempIsDisabled(!tempIsDisabled);
+                                }
+                              }}
+                              disabled={isClientDisabled}
+                            />
+                          </div>
+                        );
+                      })()}
+                    </Field>
+                  )}
+                </div>
+              </ModalBody>
+
+              <ModalFooter className="sm:justify-between">
+                <Button type="button" variant="outline" onClick={closeModal}>
+                  {t('common:buttons.cancel')}
+                </Button>
+                <Button type="submit" disabled={!canSubmit}>
+                  {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
+                </Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        )}
       </Modal>
 
       <DeleteConfirmModal

@@ -78,76 +78,80 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
-      <ModalContent size="md">
-        <ModalHeader>
-          <ModalTitle>
-            <i className="fa-solid fa-table-columns text-praetor"></i>
-            {editingView ? t('table.editView') : t('table.addCustomView')}
-          </ModalTitle>
-          <ModalCloseButton onClick={onClose} />
-        </ModalHeader>
+      {() => (
+        <ModalContent size="md">
+          <ModalHeader>
+            <ModalTitle>
+              <i className="fa-solid fa-table-columns text-praetor"></i>
+              {editingView ? t('table.editView') : t('table.addCustomView')}
+            </ModalTitle>
+            <ModalCloseButton onClick={onClose} />
+          </ModalHeader>
 
-        <ModalBody className="space-y-4">
-          <Field>
-            <FieldLabel htmlFor="custom-view-name">{t('table.viewName')}</FieldLabel>
-            <Input
-              id="custom-view-name"
-              type="text"
-              data-autofocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('table.viewNamePlaceholder')}
-            />
-          </Field>
+          <ModalBody className="space-y-4">
+            <Field>
+              <FieldLabel htmlFor="custom-view-name">{t('table.viewName')}</FieldLabel>
+              <Input
+                id="custom-view-name"
+                type="text"
+                data-autofocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('table.viewNamePlaceholder')}
+              />
+            </Field>
 
-          <FieldSet>
-            <div className="flex items-center justify-between">
-              <FieldLegend variant="label">{t('table.columns')}</FieldLegend>
-              <div className="flex items-center gap-3 text-[11px] font-semibold">
-                <Button type="button" variant="link" size="xs" onClick={selectAll}>
-                  {t('table.selectAllCols')}
-                </Button>
-                <span className="text-zinc-300">|</span>
-                <Button type="button" variant="link" size="xs" onClick={deselectAll}>
-                  {t('table.deselectAllCols')}
-                </Button>
+            <FieldSet>
+              <div className="flex items-center justify-between">
+                <FieldLegend variant="label">{t('table.columns')}</FieldLegend>
+                <div className="flex items-center gap-3 text-[11px] font-semibold">
+                  <Button type="button" variant="link" size="xs" onClick={selectAll}>
+                    {t('table.selectAllCols')}
+                  </Button>
+                  <span className="text-zinc-300">|</span>
+                  <Button type="button" variant="link" size="xs" onClick={deselectAll}>
+                    {t('table.deselectAllCols')}
+                  </Button>
+                </div>
               </div>
-            </div>
-            <div className="max-h-64 overflow-y-auto rounded-md border border-border p-1.5 space-y-0.5">
-              {columns.map((col) => {
-                const isVisible = !hiddenColIds.has(col.id);
-                // Checkbox onChange owns the toggle; the row's onClick handles
-                // clicks on the text label only. Clicks inside the inner
-                // <label> bubble twice (the visible click + a UA-synthesised
-                // click on the hidden input), so we ignore those here to
-                // avoid a double-toggle that cancels itself.
-                return (
-                  <div
-                    key={col.id}
-                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded cursor-pointer"
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest('label')) return;
-                      toggleCol(col.id);
-                    }}
-                  >
-                    <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
-                    <span className="text-xs text-muted-foreground select-none">{col.header}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </FieldSet>
-        </ModalBody>
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border p-1.5 space-y-0.5">
+                {columns.map((col) => {
+                  const isVisible = !hiddenColIds.has(col.id);
+                  // Checkbox onChange owns the toggle; the row's onClick handles
+                  // clicks on the text label only. Clicks inside the inner
+                  // <label> bubble twice (the visible click + a UA-synthesised
+                  // click on the hidden input), so we ignore those here to
+                  // avoid a double-toggle that cancels itself.
+                  return (
+                    <div
+                      key={col.id}
+                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('label')) return;
+                        toggleCol(col.id);
+                      }}
+                    >
+                      <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
+                      <span className="text-xs text-muted-foreground select-none">
+                        {col.header}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </FieldSet>
+          </ModalBody>
 
-        <ModalFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            {t('table.cancel')}
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={!canSave}>
-            {t('table.save')}
-          </Button>
-        </ModalFooter>
-      </ModalContent>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('table.cancel')}
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={!canSave}>
+              {t('table.save')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      )}
     </Modal>
   );
 };

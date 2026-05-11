@@ -168,6 +168,8 @@ export type StandardTableProps<T extends object = object> = {
   footerClassName?: string;
   children?: ReactNode;
   emptyState?: ReactNode;
+  isLoading?: boolean;
+  loadingState?: ReactNode;
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
@@ -189,6 +191,8 @@ const StandardTable = <T extends object>({
   footerClassName,
   children,
   emptyState,
+  isLoading = false,
+  loadingState,
   data,
   columns,
   defaultRowsPerPage = 10,
@@ -207,6 +211,8 @@ const StandardTable = <T extends object>({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [gearOpen, setGearOpen] = useState(false);
+  const [openActionMenuRowId, setOpenActionMenuRowId] = useState<string | null>(null);
+  const [openContextMenuRowId, setOpenContextMenuRowId] = useState<string | null>(null);
 
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
@@ -383,7 +389,8 @@ const StandardTable = <T extends object>({
     [clampColumnSizing, validColumnSizing],
   );
 
-  const usesFixedTableLayout = Boolean(columns && data);
+  const shouldRenderTable = Boolean(columns && data && !isLoading);
+  const usesFixedTableLayout = shouldRenderTable;
 
   // Excludes statically hidden filter-only columns and row actions; sort/filter
   // still target hidden filter-only columns via colsById.
@@ -654,7 +661,7 @@ const StandardTable = <T extends object>({
   );
 
   const table = useReactTable({
-    data: data ?? [],
+    data: shouldRenderTable ? (data ?? []) : [],
     columns: tanStackColumns,
     onSortingChange,
     onColumnFiltersChange,
@@ -676,10 +683,10 @@ const StandardTable = <T extends object>({
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const processedRows = data ? table.getPrePaginationRowModel().rows : [];
-  const totalItems = data ? processedRows.length : externalTotalCount || 0;
-  const totalPages = data ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
-  const paginatedRows = data ? table.getRowModel().rows : [];
+  const processedRows = shouldRenderTable ? table.getPrePaginationRowModel().rows : [];
+  const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
+  const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
+  const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
   const hasTrailingActionColumn =
     visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
   const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;
@@ -701,7 +708,7 @@ const StandardTable = <T extends object>({
   // instead of re-scanning the full dataset on every header re-render.
   const filterOptionsByCol = useMemo(() => {
     const m = new Map<string, string[]>();
-    if (!data || !columns) return m;
+    if (!shouldRenderTable || !data || !columns) return m;
     for (const col of columns) {
       if (col.disableFiltering) continue;
       const values = new Set<string>();
@@ -711,7 +718,7 @@ const StandardTable = <T extends object>({
       m.set(getColId(col), Array.from(values).sort());
     }
     return m;
-  }, [data, columns, getValue, formatForFilter, getColId]);
+  }, [shouldRenderTable, data, columns, getValue, formatForFilter, getColId]);
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
@@ -1628,7 +1635,7 @@ const StandardTable = <T extends object>({
         ref={tableContainerRef}
         className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
       >
-        {columns && data ? (
+        {shouldRenderTable ? (
           <Table
             className="table-fixed text-left"
             style={
@@ -1820,6 +1827,8 @@ const StandardTable = <T extends object>({
                   const rowActionMenuItems = hasActionMenuItems(rowActionContent)
                     ? renderActionMenuItems(rowActionContent)
                     : null;
+                  const isActionMenuOpen = openActionMenuRowId === tableRow.id;
+                  const isContextMenuOpen = openContextMenuRowId === tableRow.id;
                   const rowElement = (
                     <TableRow
                       key={tableRow.id}
@@ -1856,13 +1865,13 @@ const StandardTable = <T extends object>({
                           | boolean
                           | null
                           | undefined;
-                        const cellContent = col.cell
-                          ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                          : flexRender(cell.column.columnDef.cell, cell.getContext());
-                        const actionMenuItems =
-                          isActionColumn && hasActionMenuItems(cellContent)
-                            ? renderActionMenuItems(cellContent)
-                            : null;
+                        const cellContent =
+                          isActionColumn && cell.id === rowActionCell?.id
+                            ? rowActionContent
+                            : col.cell
+                              ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                              : flexRender(cell.column.columnDef.cell, cell.getContext());
+                        const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
                         return (
                           <Fragment key={cell.id}>
                             {shouldAnchorTrailingActionColumn && isActionColumn && (
@@ -1882,7 +1891,12 @@ const StandardTable = <T extends object>({
                             >
                               {isActionColumn ? (
                                 actionMenuItems ? (
-                                  <DropdownMenu>
+                                  <DropdownMenu
+                                    open={isActionMenuOpen}
+                                    onOpenChange={(open) =>
+                                      setOpenActionMenuRowId(open ? tableRow.id : null)
+                                    }
+                                  >
                                     <DropdownMenuTrigger asChild>
                                       <Button
                                         type="button"
@@ -1898,17 +1912,19 @@ const StandardTable = <T extends object>({
                                         ></i>
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                      align="end"
-                                      data-standard-table-action-menu="true"
-                                      className={ACTION_MENU_CONTENT_CLASSNAME}
-                                      onClick={(event) => event.stopPropagation()}
-                                      onDoubleClick={(event) => event.stopPropagation()}
-                                    >
-                                      <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                                        {actionMenuItems}
-                                      </div>
-                                    </DropdownMenuContent>
+                                    {isActionMenuOpen && (
+                                      <DropdownMenuContent
+                                        align="end"
+                                        data-standard-table-action-menu="true"
+                                        className={ACTION_MENU_CONTENT_CLASSNAME}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onDoubleClick={(event) => event.stopPropagation()}
+                                      >
+                                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>
+                                          {actionMenuItems}
+                                        </div>
+                                      </DropdownMenuContent>
+                                    )}
                                   </DropdownMenu>
                                 ) : null
                               ) : (
@@ -1922,16 +1938,21 @@ const StandardTable = <T extends object>({
                   );
 
                   return rowActionMenuItems ? (
-                    <ContextMenu key={tableRow.id}>
+                    <ContextMenu
+                      key={tableRow.id}
+                      onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}
+                    >
                       <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
-                      <ContextMenuContent
-                        data-standard-table-action-menu="true"
-                        className={ACTION_MENU_CONTENT_CLASSNAME}
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
-                      </ContextMenuContent>
+                      {isContextMenuOpen && (
+                        <ContextMenuContent
+                          data-standard-table-action-menu="true"
+                          className={ACTION_MENU_CONTENT_CLASSNAME}
+                          onClick={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                        >
+                          <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
+                        </ContextMenuContent>
+                      )}
                     </ContextMenu>
                   ) : (
                     rowElement
@@ -1953,7 +1974,7 @@ const StandardTable = <T extends object>({
             </TableBody>
           </Table>
         ) : (
-          children
+          (loadingState ?? children)
         )}
       </div>
 
