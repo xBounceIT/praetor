@@ -10,7 +10,7 @@ export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
 export { clientsOrdersApi } from './api/clientsOrders';
-export type { LoginResponse, Settings } from './api/contracts';
+export type { LoginResponse, PersonalAccessToken, Settings } from './api/contracts';
 export { emailApi } from './api/email';
 export { employeesApi } from './api/employees';
 export { entriesApi } from './api/entries';

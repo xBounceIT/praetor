@@ -1,4 +1,15 @@
-import { Check, Contrast, Copy, type LucideIcon, Moon, Sun, SunMoon, Trash2 } from 'lucide-react';
+import {
+  Check,
+  Contrast,
+  Copy,
+  type LucideIcon,
+  Moon,
+  RefreshCw,
+  Shield,
+  Sun,
+  SunMoon,
+  Trash2,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +29,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import praetorFaviconUrl from '../praetor-favicon.png';
-import type { CreatedMcpToken, McpToken, Settings } from '../services/api';
+import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
 import { writeTextToClipboard } from '../utils/clipboard';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
@@ -31,6 +42,8 @@ export interface UserSettingsProps {
   onListMcpTokens: () => Promise<McpToken[]>;
   onCreateMcpToken: (name: string) => Promise<CreatedMcpToken>;
   onRevokeMcpToken: (id: string) => Promise<unknown>;
+  onGetPersonalAccessToken: () => Promise<PersonalAccessToken>;
+  onRenewPersonalAccessToken: () => Promise<PersonalAccessToken>;
 }
 
 type LanguagePreference = NonNullable<Settings['language']>;
@@ -94,7 +107,7 @@ const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => 
   return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
 };
 
-const formatTokenDate = (value: number | null) => {
+const formatMcpTokenDate = (value: number | null) => {
   if (!value) return 'Never';
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
@@ -130,9 +143,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   onListMcpTokens,
   onCreateMcpToken,
   onRevokeMcpToken,
+  onGetPersonalAccessToken,
+  onRenewPersonalAccessToken,
 }) => {
   const { t } = useTranslation(['settings', 'common']);
-  const tRef = useRef(t);
+  const translateRef = useRef(t);
 
   const [fullName, setFullName] = useState(settings.fullName);
   const [email, setEmail] = useState(settings.email);
@@ -140,7 +155,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
 
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'appearance' | 'language' | 'password' | 'mcp'
+    'profile' | 'appearance' | 'language' | 'security' | 'mcp'
   >('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -176,16 +191,54 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     [mcpEndpointUrl, rawMcpToken],
   );
 
+  const [personalAccessToken, setPersonalAccessToken] = useState<PersonalAccessToken | null>(null);
+  const [isLoadingToken, setIsLoadingToken] = useState(false);
+  const [isRenewingToken, setIsRenewingToken] = useState(false);
+  const [tokenError, setTokenError] = useState('');
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const tokenLoadInFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
     setFullName(settings.fullName);
     setEmail(settings.email);
     setLanguage(settings.language || 'auto');
   }, [settings]);
 
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
+
   useEffect(() => {
-    tRef.current = t;
+    translateRef.current = t;
   }, [t]);
 
+  useEffect(() => {
+    if (activeTab !== 'security' || personalAccessToken || tokenLoadInFlightRef.current) return;
+
+    const loadToken = async () => {
+      tokenLoadInFlightRef.current = true;
+      setIsLoadingToken(true);
+      setTokenError('');
+      try {
+        const tokenMetadata = await onGetPersonalAccessToken();
+        if (isMountedRef.current) setPersonalAccessToken(tokenMetadata);
+      } catch (err: unknown) {
+        console.error('Failed to load personal access token:', err);
+        if (isMountedRef.current) {
+          setTokenError((err as Error).message || translateRef.current('security.tokenLoadFailed'));
+        }
+      } finally {
+        tokenLoadInFlightRef.current = false;
+        if (isMountedRef.current) setIsLoadingToken(false);
+      }
+    };
+
+    void loadToken();
+  }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
     setCurrentTheme(theme);
@@ -258,7 +311,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       setMcpTokens(await onListMcpTokens());
     } catch (err) {
       console.error('Failed to load MCP tokens:', err);
-      setMcpError(tRef.current('mcp.loadFailed'));
+      setMcpError(translateRef.current('mcp.loadFailed'));
     } finally {
       setIsLoadingMcpTokens(false);
     }
@@ -314,6 +367,39 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const copyMcpSetupPrompt = async () => {
     await writeTextToClipboard(mcpSetupPrompt);
   };
+
+  const handleRenewPersonalAccessToken = async () => {
+    setIsRenewingToken(true);
+    setTokenError('');
+    setTokenCopied(false);
+    try {
+      const renewed = await onRenewPersonalAccessToken();
+      setPersonalAccessToken(renewed);
+    } catch (err: unknown) {
+      console.error('Failed to renew personal access token:', err);
+      setTokenError((err as Error).message || t('security.tokenRenewFailed'));
+    } finally {
+      setIsRenewingToken(false);
+    }
+  };
+
+  const handleCopyPersonalAccessToken = async () => {
+    if (!personalAccessToken?.token) return;
+    const copied = await writeTextToClipboard(personalAccessToken.token);
+    if (!copied) {
+      setTokenError(t('security.copyFailed'));
+      return;
+    }
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 3000);
+  };
+
+  const formatPersonalAccessTokenDate = (value: string | null) =>
+    value ? new Date(value).toLocaleString() : t('security.neverUsed');
+
+  const tokenDisplayValue = personalAccessToken
+    ? (personalAccessToken.token ?? `${personalAccessToken.tokenPrefix}********`)
+    : '';
 
   const hasChanges =
     fullName !== settings.fullName ||
@@ -373,12 +459,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </button>
         <button
-          onClick={() => setActiveTab('password')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'password' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
+          onClick={() => setActiveTab('security')}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'security' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-lock mr-2"></i>
-          {t('password.title')}
-          {activeTab === 'password' && (
+          {t('security.title')}
+          {activeTab === 'security' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
           )}
         </button>
@@ -581,11 +667,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </section>
       )}
 
-      {activeTab === 'password' && (
+      {activeTab === 'security' && (
         <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-lock text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('password.title')}</h3>
+            <h3 className="font-semibold text-zinc-800">{t('security.title')}</h3>
           </div>
           <form onSubmit={handlePasswordUpdate}>
             <div className="p-6">
@@ -666,6 +752,106 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               </button>
             </div>
           </form>
+          <div className="border-t border-zinc-200 p-6">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
+                  <Shield aria-hidden="true" className="size-4" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-zinc-800">
+                    {t('security.personalAccessToken.title')}
+                  </h4>
+                  <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+                    {t('security.personalAccessToken.description')}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRenewPersonalAccessToken}
+                disabled={isLoadingToken || isRenewingToken}
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={`size-4 ${isRenewingToken ? 'animate-spin' : ''}`}
+                />
+                {isRenewingToken
+                  ? t('security.personalAccessToken.renewing')
+                  : t('security.personalAccessToken.renew')}
+              </Button>
+            </div>
+
+            {tokenError && (
+              <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                {tokenError}
+              </div>
+            )}
+
+            <div className="space-y-4 rounded-lg border border-border bg-background p-4">
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  {t('security.personalAccessToken.tokenLabel')}
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={
+                      isLoadingToken ? t('security.personalAccessToken.loading') : tokenDisplayValue
+                    }
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCopyPersonalAccessToken}
+                    disabled={!personalAccessToken?.token}
+                  >
+                    <Copy aria-hidden="true" className="size-4" />
+                    {tokenCopied
+                      ? t('security.personalAccessToken.copied')
+                      : t('security.personalAccessToken.copy')}
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  {personalAccessToken?.token
+                    ? t('security.personalAccessToken.visibleOnce')
+                    : t('security.personalAccessToken.masked')}
+                </p>
+              </div>
+
+              {personalAccessToken && (
+                <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                      {t('security.personalAccessToken.createdAt')}
+                    </dt>
+                    <dd className="mt-1 text-zinc-700">
+                      {formatPersonalAccessTokenDate(personalAccessToken.createdAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                      {t('security.personalAccessToken.updatedAt')}
+                    </dt>
+                    <dd className="mt-1 text-zinc-700">
+                      {formatPersonalAccessTokenDate(personalAccessToken.updatedAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                      {t('security.personalAccessToken.lastUsedAt')}
+                    </dt>
+                    <dd className="mt-1 text-zinc-700">
+                      {formatPersonalAccessTokenDate(personalAccessToken.lastUsedAt)}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          </div>
         </section>
       )}
 
@@ -798,8 +984,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                         <p className="font-semibold text-foreground">{token.name}</p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {token.tokenPrefix}... · {t('mcp.created')}{' '}
-                          {formatTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
-                          {formatTokenDate(token.lastUsedAt)}
+                          {formatMcpTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
+                          {formatMcpTokenDate(token.lastUsedAt)}
                         </p>
                       </div>
                       <Dialog>

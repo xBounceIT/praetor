@@ -1,5 +1,5 @@
 import { fetchApi } from './client';
-import type { Settings } from './contracts';
+import type { PersonalAccessToken, Settings } from './contracts';
 
 export type McpToken = {
   id: string;
@@ -40,5 +40,13 @@ export const settingsApi = {
   revokeMcpToken: (id: string): Promise<{ message: string }> =>
     fetchApi(`/settings/mcp-tokens/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    }),
+
+  getPersonalAccessToken: (): Promise<PersonalAccessToken> =>
+    fetchApi('/settings/personal-access-token'),
+
+  renewPersonalAccessToken: (): Promise<PersonalAccessToken> =>
+    fetchApi('/settings/personal-access-token/renew', {
+      method: 'POST',
     }),
 };

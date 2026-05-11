@@ -77,6 +77,28 @@
     "createFailed": "Impossibile creare il token MCP",
     "revokeFailed": "Impossibile revocare il token MCP"
   },
+  "security": {
+    "title": "Sicurezza",
+    "tokenLoadFailed": "Impossibile caricare il token di accesso personale",
+    "tokenRenewFailed": "Impossibile rinnovare il token di accesso personale",
+    "copyFailed": "Impossibile copiare il token",
+    "neverUsed": "Mai usato",
+    "personalAccessToken": {
+      "title": "Token di Accesso Personale",
+      "description": "Usa questo token con l'API per agire come il tuo utente ed ereditare i tuoi permessi correnti.",
+      "tokenLabel": "Token API",
+      "loading": "Caricamento token...",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "renew": "Rinnova token",
+      "renewing": "Rinnovo...",
+      "visibleOnce": "Copia ora questo token. Non verra mostrato di nuovo dopo aver lasciato questa pagina.",
+      "masked": "Il token completo e nascosto. Rinnovalo per generarne e copiarne uno nuovo.",
+      "createdAt": "Creato",
+      "updatedAt": "Ultimo rinnovo",
+      "lastUsedAt": "Ultimo utilizzo"
+    }
+  },
   "general": {
     "title": "Impostazioni Generali",
     "pageTitle": "Amministrazione Generale",

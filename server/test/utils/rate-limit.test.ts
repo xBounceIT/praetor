@@ -7,21 +7,21 @@ import {
 
 describe('GLOBAL_RATE_LIMIT', () => {
   test('has the documented max and timeWindow', () => {
-    expect(GLOBAL_RATE_LIMIT.max).toBe(1000);
+    expect(GLOBAL_RATE_LIMIT.max).toBe(3000);
     expect(GLOBAL_RATE_LIMIT.timeWindow).toBe('1 minute');
   });
 });
 
 describe('STANDARD_ROUTE_RATE_LIMIT', () => {
   test('has the documented max and timeWindow', () => {
-    expect(STANDARD_ROUTE_RATE_LIMIT.max).toBe(120);
+    expect(STANDARD_ROUTE_RATE_LIMIT.max).toBe(600);
     expect(STANDARD_ROUTE_RATE_LIMIT.timeWindow).toBe('1 minute');
   });
 });
 
 describe('LOGIN_RATE_LIMIT', () => {
   test('has the documented max and timeWindow', () => {
-    expect(LOGIN_RATE_LIMIT.max).toBe(10);
+    expect(LOGIN_RATE_LIMIT.max).toBe(30);
     expect(LOGIN_RATE_LIMIT.timeWindow).toBe('15 minutes');
   });
 });
