@@ -251,19 +251,26 @@ const buildServer = () => {
       const denied = enforceAny(user, USER_HIERARCHY_PERMISSIONS);
       if (denied) return denied;
 
-      const users = canViewAllUsers(user)
+      const hasWorkUnitsView = hasPermission(user, 'hr.work_units.view');
+      const hasCostsView = hasPermission(user, 'hr.costs.view');
+      const hasUserManagementView = hasPermission(user, 'administration.user_management.view');
+      const hasAllUsersView = canViewAllUsers(user);
+      const hasAllWorkUnitsView = canViewAllWorkUnits(user);
+      const hasEmailView = canViewUserEmails(user);
+
+      const users = hasAllUsersView
         ? await usersRepo.listAllForAdmin()
         : await usersRepo.listScopedForManager(user.id, {
             canViewManagedUsers:
               hasPermission(user, 'timesheets.tracker.view') ||
-              hasPermission(user, 'hr.work_units.view') ||
-              hasPermission(user, 'administration.user_management.view'),
+              hasWorkUnitsView ||
+              hasUserManagementView,
             canViewInternal: hasPermission(user, 'hr.internal.view'),
             canViewExternal: hasPermission(user, 'hr.external.view'),
           });
 
-      const visibleWorkUnits = hasPermission(user, 'hr.work_units.view')
-        ? canViewAllWorkUnits(user)
+      const visibleWorkUnits = hasWorkUnitsView
+        ? hasAllWorkUnitsView
           ? await workUnitsRepo.listAll()
           : await workUnitsRepo.listManagedBy(user.id)
         : [];
@@ -281,8 +288,8 @@ const buildServer = () => {
       return jsonResult({
         users: users.map((entry) =>
           maskUser(entry, {
-            canViewCosts: hasPermission(user, 'hr.costs.view'),
-            canViewEmails: canViewUserEmails(user),
+            canViewCosts: hasCostsView,
+            canViewEmails: hasEmailView,
           }),
         ),
         workUnits: visibleWorkUnits.map((unit) => ({
@@ -290,11 +297,11 @@ const buildServer = () => {
           userIds: userIdsByWorkUnit.get(unit.id) ?? [],
         })),
         scope: {
-          canViewAllUsers: canViewAllUsers(user),
-          canViewAllWorkUnits: canViewAllWorkUnits(user),
-          canViewWorkUnits: hasPermission(user, 'hr.work_units.view'),
-          includesCosts: hasPermission(user, 'hr.costs.view'),
-          includesEmails: canViewUserEmails(user),
+          canViewAllUsers: hasAllUsersView,
+          canViewAllWorkUnits: hasAllWorkUnitsView,
+          canViewWorkUnits: hasWorkUnitsView,
+          includesCosts: hasCostsView,
+          includesEmails: hasEmailView,
         },
       });
     },

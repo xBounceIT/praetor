@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, Settings } from '../services/api';
+import { writeTextToClipboard } from '../utils/clipboard';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
 
@@ -120,24 +121,6 @@ const McpIcon = ({ className }: { className?: string }) => (
     <path d={siModelcontextprotocol.path} />
   </svg>
 );
-
-const copyTextToClipboard = async (text: string) => {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.top = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
-};
 
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
@@ -321,15 +304,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const copyRawMcpToken = async () => {
     if (!rawMcpToken) return;
-    await copyTextToClipboard(rawMcpToken);
+    await writeTextToClipboard(rawMcpToken);
   };
 
   const copyMcpEndpointUrl = async () => {
-    await copyTextToClipboard(mcpEndpointUrl);
+    await writeTextToClipboard(mcpEndpointUrl);
   };
 
   const copyMcpSetupPrompt = async () => {
-    await copyTextToClipboard(mcpSetupPrompt);
+    await writeTextToClipboard(mcpSetupPrompt);
   };
 
   const hasChanges =
@@ -797,70 +780,68 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   {t('mcp.empty')}
                 </div>
               ) : (
-                mcpTokens.map((token) => (
-                  <div
-                    key={token.id}
-                    className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <p className="font-semibold text-foreground">{token.name}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {token.tokenPrefix}... · {t('mcp.created')}{' '}
-                        {formatTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
-                        {formatTokenDate(token.lastUsedAt)}
-                      </p>
-                    </div>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={revokingMcpTokenId === token.id}
-                        >
-                          {revokingMcpTokenId === token.id ? (
-                            <i className="fa-solid fa-circle-notch fa-spin"></i>
-                          ) : (
-                            <Trash2 aria-hidden="true" className="size-3.5" />
-                          )}
-                          {t('mcp.revoke')}
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>{t('mcp.revokeDialogTitle')}</DialogTitle>
-                          <DialogDescription>
-                            {t('mcp.revokeDialogDescription', { name: token.name })}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              disabled={revokingMcpTokenId === token.id}
-                            >
-                              {t('common:buttons.cancel')}
-                            </Button>
-                          </DialogClose>
+                mcpTokens.map((token) => {
+                  const isRevoking = revokingMcpTokenId === token.id;
+                  const renderRevokeIcon = () =>
+                    isRevoking ? (
+                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                    ) : (
+                      <Trash2 aria-hidden="true" className="size-3.5" />
+                    );
+
+                  return (
+                    <div
+                      key={token.id}
+                      className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center"
+                    >
+                      <div>
+                        <p className="font-semibold text-foreground">{token.name}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {token.tokenPrefix}... · {t('mcp.created')}{' '}
+                          {formatTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
+                          {formatTokenDate(token.lastUsedAt)}
+                        </p>
+                      </div>
+                      <Dialog>
+                        <DialogTrigger asChild>
                           <Button
                             type="button"
                             variant="destructive"
-                            onClick={() => void handleRevokeMcpToken(token.id)}
-                            disabled={revokingMcpTokenId === token.id}
+                            size="sm"
+                            disabled={isRevoking}
                           >
-                            {revokingMcpTokenId === token.id ? (
-                              <i className="fa-solid fa-circle-notch fa-spin"></i>
-                            ) : (
-                              <Trash2 aria-hidden="true" className="size-3.5" />
-                            )}
-                            {t('mcp.revokeConfirm')}
+                            {renderRevokeIcon()}
+                            {t('mcp.revoke')}
                           </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                ))
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{t('mcp.revokeDialogTitle')}</DialogTitle>
+                            <DialogDescription>
+                              {t('mcp.revokeDialogDescription', { name: token.name })}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button type="button" variant="outline" disabled={isRevoking}>
+                                {t('common:buttons.cancel')}
+                              </Button>
+                            </DialogClose>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => void handleRevokeMcpToken(token.id)}
+                              disabled={isRevoking}
+                            >
+                              {renderRevokeIcon()}
+                              {t('mcp.revokeConfirm')}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
