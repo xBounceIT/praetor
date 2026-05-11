@@ -40,7 +40,7 @@ const Calendar: React.FC<CalendarProps> = ({
   allowWeekendSelection = false,
   size = 'default',
 }) => {
-  const { t } = useTranslation('timesheets');
+  const { t, i18n } = useTranslation('timesheets');
   const isCompact = size === 'compact';
   const [viewDate, setViewDate] = useState(() => {
     if (selectedDate) return dateOnlyStringToLocalDate(selectedDate);
@@ -90,25 +90,39 @@ const Calendar: React.FC<CalendarProps> = ({
     return totals;
   }, [entries]);
 
-  const monthNames = [
-    'Gennaio',
-    'Febbraio',
-    'Marzo',
-    'Aprile',
-    'Maggio',
-    'Giugno',
-    'Luglio',
-    'Agosto',
-    'Settembre',
-    'Ottobre',
-    'Novembre',
-    'Dicembre',
-  ];
+  const locale = i18n.language;
+  const monthNames = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { month: 'long' });
+    return Array.from({ length: 12 }, (_, i) =>
+      // Use day=15 to avoid edge-of-month / timezone issues
+      formatter.format(new Date(2000, i, 15)),
+    );
+  }, [locale]);
+  const monthShortNames = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { month: 'short' });
+    return Array.from({ length: 12 }, (_, i) => formatter.format(new Date(2000, i, 15)));
+  }, [locale]);
 
-  const dayHeaders =
-    startOfWeek === 'Monday'
-      ? ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
-      : ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const dayHeaders = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    // 2024-01-07 is a Sunday; build seven consecutive days starting from Sunday.
+    const sundayBased = Array.from({ length: 7 }, (_, i) =>
+      formatter.format(new Date(2024, 0, 7 + i)),
+    );
+    if (startOfWeek === 'Monday') {
+      // Rotate so Monday is first, Sunday last.
+      return [...sundayBased.slice(1), sundayBased[0]];
+    }
+    return sundayBased;
+  }, [locale, startOfWeek]);
+
+  const weekendLongNames = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: 'long' });
+    return {
+      sunday: formatter.format(new Date(2024, 0, 7)),
+      saturday: formatter.format(new Date(2024, 0, 6)),
+    };
+  }, [locale]);
 
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
@@ -167,7 +181,12 @@ const Calendar: React.FC<CalendarProps> = ({
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
     const isForbidden = !allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday;
     const holidayLabel =
-      holidayName || (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '');
+      holidayName ||
+      (isSunday
+        ? weekendLongNames.sunday
+        : isSaturday && treatSaturdayAsHoliday
+          ? weekendLongNames.saturday
+          : '');
 
     days.push(
       <Tooltip key={d} disabled={!holidayLabel}>
@@ -277,9 +296,9 @@ const Calendar: React.FC<CalendarProps> = ({
           {/* Month Picker Overlay */}
           {isMonthPickerOpen && (
             <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              {monthNames.map((mName, idx) => (
+              {monthShortNames.map((mShortName, idx) => (
                 <button
-                  key={mName}
+                  key={mShortName}
                   type="button"
                   onClick={() => {
                     setViewDate(new Date(year, idx, 1));
@@ -293,7 +312,7 @@ const Calendar: React.FC<CalendarProps> = ({
                         : 'text-zinc-600 hover:bg-zinc-50'
                   }`}
                 >
-                  {mName.slice(0, 3)}
+                  {mShortName}
                 </button>
               ))}
             </div>
@@ -341,7 +360,7 @@ const Calendar: React.FC<CalendarProps> = ({
               isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
             }`}
           >
-            Oggi
+            {t('common:time.today')}
           </button>
           <button
             type="button"
