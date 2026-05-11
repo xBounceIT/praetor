@@ -49,12 +49,12 @@ const cpoGetUsageCountMock = mock();
 const cpoDeleteByIdMock = mock();
 
 // userAssignmentsRepo
-const assignClientToUserMock = mock(async () => undefined);
-const assignClientToTopManagersMock = mock(async () => undefined);
+const assignClientToUserMock = mock();
+const assignClientToTopManagersMock = mock();
 const isClientAssignedToUserMock = mock();
 
-const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const logAuditMock = mock();
+const withDbTransactionMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -268,7 +268,10 @@ describe('GET /api/clients', () => {
     expect(body[0].clientCode).toBe('ACME-01');
   });
 
-  test('200 viewer with only timesheets perm → minimal fields only', async () => {
+  test('200 viewer with only timesheets perm → restricted but schema-compliant shape', async () => {
+    // Regression: previously the handler returned `{id, name, description}` only, missing the
+    // ~30 fields declared in `clientSchema`. With the fix the response includes every declared
+    // field (with sensitive ones zeroed out) so the Fastify response serializer is happy.
     getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
     listClientsMock.mockResolvedValue([SAMPLE_CLIENT]);
 
@@ -280,7 +283,53 @@ describe('GET /api/clients', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body[0]).toEqual({ id: 'c-1', name: 'ACME', description: null });
+    const row = body[0];
+    expect(row.id).toBe('c-1');
+    expect(row.name).toBe('ACME');
+    expect(row.clientCode).toBeNull();
+    expect(row.fiscalCode).toBeNull();
+    expect(row.email).toBeNull();
+    expect(row.phone).toBeNull();
+    expect(row.contactName).toBeNull();
+    expect(row.vatNumber).toBeNull();
+    expect(row.taxCode).toBeNull();
+    expect(row.contacts).toEqual([]);
+    expect(row.totalSentQuotes).toBe(0);
+    expect(row.totalAcceptedOrders).toBe(0);
+    const schemaKeys = [
+      'id',
+      'name',
+      'description',
+      'isDisabled',
+      'type',
+      'contacts',
+      'contactName',
+      'clientCode',
+      'email',
+      'phone',
+      'address',
+      'addressCountry',
+      'addressState',
+      'addressCap',
+      'addressProvince',
+      'addressCivicNumber',
+      'addressLine',
+      'atecoCode',
+      'website',
+      'sector',
+      'numberOfEmployees',
+      'revenue',
+      'fiscalCode',
+      'officeCountRange',
+      'vatNumber',
+      'taxCode',
+      'createdAt',
+      'totalSentQuotes',
+      'totalAcceptedOrders',
+    ];
+    for (const key of schemaKeys) {
+      expect(row).toHaveProperty(key);
+    }
   });
 
   test('401 missing token', async () => {
@@ -320,8 +369,12 @@ describe('POST /api/clients', () => {
 
     expect(res.statusCode).toBe(201);
     expect(createClientMock).toHaveBeenCalledTimes(1);
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', expect.any(String));
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith(expect.any(String));
+    // Repo calls now run inside `withDbTransaction`, so each receives the tx executor as
+    // the last positional argument.
+    const assignUserCall = assignClientToUserMock.mock.calls[0];
+    expect(assignUserCall[0]).toBe('u1');
+    expect(typeof assignUserCall[1]).toBe('string');
+    expect(assignClientToTopManagersMock.mock.calls[0][0]).toEqual(expect.any(String));
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.created', entityType: 'client' }),
     );
@@ -408,6 +461,84 @@ describe('POST /api/clients', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'Client ID already exists' });
+  });
+
+  test('400 clients_pkey violation maps to retry message (not fiscal code)', async () => {
+    // Regression: the old `'c-' + Date.now()` ID generator could collide on concurrent
+    // requests; the unique-violation handler fell through to the generic
+    // "Fiscal code already exists" message, which was misleading. Now `clients_pkey`
+    // surfaces a dedicated retry message.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockRejectedValue(makeDbError('23505', 'clients_pkey'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: validBody,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Client ID conflict, please retry' });
+  });
+
+  test('201 concurrent creates produce unique IDs (collision-safe generator)', async () => {
+    // Regression: `'c-' + Date.now()` produced identical IDs for back-to-back requests in
+    // the same millisecond. UUID-suffixed IDs eliminate the collision.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (input: { id: string }) => ({
+      ...SAMPLE_CLIENT,
+      id: input.id,
+    }));
+
+    const [a, b] = await Promise.all([
+      testApp.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: authHeader(),
+        payload: { ...validBody, clientCode: 'ACME-A', fiscalCode: 'IT11111111111' },
+      }),
+      testApp.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: authHeader(),
+        payload: { ...validBody, clientCode: 'ACME-B', fiscalCode: 'IT22222222222' },
+      }),
+    ]);
+
+    expect(a.statusCode).toBe(201);
+    expect(b.statusCode).toBe(201);
+    const idA = JSON.parse(a.body).id;
+    const idB = JSON.parse(b.body).id;
+    expect(idA).not.toBe(idB);
+    expect(idA).toMatch(/^c-[0-9a-f-]{36}$/i);
+    expect(idB).toMatch(/^c-[0-9a-f-]{36}$/i);
+  });
+
+  test('201 wraps create + assignments in a single transaction', async () => {
+    // Regression: previously create + assignClientToUser + assignClientToTopManagers ran
+    // outside any transaction, so an assignment failure left an orphan client row. The
+    // fix routes all three through `withDbTransaction`.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    const TX_SENTINEL = { __tx: true } as const;
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    createClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(createClientMock.mock.calls[0][1]).toBe(TX_SENTINEL);
+    const assignUserCall = assignClientToUserMock.mock.calls[0];
+    expect(assignUserCall[assignUserCall.length - 1]).toBe(TX_SENTINEL);
+    expect(assignClientToTopManagersMock.mock.calls[0][1]).toBe(TX_SENTINEL);
   });
 
   test('401 missing token', async () => {
