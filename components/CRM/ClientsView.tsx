@@ -534,10 +534,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       await onUpdateClient(clientToToggleDisabled.id, {
         isDisabled: !clientToToggleDisabled.isDisabled,
       });
-    } finally {
-      setIsTogglingDisabled(false);
+      // Only close the modal once the update has actually succeeded. On failure
+      // (network/API), leave the dialog open so the user can retry.
       setIsToggleDisabledOpen(false);
       setClientToToggleDisabled(null);
+    } catch (err) {
+      console.error('Failed to toggle client disabled state:', err);
+    } finally {
+      setIsTogglingDisabled(false);
     }
   };
 
