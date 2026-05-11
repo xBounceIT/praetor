@@ -247,10 +247,15 @@ export const update = async (
 export const findBillingById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ billingType: BillingType; billingFrequency: BillingFrequency } | null> => {
-  const project = await findById(id, exec);
-  if (!project) return null;
-  return { billingType: project.billingType, billingFrequency: project.billingFrequency };
+): Promise<{ billingType: StoredBillingType; billingFrequency: BillingFrequency } | null> => {
+  const rows = await exec
+    .select({
+      billingType: projects.billingType,
+      billingFrequency: projects.billingFrequency,
+    })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
