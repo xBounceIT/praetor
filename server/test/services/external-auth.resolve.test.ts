@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realExternalIdentitiesRepo from '../../repositories/externalIdentitiesRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
@@ -59,6 +59,15 @@ beforeAll(async () => {
   }));
 
   ({ resolveExternalIdentity } = await import('../../services/external-auth.ts'));
+});
+
+afterAll(() => {
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../repositories/externalIdentitiesRepo.ts', () => externalIdentitiesRepoSnap);
+  mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
+  mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
+  mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
 });
 
 beforeEach(() => {

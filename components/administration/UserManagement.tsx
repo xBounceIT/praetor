@@ -1077,7 +1077,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   {t('hr:workforce.authMethod.providerLabel')}
                 </label>
                 <Select
-                  value={authProviderDraft}
+                  value={authProviderDraft || undefined}
                   onValueChange={(value) => {
                     setAuthProviderDraft(value);
                     setAuthMethodError('');

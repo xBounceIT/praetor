@@ -991,6 +991,26 @@ describe('PUT /api/users/:id/auth-method', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  test('403 manager cannot change auth method for unmanaged app_user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: managerAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
 });
 
 // =========================================================================

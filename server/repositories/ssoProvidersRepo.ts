@@ -1,6 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
-import { type SsoProtocol, type StoredSsoRoleMapping, ssoProviders } from '../db/schema/sso.ts';
+import {
+  type SsoProtocol,
+  type StoredSsoRoleMapping,
+  ssoProviders,
+} from '../db/schema/ssoProviders.ts';
 
 export type SsoRoleMapping = StoredSsoRoleMapping;
 

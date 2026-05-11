@@ -535,6 +535,8 @@ describe('syncUsers', () => {
       passwordHash: realUsersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
       role: 'user',
       avatarInitials: 'CA',
+      authMethod: 'ldap',
+      authProviderId: null,
     });
     expect(result).toEqual({ synced: 0, created: 1 });
   });

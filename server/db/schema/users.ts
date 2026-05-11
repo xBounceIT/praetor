@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, numeric, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, index, numeric, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { roles } from './roles.ts';
+import { ssoProviders } from './ssoProviders.ts';
 
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 
@@ -22,7 +23,9 @@ export const users = pgTable(
       .$type<'app_user' | 'internal' | 'external'>()
       .default('app_user'),
     authMethod: varchar('auth_method', { length: 20 }).$type<UserAuthMethod>().default('local'),
-    authProviderId: varchar('auth_provider_id', { length: 50 }),
+    authProviderId: varchar('auth_provider_id', { length: 50 }).references(() => ssoProviders.id, {
+      onDelete: 'set null',
+    }),
   },
   (table) => [
     check(
@@ -30,5 +33,6 @@ export const users = pgTable(
       sql`${table.employeeType} IN ('app_user', 'internal', 'external')`,
     ),
     check('users_auth_method_check', sql`${table.authMethod} IN ('local', 'ldap', 'oidc', 'saml')`),
+    index('idx_users_auth_provider_id').on(table.authProviderId),
   ],
 );

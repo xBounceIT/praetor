@@ -718,6 +718,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .code(409)
           .send({ error: 'Authentication method can be changed only for app users' });
       }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        idResult.value !== request.user?.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       if (idResult.value === request.user?.id && methodResult.value !== 'local') {
         return badRequest(
           reply,
