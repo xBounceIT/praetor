@@ -3,6 +3,21 @@ import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import { fetchApi } from './client';
 import { normalizeClient, normalizeProject, normalizeTask, normalizeUser } from './normalizers';
 
+/**
+ * Update payload accepted by `PUT /api/users/:id`. Mirrors
+ * `userUpdateBodySchema` in `server/routes/users.ts` — fields outside this DTO
+ * are silently dropped server-side, so we keep the type narrow so callers
+ * can't pretend to mutate (e.g.) `permissions` or `availableRoles` via this
+ * endpoint.
+ */
+export type UpdateUserInput = {
+  name?: string;
+  isDisabled?: boolean;
+  costPerHour?: number;
+  role?: string;
+  email?: string;
+};
+
 export const usersApi = {
   list: (): Promise<User[]> => fetchApi<User[]>('/users').then((users) => users.map(normalizeUser)),
 
@@ -19,12 +34,14 @@ export const usersApi = {
       body: JSON.stringify({ name, username, password, role, email, costPerHour }),
     }).then(normalizeUser),
 
-  delete: (id: string): Promise<void> => fetchApi(`/users/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> => fetchApi<void>(`/users/${id}`, { method: 'DELETE' }),
 
   getAssignments: (
     id: string,
   ): Promise<{ clientIds: string[]; projectIds: string[]; taskIds: string[] }> =>
-    fetchApi(`/users/${id}/assignments`),
+    fetchApi<{ clientIds: string[]; projectIds: string[]; taskIds: string[] }>(
+      `/users/${id}/assignments`,
+    ),
 
   getTrackerCatalogs: (id: string): Promise<TrackerCatalogs> =>
     fetchApi<{
@@ -43,26 +60,26 @@ export const usersApi = {
     projectIds: string[],
     taskIds?: string[],
   ): Promise<void> =>
-    fetchApi(`/users/${id}/assignments`, {
+    fetchApi<void>(`/users/${id}/assignments`, {
       method: 'POST',
       body: JSON.stringify({ clientIds, projectIds, taskIds }),
     }),
 
-  update: (id: string, updates: Partial<User>): Promise<User> =>
+  update: (id: string, updates: UpdateUserInput): Promise<User> =>
     fetchApi<User>(`/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeUser),
 
   getRoles: (id: string): Promise<{ roleIds: string[]; primaryRoleId: string }> =>
-    fetchApi(`/users/${id}/roles`),
+    fetchApi<{ roleIds: string[]; primaryRoleId: string }>(`/users/${id}/roles`),
 
   updateRoles: (
     id: string,
     roleIds: string[],
     primaryRoleId: string,
   ): Promise<{ roleIds: string[]; primaryRoleId: string }> =>
-    fetchApi(`/users/${id}/roles`, {
+    fetchApi<{ roleIds: string[]; primaryRoleId: string }>(`/users/${id}/roles`, {
       method: 'PUT',
       body: JSON.stringify({ roleIds, primaryRoleId }),
     }),

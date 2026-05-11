@@ -13,8 +13,28 @@ const ensureToken = (token: unknown): string => {
   return normalizedToken;
 };
 
-const normalizeAuthUser = (user: User): User => {
-  const normalizedUser = normalizeUser(user);
+/**
+ * Validate the canonical /auth/me shape. The server contract is that the
+ * authenticated user's own record is always fully populated (email,
+ * costPerHour, employeeType, authMethod, available roles). If any of those are
+ * missing we treat the response as invalid rather than silently inventing
+ * defaults — that masks real server-side regressions.
+ */
+const normalizeAuthUser = (rawUser: User): User => {
+  // Pre-check raw payload BEFORE normalization so we don't lose information
+  // (e.g. `email` collapses from `''` to `undefined` in the normalizer).
+  if (
+    rawUser === null ||
+    typeof rawUser !== 'object' ||
+    typeof rawUser.email !== 'string' ||
+    typeof rawUser.costPerHour !== 'number' ||
+    typeof rawUser.employeeType !== 'string' ||
+    typeof rawUser.authMethod !== 'string'
+  ) {
+    throw new Error(INVALID_AUTH_RESPONSE_ERROR);
+  }
+
+  const normalizedUser = normalizeUser(rawUser);
   if (
     !normalizedUser.id ||
     !normalizedUser.name ||

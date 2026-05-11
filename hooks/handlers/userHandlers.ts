@@ -1,5 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
+import type { UpdateUserInput } from '../../services/api/users';
 import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 
@@ -32,7 +33,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     }
   };
 
-  const updateUser = async (id: string, updates: Partial<User>) => {
+  const updateUser = async (id: string, updates: UpdateUserInput) => {
     try {
       const updated = await api.users.update(id, updates);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
@@ -118,7 +119,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
   const addExternalEmployee = (name: string, costPerHour?: number) =>
     addEmployee(name, 'external', costPerHour);
 
-  const updateEmployee = async (id: string, updates: Partial<User>) => {
+  const updateEmployee = async (id: string, updates: UpdateUserInput) => {
     try {
       const updated = await api.employees.update(id, updates);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));

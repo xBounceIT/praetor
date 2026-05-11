@@ -21,6 +21,15 @@ const i18nMock = {
   changeLanguage: mock((_lang: string) => {}),
 };
 
+class TestApiError extends Error {
+  readonly statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+  }
+}
+
 mock.module('../../services/api', () => ({
   default: {
     auth: {
@@ -33,6 +42,11 @@ mock.module('../../services/api', () => ({
   },
   getAuthToken: () => getAuthTokenMock(),
   setAuthToken: (token: string | null) => setAuthTokenMock(token),
+}));
+
+mock.module('../../services/api/client', () => ({
+  ApiError: TestApiError,
+  isApiError: (err: unknown): err is TestApiError => err instanceof TestApiError,
 }));
 
 mock.module('../../i18n', () => ({
@@ -97,15 +111,78 @@ describe('useAuth', () => {
     expect(localStorage.getItem('i18nextLng')).toBe('it');
   });
 
-  test('initial mount: api.auth.me rejection clears token', async () => {
+  test('initial mount: api.auth.me 401 clears token (real auth failure)', async () => {
     tokenStore.token = 'bad-token';
-    apiMocks.authMe.mockImplementation(() => Promise.reject(new Error('bad token')));
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new TestApiError('Unauthorized', 401)));
 
     const { result } = renderHook(() => useAuth());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.currentUser).toBeNull();
     expect(setAuthTokenMock).toHaveBeenCalledWith(null);
+  });
+
+  test('initial mount: api.auth.me 403 clears token (real auth failure)', async () => {
+    tokenStore.token = 'forbidden-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new TestApiError('Forbidden', 403)));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.currentUser).toBeNull();
+    expect(setAuthTokenMock).toHaveBeenCalledWith(null);
+  });
+
+  test('initial mount: transient 500 keeps token and restores cached user', async () => {
+    tokenStore.token = 'good-token';
+    const cached = { id: 'cached-u', name: 'Cached User' };
+    localStorage.setItem('praetor_cached_auth_user', JSON.stringify(cached));
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new TestApiError('boom', 500)));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // Token must NOT be cleared on a transient error.
+    expect(setAuthTokenMock).not.toHaveBeenCalledWith(null);
+    // Cached user is restored so the UI stays usable until the next refresh.
+    expect(result.current.currentUser?.id).toBe('cached-u');
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+
+  test('initial mount: network error (no status) keeps token and restores cache', async () => {
+    tokenStore.token = 'good-token';
+    const cached = { id: 'cached-u', name: 'Cached User' };
+    localStorage.setItem('praetor_cached_auth_user', JSON.stringify(cached));
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(setAuthTokenMock).not.toHaveBeenCalledWith(null);
+    expect(result.current.currentUser?.id).toBe('cached-u');
+  });
+
+  test('initial mount: transient error with no cached user leaves user null but token intact', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new TestApiError('boom', 500)));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(setAuthTokenMock).not.toHaveBeenCalledWith(null);
+    expect(result.current.currentUser).toBeNull();
+  });
+
+  test('successful /auth/me caches the user for transient-recovery', async () => {
+    tokenStore.token = 'tok';
+    const user = { id: 'u-fresh', name: 'Fresh' };
+    apiMocks.authMe.mockImplementation(() => Promise.resolve(user));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(localStorage.getItem('praetor_cached_auth_user')).toBe(JSON.stringify(user));
+    expect(result.current.currentUser).toEqual(user as never);
   });
 
   test('language=auto removes localStorage entry and detects browser language', async () => {
@@ -183,6 +260,7 @@ describe('useAuth', () => {
     expect(result.current.currentUser).toBeNull();
     expect(result.current.logoutReason).toBe('inactivity');
     expect(onLogout).toHaveBeenCalledWith('inactivity');
+    expect(localStorage.getItem('praetor_cached_auth_user')).toBeNull();
   });
 
   test('logout without reason sets logoutReason to null', async () => {
