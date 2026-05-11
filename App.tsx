@@ -77,6 +77,7 @@ import type {
   View,
   WorkUnit,
 } from './types';
+import { canonicalizeLegacyHash, normalizeCurrencyForState, VALID_VIEWS } from './utils/appShell';
 import {
   dateOnlyStringToLocalDate,
   formatDateOnlyForLocale,
@@ -92,6 +93,7 @@ import {
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasScopedActionPermission,
   hasViewAccess,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
@@ -129,14 +131,6 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('administration/')) return 'administration';
   if (view === 'settings') return 'settings';
   return null;
-};
-
-const canonicalizeLegacyHash = (hash: string) => {
-  if (hash === 'suppliers/manage') return 'crm/suppliers';
-  if (hash === 'suppliers/quotes') return 'sales/supplier-quotes';
-  if (hash === 'sales/supplier-offers') return 'sales/supplier-quotes';
-  if (hash === 'administration/work-units') return 'hr/work-units';
-  return hash;
 };
 
 const TrackerView: React.FC<{
@@ -583,6 +577,9 @@ const App: React.FC = () => {
   const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  // Becomes true once the initial entries list has been loaded for the current session so
+  // that recurring-entry generation never runs against an empty entries array.
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
   // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
   const entriesStreamTokenRef = useRef(0);
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
@@ -653,87 +650,13 @@ const App: React.FC = () => {
       catalogs: null,
       isLoading: false,
     });
-  const VALID_VIEWS: View[] = useMemo(
-    () => [
-      'timesheets/tracker',
-      'timesheets/recurring',
-      'administration/user-management',
-      'administration/roles',
-      'administration/authentication',
-      'administration/general',
-      'administration/email',
-      'administration/logs',
-      'crm/clients',
-      'crm/suppliers',
-      // Sales module
-      'sales/client-quotes',
-      'sales/client-offers',
-      'sales/supplier-quotes',
-      // Accounting module
-      'accounting/clients-orders',
-      'accounting/clients-invoices',
-      'accounting/supplier-orders',
-      'accounting/supplier-invoices',
-      // Catalog module
-      'catalog/internal-listing',
-      'projects/manage',
-      'projects/tasks',
-      'hr/internal',
-      'hr/external',
-      'hr/work-units',
-      // Reports module
-      'reports/ai-reporting',
-      'settings',
-      'docs',
-      'docs/api',
-      'docs/frontend',
-    ],
-    [],
-  );
-
   const [activeView, setActiveView] = useState<View | '404'>(() => {
     const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
     if (technicalDocsView) return technicalDocsView;
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
-    // We can't use the memoized VALID_VIEWS here because this runs before the initial render
-    // So we define the list once for initialization
-    const validViews: View[] = [
-      'timesheets/tracker',
-      'timesheets/recurring',
-      'administration/user-management',
-      'administration/roles',
-      'administration/authentication',
-      'administration/general',
-      'administration/email',
-      'administration/logs',
-      'crm/clients',
-      'crm/suppliers',
-      // Sales module
-      'sales/client-quotes',
-      'sales/client-offers',
-      'sales/supplier-quotes',
-      // Accounting module
-      'accounting/clients-orders',
-      'accounting/clients-invoices',
-      'accounting/supplier-orders',
-      'accounting/supplier-invoices',
-      // Catalog module
-      'catalog/internal-listing',
-      'projects/manage',
-      'projects/tasks',
-      'hr/internal',
-      'hr/external',
-      'hr/work-units',
-      // Reports module
-      'reports/ai-reporting',
-      'settings',
-      'docs',
-      'docs/api',
-      'docs/frontend',
-    ];
     const canonicalHash = canonicalizeLegacyHash(rawHash);
     const hash = canonicalHash as View;
-    return validViews.includes(hash)
+    return VALID_VIEWS.includes(hash)
       ? hash
       : canonicalHash === '' || canonicalHash === 'login'
         ? 'timesheets/tracker'
@@ -767,6 +690,7 @@ const App: React.FC = () => {
     setSupplierOrders([]);
     setSupplierInvoices([]);
     setEntries([]);
+    setEntriesLoaded(false);
     entriesStreamTokenRef.current++;
     setWorkUnits([]);
     setViewingUserAssignmentState({
@@ -985,7 +909,10 @@ const App: React.FC = () => {
       if (window.location.hash !== '#/login') window.location.hash = '/login';
       return;
     }
-    window.location.hash = '/' + activeView;
+    const targetHash = `#/${activeView}`;
+    if (window.location.hash !== targetHash) {
+      window.location.hash = `/${activeView}`;
+    }
   }, [activeView, currentUser, isLoading]);
 
   useEffect(() => {
@@ -997,6 +924,13 @@ const App: React.FC = () => {
       React.startTransition(() => setClientQuoteFilterId(null));
     }
     if (
+      activeView !== 'sales/client-offers' &&
+      activeView !== 'accounting/clients-orders' &&
+      clientOfferFilterId
+    ) {
+      React.startTransition(() => setClientOfferFilterId(null));
+    }
+    if (
       activeView !== 'sales/supplier-quotes' &&
       activeView !== 'accounting/supplier-orders' &&
       supplierQuoteFilterId
@@ -1006,7 +940,13 @@ const App: React.FC = () => {
     if (activeView !== 'accounting/clients-orders' && clientsOrderFilterId) {
       React.startTransition(() => setClientsOrderFilterId(null));
     }
-  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId, clientsOrderFilterId]);
+  }, [
+    activeView,
+    clientQuoteFilterId,
+    clientOfferFilterId,
+    supplierQuoteFilterId,
+    clientsOrderFilterId,
+  ]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -1035,7 +975,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS, currentUser]);
+  }, [activeView, currentUser]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -1045,24 +985,24 @@ const App: React.FC = () => {
   }, [activeView, currentUser, viewingUserId]);
 
   useEffect(() => {
-    if (activeView !== 'sales/client-offers' && activeView !== 'accounting/clients-orders') {
-      setClientOfferFilterId(null);
-    }
-  }, [activeView]);
-
-  useEffect(() => {
     if (!currentUser) return;
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
     if (!module || module === 'settings') return;
     if (loadedModules.has(module)) return;
 
+    let cancelled = false;
+    const runIfActive =
+      <T,>(setter: (value: T) => void) =>
+      (value: T) => {
+        if (!cancelled) setter(value);
+      };
+
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
       const genSettings = await api.generalSettings.get();
-      if (genSettings.currency === 'USD') {
-        genSettings.currency = '$';
-      }
+      if (cancelled) return;
+      genSettings.currency = normalizeCurrencyForState(genSettings.currency);
       setGeneralSettings({
         ...genSettings,
         geminiApiKey: genSettings.geminiApiKey || '',
@@ -1078,6 +1018,7 @@ const App: React.FC = () => {
     const loadLdapConfig = async () => {
       if (hasLoadedLdapConfig) return;
       const ldap = await api.ldap.getConfig();
+      if (cancelled) return;
       setLdapConfig(ldap);
       setHasLoadedLdapConfig(true);
     };
@@ -1085,6 +1026,7 @@ const App: React.FC = () => {
     const loadSsoProviders = async () => {
       if (hasLoadedSsoProviders) return;
       const providers = await api.sso.listProviders();
+      if (cancelled) return;
       setSsoProviders(providers);
       setHasLoadedSsoProviders(true);
     };
@@ -1096,6 +1038,7 @@ const App: React.FC = () => {
     const loadEmailConfig = async () => {
       if (hasLoadedEmailConfig) return;
       const email = await api.email.getConfig();
+      if (cancelled) return;
       setEmailConfig(email);
       setHasLoadedEmailConfig(true);
     };
@@ -1103,6 +1046,7 @@ const App: React.FC = () => {
     const loadRoles = async () => {
       if (hasLoadedRoles) return;
       const rolesData = await api.roles.list();
+      if (cancelled) return;
       setRoles(rolesData);
       setHasLoadedRoles(true);
     };
@@ -1116,6 +1060,7 @@ const App: React.FC = () => {
       try {
         await load();
       } catch (err) {
+        if (cancelled) return;
         failures.push(dataset);
         console.error(
           `Failed to load ${moduleName} dataset "${dataset}": ${getErrorMessage(err)}`,
@@ -1288,13 +1233,14 @@ const App: React.FC = () => {
             if (!canViewTimesheets) return;
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
               while (cursor) {
-                if (entriesStreamTokenRef.current !== token) return;
+                if (cancelled || entriesStreamTokenRef.current !== token) return;
                 try {
                   const page = await api.entries.listPage({ cursor, limit: 500 });
-                  if (entriesStreamTokenRef.current !== token) return;
+                  if (cancelled || entriesStreamTokenRef.current !== token) return;
                   setEntries((prev) => [...prev, ...page.entries]);
                   cursor = page.nextCursor;
                 } catch (err) {
+                  if (cancelled) return;
                   console.error('Failed to stream remaining entries:', err);
                   return;
                 }
@@ -1306,15 +1252,32 @@ const App: React.FC = () => {
                 enabled: true,
                 load: () => api.entries.listPage({ limit: 500 }),
                 apply: (page) => {
+                  if (cancelled) return;
                   const token = ++entriesStreamTokenRef.current;
                   setEntries(page.entries);
+                  setEntriesLoaded(true);
                   if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                 },
               },
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
+              listRequest(
+                'clients',
+                canListClients,
+                () => api.clients.list(),
+                runIfActive(setClients),
+              ),
+              listRequest(
+                'projects',
+                canListProjects,
+                () => api.projects.list(),
+                runIfActive(setProjects),
+              ),
+              listRequest(
+                'tasks',
+                canListTasks,
+                () => api.tasks.list(),
+                runIfActive(setProjectTasks),
+              ),
+              listRequest('users', canListUsers, () => api.users.list(), runIfActive(setUsers)),
             ]);
             await loadOptionalDataset(
               module,
@@ -1327,25 +1290,30 @@ const App: React.FC = () => {
           case 'hr': {
             if (!canViewHr) return;
             failedDatasets = await loadDatasets(module, [
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
-              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
+              listRequest('users', canListUsers, () => api.users.list(), runIfActive(setUsers)),
+              listRequest(
+                'work units',
+                canListWorkUnits,
+                () => api.workUnits.list(),
+                runIfActive(setWorkUnits),
+              ),
               listRequest(
                 'clients',
                 canManageEmployeeAssignments && canListClients,
                 () => api.clients.list(),
-                setClients,
+                runIfActive(setClients),
               ),
               listRequest(
                 'projects',
                 canManageEmployeeAssignments && canListProjects,
                 () => api.projects.list(),
-                setProjects,
+                runIfActive(setProjects),
               ),
               listRequest(
                 'tasks',
                 canManageEmployeeAssignments && canListTasks,
                 () => api.tasks.list(),
-                setProjectTasks,
+                runIfActive(setProjectTasks),
               ),
             ]);
             await loadOptionalDataset(
@@ -1366,7 +1334,7 @@ const App: React.FC = () => {
                 'users',
                 shouldLoadUsers && canListUsers,
                 () => api.users.list(),
-                setUsers,
+                runIfActive(setUsers),
               ),
             ]);
 
@@ -1399,13 +1367,13 @@ const App: React.FC = () => {
                 'clients',
                 canViewCrmClients && canListClients,
                 () => api.clients.list(),
-                setClients,
+                runIfActive(setClients),
               ),
               listRequest(
                 'suppliers',
                 canViewCrmSuppliers && canListSuppliers,
                 () => api.suppliers.list(),
-                setSuppliers,
+                runIfActive(setSuppliers),
               ),
             ]);
             await loadOptionalDataset(
@@ -1419,22 +1387,37 @@ const App: React.FC = () => {
           case 'sales': {
             if (!canViewSales) return;
             failedDatasets = await loadDatasets(module, [
-              listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
+              listRequest('quotes', canListQuotes, () => api.quotes.list(), runIfActive(setQuotes)),
               listRequest(
                 'client offers',
                 canListClientOffers,
                 () => api.clientOffers.list(),
-                setClientOffers,
+                runIfActive(setClientOffers),
               ),
               listRequest(
                 'supplier quotes',
                 canListSupplierQuotes,
                 () => api.supplierQuotes.list(),
-                setSupplierQuotes,
+                runIfActive(setSupplierQuotes),
               ),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              listRequest(
+                'clients',
+                canListClients,
+                () => api.clients.list(),
+                runIfActive(setClients),
+              ),
+              listRequest(
+                'suppliers',
+                canListSuppliers,
+                () => api.suppliers.list(),
+                runIfActive(setSuppliers),
+              ),
+              listRequest(
+                'products',
+                canListProducts,
+                () => api.products.list(),
+                runIfActive(setProducts),
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1451,24 +1434,44 @@ const App: React.FC = () => {
                 'client orders',
                 canListOrders,
                 () => api.clientsOrders.list(),
-                setClientsOrders,
+                runIfActive(setClientsOrders),
               ),
-              listRequest('invoices', canListInvoices, () => api.invoices.list(), setInvoices),
+              listRequest(
+                'invoices',
+                canListInvoices,
+                () => api.invoices.list(),
+                runIfActive(setInvoices),
+              ),
               listRequest(
                 'supplier orders',
                 canListSupplierOrders,
                 () => api.supplierOrders.list(),
-                setSupplierOrders,
+                runIfActive(setSupplierOrders),
               ),
               listRequest(
                 'supplier invoices',
                 canListSupplierInvoices,
                 () => api.supplierInvoices.list(),
-                setSupplierInvoices,
+                runIfActive(setSupplierInvoices),
               ),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              listRequest(
+                'clients',
+                canListClients,
+                () => api.clients.list(),
+                runIfActive(setClients),
+              ),
+              listRequest(
+                'suppliers',
+                canListSuppliers,
+                () => api.suppliers.list(),
+                runIfActive(setSuppliers),
+              ),
+              listRequest(
+                'products',
+                canListProducts,
+                () => api.products.list(),
+                runIfActive(setProducts),
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1485,7 +1488,7 @@ const App: React.FC = () => {
                 'products',
                 canListProducts && canViewCatalogInternal,
                 () => api.products.list(),
-                setProducts,
+                runIfActive(setProducts),
               ),
             ]);
             await loadOptionalDataset(
@@ -1499,16 +1502,36 @@ const App: React.FC = () => {
           case 'projects': {
             if (!canViewProjects) return;
             failedDatasets = await loadDatasets(module, [
-              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
-              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
+              listRequest(
+                'projects',
+                canListProjects,
+                () => api.projects.list(),
+                runIfActive(setProjects),
+              ),
+              listRequest(
+                'tasks',
+                canListTasks,
+                () => api.tasks.list(),
+                runIfActive(setProjectTasks),
+              ),
+              listRequest(
+                'clients',
+                canListClients,
+                () => api.clients.list(),
+                runIfActive(setClients),
+              ),
+              listRequest('users', canListUsers, () => api.users.list(), runIfActive(setUsers)),
+              listRequest(
+                'work units',
+                canListWorkUnits,
+                () => api.workUnits.list(),
+                runIfActive(setWorkUnits),
+              ),
               listRequest(
                 'client orders',
                 canListOrders,
                 () => api.clientsOrders.list(),
-                setClientsOrders,
+                runIfActive(setClientsOrders),
               ),
             ]);
             break;
@@ -1516,14 +1539,24 @@ const App: React.FC = () => {
           case 'suppliers': {
             if (!canViewSuppliersModule) return;
             failedDatasets = await loadDatasets(module, [
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
+              listRequest(
+                'suppliers',
+                canListSuppliers,
+                () => api.suppliers.list(),
+                runIfActive(setSuppliers),
+              ),
               listRequest(
                 'supplier quotes',
                 canListSupplierQuotes,
                 () => api.supplierQuotes.list(),
-                setSupplierQuotes,
+                runIfActive(setSupplierQuotes),
               ),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              listRequest(
+                'products',
+                canListProducts,
+                () => api.products.list(),
+                runIfActive(setProducts),
+              ),
             ]);
             await loadOptionalDataset(
               module,
@@ -1546,16 +1579,24 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Failed to load module data:', err);
-        failedDatasets.push('module data');
+        if (!cancelled) {
+          console.error('Failed to load module data:', err);
+          failedDatasets.push('module data');
+        }
       } finally {
-        const uniqueFailures = Array.from(new Set(failedDatasets));
-        recordFailures(module, uniqueFailures);
-        markModuleLoaded(module);
+        if (!cancelled) {
+          const uniqueFailures = Array.from(new Set(failedDatasets));
+          recordFailures(module, uniqueFailures);
+          markModuleLoaded(module);
+        }
       }
     };
 
     loadModuleData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeView,
     currentUser,
@@ -1707,21 +1748,27 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleDeleteNotification = useCallback(
-    async (id: string) => {
-      try {
-        const notification = notifications.find((n) => n.id === id);
-        await api.notifications.delete(id);
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-        if (notification && !notification.isRead) {
-          setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
+  const handleDeleteNotification = useCallback(async (id: string) => {
+    try {
+      await api.notifications.delete(id);
+      // Compute both updates inside their own functional setters so neither
+      // depends on a closure variable assigned in a (possibly batched/deferred)
+      // sibling updater. Using a ref to ferry the unread flag between updaters
+      // would also race; instead the count updater consults `notifications`
+      // again via setUnreadNotificationCount's prev arg — but the source of
+      // truth for `isRead` is the notifications array, so look it up there
+      // before issuing the filter.
+      setNotifications((prev) => {
+        const target = prev.find((n) => n.id === id);
+        if (target && !target.isRead) {
+          setUnreadNotificationCount((c) => Math.max(0, c - 1));
         }
-      } catch (err) {
-        console.error('Failed to delete notification:', err);
-      }
-    },
-    [notifications],
-  );
+        return prev.filter((n) => n.id !== id);
+      });
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  }, []);
 
   // Determine available users for the dropdown based on permissions
   const availableUsers = useMemo(() => {
@@ -1855,11 +1902,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
+    // Defer recurring placeholder generation until the entries list has finished loading
+    // so we don't insert duplicate placeholders against an empty `entries` array.
+    if (!entriesLoaded) return;
     const timer = setTimeout(() => {
       generateRecurringEntries();
     }, 100);
     return () => clearTimeout(timer);
-  }, [generateRecurringEntries, currentUser]);
+  }, [generateRecurringEntries, currentUser, entriesLoaded]);
 
   const taskHandlers = useMemo(
     () =>
@@ -1945,9 +1995,10 @@ const App: React.FC = () => {
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
   const handleUpdateUserAuthMethod = userHandlers.updateUserAuthMethod;
 
-  const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
+  const handleUpdateGeneralSettings = useCallback(async (updates: Partial<IGeneralSettings>) => {
     try {
       const updated = await api.generalSettings.update(updates);
+      updated.currency = normalizeCurrencyForState(updated.currency);
       setGeneralSettings({
         ...updated,
         geminiApiKey: updated.geminiApiKey || '',
@@ -1961,47 +2012,82 @@ const App: React.FC = () => {
       console.error('Failed to update general settings:', err);
       alert('Failed to update settings');
     }
-  };
+  }, []);
 
-  const handleUpdateUserSettings = async (updates: Partial<Settings>) => {
-    try {
-      const updated = await api.settings.update(updates);
-      setUserSettings((prev) => ({ ...prev, ...updated }));
-    } catch (err) {
-      console.error('Failed to update user settings:', err);
-      alert('Failed to update settings');
-      throw err;
-    }
-  };
+  const handleUpdateUserSettings = useCallback(
+    async (updates: Partial<Settings>) => {
+      try {
+        const updated = await api.settings.update(updates);
+        setUserSettings((prev) => ({ ...prev, ...updated }));
+      } catch (err) {
+        console.error('Failed to update user settings:', err);
+        alert('Failed to update settings');
+        throw err;
+      }
+    },
+    [setUserSettings],
+  );
 
-  const handleUpdateUserPassword = async (currentPassword: string, newPassword: string) => {
-    try {
-      await api.settings.updatePassword(currentPassword, newPassword);
-    } catch (err) {
-      console.error('Failed to update password:', err);
-      throw err;
-    }
-  };
-
-  const handleListMcpTokens = () => api.settings.listMcpTokens();
-
-  const handleCreateMcpToken = (name: string) => api.settings.createMcpToken(name);
-
-  const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
-
-  const handleGetPersonalAccessToken = useCallback(
-    async (): Promise<PersonalAccessToken> => api.settings.getPersonalAccessToken(),
+  const handleUpdateUserPassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      try {
+        await api.settings.updatePassword(currentPassword, newPassword);
+      } catch (err) {
+        console.error('Failed to update password:', err);
+        throw err;
+      }
+    },
     [],
   );
 
-  const handleRenewPersonalAccessToken = useCallback(
-    async (): Promise<PersonalAccessToken> => api.settings.renewPersonalAccessToken(),
-    [],
-  );
+  const handleListMcpTokens = useCallback(async () => {
+    try {
+      return await api.settings.listMcpTokens();
+    } catch (err) {
+      console.error('Failed to list MCP tokens:', err);
+      throw err;
+    }
+  }, []);
 
-  const handleNotFoundReturn = () => {
+  const handleCreateMcpToken = useCallback(async (name: string) => {
+    try {
+      return await api.settings.createMcpToken(name);
+    } catch (err) {
+      console.error('Failed to create MCP token:', err);
+      throw err;
+    }
+  }, []);
+
+  const handleRevokeMcpToken = useCallback(async (id: string) => {
+    try {
+      return await api.settings.revokeMcpToken(id);
+    } catch (err) {
+      console.error('Failed to revoke MCP token:', err);
+      throw err;
+    }
+  }, []);
+
+  const handleGetPersonalAccessToken = useCallback(async (): Promise<PersonalAccessToken> => {
+    try {
+      return await api.settings.getPersonalAccessToken();
+    } catch (err) {
+      console.error('Failed to get personal access token:', err);
+      throw err;
+    }
+  }, []);
+
+  const handleRenewPersonalAccessToken = useCallback(async (): Promise<PersonalAccessToken> => {
+    try {
+      return await api.settings.renewPersonalAccessToken();
+    } catch (err) {
+      console.error('Failed to renew personal access token:', err);
+      throw err;
+    }
+  }, []);
+
+  const handleNotFoundReturn = useCallback(() => {
     setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
-  };
+  }, [currentUser]);
 
   const handleSaveLdapConfig = async (config: LdapConfig) => {
     try {
@@ -2463,6 +2549,15 @@ const App: React.FC = () => {
                   onAddTask={addProjectTask}
                   onUpdateTask={handleUpdateTask}
                   onDeleteTask={async (id) => {
+                    if (
+                      !hasScopedActionPermission(
+                        currentUser.permissions,
+                        'projects.tasks',
+                        'delete',
+                      )
+                    ) {
+                      return;
+                    }
                     try {
                       await api.tasks.delete(id);
                       setProjectTasks((prev) => prev.filter((t) => t.id !== id));
@@ -2490,6 +2585,15 @@ const App: React.FC = () => {
                   onAddTask={addProjectTask}
                   onUpdateTask={handleUpdateTask}
                   onDeleteTask={async (id) => {
+                    if (
+                      !hasScopedActionPermission(
+                        currentUser.permissions,
+                        'projects.tasks',
+                        'delete',
+                      )
+                    ) {
+                      return;
+                    }
                     try {
                       await api.tasks.delete(id);
                       setProjectTasks((prev) => prev.filter((t) => t.id !== id));
