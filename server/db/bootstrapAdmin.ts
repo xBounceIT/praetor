@@ -83,7 +83,18 @@ export const ensureBootstrapAdmin = async () => {
 
     if (resolved.source === 'generated') {
       // Surface the generated credential exactly once so the operator can capture it
-      // before rotating. We deliberately avoid logging it on every restart.
+      // before rotating. Write directly to stderr in addition to the structured log so
+      // the credential is visible even when LOG_LEVEL filters out warn (e.g. `error`).
+      const banner = [
+        '====================================================================',
+        '  Praetor bootstrap admin created with a generated password.',
+        `  Capture it now and rotate it. Set ${ADMIN_PASSWORD_ENV} to override.`,
+        `  username: ${ADMIN_USERNAME}`,
+        `  password: ${resolved.password}`,
+        '====================================================================',
+        '',
+      ].join('\n');
+      process.stderr.write(banner);
       logger.warn(
         {
           adminUsername: ADMIN_USERNAME,
