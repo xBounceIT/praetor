@@ -39,17 +39,6 @@ const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
-type TaskDraftRow = {
-  id: string;
-  name: string;
-  billingType: StoredBillingType;
-  billingFrequency: BillingFrequency;
-  monthlyEffort: string;
-  expectedEffort: string;
-  revenue: string;
-  notes: string;
-};
-
 const billingTypeOptions = [
   { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
   { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
@@ -650,150 +639,6 @@ const TasksView: React.FC<TasksViewProps> = ({
   const managingTask = tasks.find((t) => t.id === managingTaskId);
 
   const projectSelectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
-  const creationTaskRows: TaskDraftRow[] = [
-    {
-      id: 'new-task',
-      name,
-      billingType,
-      billingFrequency,
-      monthlyEffort,
-      expectedEffort,
-      revenue,
-      notes,
-    },
-  ];
-  const creationTaskColumns: Column<TaskDraftRow>[] = [
-    {
-      header: t('projects:projects.taskName'),
-      id: 'name',
-      accessorKey: 'name',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <Input
-          value={row.name}
-          required
-          placeholder={t('tasks.taskNamePlaceholder')}
-          onChange={(e) => setName(e.target.value)}
-          className="h-8 min-w-[140px] text-xs"
-        />
-      ),
-    },
-    {
-      header: t('projects:projects.billingType'),
-      id: 'billingType',
-      accessorKey: 'billingType',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <SelectControl
-          options={translatedBillingTypeOptions}
-          value={row.billingType}
-          onChange={(val) => {
-            const nextBillingType = val as StoredBillingType;
-            setBillingType(nextBillingType);
-            if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
-          }}
-          className="min-w-[140px]"
-          buttonClassName="h-8 text-xs"
-          searchable={false}
-        />
-      ),
-    },
-    {
-      header: t('projects:projects.billingFrequency'),
-      id: 'billingFrequency',
-      accessorKey: 'billingFrequency',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <SelectControl
-          options={
-            row.billingType === 'retainer'
-              ? translatedBillingFrequencyOptions
-              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
-          }
-          value={row.billingType === 'time_and_materials' ? 'monthly' : row.billingFrequency}
-          onChange={(val) => setBillingFrequency(val as BillingFrequency)}
-          disabled={row.billingType === 'time_and_materials'}
-          className="min-w-[120px]"
-          buttonClassName="h-8 text-xs"
-          searchable={false}
-        />
-      ),
-    },
-    {
-      header: t('projects:projects.monthlyEffort'),
-      id: 'monthlyEffort',
-      accessorKey: 'monthlyEffort',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <Input
-          type="number"
-          min="0"
-          step="1"
-          required
-          value={row.monthlyEffort}
-          placeholder="0"
-          onKeyDown={(e) => {
-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
-          }}
-          onChange={(e) => setMonthlyEffort(e.target.value)}
-          className="h-8 min-w-[80px] text-xs"
-        />
-      ),
-    },
-    {
-      header: t('projects:projects.expectedEffort'),
-      id: 'expectedEffort',
-      accessorKey: 'expectedEffort',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <Input
-          type="number"
-          min="0"
-          step="1"
-          required
-          value={row.expectedEffort}
-          placeholder="0"
-          onKeyDown={(e) => {
-            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-          }}
-          onChange={(e) => setExpectedEffort(e.target.value)}
-          className="h-8 min-w-[80px] text-xs"
-        />
-      ),
-    },
-    {
-      header: `${t('projects:projects.taskRevenue')} (${currency})`,
-      id: 'revenue',
-      accessorKey: 'revenue',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          required
-          value={row.revenue}
-          placeholder="0.00"
-          onChange={(e) => setRevenue(e.target.value)}
-          className="h-8 min-w-[80px] text-xs"
-        />
-      ),
-    },
-    {
-      header: t('projects:projects.taskNotes'),
-      id: 'notes',
-      accessorKey: 'notes',
-      disableFiltering: true,
-      cell: ({ row }) => (
-        <Input
-          value={row.notes}
-          placeholder="-"
-          onChange={(e) => setNotes(e.target.value)}
-          className="h-8 min-w-[120px] text-xs"
-        />
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -827,7 +672,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <ModalContent size={editingTask ? 'lg' : '2xl'}>
+        <ModalContent size="2xl">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
             <ModalHeader>
               <ModalTitle className="gap-3">
@@ -902,18 +747,16 @@ const TasksView: React.FC<TasksViewProps> = ({
                   buttonClassName="h-9"
                 />
 
-                {editingTask && (
-                  <Field>
-                    <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
-                    <Input
-                      id="task-name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={t('tasks.taskNamePlaceholder')}
-                    />
-                  </Field>
-                )}
+                <Field>
+                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                  <Input
+                    id="task-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('tasks.taskNamePlaceholder')}
+                  />
+                </Field>
 
                 <Field>
                   <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
@@ -927,106 +770,92 @@ const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </Field>
 
-                {editingTask ? (
-                  <>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <SelectControl
-                        id="task-billing-type"
-                        options={translatedBillingTypeOptions}
-                        value={billingType}
-                        onChange={(val) => {
-                          const nextBillingType = val as StoredBillingType;
-                          setBillingType(nextBillingType);
-                          if (nextBillingType === 'time_and_materials')
-                            setBillingFrequency('monthly');
-                        }}
-                        label={t('projects:projects.billingType')}
-                        searchable={false}
-                        buttonClassName="h-9"
-                      />
-                      <SelectControl
-                        id="task-billing-frequency"
-                        options={
-                          billingType === 'retainer'
-                            ? translatedBillingFrequencyOptions
-                            : translatedBillingFrequencyOptions.filter(
-                                (option) => option.id === 'monthly',
-                              )
-                        }
-                        value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
-                        onChange={(val) => setBillingFrequency(val as BillingFrequency)}
-                        label={t('projects:projects.billingFrequency')}
-                        disabled={billingType === 'time_and_materials'}
-                        searchable={false}
-                        buttonClassName="h-9"
-                      />
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <Field>
-                        <FieldLabel htmlFor="task-monthly-effort">
-                          {t('projects:projects.monthlyEffort')}
-                        </FieldLabel>
-                        <Input
-                          id="task-monthly-effort"
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={monthlyEffort}
-                          onChange={(e) => setMonthlyEffort(e.target.value)}
-                          placeholder="0"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="task-expected-effort">
-                          {t('projects:projects.expectedEffort')}
-                        </FieldLabel>
-                        <Input
-                          id="task-expected-effort"
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={expectedEffort}
-                          onChange={(e) => setExpectedEffort(e.target.value)}
-                          placeholder="0"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="task-revenue">
-                          {`${t('projects:projects.taskRevenue')} (${currency})`}
-                        </FieldLabel>
-                        <Input
-                          id="task-revenue"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={revenue}
-                          onChange={(e) => setRevenue(e.target.value)}
-                          placeholder="0.00"
-                        />
-                      </Field>
-                    </div>
-
-                    <Field>
-                      <FieldLabel htmlFor="task-notes">
-                        {t('projects:projects.taskNotes')}
-                      </FieldLabel>
-                      <Input
-                        id="task-notes"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="-"
-                      />
-                    </Field>
-                  </>
-                ) : (
-                  <StandardTable<TaskDraftRow>
-                    title={t('projects:projects.projectTasks')}
-                    data={creationTaskRows}
-                    columns={creationTaskColumns}
-                    defaultRowsPerPage={5}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectControl
+                    id="task-billing-type"
+                    options={translatedBillingTypeOptions}
+                    value={billingType}
+                    onChange={(val) => {
+                      const nextBillingType = val as StoredBillingType;
+                      setBillingType(nextBillingType);
+                      if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
+                    }}
+                    label={t('projects:projects.billingType')}
+                    searchable={false}
+                    buttonClassName="h-9"
                   />
-                )}
+                  <SelectControl
+                    id="task-billing-frequency"
+                    options={
+                      billingType === 'retainer'
+                        ? translatedBillingFrequencyOptions
+                        : translatedBillingFrequencyOptions.filter(
+                            (option) => option.id === 'monthly',
+                          )
+                    }
+                    value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                    onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                    label={t('projects:projects.billingFrequency')}
+                    disabled={billingType === 'time_and_materials'}
+                    searchable={false}
+                    buttonClassName="h-9"
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field>
+                    <FieldLabel htmlFor="task-monthly-effort">
+                      {t('projects:projects.monthlyEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-monthly-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={monthlyEffort}
+                      onChange={(e) => setMonthlyEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-expected-effort">
+                      {t('projects:projects.expectedEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-expected-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={expectedEffort}
+                      onChange={(e) => setExpectedEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-revenue">
+                      {`${t('projects:projects.taskRevenue')} (${currency})`}
+                    </FieldLabel>
+                    <Input
+                      id="task-revenue"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={revenue}
+                      onChange={(e) => setRevenue(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>
+                  <Input
+                    id="task-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="-"
+                  />
+                </Field>
 
                 {(() => {
                   const project = projects.find((p) => p.id === projectId);
