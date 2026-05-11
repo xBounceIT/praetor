@@ -6,16 +6,9 @@ import react from '@vitejs/plugin-react';
 import sirv from 'sirv';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import pkg from './package.json' with { type: 'json' };
+import { getBuildDate } from './scripts/buildDate.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Generate build date in yyyymmdd format
-const getBuildDate = () => {
-  const year = '2026';
-  const month = '02';
-  const day = '16';
-  return `${year}${month}${day}`;
-};
 
 const docsFrontendDir = path.resolve(__dirname, 'docs', 'frontend');
 const docsUserDir = path.resolve(__dirname, 'docs-site', 'dist');
@@ -75,6 +68,10 @@ export default defineConfig(({ mode }) => {
   const preserveSymlinks = env.VITE_PRESERVE_SYMLINKS === 'true';
   return {
     server: {
+      port: 3000,
+      host: '0.0.0.0',
+    },
+    preview: {
       port: 3000,
       host: '0.0.0.0',
     },
