@@ -170,14 +170,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const mcpSetupPrompt = useMemo(
     () =>
       [
-        'Configure Praetor as an MCP server for this Codex workspace.',
+        'Configure Praetor as a remote MCP server for this AI agent.',
         '',
         `MCP server URL: ${mcpEndpointUrl}`,
         `Authorization bearer token: ${rawMcpToken || '<paste your Praetor MCP token here>'}`,
         'Transport: Streamable HTTP',
         'Server name: praetor',
         '',
-        'Use the bearer token only for the MCP server connection. After configuring it, call the Praetor MCP server initialize and tools/list methods to verify the connection.',
+        'Use the bearer token only for the MCP server connection. Do not send it in chat messages, logs, or tool arguments.',
+        'After configuring the server, initialize the MCP connection and list tools to verify that Praetor is available.',
       ].join('\n'),
     [mcpEndpointUrl, rawMcpToken],
   );

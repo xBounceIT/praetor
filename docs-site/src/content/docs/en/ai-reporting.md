@@ -43,7 +43,7 @@ Use these steps to connect an external agent:
 2. Create a token with a recognizable name, such as the agent or device name.
 3. Copy the token immediately; it will not be shown again.
 4. Use the displayed MCP Server URL field for the exact endpoint, usually `https://your-praetor-host/api/mcp`.
-5. Copy the Codex Setup Prompt if you want Codex or another agent to configure the server automatically.
+5. Copy the Agent Setup Prompt if you want an AI agent to configure the server automatically.
 6. Configure the MCP client with the endpoint URL and bearer token header above.
 7. Revoke old or unused tokens from Settings > MCP Tokens.
 

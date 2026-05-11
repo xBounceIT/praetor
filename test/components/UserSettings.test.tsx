@@ -86,8 +86,10 @@ describe('<UserSettings /> MCP tokens', () => {
     expect(endpointUrl.value).toContain('/api/mcp');
 
     const setupPrompt = screen.getByLabelText('mcp.promptLabel') as HTMLTextAreaElement;
+    expect(setupPrompt.value).toContain('Configure Praetor as a remote MCP server');
     expect(setupPrompt.value).toContain('MCP server URL:');
     expect(setupPrompt.value).toContain('<paste your Praetor MCP token here>');
+    expect(setupPrompt.value).toContain('Do not send it in chat messages');
   });
 
   test('creates a token and displays the raw token once', async () => {
