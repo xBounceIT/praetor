@@ -4641,6 +4641,21 @@
                           "null",
                           "string"
                         ]
+                      },
+                      "billingType": {
+                        "type": "string",
+                        "enum": [
+                          "retainer",
+                          "time_and_materials",
+                          "mixed"
+                        ]
+                      },
+                      "billingFrequency": {
+                        "type": "string",
+                        "enum": [
+                          "monthly",
+                          "one_time"
+                        ]
                       }
                     },
                     "required": [
@@ -4648,7 +4663,9 @@
                       "name",
                       "clientId",
                       "color",
-                      "isDisabled"
+                      "isDisabled",
+                      "billingType",
+                      "billingFrequency"
                     ]
                   }
                 }
@@ -4791,6 +4808,20 @@
                   },
                   "orderId": {
                     "type": "string"
+                  },
+                  "billingType": {
+                    "type": "string",
+                    "enum": [
+                      "retainer",
+                      "time_and_materials"
+                    ]
+                  },
+                  "billingFrequency": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "one_time"
+                    ]
                   }
                 },
                 "required": [
@@ -4838,6 +4869,21 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "billingType": {
+                      "type": "string",
+                      "enum": [
+                        "retainer",
+                        "time_and_materials",
+                        "mixed"
+                      ]
+                    },
+                    "billingFrequency": {
+                      "type": "string",
+                      "enum": [
+                        "monthly",
+                        "one_time"
+                      ]
                     }
                   },
                   "required": [
@@ -4845,7 +4891,9 @@
                     "name",
                     "clientId",
                     "color",
-                    "isDisabled"
+                    "isDisabled",
+                    "billingType",
+                    "billingFrequency"
                   ]
                 }
               }
@@ -5097,6 +5145,20 @@
                   },
                   "isDisabled": {
                     "type": "boolean"
+                  },
+                  "billingType": {
+                    "type": "string",
+                    "enum": [
+                      "retainer",
+                      "time_and_materials"
+                    ]
+                  },
+                  "billingFrequency": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "one_time"
+                    ]
                   }
                 }
               }
@@ -5150,6 +5212,21 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "billingType": {
+                      "type": "string",
+                      "enum": [
+                        "retainer",
+                        "time_and_materials",
+                        "mixed"
+                      ]
+                    },
+                    "billingFrequency": {
+                      "type": "string",
+                      "enum": [
+                        "monthly",
+                        "one_time"
+                      ]
                     }
                   },
                   "required": [
@@ -5157,7 +5234,9 @@
                     "name",
                     "clientId",
                     "color",
-                    "isDisabled"
+                    "isDisabled",
+                    "billingType",
+                    "billingFrequency"
                   ]
                 }
               }
@@ -5584,6 +5663,9 @@
                       "expectedEffort": {
                         "type": "number"
                       },
+                      "monthlyEffort": {
+                        "type": "number"
+                      },
                       "revenue": {
                         "type": "number"
                       },
@@ -5598,6 +5680,20 @@
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "billingType": {
+                        "type": "string",
+                        "enum": [
+                          "retainer",
+                          "time_and_materials"
+                        ]
+                      },
+                      "billingFrequency": {
+                        "type": "string",
+                        "enum": [
+                          "monthly",
+                          "one_time"
+                        ]
                       }
                     },
                     "required": [
@@ -5759,11 +5855,28 @@
                   "expectedEffort": {
                     "type": "number"
                   },
+                  "monthlyEffort": {
+                    "type": "number"
+                  },
                   "revenue": {
                     "type": "number"
                   },
                   "notes": {
                     "type": "string"
+                  },
+                  "billingType": {
+                    "type": "string",
+                    "enum": [
+                      "retainer",
+                      "time_and_materials"
+                    ]
+                  },
+                  "billingFrequency": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "one_time"
+                    ]
                   }
                 },
                 "required": [
@@ -5824,6 +5937,9 @@
                     "expectedEffort": {
                       "type": "number"
                     },
+                    "monthlyEffort": {
+                      "type": "number"
+                    },
                     "revenue": {
                       "type": "number"
                     },
@@ -5838,6 +5954,20 @@
                     },
                     "createdAt": {
                       "type": "number"
+                    },
+                    "billingType": {
+                      "type": "string",
+                      "enum": [
+                        "retainer",
+                        "time_and_materials"
+                      ]
+                    },
+                    "billingFrequency": {
+                      "type": "string",
+                      "enum": [
+                        "monthly",
+                        "one_time"
+                      ]
                     }
                   },
                   "required": [
@@ -6231,6 +6361,9 @@
                   "expectedEffort": {
                     "type": "number"
                   },
+                  "monthlyEffort": {
+                    "type": "number"
+                  },
                   "revenue": {
                     "type": "number"
                   },
@@ -6239,6 +6372,20 @@
                   },
                   "isDisabled": {
                     "type": "boolean"
+                  },
+                  "billingType": {
+                    "type": "string",
+                    "enum": [
+                      "retainer",
+                      "time_and_materials"
+                    ]
+                  },
+                  "billingFrequency": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "one_time"
+                    ]
                   }
                 }
               }
@@ -6305,6 +6452,9 @@
                     "expectedEffort": {
                       "type": "number"
                     },
+                    "monthlyEffort": {
+                      "type": "number"
+                    },
                     "revenue": {
                       "type": "number"
                     },
@@ -6319,6 +6469,20 @@
                     },
                     "createdAt": {
                       "type": "number"
+                    },
+                    "billingType": {
+                      "type": "string",
+                      "enum": [
+                        "retainer",
+                        "time_and_materials"
+                      ]
+                    },
+                    "billingFrequency": {
+                      "type": "string",
+                      "enum": [
+                        "monthly",
+                        "one_time"
+                      ]
                     }
                   },
                   "required": [

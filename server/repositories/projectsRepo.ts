@@ -1,6 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { projects } from '../db/schema/projects.ts';
+import {
+  type BillingFrequency,
+  type BillingType,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  type StoredBillingType,
+} from '../utils/billing.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import {
@@ -18,6 +26,8 @@ export type Project = {
   isDisabled: boolean;
   createdAt: number;
   orderId: string | null;
+  billingType: BillingType;
+  billingFrequency: BillingFrequency;
 };
 
 const mapRow = (row: typeof projects.$inferSelect): Project => ({
@@ -31,42 +41,82 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   // `?? 0` is a TS-strict appeasement for the unreachable branch.
   createdAt: row.createdAt?.getTime() ?? 0,
   orderId: row.orderId,
+  billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
+  billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
 });
 
+type ProjectRawRow = {
+  id: string;
+  name: string;
+  client_id: string;
+  color: string;
+  description: string | null;
+  is_disabled: boolean | null;
+  created_at: string | Date | null;
+  order_id: string | null;
+  billing_type: BillingType | null;
+  billing_frequency: BillingFrequency | null;
+};
+
+const derivedBillingTypeSql = sql`CASE
+  WHEN EXISTS (
+    SELECT 1 FROM tasks t
+    WHERE t.project_id = p.id AND t.billing_type <> p.billing_type
+  )
+  OR (
+    SELECT COUNT(DISTINCT t2.billing_type) FROM tasks t2 WHERE t2.project_id = p.id
+  ) > 1
+  THEN 'mixed'
+  ELSE p.billing_type
+END`;
+
+const mapRawRow = (row: ProjectRawRow): Project => ({
+  id: row.id,
+  name: row.name,
+  clientId: row.client_id,
+  color: row.color,
+  description: row.description,
+  isDisabled: row.is_disabled ?? false,
+  createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
+  orderId: row.order_id,
+  billingType: row.billing_type ?? DEFAULT_BILLING_TYPE,
+  billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
+});
+
+const projectSelectSql = sql`p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id,
+       ${derivedBillingTypeSql} AS billing_type, p.billing_frequency`;
+
 export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
-  const rows = await exec.select().from(projects).orderBy(projects.name);
-  return rows.map(mapRow);
+  const rows = await executeRows<ProjectRawRow>(
+    exec,
+    sql`SELECT ${projectSelectSql}
+          FROM projects p
+         ORDER BY p.name`,
+  );
+  return rows.map(mapRawRow);
 };
 
 export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Project[]> => {
-  type Row = {
-    id: string;
-    name: string;
-    client_id: string;
-    color: string;
-    description: string | null;
-    is_disabled: boolean | null;
-    created_at: string | Date | null;
-    order_id: string | null;
-  };
-  const rows = await executeRows<Row>(
+  const rows = await executeRows<ProjectRawRow>(
     exec,
-    sql`SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id
+    sql`SELECT ${projectSelectSql}
        FROM projects p
        INNER JOIN user_projects up ON p.id = up.project_id
       WHERE up.user_id = ${userId}
       ORDER BY p.name`,
   );
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    clientId: row.client_id,
-    color: row.color,
-    description: row.description,
-    isDisabled: row.is_disabled ?? false,
-    createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
-    orderId: row.order_id,
-  }));
+  return rows.map(mapRawRow);
+};
+
+export const findById = async (id: string, exec: DbExecutor = db): Promise<Project | null> => {
+  const rows = await executeRows<ProjectRawRow>(
+    exec,
+    sql`SELECT ${projectSelectSql}
+          FROM projects p
+         WHERE p.id = ${id}
+         LIMIT 1`,
+  );
+  return rows[0] ? mapRawRow(rows[0]) : null;
 };
 
 export const findClientId = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
@@ -109,6 +159,8 @@ export type NewProject = {
   description: string | null;
   isDisabled: boolean;
   orderId?: string | null;
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
 };
 
 const PROJECT_ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
@@ -125,9 +177,14 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         description: project.description,
         isDisabled: project.isDisabled,
         orderId: project.orderId ?? null,
+        billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
+        billingFrequency: normalizeBillingFrequency(
+          project.billingType ?? DEFAULT_BILLING_TYPE,
+          project.billingFrequency,
+        ),
       })
       .returning();
-    return mapRow(rows[0]);
+    return (await findById(project.id, exec)) ?? mapRow(rows[0]);
   } catch (err) {
     const fk = getForeignKeyViolation(err);
     if (fk) {
@@ -144,6 +201,8 @@ export type ProjectUpdate = {
   color?: string | null;
   description?: string | null;
   isDisabled?: boolean;
+  billingType?: StoredBillingType | null;
+  billingFrequency?: BillingFrequency | null;
 };
 
 export const update = async (
@@ -157,19 +216,41 @@ export const update = async (
   if (patch.color !== undefined) set.color = patch.color;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
+  if (patch.billingType !== undefined) {
+    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+    set.billingType = nextBillingType;
+    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
+  } else if (patch.billingFrequency !== undefined) {
+    const currentRows = await exec
+      .select({ billingType: projects.billingType })
+      .from(projects)
+      .where(eq(projects.id, id));
+    set.billingFrequency = normalizeBillingFrequency(
+      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
+      patch.billingFrequency,
+    );
+  }
 
   if (Object.keys(set).length === 0) {
-    const rows = await exec.select().from(projects).where(eq(projects.id, id));
-    return rows[0] ? mapRow(rows[0]) : null;
+    return findById(id, exec);
   }
 
   try {
     const rows = await exec.update(projects).set(set).where(eq(projects.id, id)).returning();
-    return rows[0] ? mapRow(rows[0]) : null;
+    return rows[0] ? ((await findById(id, exec)) ?? mapRow(rows[0])) : null;
   } catch (err) {
     if (getForeignKeyViolation(err)) throw new ForeignKeyError('Client');
     throw err;
   }
+};
+
+export const findBillingById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ billingType: BillingType; billingFrequency: BillingFrequency } | null> => {
+  const project = await findById(id, exec);
+  if (!project) return null;
+  return { billingType: project.billingType, billingFrequency: project.billingFrequency };
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
