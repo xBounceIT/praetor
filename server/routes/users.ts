@@ -5,6 +5,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
+import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -53,6 +54,9 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
+    authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    authProviderName: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     hasTopManagerRole: { type: 'boolean' },
     isAdminOnly: { type: 'boolean' },
   },
@@ -66,6 +70,9 @@ const userSchema = {
     'costPerHour',
     'isDisabled',
     'employeeType',
+    'authMethod',
+    'authProviderId',
+    'authProviderName',
     'hasTopManagerRole',
     'isAdminOnly',
   ],
@@ -132,6 +139,18 @@ const userRolesUpdateBodySchema = {
   },
   required: ['roleIds', 'primaryRoleId'],
 } as const;
+
+const authMethodUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
+    authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+  },
+  required: ['authMethod'],
+} as const;
+
+const isSsoAuthMethod = (authMethod: usersRepo.AuthMethod): authMethod is 'oidc' | 'saml' =>
+  authMethod === 'oidc' || authMethod === 'saml';
 
 const canViewUserEmails = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
@@ -407,6 +426,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           costPerHour: costPerHourResult.value || 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
+          authMethod: 'local',
+          authProviderId: null,
+          authProviderName: null,
           hasTopManagerRole: roleValue === TOP_MANAGER_ROLE_ID,
           isAdminOnly: roleValue === ADMIN_ROLE_ID,
         });
@@ -652,6 +674,96 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fullUser,
         hasPermission(request, 'hr.costs.view'),
         canRevealUserEmails,
+      );
+    },
+  );
+
+  // PUT /:id/auth-method - Change an app user's enforced authentication method
+  fastify.put(
+    '/:id/auth-method',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      schema: {
+        tags: ['users'],
+        summary: 'Change user authentication method',
+        params: idParamSchema,
+        body: authMethodUpdateBodySchema,
+        response: {
+          200: userSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { authMethod, authProviderId } = request.body as {
+        authMethod?: unknown;
+        authProviderId?: unknown;
+      };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const methodResult = validateEnum(
+        authMethod,
+        ['local', 'ldap', 'oidc', 'saml'] as const,
+        'authMethod',
+      );
+      if (!methodResult.ok) return badRequest(reply, methodResult.message);
+
+      const targetUser = await usersRepo.findCoreById(idResult.value);
+      if (!targetUser) return reply.code(404).send({ error: 'User not found' });
+      if (targetUser.employeeType !== 'app_user') {
+        return reply
+          .code(409)
+          .send({ error: 'Authentication method can be changed only for app users' });
+      }
+      if (idResult.value === request.user?.id && methodResult.value !== 'local') {
+        return badRequest(
+          reply,
+          'Cannot change your own account to an external authentication method',
+        );
+      }
+
+      let resolvedProviderId: string | null = null;
+      if (isSsoAuthMethod(methodResult.value)) {
+        const providerIdResult = requireNonEmptyString(authProviderId, 'authProviderId');
+        if (!providerIdResult.ok) return badRequest(reply, providerIdResult.message);
+        const provider = await ssoProvidersRepo.findById(providerIdResult.value);
+        if (!provider) return badRequest(reply, 'Invalid SSO provider');
+        if (!provider.enabled) return badRequest(reply, 'SSO provider must be enabled');
+        if (provider.protocol !== methodResult.value) {
+          return badRequest(reply, 'SSO provider protocol does not match authMethod');
+        }
+        resolvedProviderId = provider.id;
+      } else if (authProviderId !== undefined && authProviderId !== null && authProviderId !== '') {
+        return badRequest(reply, 'authProviderId is allowed only for OIDC or SAML');
+      }
+
+      const updated = await usersRepo.updateAuthMethod(
+        idResult.value,
+        methodResult.value,
+        resolvedProviderId,
+      );
+      if (!updated) return reply.code(404).send({ error: 'User not found' });
+
+      await logAudit({
+        request,
+        action: 'user.auth_method_changed',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: updated.name,
+          secondaryLabel: updated.username,
+          fromValue: targetUser.authMethod,
+          toValue: methodResult.value,
+        },
+      });
+
+      return maskUserResponse(
+        updated,
+        hasPermission(request, 'hr.costs.view'),
+        canViewUserEmails(request),
       );
     },
   );

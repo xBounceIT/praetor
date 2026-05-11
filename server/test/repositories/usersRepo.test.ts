@@ -58,9 +58,9 @@ describe('findAuthUserById', () => {
 
 describe('findLoginUserByUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
-    // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled
+    // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled, authMethod, authProviderId
     exec.enqueue({
-      rows: [['user-1', 'Alice', 'alice', 'manager', '$2b$10$abc', 'AL', false]],
+      rows: [['user-1', 'Alice', 'alice', 'manager', '$2b$10$abc', 'AL', false, 'local', null]],
     });
     const result = await usersRepo.findLoginUserByUsername('alice', testDb);
     expect(result).toEqual({
@@ -71,6 +71,8 @@ describe('findLoginUserByUsername', () => {
       passwordHash: '$2b$10$abc',
       avatarInitials: 'AL',
       isDisabled: false,
+      authMethod: 'local',
+      authProviderId: null,
     });
     expect(exec.calls[0].params).toContain('alice');
   });
@@ -171,6 +173,9 @@ const sampleListRow = {
   employeeType: 'app_user',
   hasTopManagerRole: false,
   isAdminOnly: false,
+  authMethod: 'local',
+  authProviderId: null,
+  authProviderName: null,
 };
 
 describe('listAllForAdmin', () => {
@@ -191,6 +196,9 @@ describe('listAllForAdmin', () => {
         employeeType: 'app_user',
         hasTopManagerRole: false,
         isAdminOnly: false,
+        authMethod: 'local',
+        authProviderId: null,
+        authProviderName: null,
       },
     ]);
   });
@@ -250,8 +258,8 @@ describe('findById', () => {
 
 describe('findCoreById', () => {
   test('returns the mapped core user when the row exists', async () => {
-    // Projection: id, name, username, role, employeeType
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'internal']] });
+    // Projection: id, name, username, role, employeeType, authMethod, authProviderId
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'internal', 'local', null]] });
     const result = await usersRepo.findCoreById('user-1', testDb);
     expect(result).toEqual({
       id: 'user-1',
@@ -259,12 +267,14 @@ describe('findCoreById', () => {
       username: 'alice',
       role: 'manager',
       employeeType: 'internal',
+      authMethod: 'local',
+      authProviderId: null,
     });
     expect(exec.calls[0].params).toContain('user-1');
   });
 
   test('defaults employeeType to app_user when null', async () => {
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', null]] });
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', null, null, null]] });
     const result = await usersRepo.findCoreById('user-1', testDb);
     expect(result?.employeeType).toBe('app_user');
   });

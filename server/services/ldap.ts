@@ -403,6 +403,8 @@ class LDAPService {
             passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: roleIds[0],
             avatarInitials: computeAvatarInitials(name),
+            authMethod: 'ldap',
+            authProviderId: null,
           });
           await applyExternalRolesForUser(id, groups, this.getRoleMappings());
           createdCount++;

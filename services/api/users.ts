@@ -1,4 +1,4 @@
-import type { User } from '../../types';
+import type { User, UserAuthMethod } from '../../types';
 import { fetchApi } from './client';
 import { normalizeUser } from './normalizers';
 
@@ -54,4 +54,14 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify({ roleIds, primaryRoleId }),
     }),
+
+  updateAuthMethod: (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ): Promise<User> =>
+    fetchApi<User>(`/users/${id}/auth-method`, {
+      method: 'PUT',
+      body: JSON.stringify({ authMethod, authProviderId: authProviderId ?? null }),
+    }).then(normalizeUser),
 };

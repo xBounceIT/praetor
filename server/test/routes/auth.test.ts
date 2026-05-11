@@ -104,6 +104,8 @@ const HAPPY_USER = {
 const LOGIN_USER = {
   ...HAPPY_USER,
   passwordHash: '$2a$hashed',
+  authMethod: 'local' as const,
+  authProviderId: null,
 };
 
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view', 'timesheets.tracker.create'];
@@ -206,7 +208,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: LDAP success skips bcrypt', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
       groups: ['admins'],
@@ -243,11 +245,12 @@ describe('POST /api/auth/login', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
     expect(bcryptCompareMock).toHaveBeenCalledTimes(1);
   });
 
-  test('200: LDAP throws, bcrypt fallback succeeds', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+  test('401: LDAP user does not fall back to local password when LDAP fails', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockRejectedValue(new Error('LDAP server unreachable'));
     bcryptCompareMock.mockResolvedValue(true);
 
@@ -257,8 +260,27 @@ describe('POST /api/auth/login', () => {
       payload: { username: 'alice', password: 'secret' },
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(bcryptCompareMock).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(401);
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+  });
+
+  test('401: SSO-only user cannot sign in with local password', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      authMethod: 'oidc',
+      authProviderId: 'sso-1',
+    });
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
   });
 
   test('200: empty availableRoles falls back to user.role synthetic role', async () => {

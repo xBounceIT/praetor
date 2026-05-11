@@ -15,6 +15,8 @@ When changing a role, consider the impact on every assigned user. After major ch
 
 Praetor supports local authentication and company integrations such as LDAP or SSO when configured. Keep endpoints, role mappings, and security settings updated.
 
+In the user list, open the row actions menu and choose **Change authentication method** to restrict an application user to local credentials, LDAP, OIDC, or SAML. For OIDC and SAML, also select the specific provider: the user will be able to sign in only through that provider.
+
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
 ## General and email settings

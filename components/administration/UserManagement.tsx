@@ -1,8 +1,33 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usersApi } from '../../services/api/users';
-import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import type {
+  Client,
+  Project,
+  ProjectTask,
+  Role,
+  SsoProvider,
+  User,
+  UserAuthMethod,
+} from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -12,6 +37,9 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+
+const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
+  authMethod === 'oidc' || authMethod === 'saml';
 
 export interface UserManagementProps {
   users: User[];
@@ -28,9 +56,15 @@ export interface UserManagementProps {
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   onUpdateUserRoles: (id: string, roleIds: string[], primaryRoleId: string) => Promise<void>;
+  onUpdateUserAuthMethod: (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ) => Promise<void>;
   currentUserId: string;
   permissions: string[];
   roles: Role[];
+  ssoProviders: SsoProvider[];
   currency: string;
 }
 
@@ -43,9 +77,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
   onDeleteUser,
   onUpdateUser,
   onUpdateUserRoles,
+  onUpdateUserAuthMethod,
   currentUserId,
   permissions,
   roles,
+  ssoProviders,
   currency,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
@@ -155,6 +191,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [authMethodUser, setAuthMethodUser] = useState<User | null>(null);
+  const [authMethodDraft, setAuthMethodDraft] = useState<UserAuthMethod>('local');
+  const [authProviderDraft, setAuthProviderDraft] = useState<string>('');
+  const [authMethodError, setAuthMethodError] = useState('');
+  const [isSavingAuthMethod, setIsSavingAuthMethod] = useState(false);
 
   const canCreateUsers = hasPermission(
     permissions,
@@ -447,6 +488,43 @@ const UserManagement: React.FC<UserManagementProps> = ({
       });
   };
 
+  const openAuthMethodDialog = (user: User) => {
+    const method = user.authMethod || 'local';
+    setAuthMethodUser(user);
+    setAuthMethodDraft(method);
+    setAuthProviderDraft(user.authProviderId || '');
+    setAuthMethodError('');
+  };
+
+  const closeAuthMethodDialog = () => {
+    if (isSavingAuthMethod) return;
+    setAuthMethodUser(null);
+    setAuthMethodError('');
+  };
+
+  const saveAuthMethod = async () => {
+    if (!authMethodUser) return;
+    const requiresProvider = isSsoAuthMethod(authMethodDraft);
+    if (requiresProvider && !authProviderDraft) {
+      setAuthMethodError(t('hr:workforce.authMethod.providerRequired'));
+      return;
+    }
+    setIsSavingAuthMethod(true);
+    setAuthMethodError('');
+    try {
+      await onUpdateUserAuthMethod(
+        authMethodUser.id,
+        authMethodDraft,
+        requiresProvider ? authProviderDraft : null,
+      );
+      setAuthMethodUser(null);
+    } catch (err) {
+      setAuthMethodError((err as Error).message || t('common:messages.errorOccurred'));
+    } finally {
+      setIsSavingAuthMethod(false);
+    }
+  };
+
   const closeEditModal = () => {
     setEditingUser(null);
     setEditRolesError('');
@@ -674,6 +752,24 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const emptyEmailLabel = t('common:common.none');
   const noUsersFoundLabel = t('hr:workforce.noUsers');
+  const authMethodOptions: Array<{ id: UserAuthMethod; name: string }> = [
+    { id: 'local', name: t('hr:workforce.authMethod.local') },
+    { id: 'ldap', name: t('hr:workforce.authMethod.ldap') },
+    { id: 'oidc', name: t('hr:workforce.authMethod.oidc') },
+    { id: 'saml', name: t('hr:workforce.authMethod.saml') },
+  ];
+  const isSsoAuthMethodDraft = isSsoAuthMethod(authMethodDraft);
+  const providerOptions = isSsoAuthMethodDraft
+    ? ssoProviders.filter((provider) => provider.enabled && provider.protocol === authMethodDraft)
+    : [];
+  const getAuthMethodLabel = (user: User) => {
+    const method = user.authMethod || 'local';
+    if (isSsoAuthMethod(method)) {
+      const protocol = method.toUpperCase();
+      return `${protocol}: ${user.authProviderName || t('hr:workforce.authMethod.providerMissing')}`;
+    }
+    return t(`hr:workforce.authMethod.${method}`);
+  };
   const getUserStatusLabel = (user: User) =>
     user.isDisabled ? t('common:common.disabled') : t('common:common.active');
   const getRolePresentation = (user: User) => {
@@ -738,6 +834,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
       },
     },
     {
+      header: t('hr:workforce.authMethod.column'),
+      accessorFn: (user) => getAuthMethodLabel(user),
+      cell: ({ row }) => <StatusBadge type="inherited" label={getAuthMethodLabel(row)} />,
+    },
+    {
       header: t('common:labels.status'),
       accessorFn: (user) => getUserStatusLabel(user),
       cell: ({ row }) => (
@@ -800,6 +901,27 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>{t('hr:workforce.editUser')}</TooltipContent>
                 </Tooltip>
+                {row.employeeType === 'app_user' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          aria-label={t('hr:workforce.authMethod.changeAction')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAuthMethodDialog(row);
+                          }}
+                          disabled={row.id === currentUserId}
+                          className="text-zinc-400 hover:text-praetor disabled:opacity-0 transition-colors p-2"
+                        >
+                          <i className="fa-solid fa-key"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('hr:workforce.authMethod.changeAction')}</TooltipContent>
+                  </Tooltip>
+                )}
                 {row.isDisabled ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -903,6 +1025,98 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       </Modal>
+
+      <Dialog
+        open={!!authMethodUser}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeAuthMethodDialog();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('hr:workforce.authMethod.changeAction')}</DialogTitle>
+            <DialogDescription>
+              {t('hr:workforce.authMethod.description', { name: authMethodUser?.name })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                {t('hr:workforce.authMethod.methodLabel')}
+              </label>
+              <Select
+                value={authMethodDraft}
+                onValueChange={(value) => {
+                  const next = value as UserAuthMethod;
+                  setAuthMethodDraft(next);
+                  setAuthProviderDraft('');
+                  setAuthMethodError('');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {authMethodOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isSsoAuthMethodDraft && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {t('hr:workforce.authMethod.providerLabel')}
+                </label>
+                <Select
+                  value={authProviderDraft}
+                  onValueChange={(value) => {
+                    setAuthProviderDraft(value);
+                    setAuthMethodError('');
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('hr:workforce.authMethod.providerPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {providerOptions.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {providerOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('hr:workforce.authMethod.noProviders')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {authMethodError && <p className="text-sm text-destructive">{authMethodError}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeAuthMethodDialog}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button type="button" onClick={saveAuthMethod} disabled={isSavingAuthMethod}>
+              {isSavingAuthMethod ? t('common:buttons.saving') : t('common:buttons.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit User Modal */}
       <Modal isOpen={!!editingUser} onClose={closeEditModal}>

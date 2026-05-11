@@ -32,6 +32,15 @@ export type ResolveExternalIdentityInput = {
   roleMappings: ExternalRoleMapping[];
 };
 
+const assertUserAllowsExternalProvider = (
+  user: Pick<usersRepo.LoginUserWithAuth, 'authMethod' | 'authProviderId'>,
+  input: ResolveExternalIdentityInput,
+): void => {
+  if (user.authMethod !== input.protocol || user.authProviderId !== input.providerId) {
+    throw new Error('External identity is not allowed for this Praetor user');
+  }
+};
+
 export const normalizeExternalUsername = (username: string): string =>
   username.trim().toLowerCase();
 
@@ -125,14 +134,14 @@ export const resolveExternalIdentity = async (
       tx,
     );
 
-    let user: usersRepo.LoginUser | null = null;
+    let user: usersRepo.LoginUserWithAuth | null = null;
     let wasCreated = false;
     let wasBound = false;
 
     if (existingIdentity) {
-      const authUser = await usersRepo.findAuthUserById(existingIdentity.userId, tx);
-      if (!authUser) throw new Error('Bound Praetor user no longer exists');
-      user = { ...authUser, passwordHash: null };
+      user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
+      if (!user) throw new Error('Bound Praetor user no longer exists');
+      assertUserAllowsExternalProvider(user, input);
     } else {
       user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
       if (!user) {
@@ -149,6 +158,8 @@ export const resolveExternalIdentity = async (
             costPerHour: 0,
             isDisabled: false,
             employeeType: 'app_user',
+            authMethod: input.protocol,
+            authProviderId: input.providerId,
           },
           tx,
         );
@@ -165,8 +176,12 @@ export const resolveExternalIdentity = async (
           avatarInitials: computeAvatarInitials(name),
           isDisabled: false,
           passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+          authMethod: input.protocol,
+          authProviderId: input.providerId,
         };
         wasCreated = true;
+      } else {
+        assertUserAllowsExternalProvider(user, input);
       }
 
       await externalIdentitiesRepo.insert(
