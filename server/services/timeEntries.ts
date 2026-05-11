@@ -243,7 +243,7 @@ export const bulkDeleteTimeEntries = async (
   input: { projectId?: unknown; task?: unknown; futureOnly?: unknown; placeholderOnly?: unknown },
 ): Promise<{ message: string }> => {
   if (
-    !hasPermission(actor, 'timesheets.tracker.delete') &&
+    !hasTrackerPermission(actor, 'delete') &&
     !hasPermission(actor, 'timesheets.recurring.delete')
   ) {
     fail(403, 'Insufficient permissions');
