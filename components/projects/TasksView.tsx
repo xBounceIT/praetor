@@ -722,41 +722,43 @@ const TasksView: React.FC<TasksViewProps> = ({
               })()}
 
               <div className="space-y-4">
-                <SelectControl
-                  id="task-project"
-                  options={projectSelectOptions}
-                  value={projectId}
-                  onChange={(val) => {
-                    const nextProjectId = val as string;
-                    setProjectId(nextProjectId);
-                    if (!editingTask) {
-                      const project = projects.find((item) => item.id === nextProjectId);
-                      const nextBillingType =
-                        project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
-                      setBillingType(nextBillingType);
-                      setBillingFrequency(
-                        nextBillingType === 'time_and_materials'
-                          ? 'monthly'
-                          : (project?.billingFrequency ?? 'monthly'),
-                      );
-                    }
-                  }}
-                  label={t('tasks.project')}
-                  placeholder={t('common:labels.selectOption')}
-                  searchable={true}
-                  buttonClassName="h-9"
-                />
-
-                <Field>
-                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
-                  <Input
-                    id="task-name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('tasks.taskNamePlaceholder')}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectControl
+                    id="task-project"
+                    options={projectSelectOptions}
+                    value={projectId}
+                    onChange={(val) => {
+                      const nextProjectId = val as string;
+                      setProjectId(nextProjectId);
+                      if (!editingTask) {
+                        const project = projects.find((item) => item.id === nextProjectId);
+                        const nextBillingType =
+                          project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+                        setBillingType(nextBillingType);
+                        setBillingFrequency(
+                          nextBillingType === 'time_and_materials'
+                            ? 'monthly'
+                            : (project?.billingFrequency ?? 'monthly'),
+                        );
+                      }
+                    }}
+                    label={t('tasks.project')}
+                    placeholder={t('common:labels.selectOption')}
+                    searchable={true}
+                    buttonClassName="h-9"
                   />
-                </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                    <Input
+                      id="task-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('tasks.taskNamePlaceholder')}
+                    />
+                  </Field>
+                </div>
 
                 <Field>
                   <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
@@ -770,7 +772,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </Field>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                   <SelectControl
                     id="task-billing-type"
                     options={translatedBillingTypeOptions}
@@ -800,9 +802,6 @@ const TasksView: React.FC<TasksViewProps> = ({
                     searchable={false}
                     buttonClassName="h-9"
                   />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
                   <Field>
                     <FieldLabel htmlFor="task-monthly-effort">
                       {t('projects:projects.monthlyEffort')}
@@ -849,11 +848,13 @@ const TasksView: React.FC<TasksViewProps> = ({
 
                 <Field>
                   <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>
-                  <Input
+                  <Textarea
                     id="task-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="-"
+                    rows={3}
+                    className="min-h-20 resize-none"
                   />
                 </Field>
 
