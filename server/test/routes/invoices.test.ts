@@ -134,6 +134,7 @@ const SAMPLE_ITEM = {
   unitOfMeasure: 'unit' as const,
   quantity: 1,
   unitPrice: 100,
+  taxRate: 0,
   discount: 0,
 };
 
@@ -220,6 +221,7 @@ describe('POST /api/invoices', () => {
         unitOfMeasure: 'unit',
         quantity: 1,
         unitPrice: 100,
+        taxRate: 0,
       },
     ],
   };
@@ -317,6 +319,7 @@ describe('POST /api/invoices', () => {
             unitOfMeasure: 'unit',
             quantity: 2,
             unitPrice: 50,
+            taxRate: 0,
             discount: 10,
           },
         ],
@@ -396,7 +399,9 @@ describe('POST /api/invoices', () => {
       headers: authHeader(),
       payload: {
         ...validBody,
-        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: -5, unitPrice: 100 }],
+        items: [
+          { description: 'X', unitOfMeasure: 'unit', quantity: -5, unitPrice: 100, taxRate: 0 },
+        ],
       },
     });
 
@@ -417,6 +422,7 @@ describe('POST /api/invoices', () => {
             unitOfMeasure: 'unit',
             quantity: 1,
             unitPrice: 100,
+            taxRate: 0,
             discount: 150,
           },
         ],
@@ -445,6 +451,7 @@ describe('POST /api/invoices', () => {
             unitOfMeasure: 'unit',
             quantity: 1,
             unitPrice: 100,
+            taxRate: 0,
             discount: 100,
           },
         ],
@@ -519,7 +526,15 @@ describe('PUT /api/invoices/:id', () => {
       url: '/api/invoices/inv-1',
       headers: authHeader(),
       payload: {
-        items: [{ description: 'Replaced', unitOfMeasure: 'unit', quantity: 2, unitPrice: 50 }],
+        items: [
+          {
+            description: 'Replaced',
+            unitOfMeasure: 'unit',
+            quantity: 2,
+            unitPrice: 50,
+            taxRate: 0,
+          },
+        ],
         // Client tries to submit a bogus 999 — server must override.
         subtotal: 999,
         total: 999,
@@ -547,7 +562,9 @@ describe('PUT /api/invoices/:id', () => {
       url: '/api/invoices/inv-1',
       headers: authHeader(),
       payload: {
-        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+        items: [
+          { description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50, taxRate: 0 },
+        ],
       },
     });
 
@@ -565,7 +582,9 @@ describe('PUT /api/invoices/:id', () => {
       url: '/api/invoices/missing',
       headers: authHeader(),
       payload: {
-        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+        items: [
+          { description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50, taxRate: 0 },
+        ],
       },
     });
 
@@ -583,7 +602,9 @@ describe('PUT /api/invoices/:id', () => {
       url: '/api/invoices/inv-1',
       headers: authHeader(),
       payload: {
-        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+        items: [
+          { description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50, taxRate: 0 },
+        ],
       },
     });
 
@@ -615,7 +636,9 @@ describe('PUT /api/invoices/:id', () => {
       url: '/api/invoices/inv-1',
       headers: authHeader(),
       payload: {
-        items: [{ description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50 }],
+        items: [
+          { description: 'X', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50, taxRate: 0 },
+        ],
         amountPaid: 9999,
       },
     });

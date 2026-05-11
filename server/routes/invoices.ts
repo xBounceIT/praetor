@@ -100,7 +100,9 @@ const invoiceItemBodySchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
   },
-  required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
+  // taxRate is required so a PUT that omits it can't silently zero out tax on an
+  // existing taxed invoice. Clients must round-trip the field explicitly.
+  required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice', 'taxRate'],
 } as const;
 
 // subtotal/total are server-computed from items; clients cannot set them.
