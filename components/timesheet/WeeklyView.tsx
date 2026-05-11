@@ -71,10 +71,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   );
 
   // If the configured start of the week changes (e.g. via Administration settings),
-  // re-align the visible week so days still line up under the right headers.
+  // re-align the visible week. Anchor the recompute on a day inside the visible week
+  // (the middle) so a Sunday->Monday flip doesn't jump back/forward an entire week.
   const expectedStartIdx = startOfWeekDayIndex(startOfWeek);
   if (currentWeekStart.getDay() !== expectedStartIdx) {
-    setCurrentWeekStart(computeWeekStart(currentWeekStart, startOfWeek));
+    const midWeek = new Date(currentWeekStart);
+    midWeek.setDate(midWeek.getDate() + Math.floor(WEEK_LENGTH / 2));
+    setCurrentWeekStart(computeWeekStart(midWeek, startOfWeek));
   }
 
   const weekDays = useMemo(() => {
