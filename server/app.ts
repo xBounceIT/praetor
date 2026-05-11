@@ -115,7 +115,6 @@ export const buildApp = async () => {
   await fastify.register(supplierQuotesRoutes, { prefix: '/api/sales/supplier-quotes' });
   await fastify.register(supplierOrdersRoutes, { prefix: '/api/accounting/supplier-orders' });
   await fastify.register(supplierInvoicesRoutes, { prefix: '/api/accounting/supplier-invoices' });
-  await fastify.register(supplierQuotesRoutes, { prefix: '/api/supplier-quotes' });
   await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
   await fastify.register(emailRoutes, { prefix: '/api/email' });
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });

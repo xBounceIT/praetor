@@ -6,16 +6,9 @@ import react from '@vitejs/plugin-react';
 import sirv from 'sirv';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import pkg from './package.json' with { type: 'json' };
+import { getBuildDate } from './scripts/build-date.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Generate build date in yyyymmdd format
-const getBuildDate = () => {
-  const year = '2026';
-  const month = '02';
-  const day = '16';
-  return `${year}${month}${day}`;
-};
 
 const docsFrontendDir = path.resolve(__dirname, 'docs', 'frontend');
 
