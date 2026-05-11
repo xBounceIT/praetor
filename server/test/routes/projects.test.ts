@@ -281,10 +281,11 @@ describe('POST /api/projects', () => {
         orderId: 'o-1',
         isDisabled: false,
       }),
+      undefined,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1');
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
     expect(assignProjectToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1');
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
     expect(assignProjectToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
@@ -304,7 +305,44 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ color: '#3b82f6', orderId: null, description: null }),
+      undefined,
     );
+  });
+
+  test('201: create + assignments run inside one withDbTransaction', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Website', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // Atomic create: a single transaction wraps the project insert + the four assignment calls
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('500: assignment failure rolls back project create (no audit, no 201)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+    // Simulate an assignment failure inside the transaction. On the old code the project would
+    // already be persisted before the assignment ran; the new code wraps both in a transaction
+    // so the failure must propagate out of withDbTransaction with no audit log emitted.
+    assignProjectToTopManagersMock.mockImplementation(async () => {
+      throw new Error('assignment failed');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Website', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('400: missing name', async () => {

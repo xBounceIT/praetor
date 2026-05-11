@@ -217,24 +217,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const created = await projectsRepo.create({
-          id,
-          name: nameResult.value,
-          clientId: clientIdResult.value,
-          color: projectColor,
-          description: description || null,
-          isDisabled: false,
-          orderId: orderId || null,
-          billingType,
-          billingFrequency,
-        });
+        const created = await withDbTransaction(async (tx) => {
+          const project = await projectsRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              clientId: clientIdResult.value,
+              color: projectColor,
+              description: description || null,
+              isDisabled: false,
+              orderId: orderId || null,
+              billingType,
+              billingFrequency,
+            },
+            tx,
+          );
 
-        await Promise.all([
-          userAssignmentsRepo.assignClientToUser(request.user.id, clientIdResult.value),
-          userAssignmentsRepo.assignProjectToUser(request.user.id, id),
-          userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value),
-          userAssignmentsRepo.assignProjectToTopManagers(id),
-        ]);
+          await Promise.all([
+            userAssignmentsRepo.assignClientToUser(
+              request.user.id,
+              clientIdResult.value,
+              undefined,
+              tx,
+            ),
+            userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
+            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+            userAssignmentsRepo.assignProjectToTopManagers(id, tx),
+          ]);
+
+          return project;
+        });
         await logAudit({
           request,
           action: 'project.created',

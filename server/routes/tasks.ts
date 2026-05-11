@@ -286,36 +286,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('t');
 
       try {
-        const created = await tasksRepo.create({
-          id,
-          name: nameResult.value,
-          projectId: projectIdResult.value,
-          description: description || null,
-          isRecurring: isRecurringValue,
-          recurrencePattern: recurrencePattern || null,
-          recurrenceStart: start,
-          recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffortResult.value ?? 0,
-          monthlyEffort: monthlyEffortResult.value ?? 0,
-          revenue: revenueResult.value ?? 0,
-          notes: notes || null,
-          isDisabled: false,
-          billingType: taskBillingType,
-          billingFrequency: taskBillingFrequency,
+        const created = await withDbTransaction(async (tx) => {
+          const task = await tasksRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              projectId: projectIdResult.value,
+              description: description || null,
+              isRecurring: isRecurringValue,
+              recurrencePattern: recurrencePattern || null,
+              recurrenceStart: start,
+              recurrenceDuration: durationResult.value || 0,
+              expectedEffort: expectedEffortResult.value ?? 0,
+              monthlyEffort: monthlyEffortResult.value ?? 0,
+              revenue: revenueResult.value ?? 0,
+              notes: notes || null,
+              isDisabled: false,
+              billingType: taskBillingType,
+              billingFrequency: taskBillingFrequency,
+            },
+            tx,
+          );
+
+          const clientId = await projectsRepo.findClientId(projectIdResult.value, tx);
+
+          await Promise.all(
+            [
+              clientId
+                ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx)
+                : null,
+              userAssignmentsRepo.assignProjectToUser(
+                request.user.id,
+                projectIdResult.value,
+                undefined,
+                tx,
+              ),
+              userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
+              clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId, tx) : null,
+              userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
+              userAssignmentsRepo.assignTaskToTopManagers(id, tx),
+            ].filter((p): p is Promise<void> => p !== null),
+          );
+
+          return task;
         });
-
-        const clientId = await projectsRepo.findClientId(projectIdResult.value);
-
-        await Promise.all(
-          [
-            clientId ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId) : null,
-            userAssignmentsRepo.assignProjectToUser(request.user.id, projectIdResult.value),
-            userAssignmentsRepo.assignTaskToUser(request.user.id, id),
-            clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId) : null,
-            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value),
-            userAssignmentsRepo.assignTaskToTopManagers(id),
-          ].filter((p): p is Promise<void> => p !== null),
-        );
         await logAudit({
           request,
           action: 'task.created',
@@ -532,14 +546,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
 
+      let normalizedRecurrenceStart: string | undefined;
       if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
         const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
         if (!startResult.ok) return badRequest(reply, startResult.message);
+        normalizedRecurrenceStart = startResult.value;
       }
 
+      let normalizedRecurrenceEnd: string | undefined;
       if (recurrenceEnd !== undefined && recurrenceEnd !== null && recurrenceEnd !== '') {
         const endResult = parseDateString(recurrenceEnd, 'recurrenceEnd');
         if (!endResult.ok) return badRequest(reply, endResult.message);
+        normalizedRecurrenceEnd = endResult.value;
       }
 
       const isRecurringValue =
@@ -550,8 +568,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description: description || undefined,
         isRecurring: isRecurringValue,
         recurrencePattern: recurrencePattern || undefined,
-        recurrenceStart: recurrenceStart || undefined,
-        recurrenceEnd: recurrenceEnd || undefined,
+        recurrenceStart: normalizedRecurrenceStart,
+        recurrenceEnd: normalizedRecurrenceEnd,
         // optionalLocalizedNonNegativeNumber returns null when the body field is omitted; the
         // dynamic-SET in tasksRepo.update would interpret null as "set to NULL" and clobber the
         // existing recurrence_duration. Forward undefined instead so the column is left alone.
