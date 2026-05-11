@@ -38,6 +38,7 @@
     "status": "Status",
     "discount": "Discount (%)",
     "subtotal": "Subtotal",
+    "summary": "Summary",
     "total": "Total",
     "margin": "Margin",
     "orderNumber": "Order Number",
@@ -118,6 +119,7 @@
     "itemsRequired": "At least one item is required",
     "notes": "Notes",
     "costSummary": "Cost Summary",
+    "summary": "Summary",
     "deleteTitle": "Delete invoice?",
     "deleteMessage": "Are you sure you want to delete invoice {{invoiceNumber}}? This action cannot be undone.",
     "notesPlaceholder": "Additional notes..."
@@ -150,6 +152,7 @@
     "orderDetails": "Order Details",
     "items": "Items",
     "subtotal": "Subtotal",
+    "summary": "Summary",
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
@@ -182,6 +185,7 @@
     "invoiceDetails": "Invoice Details",
     "items": "Items",
     "subtotal": "Subtotal",
+    "summary": "Summary",
     "statusDraft": "Draft",
     "statusSent": "Sent",
     "statusPaid": "Paid",

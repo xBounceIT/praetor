@@ -27,6 +27,7 @@ describe('supplier accounting modal styling', () => {
       '<ModalBody className="flex-1 space-y-5">',
       '<ModalFooter>',
       'id="supplier-order-notes"',
+      "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
@@ -53,6 +54,7 @@ describe('supplier accounting modal styling', () => {
       '<ModalContent size="full"',
       'id="supplier-invoice-supplier"',
       'id="supplier-invoice-notes"',
+      "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);

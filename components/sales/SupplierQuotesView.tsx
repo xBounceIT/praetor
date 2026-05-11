@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -776,7 +776,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     />
                   </h4>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <Field data-invalid={Boolean(errors.supplierId)}>
                       <SelectControl
                         id="supplier-quote-supplier"
                         options={activeSuppliers.map((supplier) => ({
@@ -794,13 +794,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         buttonClassName="h-9"
                         className={errors.supplierId ? 'border-red-300' : ''}
                       />
-                      {errors.supplierId && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">
-                          {errors.supplierId}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.supplierId}</FieldError>
+                    </Field>
+                    <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="supplier-quote-code">
                         {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
@@ -823,12 +819,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           }
                         }}
                         className={errors.id ? 'border-red-300' : ''}
+                        aria-invalid={Boolean(errors.id)}
                       />
-                      {errors.id && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.id}</FieldError>
+                    </Field>
+                    <Field>
                       <SelectControl
                         id="supplier-quote-payment-terms"
                         options={paymentTermsOptions}
@@ -846,8 +841,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         })}
                         buttonClassName="h-9"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field>
                       <FieldLabel htmlFor="supplier-quote-expiration-date">
                         {t('sales:supplierQuotes.expirationDate', {
                           defaultValue: 'Expiration Date',
@@ -862,7 +857,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
                         }
                       />
-                    </div>
+                    </Field>
                   </div>
                 </div>
 
@@ -1154,7 +1149,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     />
                   </Field>
 
-                  <div className="w-full md:w-1/3">
+                  <div className="w-full space-y-2 md:w-1/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('sales:supplierQuotes.summary', { defaultValue: 'Summary' })}
+                    </h4>
                     <CostSummaryPanel
                       currency={currency}
                       subtotal={totalsBreakdown.subtotal}

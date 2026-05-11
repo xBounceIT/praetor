@@ -573,9 +573,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     {t('accounting:supplierOrders.orderDetails')}
                   </h4>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <FieldLabel>{t('accounting:supplierOrders.supplier')}</FieldLabel>
+                    <Field>
                       <SelectControl
+                        id="supplier-order-supplier"
                         options={supplierOptions}
                         value={formData.supplierId || ''}
                         onChange={(value) => {
@@ -588,18 +588,19 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         }}
                         searchable={true}
                         disabled={isReadOnly}
+                        label={t('accounting:supplierOrders.supplier')}
                         buttonClassName="h-9"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field>
                       <FieldLabel>{t('accounting:supplierOrders.orderNumber')}</FieldLabel>
                       <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
                         {editingOrder?.id || '-'}
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <FieldLabel>{t('accounting:supplierOrders.paymentTerms')}</FieldLabel>
+                    </Field>
+                    <Field>
                       <SelectControl
+                        id="supplier-order-payment-terms"
                         options={paymentTermsOptions}
                         value={formData.paymentTerms || 'immediate'}
                         onChange={(value) =>
@@ -610,9 +611,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         }
                         searchable={false}
                         disabled={isReadOnly}
+                        label={t('accounting:supplierOrders.paymentTerms')}
                         buttonClassName="h-9"
                       />
-                    </div>
+                    </Field>
                   </div>
                 </div>
 
@@ -860,7 +862,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     />
                   </Field>
 
-                  <div className="md:w-1/3">
+                  <div className="space-y-2 md:w-1/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('accounting:supplierOrders.summary', { defaultValue: 'Summary' })}
+                    </h4>
                     <CostSummaryPanel
                       currency={currency}
                       subtotal={totals.subtotal}

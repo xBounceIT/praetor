@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1333,7 +1333,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     />
                   </h4>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="client-quote-client"
                         options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
@@ -1346,11 +1346,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         buttonClassName="h-9"
                         className={errors.clientId ? 'border-red-300' : ''}
                       />
-                      {errors.clientId && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
+                    </Field>
+                    <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="client-quote-code">
                         {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
@@ -1371,12 +1369,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         placeholder="Q0000"
                         disabled={isReadOnly}
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+                        aria-invalid={Boolean(errors.id)}
                       />
-                      {errors.id && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.id}</FieldError>
+                    </Field>
+                    <Field>
                       <SelectControl
                         id="client-quote-payment-terms"
                         options={paymentTermsOptions}
@@ -1392,8 +1389,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         label={t('sales:clientQuotes.paymentTerms')}
                         buttonClassName="h-9"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field>
                       <FieldLabel htmlFor="client-quote-expiration-date">
                         {t('sales:clientQuotes.expirationDateLabel')}
                       </FieldLabel>
@@ -1407,7 +1404,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         }
                         disabled={isReadOnly}
                       />
-                    </div>
+                    </Field>
                   </div>
                 </div>
 
@@ -1873,7 +1870,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     />
                   </Field>
 
-                  <div className="w-full md:w-1/3">
+                  <div className="w-full space-y-2 md:w-1/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('sales:clientQuotes.summary', { defaultValue: 'Summary' })}
+                    </h4>
                     {errors.total && (
                       <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
                     )}

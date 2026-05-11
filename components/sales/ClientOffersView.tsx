@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -909,7 +909,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     />
                   </h4>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="client-offer-client"
                         options={clientOptions}
@@ -924,11 +924,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         buttonClassName="h-9"
                         className={errors.clientId ? 'border-red-300' : ''}
                       />
-                      {errors.clientId && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
+                    </Field>
+                    <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="client-offer-code">
                         {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
                       </FieldLabel>
@@ -942,12 +940,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         }
                         placeholder="O0000"
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+                        aria-invalid={Boolean(errors.id)}
                       />
-                      {errors.id && (
-                        <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
+                      <FieldError className="text-xs">{errors.id}</FieldError>
+                    </Field>
+                    <Field>
                       <SelectControl
                         id="client-offer-payment-terms"
                         options={paymentTermsOptions}
@@ -965,8 +962,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         })}
                         buttonClassName="h-9"
                       />
-                    </div>
-                    <div className="space-y-1.5">
+                    </Field>
+                    <Field>
                       <FieldLabel htmlFor="client-offer-expiration-date">
                         {t('sales:clientOffers.expirationDate', {
                           defaultValue: 'Expiration date',
@@ -982,7 +979,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
                         }
                       />
-                    </div>
+                    </Field>
                   </div>
                 </div>
 
@@ -1439,7 +1436,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           className="min-h-28 resize-none"
                         />
                       </Field>
-                      <div className="md:w-1/3">
+                      <div className="space-y-2 md:w-1/3">
+                        <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                          <span className="size-1.5 rounded-full bg-primary"></span>
+                          {t('sales:clientOffers.summary', { defaultValue: 'Summary' })}
+                        </h4>
                         <CostSummaryPanel
                           currency={currency}
                           subtotal={subtotal}

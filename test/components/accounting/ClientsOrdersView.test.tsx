@@ -99,6 +99,7 @@ describe('<ClientsOrdersView />', () => {
       '<ModalFooter>',
       'id="client-order-client"',
       'id="client-order-notes"',
+      "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, [

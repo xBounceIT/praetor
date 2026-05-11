@@ -498,7 +498,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   {t('accounting:clientsInvoices.invoiceDetails')}
                 </h4>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <div className="space-y-1.5">
+                  <Field data-invalid={Boolean(errors.clientId)}>
                     <SelectControl
                       id="client-invoice-client"
                       options={activeClients.map((client) => ({
@@ -513,7 +513,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
                     />
                     <FieldError className="text-xs">{errors.clientId}</FieldError>
-                  </div>
+                  </Field>
                   <Field data-invalid={Boolean(errors.id)}>
                     <FieldLabel htmlFor="client-invoice-number">
                       {t('accounting:clientsInvoices.invoiceNumber')}
@@ -566,7 +566,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <div className="space-y-1.5">
+                  <Field>
                     <SelectControl
                       id="client-invoice-status"
                       options={statusOptions}
@@ -578,7 +578,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       searchable={false}
                       buttonClassName="h-9"
                     />
-                  </div>
+                  </Field>
                 </div>
               </div>
 
@@ -779,7 +779,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   />
                 </Field>
 
-                <div className="md:w-1/3">
+                <div className="space-y-2 md:w-1/3">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsInvoices.summary', { defaultValue: 'Summary' })}
+                  </h4>
                   <CostSummaryPanel
                     currency={currency}
                     subtotal={grossSubtotal}

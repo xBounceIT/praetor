@@ -364,23 +364,25 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   {t('accounting:supplierInvoices.invoiceDetails')}
                 </h4>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <SelectControl
-                    id="supplier-invoice-supplier"
-                    options={supplierOptions}
-                    value={formData.supplierId || ''}
-                    onChange={(value) => {
-                      const supplier = suppliers.find((item) => item.id === value);
-                      setFormData((prev) => ({
-                        ...prev,
-                        supplierId: value as string,
-                        supplierName: supplier?.name || '',
-                      }));
-                    }}
-                    searchable={true}
-                    label={t('accounting:supplierInvoices.supplier')}
-                    placeholder={t('accounting:supplierInvoices.selectSupplier')}
-                    buttonClassName="h-9"
-                  />
+                  <Field>
+                    <SelectControl
+                      id="supplier-invoice-supplier"
+                      options={supplierOptions}
+                      value={formData.supplierId || ''}
+                      onChange={(value) => {
+                        const supplier = suppliers.find((item) => item.id === value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          supplierId: value as string,
+                          supplierName: supplier?.name || '',
+                        }));
+                      }}
+                      searchable={true}
+                      label={t('accounting:supplierInvoices.supplier')}
+                      placeholder={t('accounting:supplierInvoices.selectSupplier')}
+                      buttonClassName="h-9"
+                    />
+                  </Field>
                   <Field>
                     <FieldLabel htmlFor="supplier-invoice-number">
                       {t('accounting:supplierInvoices.invoiceNumber')}
@@ -427,20 +429,22 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <SelectControl
-                    id="supplier-invoice-status"
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: value as SupplierInvoice['status'],
-                      }))
-                    }
-                    label={t('accounting:supplierInvoices.status')}
-                    searchable={false}
-                    buttonClassName="h-9"
-                  />
+                  <Field>
+                    <SelectControl
+                      id="supplier-invoice-status"
+                      options={statusOptions}
+                      value={formData.status || 'draft'}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          status: value as SupplierInvoice['status'],
+                        }))
+                      }
+                      label={t('accounting:supplierInvoices.status')}
+                      searchable={false}
+                      buttonClassName="h-9"
+                    />
+                  </Field>
                 </div>
               </div>
 
@@ -653,7 +657,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   />
                 </Field>
 
-                <div className="md:w-1/3">
+                <div className="space-y-2 md:w-1/3">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:supplierInvoices.summary', { defaultValue: 'Summary' })}
+                  </h4>
                   <CostSummaryPanel
                     currency={currency}
                     subtotal={grossSubtotal}

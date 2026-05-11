@@ -20,6 +20,7 @@ describe('ClientsInvoicesView modal styling', () => {
       '<ModalFooter>',
       'id="client-invoice-client"',
       'id="client-invoice-notes"',
+      "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, [

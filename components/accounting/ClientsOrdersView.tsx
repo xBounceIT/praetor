@@ -790,7 +790,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     {t('accounting:clientsOrders.orderDetails')}
                   </h4>
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div className="space-y-1.5">
+                    <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="client-order-client"
                         options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
@@ -803,7 +803,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
                       />
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
-                    </div>
+                    </Field>
                     <Field>
                       <FieldLabel>
                         {t('accounting:clientsOrders.orderNumber', {
@@ -814,7 +814,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         {editingOrder?.id || '-'}
                       </div>
                     </Field>
-                    <div className="space-y-1.5">
+                    <Field>
                       <SelectControl
                         id="client-order-payment-terms"
                         options={paymentTermsOptions}
@@ -830,7 +830,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         disabled={isReadOnly}
                         buttonClassName="h-9"
                       />
-                    </div>
+                    </Field>
                     <Field>
                       <FieldLabel>
                         {t('accounting:clientsOrders.paymentDueDate', {
@@ -1118,7 +1118,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     />
                   </Field>
 
-                  <div className="md:w-1/3">
+                  <div className="space-y-2 md:w-1/3">
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                      <span className="size-1.5 rounded-full bg-primary"></span>
+                      {t('accounting:clientsOrders.summary', { defaultValue: 'Summary' })}
+                    </h4>
                     {(() => {
                       const { subtotal, discountAmount, total, margin, marginPercentage } =
                         calculatePricingTotals(

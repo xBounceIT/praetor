@@ -77,14 +77,7 @@ const getMultiButtonLabel = ({
 
 const SelectLabel = ({ id, label }: { id?: string; label?: string }) => {
   if (!label) return null;
-  return (
-    <FieldLabel
-      htmlFor={id}
-      className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
-    >
-      {label}
-    </FieldLabel>
-  );
+  return <FieldLabel htmlFor={id}>{label}</FieldLabel>;
 };
 
 const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label: string }) => {

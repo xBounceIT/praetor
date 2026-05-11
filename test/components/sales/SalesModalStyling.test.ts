@@ -15,13 +15,14 @@ describe('sales modal styling', () => {
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
-      "import { Field, FieldLabel } from '@/components/ui/field';",
+      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
       "import { Input } from '@/components/ui/input';",
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="full"',
       '<ModalBody className="flex-1 space-y-5">',
       '<ModalFooter>',
       `id="${notesId}"`,
+      "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
