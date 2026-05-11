@@ -91,6 +91,11 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
   };
 
   const createSupplierOrderFromQuote = async (quote: SupplierQuote) => {
+    const missingProductIndex = quote.items.findIndex((item) => !item.productId);
+    if (missingProductIndex !== -1) {
+      alert(`Item ${missingProductIndex + 1} is missing a product. Please add one.`);
+      return;
+    }
     try {
       await api.supplierOrders.create({
         linkedQuoteId: quote.id,
@@ -103,7 +108,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
           ...item,
           id: makeTempId(),
           orderId: '',
-          productId: item.productId ?? '',
+          productId: item.productId as string,
         })),
       });
       setSupplierQuoteFilterId(quote.id);
