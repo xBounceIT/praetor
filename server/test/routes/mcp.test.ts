@@ -10,6 +10,7 @@ import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realReportsRoutes from '../../routes/reports.ts';
+import * as realTimeEntriesService from '../../services/timeEntries.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 const mcpAuthSnap = { ...realMcpAuth };
@@ -21,6 +22,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const reportsRoutesSnap = { ...realReportsRoutes };
+const timeEntriesServiceSnap = { ...realTimeEntriesService };
 
 const clientsListMock = mock();
 const suppliersListAllMock = mock();
@@ -37,6 +39,10 @@ const notificationsListForUserMock = mock();
 const notificationsCountUnreadForUserMock = mock();
 const markNotificationReadForUserMock = mock();
 const deleteNotificationForUserMock = mock();
+const listTimeEntriesMock = mock();
+const createTimeEntryMock = mock();
+const updateTimeEntryMock = mock();
+const deleteTimeEntryMock = mock();
 const buildBusinessDatasetMock = mock();
 const determineRequestedSectionsMock = mock();
 const getGeneralAiConfigMock = mock();
@@ -118,6 +124,13 @@ beforeAll(async () => {
     getGeneralAiConfig: getGeneralAiConfigMock,
     getReportingRange: getReportingRangeMock,
   }));
+  mock.module('../../services/timeEntries.ts', () => ({
+    ...timeEntriesServiceSnap,
+    listTimeEntries: listTimeEntriesMock,
+    createTimeEntry: createTimeEntryMock,
+    updateTimeEntry: updateTimeEntryMock,
+    deleteTimeEntry: deleteTimeEntryMock,
+  }));
 
   routePlugin = (await import('../../routes/mcp.ts')).default as FastifyPluginAsync;
 });
@@ -132,6 +145,7 @@ afterAll(() => {
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('../../routes/reports.ts', () => reportsRoutesSnap);
+  mock.module('../../services/timeEntries.ts', () => timeEntriesServiceSnap);
 });
 
 beforeEach(async () => {
@@ -152,6 +166,10 @@ beforeEach(async () => {
     notificationsCountUnreadForUserMock,
     markNotificationReadForUserMock,
     deleteNotificationForUserMock,
+    listTimeEntriesMock,
+    createTimeEntryMock,
+    updateTimeEntryMock,
+    deleteTimeEntryMock,
     buildBusinessDatasetMock,
     determineRequestedSectionsMock,
     getGeneralAiConfigMock,
@@ -202,6 +220,12 @@ beforeEach(async () => {
   notificationsCountUnreadForUserMock.mockResolvedValue(0);
   markNotificationReadForUserMock.mockResolvedValue(true);
   deleteNotificationForUserMock.mockResolvedValue(true);
+  listTimeEntriesMock.mockResolvedValue({ entries: [], nextCursor: null });
+  createTimeEntryMock.mockImplementation((_user, entry) =>
+    Promise.resolve({ id: `created-${entry.task}`, ...entry }),
+  );
+  updateTimeEntryMock.mockImplementation((_user, id, patch) => Promise.resolve({ id, ...patch }));
+  deleteTimeEntryMock.mockResolvedValue({ message: 'Entry deleted' });
   getGeneralAiConfigMock.mockResolvedValue({ enableAiReporting: true, currency: 'EUR' });
   getReportingRangeMock.mockReturnValue({ fromDate: '2026-01-01', toDate: '2026-05-11' });
   determineRequestedSectionsMock.mockReturnValue(null);
@@ -231,6 +255,16 @@ const parseMcpBody = (body: string) => {
   return JSON.parse(dataLine ?? body);
 };
 
+const makeCreateTimeEntryArgs = (task: string) => ({
+  date: '2026-05-11',
+  clientId: 'c1',
+  clientName: 'Client One',
+  projectId: 'p1',
+  projectName: 'Project One',
+  task,
+  duration: 1,
+});
+
 describe('/api/mcp', () => {
   test('supports initialize over Streamable HTTP', async () => {
     const res = await rpc({
@@ -256,6 +290,9 @@ describe('/api/mcp', () => {
     const toolNames = toolsBody.result.tools.map((tool: { name: string }) => tool.name);
     expect(toolNames).toContain('praetor_list_clients');
     expect(toolNames).toContain('praetor_get_users_hierarchy');
+    expect(toolNames).toContain('praetor_bulk_create_time_entries');
+    expect(toolNames).toContain('praetor_bulk_update_time_entries');
+    expect(toolNames).toContain('praetor_bulk_delete_time_entries');
 
     const clientsRes = await rpc({
       jsonrpc: '2.0',
@@ -421,5 +458,153 @@ describe('/api/mcp', () => {
     expect(usersListScopedForManagerMock).not.toHaveBeenCalled();
     expect(workUnitsListManagedByMock).not.toHaveBeenCalled();
     expect(workUnitsListUserIdsByUnitIdsMock).not.toHaveBeenCalled();
+  });
+
+  test('bulk creates time entries with partial per-item results', async () => {
+    createTimeEntryMock.mockImplementationOnce((_user, entry) =>
+      Promise.resolve({ id: 'te-1', ...entry }),
+    );
+    createTimeEntryMock.mockImplementationOnce(() =>
+      Promise.reject(new realTimeEntriesService.TimeEntryServiceError(403, 'Not authorized')),
+    );
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: {
+          entries: [makeCreateTimeEntryArgs('Task One'), makeCreateTimeEntryArgs('Task Two')],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.summary).toEqual({
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    expect(body.result.structuredContent.results).toEqual([
+      {
+        index: 0,
+        success: true,
+        entry: { id: 'te-1', ...makeCreateTimeEntryArgs('Task One') },
+      },
+      { index: 1, success: false, error: 'Not authorized' },
+    ]);
+    expect(createTimeEntryMock).toHaveBeenCalledTimes(2);
+    expect(createTimeEntryMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'u1' }),
+      makeCreateTimeEntryArgs('Task One'),
+    );
+  });
+
+  test('bulk updates time entries in input order with partial per-item results', async () => {
+    updateTimeEntryMock.mockImplementationOnce((_user, id, patch) =>
+      Promise.resolve({ id, ...patch }),
+    );
+    updateTimeEntryMock.mockImplementationOnce(() =>
+      Promise.reject(new realTimeEntriesService.TimeEntryServiceError(404, 'Entry not found')),
+    );
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_update_time_entries',
+        arguments: {
+          entries: [
+            { id: 'te-1', duration: 2, notes: 'Done' },
+            { id: 'missing', duration: 3 },
+          ],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.summary).toEqual({
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    expect(body.result.structuredContent.results).toEqual([
+      { index: 0, success: true, entry: { id: 'te-1', duration: 2, notes: 'Done' } },
+      { index: 1, success: false, error: 'Entry not found' },
+    ]);
+    expect(updateTimeEntryMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'u1' }),
+      'te-1',
+      { duration: 2, notes: 'Done' },
+    );
+    expect(updateTimeEntryMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'u1' }),
+      'missing',
+      { duration: 3 },
+    );
+  });
+
+  test('bulk deletes time entries by id with partial per-item results', async () => {
+    deleteTimeEntryMock.mockImplementationOnce(() => Promise.resolve({ message: 'Entry deleted' }));
+    deleteTimeEntryMock.mockImplementationOnce(() =>
+      Promise.reject(new realTimeEntriesService.TimeEntryServiceError(404, 'Entry not found')),
+    );
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_delete_time_entries',
+        arguments: { ids: ['te-1', 'missing'] },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.summary).toEqual({
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    expect(body.result.structuredContent.results).toEqual([
+      { index: 0, success: true, message: 'Entry deleted' },
+      { index: 1, success: false, error: 'Entry not found' },
+    ]);
+    expect(deleteTimeEntryMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'u1' }),
+      'te-1',
+    );
+    expect(deleteTimeEntryMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'u1' }),
+      'missing',
+    );
+  });
+
+  test('rejects bulk time entry batches over 100 items before calling services', async () => {
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_delete_time_entries',
+        arguments: { ids: Array.from({ length: 101 }, (_, index) => `te-${index}`) },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toContain('Too big');
+    expect(deleteTimeEntryMock).not.toHaveBeenCalled();
   });
 });

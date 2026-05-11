@@ -80,6 +80,30 @@ const USER_HIERARCHY_PERMISSIONS = [
   'hr.work_units.view',
 ] as const;
 
+const MAX_BULK_TIME_ENTRY_ITEMS = 100;
+
+const createTimeEntryInputSchema = z.object({
+  date: z.string(),
+  clientId: z.string(),
+  clientName: z.string(),
+  projectId: z.string(),
+  projectName: z.string(),
+  task: z.string(),
+  notes: z.string().optional(),
+  duration: z.number().nonnegative().optional(),
+  isPlaceholder: z.boolean().optional(),
+  userId: z.string().optional(),
+  location: z.string().optional(),
+});
+
+const updateTimeEntryInputSchema = z.object({
+  id: z.string(),
+  duration: z.number().nonnegative().optional(),
+  notes: z.string().nullable().optional(),
+  isPlaceholder: z.boolean().optional(),
+  location: z.string().optional(),
+});
+
 const enforceAny = (
   user: McpAuthenticatedUser,
   permissions: readonly string[],
@@ -137,6 +161,33 @@ const runTimeEntryTool = async (
     if (err instanceof TimeEntryServiceError) return toolError(err.message);
     throw err;
   }
+};
+
+const runBulkTimeEntryTool = async <T>(
+  items: T[],
+  operation: (item: T) => Promise<Record<string, unknown>>,
+): Promise<CallToolResult> => {
+  const results: Array<Record<string, unknown>> = [];
+  let succeeded = 0;
+
+  for (const [index, item] of items.entries()) {
+    try {
+      results.push({ index, success: true, ...(await operation(item)) });
+      succeeded += 1;
+    } catch (err) {
+      if (!(err instanceof TimeEntryServiceError)) throw err;
+      results.push({ index, success: false, error: err.message });
+    }
+  }
+
+  return jsonResult({
+    summary: {
+      requested: items.length,
+      succeeded,
+      failed: items.length - succeeded,
+    },
+    results,
+  });
 };
 
 const buildServer = () => {
@@ -330,19 +381,7 @@ const buildServer = () => {
     {
       title: 'Create Time Entry',
       description: 'Create a time entry using the same validation and permissions as the app.',
-      inputSchema: z.object({
-        date: z.string(),
-        clientId: z.string(),
-        clientName: z.string(),
-        projectId: z.string(),
-        projectName: z.string(),
-        task: z.string(),
-        notes: z.string().optional(),
-        duration: z.number().nonnegative().optional(),
-        isPlaceholder: z.boolean().optional(),
-        userId: z.string().optional(),
-        location: z.string().optional(),
-      }),
+      inputSchema: createTimeEntryInputSchema,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async (args, ctx) => {
@@ -352,22 +391,54 @@ const buildServer = () => {
   );
 
   server.registerTool(
+    'praetor_bulk_create_time_entries',
+    {
+      title: 'Bulk Create Time Entries',
+      description:
+        'Create multiple time entries with per-item results using the same validation and permissions as the app.',
+      inputSchema: z.object({
+        entries: z.array(createTimeEntryInputSchema).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async ({ entries }, ctx) => {
+      const user = requireUser(ctx);
+      return runBulkTimeEntryTool(entries, async (entry) => ({
+        entry: await createTimeEntry(user, entry),
+      }));
+    },
+  );
+
+  server.registerTool(
     'praetor_update_time_entry',
     {
       title: 'Update Time Entry',
       description: 'Update duration, notes, placeholder state, or location for a time entry.',
-      inputSchema: z.object({
-        id: z.string(),
-        duration: z.number().nonnegative().optional(),
-        notes: z.string().nullable().optional(),
-        isPlaceholder: z.boolean().optional(),
-        location: z.string().optional(),
-      }),
+      inputSchema: updateTimeEntryInputSchema,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async ({ id, ...patch }, ctx) => {
       const user = requireUser(ctx);
       return runTimeEntryTool(async () => ({ entry: await updateTimeEntry(user, id, patch) }));
+    },
+  );
+
+  server.registerTool(
+    'praetor_bulk_update_time_entries',
+    {
+      title: 'Bulk Update Time Entries',
+      description:
+        'Update multiple time entries with per-item results using the same validation and permissions as the app.',
+      inputSchema: z.object({
+        entries: z.array(updateTimeEntryInputSchema).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async ({ entries }, ctx) => {
+      const user = requireUser(ctx);
+      return runBulkTimeEntryTool(entries, async ({ id, ...patch }) => ({
+        entry: await updateTimeEntry(user, id, patch),
+      }));
     },
   );
 
@@ -382,6 +453,21 @@ const buildServer = () => {
     async ({ id }, ctx) => {
       const user = requireUser(ctx);
       return runTimeEntryTool(async () => ({ ...(await deleteTimeEntry(user, id)) }));
+    },
+  );
+
+  server.registerTool(
+    'praetor_bulk_delete_time_entries',
+    {
+      title: 'Bulk Delete Time Entries',
+      description:
+        'Delete multiple time entries by ID with per-item results using the same permissions as the app.',
+      inputSchema: z.object({ ids: z.array(z.string()).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS) }),
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    async ({ ids }, ctx) => {
+      const user = requireUser(ctx);
+      return runBulkTimeEntryTool(ids, async (id) => ({ ...(await deleteTimeEntry(user, id)) }));
     },
   );
 

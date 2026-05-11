@@ -59,10 +59,15 @@ Strumenti supportati:
 - `praetor_create_time_entry`
 - `praetor_update_time_entry`
 - `praetor_delete_time_entry`
+- `praetor_bulk_create_time_entries`
+- `praetor_bulk_update_time_entries`
+- `praetor_bulk_delete_time_entries`
 - `praetor_list_notifications`
 - `praetor_mark_notification_read`
 - `praetor_delete_notification`
 - `praetor_get_reporting_dataset`
+
+Gli strumenti bulk per i consuntivi accettano fino a 100 elementi per chiamata. Elaborano ogni elemento in modo indipendente e restituiscono un riepilogo con successi ed errori per singolo elemento.
 
 Note di sicurezza:
 

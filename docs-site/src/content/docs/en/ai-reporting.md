@@ -59,10 +59,15 @@ Supported tools:
 - `praetor_create_time_entry`
 - `praetor_update_time_entry`
 - `praetor_delete_time_entry`
+- `praetor_bulk_create_time_entries`
+- `praetor_bulk_update_time_entries`
+- `praetor_bulk_delete_time_entries`
 - `praetor_list_notifications`
 - `praetor_mark_notification_read`
 - `praetor_delete_notification`
 - `praetor_get_reporting_dataset`
+
+Bulk time-entry tools accept up to 100 items per call. They process each item independently and return a summary with per-item successes and errors.
 
 Security notes:
 
