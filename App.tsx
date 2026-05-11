@@ -1651,113 +1651,119 @@ const App: React.FC = () => {
     return [currentUser];
   }, [users, currentUser]);
 
-  const generateRecurringEntries = useCallback(async () => {
-    const today = new Date();
-    // Default future limit for entries without an end date
-    const defaultFutureLimit = new Date();
-    defaultFutureLimit.setDate(today.getDate() + 14);
+  const generateRecurringEntries = useCallback(
+    async (tasksOverride?: ProjectTask[]) => {
+      const tasksToUse = tasksOverride ?? projectTasks;
+      const today = new Date();
+      // Default future limit for entries without an end date
+      const defaultFutureLimit = new Date();
+      defaultFutureLimit.setDate(today.getDate() + 14);
 
-    const newEntries: TimeEntry[] = [];
+      const newEntries: TimeEntry[] = [];
 
-    for (const task of projectTasks.filter((t) => t.isRecurring)) {
-      const project = projects.find((p) => p.id === task.projectId);
-      const client = project ? clients.find((c) => c.id === project.clientId) : null;
-      if (!project || !client) continue;
+      for (const task of tasksToUse.filter((t) => t.isRecurring)) {
+        const project = projects.find((p) => p.id === task.projectId);
+        const client = project ? clients.find((c) => c.id === project.clientId) : null;
+        if (!project || !client) continue;
 
-      const startDate = task.recurrenceStart
-        ? dateOnlyStringToLocalDate(task.recurrenceStart)
-        : new Date();
-      // Use recurrence end date if specified, otherwise use default 14-day limit
-      const taskEndDate = task.recurrenceEnd ? dateOnlyStringToLocalDate(task.recurrenceEnd) : null;
-      const futureLimit =
-        taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
+        const startDate = task.recurrenceStart
+          ? dateOnlyStringToLocalDate(task.recurrenceStart)
+          : new Date();
+        // Use recurrence end date if specified, otherwise use default 14-day limit
+        const taskEndDate = task.recurrenceEnd
+          ? dateOnlyStringToLocalDate(task.recurrenceEnd)
+          : null;
+        const futureLimit =
+          taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
 
-      for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
-        if (taskEndDate && d > taskEndDate) break;
+        for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
+          if (taskEndDate && d > taskEndDate) break;
 
-        // Skip disabled days: Sundays, Saturdays (if configured), and holidays
-        const isSunday = d.getDay() === 0;
-        const isSaturday = d.getDay() === 6;
-        const holidayName = isItalianHoliday(d);
-        const isDisabledDay =
-          isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
-        if (isDisabledDay) continue;
+          // Skip disabled days: Sundays, Saturdays (if configured), and holidays
+          const isSunday = d.getDay() === 0;
+          const isSaturday = d.getDay() === 6;
+          const holidayName = isItalianHoliday(d);
+          const isDisabledDay =
+            isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
+          if (isDisabledDay) continue;
 
-        const dateStr = getLocalDateString(d);
+          const dateStr = getLocalDateString(d);
 
-        let matches = false;
-        if (task.recurrencePattern === 'daily') matches = true;
-        if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay())
-          matches = true;
-        if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate())
-          matches = true;
+          let matches = false;
+          if (task.recurrencePattern === 'daily') matches = true;
+          if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay())
+            matches = true;
+          if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate())
+            matches = true;
 
-        // Custom patterns: monthly:first:X or monthly:last:X
-        if (
-          typeof task.recurrencePattern === 'string' &&
-          task.recurrencePattern.startsWith('monthly:')
-        ) {
-          const parts = task.recurrencePattern.split(':');
-          if (parts.length === 3) {
-            const type = parts[1]; // 'first' or 'last'
-            const targetDay = parseInt(parts[2], 10); // 0-6 (Sun-Sat) or 1-7 depending on UI, my modal uses 0=Sun, 1=Mon... match JS getDay()
+          // Custom patterns: monthly:first:X or monthly:last:X
+          if (
+            typeof task.recurrencePattern === 'string' &&
+            task.recurrencePattern.startsWith('monthly:')
+          ) {
+            const parts = task.recurrencePattern.split(':');
+            if (parts.length === 3) {
+              const type = parts[1]; // 'first' or 'last'
+              const targetDay = parseInt(parts[2], 10); // 0-6 (Sun-Sat) or 1-7 depending on UI, my modal uses 0=Sun, 1=Mon... match JS getDay()
 
-            // Adjust for UI mapping: My modal uses 0=Sun, 1=Mon...6=Sat which matches getDay() perfectly.
-            // Wait, in modal I used 0=Sunday, 1=Monday. JS getDay() returns 0=Sunday, 1=Monday. So it matches.
+              // Adjust for UI mapping: My modal uses 0=Sun, 1=Mon...6=Sat which matches getDay() perfectly.
+              // Wait, in modal I used 0=Sunday, 1=Monday. JS getDay() returns 0=Sunday, 1=Monday. So it matches.
 
-            if (d.getDay() === targetDay) {
-              if (type === 'first') {
-                // First: dates 1-7
-                if (d.getDate() <= 7) matches = true;
-              } else if (type === 'second') {
-                // Second: dates 8-14
-                if (d.getDate() > 7 && d.getDate() <= 14) matches = true;
-              } else if (type === 'third') {
-                // Third: dates 15-21
-                if (d.getDate() > 14 && d.getDate() <= 21) matches = true;
-              } else if (type === 'fourth') {
-                // Fourth: dates 22-28
-                if (d.getDate() > 21 && d.getDate() <= 28) matches = true;
-              } else if (type === 'last') {
-                // Last: adding 7 days puts us next month
-                const nextWeek = new Date(d);
-                nextWeek.setDate(d.getDate() + 7);
-                if (nextWeek.getMonth() !== d.getMonth()) matches = true;
+              if (d.getDay() === targetDay) {
+                if (type === 'first') {
+                  // First: dates 1-7
+                  if (d.getDate() <= 7) matches = true;
+                } else if (type === 'second') {
+                  // Second: dates 8-14
+                  if (d.getDate() > 7 && d.getDate() <= 14) matches = true;
+                } else if (type === 'third') {
+                  // Third: dates 15-21
+                  if (d.getDate() > 14 && d.getDate() <= 21) matches = true;
+                } else if (type === 'fourth') {
+                  // Fourth: dates 22-28
+                  if (d.getDate() > 21 && d.getDate() <= 28) matches = true;
+                } else if (type === 'last') {
+                  // Last: adding 7 days puts us next month
+                  const nextWeek = new Date(d);
+                  nextWeek.setDate(d.getDate() + 7);
+                  if (nextWeek.getMonth() !== d.getMonth()) matches = true;
+                }
+              }
+            }
+          }
+          if (matches) {
+            const exists = entries.some(
+              (e) => e.date === dateStr && e.projectId === task.projectId && e.task === task.name,
+            );
+            if (!exists) {
+              try {
+                const entry = await api.entries.create({
+                  date: dateStr,
+                  userId: currentUser?.id || '',
+                  clientId: client.id,
+                  clientName: client.name,
+                  projectId: task.projectId,
+                  projectName: project.name,
+                  task: task.name,
+                  duration: task.recurrenceDuration || 0,
+                  isPlaceholder: true,
+                  hourlyCost: currentUser?.costPerHour || 0,
+                });
+                newEntries.push(entry);
+              } catch (err) {
+                console.error('Failed to create recurring entry:', err);
               }
             }
           }
         }
-        if (matches) {
-          const exists = entries.some(
-            (e) => e.date === dateStr && e.projectId === task.projectId && e.task === task.name,
-          );
-          if (!exists) {
-            try {
-              const entry = await api.entries.create({
-                date: dateStr,
-                userId: currentUser?.id || '',
-                clientId: client.id,
-                clientName: client.name,
-                projectId: task.projectId,
-                projectName: project.name,
-                task: task.name,
-                duration: task.recurrenceDuration || 0,
-                isPlaceholder: true,
-                hourlyCost: currentUser?.costPerHour || 0,
-              });
-              newEntries.push(entry);
-            } catch (err) {
-              console.error('Failed to create recurring entry:', err);
-            }
-          }
-        }
       }
-    }
 
-    if (newEntries.length > 0) {
-      setEntries((prev) => [...newEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
-    }
-  }, [projectTasks, entries, projects, clients, currentUser, generalSettings]);
+      if (newEntries.length > 0) {
+        setEntries((prev) => [...newEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      }
+    },
+    [projectTasks, entries, projects, clients, currentUser, generalSettings],
+  );
 
   // ... (rest of the logic remains validation which we don't need to change but need for context)
 

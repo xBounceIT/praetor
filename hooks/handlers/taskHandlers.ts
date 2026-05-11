@@ -7,7 +7,7 @@ export type TaskHandlersDeps = {
   projectTasks: ProjectTask[];
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
-  generateRecurringEntries: () => Promise<void> | void;
+  generateRecurringEntries: (tasks?: ProjectTask[]) => Promise<void> | void;
 };
 
 export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
@@ -54,10 +54,11 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
         recurrenceEnd: endDate,
         recurrenceDuration: duration,
       });
-      setProjectTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-      setTimeout(() => {
-        void generateRecurringEntries();
-      }, 100);
+      // Build the next tasks list explicitly so generateRecurringEntries sees the
+      // freshly-updated task instead of a stale closure snapshot from before this update.
+      const nextTasks = projectTasks.map((t) => (t.id === taskId ? updated : t));
+      setProjectTasks(nextTasks);
+      await generateRecurringEntries(nextTasks);
     } catch (err) {
       console.error('Failed to make task recurring:', err);
     }

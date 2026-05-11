@@ -68,12 +68,12 @@ describe('makeTaskHandlers.makeRecurring', () => {
       { id: 't1', name: 'task-A', projectId: 'p1', isRecurring: false },
     ]);
     const entries = makeStubSetter<EntryLike>([]);
-    const generateSpy = mock(() => Promise.resolve());
+    const generateSpy = mock((_tasks?: unknown) => Promise.resolve());
     const handlers = makeTaskHandlers({
       projectTasks: tasks.get() as never,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
-      generateRecurringEntries: generateSpy,
+      generateRecurringEntries: generateSpy as never,
     });
 
     await handlers.makeRecurring('t1', 'weekly', '2026-05-01', '2026-12-01', 8);
@@ -86,6 +86,78 @@ describe('makeTaskHandlers.makeRecurring', () => {
     expect(updates.recurrenceStart).toBe('2026-05-01');
     expect(updates.recurrenceEnd).toBe('2026-12-01');
     expect(updates.recurrenceDuration).toBe(8);
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+    // The recurring generator must receive the freshly-updated task list, not a
+    // stale snapshot — otherwise the just-made-recurring task is invisible.
+    const passedTasks = generateSpy.mock.calls[0]?.[0] as TaskLike[] | undefined;
+    expect(passedTasks).toBeDefined();
+    const updatedTask = passedTasks?.find((t) => t.id === 't1');
+    expect(updatedTask?.isRecurring).toBe(true);
+    expect(updatedTask?.recurrencePattern).toBe('weekly');
+  });
+
+  test('regenerates synchronously without a setTimeout race', async () => {
+    // This test fails on the legacy `setTimeout(() => void generateRecurringEntries(), 100)`
+    // implementation because the generator runs asynchronously after makeRecurring resolves.
+    // After the fix, generateRecurringEntries is awaited inline.
+    apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, name: 'task-A', projectId: 'p1', ...(updates as object) }),
+    );
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', name: 'task-A', projectId: 'p1', isRecurring: false },
+    ]);
+    const generateSpy = mock((_tasks?: unknown) => Promise.resolve());
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: generateSpy as never,
+    });
+
+    await handlers.makeRecurring('t1', 'daily', '2026-05-01');
+
+    // After the awaited makeRecurring resolves, regeneration must have already fired.
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('passes the updated task list (not stale closure) to generateRecurringEntries', async () => {
+    // Regression: when makeTaskHandlers is built from a snapshot of projectTasks that
+    // lacks the new task, the old code relied on closure and used the stale list.
+    // The fix passes the explicit `nextTasks` array, so the just-updated task is visible.
+    apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({
+        id,
+        name: 'fresh-task',
+        projectId: 'p1',
+        isRecurring: true,
+        ...(updates as object),
+      }),
+    );
+    // Simulate: handlers were built while only an older task existed; the fresh task
+    // (`fresh-task`) was just added to state but the closure here still sees it because
+    // makeRecurring uses the deps snapshot. After updating `fresh-task` to recurring,
+    // the generator must see the updated version.
+    const tasksList: TaskLike[] = [
+      { id: 't-old', name: 'old', projectId: 'p1', isRecurring: false },
+      { id: 't-new', name: 'fresh-task', projectId: 'p1', isRecurring: false },
+    ];
+    const tasks = makeStubSetter<TaskLike>(tasksList);
+    const generateSpy = mock((_tasks?: unknown) => Promise.resolve());
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: generateSpy as never,
+    });
+
+    await handlers.makeRecurring('t-new', 'weekly', '2026-05-01');
+
+    const passedTasks = generateSpy.mock.calls[0]?.[0] as TaskLike[] | undefined;
+    expect(passedTasks).toBeDefined();
+    expect(passedTasks?.length).toBe(2);
+    const newTask = passedTasks?.find((t) => t.id === 't-new');
+    expect(newTask?.isRecurring).toBe(true);
+    expect(newTask?.recurrencePattern).toBe('weekly');
   });
 
   test('editing already-recurring task: clears placeholder entries before update', async () => {
