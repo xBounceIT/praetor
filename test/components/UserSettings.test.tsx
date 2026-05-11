@@ -111,6 +111,7 @@ describe('<UserSettings /> MCP tokens', () => {
 
   test('copies MCP values when navigator.clipboard is unavailable', async () => {
     const originalClipboard = navigator.clipboard;
+    const originalExecCommand = Object.getOwnPropertyDescriptor(document, 'execCommand');
     const execCommand = mock(() => true);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
     Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
@@ -126,15 +127,26 @@ describe('<UserSettings /> MCP tokens', () => {
         configurable: true,
         value: originalClipboard,
       });
+      if (originalExecCommand) {
+        Object.defineProperty(document, 'execCommand', originalExecCommand);
+      } else {
+        Reflect.deleteProperty(document, 'execCommand');
+      }
     }
   });
 
-  test('revokes a token from the list', async () => {
+  test('requires confirmation before revoking a token from the list', async () => {
     renderSettings();
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
 
     expect(await screen.findByText('Agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /mcp.revoke/ }));
+
+    expect(onRevokeMcpToken).not.toHaveBeenCalled();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('mcp.revokeDialogTitle')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /mcp.revokeConfirm/ }));
 
     await waitFor(() => expect(onRevokeMcpToken).toHaveBeenCalledWith('mcp-token-1'));
     await waitFor(() => expect(screen.queryByText('Agent')).not.toBeInTheDocument());

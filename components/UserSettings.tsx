@@ -4,6 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -800,20 +810,55 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                         {formatTokenDate(token.lastUsedAt)}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => void handleRevokeMcpToken(token.id)}
-                      disabled={revokingMcpTokenId === token.id}
-                    >
-                      {revokingMcpTokenId === token.id ? (
-                        <i className="fa-solid fa-circle-notch fa-spin"></i>
-                      ) : (
-                        <Trash2 aria-hidden="true" className="size-3.5" />
-                      )}
-                      {t('mcp.revoke')}
-                    </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={revokingMcpTokenId === token.id}
+                        >
+                          {revokingMcpTokenId === token.id ? (
+                            <i className="fa-solid fa-circle-notch fa-spin"></i>
+                          ) : (
+                            <Trash2 aria-hidden="true" className="size-3.5" />
+                          )}
+                          {t('mcp.revoke')}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{t('mcp.revokeDialogTitle')}</DialogTitle>
+                          <DialogDescription>
+                            {t('mcp.revokeDialogDescription', { name: token.name })}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={revokingMcpTokenId === token.id}
+                            >
+                              {t('common:buttons.cancel')}
+                            </Button>
+                          </DialogClose>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() => void handleRevokeMcpToken(token.id)}
+                            disabled={revokingMcpTokenId === token.id}
+                          >
+                            {revokingMcpTokenId === token.id ? (
+                              <i className="fa-solid fa-circle-notch fa-spin"></i>
+                            ) : (
+                              <Trash2 aria-hidden="true" className="size-3.5" />
+                            )}
+                            {t('mcp.revokeConfirm')}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 ))
               )}
