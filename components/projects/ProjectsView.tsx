@@ -304,9 +304,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
-    setProjectTaskHours({});
-    setHoursLoadState('loading');
     setIsModalOpen(true);
+    // Show the bulk-fetched hours immediately for a fast paint, but always
+    // revalidate against the server so time entries logged since the parent
+    // last refreshed `allProjectHours` are picked up (stale-while-revalidate).
+    const cachedHours = allProjectHours?.[project.id];
+    setProjectTaskHours(cachedHours ?? {});
+    setHoursLoadState(cachedHours ? 'idle' : 'loading');
     fetchHoursAbortRef.current?.abort();
     const ac = new AbortController();
     fetchHoursAbortRef.current = ac;
@@ -319,7 +323,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       })
       .catch(() => {
         if (ac.signal.aborted) return;
-        setHoursLoadState('error');
+        // On failure with a cached snapshot, keep what's shown rather than
+        // wiping it; only surface 'error' state when there's nothing cached.
+        if (!cachedHours) setHoursLoadState('error');
       });
   };
 

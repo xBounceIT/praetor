@@ -200,6 +200,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  // Confirmation state for the disable/enable toggle so accidental clicks don't
+  // immediately flip availability for downstream projects, tasks, etc.
+  const [clientToToggleDisabled, setClientToToggleDisabled] = useState<Client | null>(null);
+  const [isToggleDisabledOpen, setIsToggleDisabledOpen] = useState(false);
+  const [isTogglingDisabled, setIsTogglingDisabled] = useState(false);
 
   const [profileOptions, setProfileOptions] =
     useState<ClientProfileOptionsByCategory>(EMPTY_PROFILE_OPTIONS);
@@ -508,6 +513,35 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     } finally {
       setIsDeleteConfirmOpen(false);
       setClientToDelete(null);
+    }
+  };
+
+  const requestToggleDisabled = useCallback((client: Client) => {
+    setClientToToggleDisabled(client);
+    setIsToggleDisabledOpen(true);
+  }, []);
+
+  const cancelToggleDisabled = () => {
+    if (isTogglingDisabled) return;
+    setIsToggleDisabledOpen(false);
+    setClientToToggleDisabled(null);
+  };
+
+  const handleToggleDisabled = async () => {
+    if (!canUpdateClients || !clientToToggleDisabled || isTogglingDisabled) return;
+    setIsTogglingDisabled(true);
+    try {
+      await onUpdateClient(clientToToggleDisabled.id, {
+        isDisabled: !clientToToggleDisabled.isDisabled,
+      });
+      // Only close the modal once the update has actually succeeded. On failure
+      // (network/API), leave the dialog open so the user can retry.
+      setIsToggleDisabledOpen(false);
+      setClientToToggleDisabled(null);
+    } catch (err) {
+      console.error('Failed to toggle client disabled state:', err);
+    } finally {
+      setIsTogglingDisabled(false);
     }
   };
 
@@ -885,7 +919,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canUpdateClients) return;
-                      onUpdateClient(row.id, { isDisabled: !row.isDisabled });
+                      requestToggleDisabled(row);
                     }}
                     disabled={!canUpdateClients}
                     className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -929,7 +963,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     language,
     canUpdateClients,
     canDeleteClients,
-    onUpdateClient,
+    requestToggleDisabled,
     confirmDelete,
     openEditModal,
   ]);
@@ -1635,6 +1669,66 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           name: clientToDelete?.name,
         })}${t('crm:clients.deleteConfirm')}`}
       />
+
+      <Modal
+        isOpen={isToggleDisabledOpen && !!clientToToggleDisabled}
+        onClose={cancelToggleDisabled}
+        ariaLabel={null}
+      >
+        {() => {
+          const isCurrentlyDisabled = clientToToggleDisabled?.isDisabled ?? false;
+          const titleKey = isCurrentlyDisabled
+            ? 'crm:clients.enableConfirmTitle'
+            : 'crm:clients.disableConfirmTitle';
+          const descriptionKey = isCurrentlyDisabled
+            ? 'crm:clients.enableConfirmDescription'
+            : 'crm:clients.disableConfirmDescription';
+          const confirmLabel = isCurrentlyDisabled
+            ? t('crm:clients.confirmEnable')
+            : t('crm:clients.confirmDisable');
+          const iconClass = isCurrentlyDisabled ? 'fa-rotate-left' : 'fa-triangle-exclamation';
+          return (
+            <ModalContent size="sm">
+              <ModalHeader className="justify-center text-center">
+                <div className="space-y-3">
+                  <div className="size-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+                    <i className={`fa-solid ${iconClass} text-xl`}></i>
+                  </div>
+                  <ModalTitle className="justify-center">
+                    {t(titleKey, { name: clientToToggleDisabled?.name })}
+                  </ModalTitle>
+                </div>
+              </ModalHeader>
+              <ModalBody className="text-center text-sm text-muted-foreground leading-relaxed">
+                {t(descriptionKey)}
+              </ModalBody>
+              <ModalFooter className="grid grid-cols-2 sm:flex">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelToggleDisabled}
+                  disabled={isTogglingDisabled}
+                >
+                  {t('common:buttons.noGoBack')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={() => {
+                    void handleToggleDisabled();
+                  }}
+                  disabled={isTogglingDisabled}
+                >
+                  {isTogglingDisabled && (
+                    <i className="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+                  )}
+                  {confirmLabel}
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          );
+        }}
+      </Modal>
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

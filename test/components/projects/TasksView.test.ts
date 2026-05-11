@@ -43,4 +43,18 @@ describe('TasksView', () => {
       expect(source).not.toContain('handleRowsPerPageChange');
     });
   });
+
+  describe('submit guard', () => {
+    test('handleSubmit awaits the parent handler before allowing another submission', async () => {
+      const source = await readSource();
+
+      expect(source).toContain('const [isSubmitting, setIsSubmitting] = useState(false);');
+      expect(source).toContain('const handleSubmit = async (e: React.FormEvent) => {');
+      expect(source).toContain('if (isSubmitting) return;');
+      expect(source).toContain('setIsSubmitting(true);');
+      expect(source).toContain('setIsSubmitting(false);');
+      // The submit button reflects the submitting state.
+      expect(source).toContain('disabled={!canSubmit || isSubmitting}');
+    });
+  });
 });

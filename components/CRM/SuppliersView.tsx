@@ -62,6 +62,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form State
@@ -186,12 +187,21 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
 
   const handleDelete = () => {
     if (!canDeleteSuppliers) return;
-    if (supplierToDelete) {
-      onDeleteSupplier(supplierToDelete.id).then(() => {
+    if (!supplierToDelete || isDeleting) return;
+    setIsDeleting(true);
+    onDeleteSupplier(supplierToDelete.id)
+      .then(() => {
+        // Only close the modal on success so failures (network/API) leave the
+        // dialog open with the spinner cleared and the user can retry.
         setIsDeleteConfirmOpen(false);
         setSupplierToDelete(null);
+      })
+      .catch((err) => {
+        console.error('Failed to delete supplier:', err);
+      })
+      .finally(() => {
+        setIsDeleting(false);
       });
-    }
   };
 
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
@@ -584,6 +594,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
         onConfirm={handleDelete}
+        loading={isDeleting}
         title={t('crm:suppliers.deleteSupplier')}
         description={`${t('common:messages.deleteConfirmNamed', {
           name: supplierToDelete?.name,
