@@ -149,23 +149,27 @@ describe('encodeCursor / decodeCursor', () => {
       id: 'e-1',
     });
     expect(entriesRepo.decodeCursor(encoded)).toEqual({
-      createdAt: '2026-04-30 12:00:00.123456',
-      id: 'e-1',
+      ok: true,
+      value: { createdAt: '2026-04-30 12:00:00.123456', id: 'e-1' },
     });
   });
 
-  test('returns null for malformed input', () => {
-    expect(entriesRepo.decodeCursor('not base64')).toBeNull();
-    expect(
-      entriesRepo.decodeCursor(Buffer.from('garbage', 'utf8').toString('base64url')),
-    ).toBeNull();
+  test('returns Invalid cursor error for malformed input', () => {
+    expect(entriesRepo.decodeCursor('not base64')).toEqual({
+      ok: false,
+      message: 'Invalid cursor',
+    });
+    expect(entriesRepo.decodeCursor(Buffer.from('garbage', 'utf8').toString('base64url'))).toEqual({
+      ok: false,
+      message: 'Invalid cursor',
+    });
   });
 
   test('rejects legacy numeric createdAt cursors', () => {
     const legacy = Buffer.from(JSON.stringify({ createdAt: 12345, id: 'e-1' }), 'utf8').toString(
       'base64url',
     );
-    expect(entriesRepo.decodeCursor(legacy)).toBeNull();
+    expect(entriesRepo.decodeCursor(legacy)).toEqual({ ok: false, message: 'Invalid cursor' });
   });
 
   test.each([
@@ -176,7 +180,36 @@ describe('encodeCursor / decodeCursor', () => {
     ['array payload', ['2026-04-30 12:00:00.123456', 'e-1']],
   ])('rejects %s', (_label, payload) => {
     const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-    expect(entriesRepo.decodeCursor(encoded)).toBeNull();
+    expect(entriesRepo.decodeCursor(encoded)).toEqual({ ok: false, message: 'Invalid cursor' });
+  });
+
+  test.each([
+    ['plain garbage', 'not a timestamp'],
+    ['SQL injection', "2026-04-30'; DROP TABLE x"],
+    ['empty string', ''],
+    ['date only', '2026-04-30'],
+    ['too many fractional digits', '2026-04-30 12:00:00.1234567'],
+    ['negative year', '-2026-04-30 12:00:00'],
+  ])('rejects malformed createdAt timestamp (%s)', (_label, createdAt) => {
+    const encoded = Buffer.from(JSON.stringify({ createdAt, id: 'e-1' }), 'utf8').toString(
+      'base64url',
+    );
+    expect(entriesRepo.decodeCursor(encoded)).toEqual({ ok: false, message: 'Invalid cursor' });
+  });
+
+  test.each([
+    ['Postgres format with µs', '2026-04-30 12:00:00.123456'],
+    ['Postgres format no fractional', '2026-04-30 12:00:00'],
+    ['ISO 8601 with T', '2026-04-30T12:00:00.123'],
+    ['ISO 8601 with Z', '2026-04-30T12:00:00Z'],
+  ])('accepts valid timestamp format (%s)', (_label, createdAt) => {
+    const encoded = Buffer.from(JSON.stringify({ createdAt, id: 'e-1' }), 'utf8').toString(
+      'base64url',
+    );
+    expect(entriesRepo.decodeCursor(encoded)).toEqual({
+      ok: true,
+      value: { createdAt, id: 'e-1' },
+    });
   });
 
   test('produces a nextCursor that preserves µs precision from created_at_text', async () => {

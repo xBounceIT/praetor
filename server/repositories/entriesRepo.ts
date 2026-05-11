@@ -192,21 +192,34 @@ export const listForManagerView = async (
 export const encodeCursor = (cursor: EntriesCursor): string =>
   Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 
-export const decodeCursor = (raw: string): EntriesCursor | null => {
+// Matches Postgres' `timestamp::text` output (what `created_at_text` produces): `YYYY-MM-DD HH:MM:SS`
+// with an optional fractional `.f`..`.ffffff` part. Also accepts the ISO-8601 variant with `T` and
+// trailing `Z`, in case a caller hand-crafted the cursor. Anything else would make Postgres throw
+// at query time and surface as a 500, so we reject early with a typed error.
+const CURSOR_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z?$/;
+
+export const decodeCursor = (
+  raw: string,
+): { ok: true; value: EntriesCursor } | { ok: false; message: string } => {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      typeof (parsed as EntriesCursor).createdAt === 'string' &&
-      typeof (parsed as EntriesCursor).id === 'string'
-    ) {
-      return parsed as EntriesCursor;
-    }
-    return null;
+    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
   } catch {
-    return null;
+    return { ok: false, message: 'Invalid cursor' };
   }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof (parsed as EntriesCursor).createdAt !== 'string' ||
+    typeof (parsed as EntriesCursor).id !== 'string'
+  ) {
+    return { ok: false, message: 'Invalid cursor' };
+  }
+  const cursor = parsed as EntriesCursor;
+  if (!CURSOR_TIMESTAMP_RE.test(cursor.createdAt)) {
+    return { ok: false, message: 'Invalid cursor' };
+  }
+  return { ok: true, value: cursor };
 };
 
 export const findOwner = async (id: string, exec: DbExecutor = db): Promise<string | null> => {

@@ -289,8 +289,11 @@ describe('GET /api/entries', () => {
     expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
   });
 
-  test('400: invalid cursor', async () => {
-    entriesDecodeCursorMock.mockReturnValue(null);
+  test('400: rejected cursor short-circuits before any DB call (no 500 bubble-up)', async () => {
+    // Covers both structurally malformed and bad-timestamp cursors - the decoder's typed
+    // `{ ok: false }` keeps the request out of the repo layer entirely. Before the fix,
+    // a bad `createdAt` reached Postgres and produced a 500.
+    entriesDecodeCursorMock.mockReturnValue({ ok: false, message: 'Invalid cursor' });
 
     const res = await testApp.inject({
       method: 'GET',
@@ -299,7 +302,10 @@ describe('GET /api/entries', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({ error: 'cursor is invalid' });
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid cursor' });
+    expect(entriesListAllMock).not.toHaveBeenCalled();
+    expect(entriesListForUserMock).not.toHaveBeenCalled();
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
   });
 
   test('401: missing token', async () => {
