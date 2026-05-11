@@ -41,6 +41,7 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    taxRate: { type: 'number' },
   },
   required: [
     'id',
@@ -64,6 +65,7 @@ const invoiceSchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     subtotal: { type: 'number' },
+    tax: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: ['string', 'null'] },
@@ -96,8 +98,11 @@ const invoiceItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    taxRate: { type: 'number' },
   },
-  required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
+  // taxRate is required so a PUT that omits it can't silently zero out tax on an
+  // existing taxed invoice. Clients must round-trip the field explicitly.
+  required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice', 'taxRate'],
 } as const;
 
 // subtotal/total are server-computed from items; clients cannot set them.
@@ -140,6 +145,7 @@ type NormalizedInvoiceItemInput = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  taxRate: number;
 };
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
@@ -209,6 +215,18 @@ const validateAndNormalizeItems = (
       return null;
     }
 
+    const taxRateResult = optionalLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
+    if (!taxRateResult.ok) {
+      badRequest(reply, taxRateResult.message);
+      return null;
+    }
+    // Mirror the discount bound — anything above 100% VAT is almost certainly client-side
+    // misuse and would balloon the total far beyond the subtotal.
+    if (taxRateResult.value !== null && taxRateResult.value > 100) {
+      badRequest(reply, `items[${i}].taxRate must be at most 100`);
+      return null;
+    }
+
     normalizedItems.push({
       productId: productIdResult.value || null,
       description: descriptionResult.value,
@@ -216,6 +234,7 @@ const validateAndNormalizeItems = (
       quantity: round2(quantityResult.value),
       unitPrice: round2(unitPriceResult.value),
       discount: round2(discountResult.value || 0),
+      taxRate: round2(taxRateResult.value || 0),
     });
   }
 
