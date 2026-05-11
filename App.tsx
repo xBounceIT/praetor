@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -408,12 +409,13 @@ const TrackerView: React.FC<{
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {!isViewingSelf && (
-                    <button
+                    <Button
                       onClick={() => onViewUserChange(currentUser.id)}
-                      className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors whitespace-nowrap"
+                      size="xs"
+                      className="rounded-full bg-praetor hover:bg-praetor/90 text-white text-[10px] font-bold uppercase tracking-widest"
                     >
                       {t('tracker.backToMe')}
-                    </button>
+                    </Button>
                   )}
                   <div className="w-full sm:w-56">
                     <SelectControl

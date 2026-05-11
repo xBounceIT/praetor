@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -429,12 +430,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         {availableUsers.length > 1 && (
           <div className="flex items-center gap-2">
             {currentUserId && viewingUserId !== currentUserId && (
-              <button
+              <Button
                 onClick={() => onViewUserChange(currentUserId)}
-                className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors whitespace-nowrap shrink-0"
+                size="xs"
+                className="rounded-full bg-praetor hover:bg-praetor/90 text-white text-[10px] font-bold uppercase tracking-widest shrink-0"
               >
                 {t('tracker.backToMe')}
-              </button>
+              </Button>
             )}
             <div className="w-64">
               <SelectControl
