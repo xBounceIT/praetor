@@ -117,4 +117,42 @@ describe('<DailyView /> RBAC catalog sync', () => {
       expect(screen.queryByPlaceholderText('entry.typeCustomTask')).not.toBeInTheDocument();
     });
   });
+
+  test('clears stale task name when the selected project has no scoped tasks', async () => {
+    const onAdd = mock(() => {});
+    const props = {
+      onAdd,
+      selectedDate: '2026-05-11',
+      permissions: [],
+      dailyGoal: 8,
+      currentDayTotal: 0,
+    };
+
+    const { rerender } = render(<DailyView {...props} {...alphaCatalog} />);
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Alpha Task');
+    });
+
+    rerender(
+      <DailyView
+        {...props}
+        clients={alphaCatalog.clients}
+        projects={alphaCatalog.projects}
+        projectTasks={[]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body).not.toHaveTextContent('Alpha Task');
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '1' } });
+    fireEvent.click(screen.getByText('entry.logTime'));
+
+    await waitFor(() => {
+      expect(onAdd).not.toHaveBeenCalled();
+      expect(document.body).toHaveTextContent('entry.taskRequired');
+    });
+  });
 });

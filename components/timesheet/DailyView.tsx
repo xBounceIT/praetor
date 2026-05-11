@@ -72,6 +72,10 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
   };
 
+  const canCreateCustomTask = hasAnyPermission(permissions, [
+    buildPermission('projects.tasks', 'create'),
+  ]);
+
   // Sync internal date when calendar selection changes
   useEffect(() => {
     if (selectedDate && selectedDate !== date) {
@@ -123,8 +127,12 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   useEffect(() => {
     if (filteredTasks.length === 0) {
-      if (selectedTaskId !== '') {
+      if (selectedTaskName === 'custom' && canCreateCustomTask && selectedProjectId !== '') {
+        return;
+      }
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
         setSelectedTaskId('');
+        setSelectedTaskName('');
       }
       return;
     }
@@ -133,7 +141,15 @@ const DailyView: React.FC<DailyViewProps> = ({
       setSelectedTaskName(firstFilteredTaskName);
       setSelectedTaskId(firstFilteredTaskId);
     }
-  }, [filteredTasks, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
+  }, [
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskId,
+    selectedTaskName,
+    canCreateCustomTask,
+    selectedProjectId,
+  ]);
 
   useEffect(() => {
     if (selectedProjectId === '') {
@@ -256,10 +272,6 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (Number.isNaN(val) || val <= 0) return false;
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
-
-  const canCreateCustomTask = hasAnyPermission(permissions, [
-    buildPermission('projects.tasks', 'create'),
-  ]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));

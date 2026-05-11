@@ -36,6 +36,7 @@ const projectTasks: ProjectTask[] = [
 const loadingState: TrackerAssignmentState = {
   userId: 'user-b',
   assignments: null,
+  catalogs: null,
   isLoading: true,
 };
 
@@ -68,6 +69,11 @@ describe('filterTrackerCatalogs', () => {
           clientIds: ['client-b', 'client-disabled'],
           projectIds: ['project-b', 'project-disabled-client'],
           taskIds: ['task-b', 'task-disabled'],
+        },
+        catalogs: {
+          clients,
+          projects,
+          projectTasks,
         },
         isLoading: false,
       },
@@ -105,10 +111,43 @@ describe('filterTrackerCatalogs', () => {
           projectIds: ['project-b'],
           taskIds: ['task-b'],
         },
+        catalogs: {
+          clients,
+          projects,
+          projectTasks,
+        },
         isLoading: false,
       },
     });
 
     expect(result).toEqual({ clients: [], projects: [], projectTasks: [] });
+  });
+
+  test('viewing another user can show tasks missing from the acting user catalog', () => {
+    const result = filterTrackerCatalogs({
+      clients: [clients[0]],
+      projects: [projects[0]],
+      projectTasks: [projectTasks[0]],
+      currentUserId: 'manager-user',
+      viewingUserId: 'test-user',
+      assignmentState: {
+        userId: 'test-user',
+        assignments: {
+          clientIds: ['client-b'],
+          projectIds: ['project-b'],
+          taskIds: ['task-b'],
+        },
+        catalogs: {
+          clients: [clients[1]],
+          projects: [projects[1]],
+          projectTasks: [projectTasks[1]],
+        },
+        isLoading: false,
+      },
+    });
+
+    expect(result.clients.map((client) => client.id)).toEqual(['client-b']);
+    expect(result.projects.map((project) => project.id)).toEqual(['project-b']);
+    expect(result.projectTasks.map((task) => task.id)).toEqual(['task-b']);
   });
 });

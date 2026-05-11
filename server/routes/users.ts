@@ -3,8 +3,11 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -106,6 +109,62 @@ const assignmentsSchema = {
   required: ['clientIds', 'projectIds', 'taskIds'],
 } as const;
 
+const trackerCatalogsSchema = {
+  type: 'object',
+  properties: {
+    clients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+        },
+        required: ['id', 'name', 'isDisabled'],
+      },
+    },
+    projects: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          clientId: { type: 'string' },
+          color: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+          billingType: { type: 'string' },
+          billingFrequency: { type: 'string' },
+        },
+        required: [
+          'id',
+          'name',
+          'clientId',
+          'color',
+          'isDisabled',
+          'billingType',
+          'billingFrequency',
+        ],
+      },
+    },
+    projectTasks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          projectId: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+        },
+        required: ['id', 'name', 'projectId', 'isDisabled'],
+      },
+    },
+  },
+  required: ['clients', 'projects', 'projectTasks'],
+} as const;
+
 const assignmentsUpdateBodySchema = {
   type: 'object',
   properties: {
@@ -140,6 +199,22 @@ const canViewUserEmails = (request: FastifyRequest) =>
 const canViewAllUsers = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
   hasPermission(request, 'hr.work_units_all.view');
+
+const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
+  if (request.user?.id === targetUserId) return true;
+
+  const hasAssignmentPermission =
+    hasPermission(request, 'administration.user_management.view') ||
+    hasPermission(request, 'administration.user_management.update') ||
+    hasPermission(request, 'timesheets.tracker.view') ||
+    hasPermission(request, 'timesheets.tracker_all.view') ||
+    hasPermission(request, 'hr.employee_assignments.update');
+
+  if (!hasAssignmentPermission) return false;
+  if (canViewAllUsers(request)) return true;
+
+  return usersRepo.canManageUser(targetUserId, request.user?.id ?? '');
+};
 
 const CREATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
   app_user: 'administration.user_management.create',
@@ -782,24 +857,65 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAssignments =
-        request.user?.id === id ||
-        hasPermission(request, 'administration.user_management.view') ||
-        hasPermission(request, 'administration.user_management.update') ||
-        hasPermission(request, 'timesheets.tracker.view') ||
-        hasPermission(request, 'hr.employee_assignments.update');
-
-      if (!canViewAssignments) {
+      if (!(await canViewTargetUserAssignments(request, idResult.value))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (request.user?.id !== id && !canViewAllUsers(request)) {
-        if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
+      return await usersRepo.getAssignments(idResult.value);
+    },
+  );
+
+  fastify.get(
+    '/:id/tracker-catalogs',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['users'],
+        summary: 'Get tracker catalogs for user',
+        params: idParamSchema,
+        response: {
+          200: trackerCatalogsSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canViewTargetUserAssignments(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      return await usersRepo.getAssignments(idResult.value);
+      const [clients, projects, projectTasks] = await Promise.all([
+        clientsRepo.list({ canViewAllClients: false, userId: idResult.value }),
+        projectsRepo.listForUser(idResult.value),
+        tasksRepo.listForUser(idResult.value),
+      ]);
+
+      return {
+        clients: clients.map((client) => ({
+          id: client.id,
+          name: client.name,
+          isDisabled: client.isDisabled,
+        })),
+        projects: projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          clientId: project.clientId,
+          color: project.color,
+          isDisabled: project.isDisabled,
+          billingType: project.billingType,
+          billingFrequency: project.billingFrequency,
+        })),
+        projectTasks: projectTasks.map((task) => ({
+          id: task.id,
+          name: task.name,
+          projectId: task.projectId,
+          isDisabled: task.isDisabled,
+        })),
+      };
     },
   );
 

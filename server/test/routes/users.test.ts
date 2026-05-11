@@ -1,8 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
+import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -15,6 +18,9 @@ import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
+const clientsRepoSnap = { ...realClientsRepo };
+const projectsRepoSnap = { ...realProjectsRepo };
+const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const settingsRepoSnap = { ...realSettingsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
@@ -42,6 +48,11 @@ const setPrimaryRoleMock = mock();
 const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
 const getAssignmentsMock = mock();
+
+// tracker catalog repos
+const listClientsMock = mock();
+const listProjectsForUserMock = mock();
+const listTasksForUserMock = mock();
 
 // rolesRepo
 const rolesFindByIdMock = mock();
@@ -89,6 +100,18 @@ beforeAll(async () => {
     canManageUser: canManageUserMock,
     getAssignments: getAssignmentsMock,
   }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    list: listClientsMock,
+  }));
+  mock.module('../../repositories/projectsRepo.ts', () => ({
+    ...projectsRepoSnap,
+    listForUser: listProjectsForUserMock,
+  }));
+  mock.module('../../repositories/tasksRepo.ts', () => ({
+    ...tasksRepoSnap,
+    listForUser: listTasksForUserMock,
+  }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
     userHasRole: userHasRoleMock,
@@ -131,6 +154,9 @@ beforeAll(async () => {
 afterAll(() => {
   restoreAuthMiddlewareMock();
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
@@ -231,6 +257,9 @@ const allMocks = [
   getUserRoleIdsMock,
   canManageUserMock,
   getAssignmentsMock,
+  listClientsMock,
+  listProjectsForUserMock,
+  listTasksForUserMock,
   rolesFindByIdMock,
   rolesFindExistingIdsMock,
   settingsUpsertForUserMock,
@@ -262,6 +291,9 @@ beforeEach(async () => {
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
+  listClientsMock.mockResolvedValue([]);
+  listProjectsForUserMock.mockResolvedValue([]);
+  listTasksForUserMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -1076,6 +1108,81 @@ describe('GET /api/users/:id/assignments', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /api/users/:id/tracker-catalogs', () => {
+  test('200 manager views managed user tracker catalogs including target-only tasks', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
+    canManageUserMock.mockResolvedValue(true);
+    listClientsMock.mockResolvedValue([{ id: 'c1', name: 'Acme Corp', isDisabled: false }]);
+    listProjectsForUserMock.mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'Website Redesign',
+        clientId: 'c1',
+        color: '#123456',
+        isDisabled: false,
+        billingType: 'time_and_materials',
+        billingFrequency: 'monthly',
+      },
+    ]);
+    listTasksForUserMock.mockResolvedValue([
+      {
+        id: 't-target-only',
+        name: 'Initial Design',
+        projectId: 'p1',
+        isDisabled: false,
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/tracker-catalogs',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listClientsMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u-target' });
+    expect(listProjectsForUserMock).toHaveBeenCalledWith('u-target');
+    expect(listTasksForUserMock).toHaveBeenCalledWith('u-target');
+    expect(JSON.parse(res.body)).toEqual({
+      clients: [{ id: 'c1', name: 'Acme Corp', isDisabled: false }],
+      projects: [
+        {
+          id: 'p1',
+          name: 'Website Redesign',
+          clientId: 'c1',
+          color: '#123456',
+          isDisabled: false,
+          billingType: 'time_and_materials',
+          billingFrequency: 'monthly',
+        },
+      ],
+      projectTasks: [
+        {
+          id: 't-target-only',
+          name: 'Initial Design',
+          projectId: 'p1',
+          isDisabled: false,
+        },
+      ],
+    });
+  });
+
+  test('403 user without scope cannot view another user tracker catalogs', async () => {
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/tracker-catalogs',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listTasksForUserMock).not.toHaveBeenCalled();
   });
 });
 

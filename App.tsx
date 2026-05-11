@@ -648,6 +648,7 @@ const App: React.FC = () => {
     useState<TrackerAssignmentState>({
       userId: '',
       assignments: null,
+      catalogs: null,
       isLoading: false,
     });
   const VALID_VIEWS: View[] = useMemo(
@@ -766,7 +767,12 @@ const App: React.FC = () => {
     setEntries([]);
     entriesStreamTokenRef.current++;
     setWorkUnits([]);
-    setViewingUserAssignmentState({ userId: '', assignments: null, isLoading: false });
+    setViewingUserAssignmentState({
+      userId: '',
+      assignments: null,
+      catalogs: null,
+      isLoading: false,
+    });
   }, [resetModuleLoader]);
 
   const {
@@ -1592,6 +1598,7 @@ const App: React.FC = () => {
         setViewingUserAssignmentState({
           userId: viewingUserId,
           assignments: null,
+          catalogs: null,
           isLoading: false,
         });
         return;
@@ -1610,6 +1617,7 @@ const App: React.FC = () => {
         setViewingUserAssignmentState({
           userId: viewingUserId,
           assignments: null,
+          catalogs: null,
           isLoading: true,
         });
 
@@ -1618,17 +1626,22 @@ const App: React.FC = () => {
             setViewingUserAssignmentState({
               userId: viewingUserId,
               assignments: null,
+              catalogs: null,
               isLoading: false,
             });
           }
           return;
         }
 
-        const assignments = await api.users.getAssignments(viewingUserId);
+        const [assignments, catalogs] = await Promise.all([
+          api.users.getAssignments(viewingUserId),
+          api.users.getTrackerCatalogs(viewingUserId),
+        ]);
         if (!isCancelled) {
           setViewingUserAssignmentState({
             userId: viewingUserId,
             assignments: assignments as TrackerAssignments,
+            catalogs,
             isLoading: false,
           });
         }
@@ -1638,6 +1651,7 @@ const App: React.FC = () => {
           setViewingUserAssignmentState({
             userId: viewingUserId,
             assignments: null,
+            catalogs: null,
             isLoading: false,
           });
         }
