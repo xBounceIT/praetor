@@ -149,9 +149,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const { t } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
 
-  const [fullName, setFullName] = useState(settings.fullName);
-  const [email, setEmail] = useState(settings.email);
-  const [language, setLanguage] = useState(settings.language || 'auto');
+  const [fullName, setFullName] = useState(() => settings.fullName);
+  const [email, setEmail] = useState(() => settings.email);
+  const [language, setLanguage] = useState<LanguagePreference>(() => settings.language || 'auto');
   const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
 
   const [activeTab, setActiveTab] = useState<
@@ -199,12 +199,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    setFullName(settings.fullName);
-    setEmail(settings.email);
-    setLanguage(settings.language || 'auto');
-  }, [settings]);
-
   useEffect(
     () => () => {
       isMountedRef.current = false;
@@ -216,6 +210,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     translateRef.current = t;
   }, [t]);
 
+  const onGetPersonalAccessTokenRef = useRef(onGetPersonalAccessToken);
+  useEffect(() => {
+    onGetPersonalAccessTokenRef.current = onGetPersonalAccessToken;
+  }, [onGetPersonalAccessToken]);
+
   useEffect(() => {
     if (activeTab !== 'security' || personalAccessToken || tokenLoadInFlightRef.current) return;
 
@@ -224,7 +223,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       setIsLoadingToken(true);
       setTokenError('');
       try {
-        const tokenMetadata = await onGetPersonalAccessToken();
+        const tokenMetadata = await onGetPersonalAccessTokenRef.current();
         if (isMountedRef.current) setPersonalAccessToken(tokenMetadata);
       } catch (err: unknown) {
         console.error('Failed to load personal access token:', err);
@@ -238,7 +237,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     };
 
     void loadToken();
-  }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
+  }, [activeTab, personalAccessToken]);
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
     setCurrentTheme(theme);

@@ -69,14 +69,14 @@ describe('<Login />', () => {
   });
 
   test('renders title and both input fields', () => {
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     expect(screen.getByText('auth:login.title')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('auth:login.username')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('auth:login.password')).toBeInTheDocument();
   });
 
   test('submitting empty fields shows usernameRequired and passwordRequired errors', () => {
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     const submit = screen.getByRole('button', { name: /auth:login.signIn/ });
     fireEvent.click(submit);
     expect(screen.getByText('common:validation.usernameRequired')).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('<Login />', () => {
 
   test('successful login calls onLogin with user and token', async () => {
     const onLogin = mock((_u: unknown, _t?: string) => {});
-    render(<Login users={[]} onLogin={onLogin} />);
+    render(<Login onLogin={onLogin} />);
 
     fireEvent.change(screen.getByPlaceholderText('auth:login.username'), {
       target: { value: 'admin' },
@@ -107,7 +107,7 @@ describe('<Login />', () => {
   test('login rejection surfaces error message', async () => {
     apiAuthLogin.mockImplementation(() => Promise.reject(new Error('Bad credentials')));
 
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     fireEvent.change(screen.getByPlaceholderText('auth:login.username'), {
       target: { value: 'admin' },
     });
@@ -122,7 +122,7 @@ describe('<Login />', () => {
   });
 
   test('password toggle flips input type between password and text', () => {
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     const passwordInput = screen.getByPlaceholderText('auth:login.password') as HTMLInputElement;
     expect(passwordInput.type).toBe('password');
 
@@ -140,14 +140,7 @@ describe('<Login />', () => {
 
   test('logoutReason="inactivity" renders banner; dismiss calls onClearLogoutReason', () => {
     const onClear = mock(() => {});
-    render(
-      <Login
-        users={[]}
-        onLogin={() => {}}
-        logoutReason="inactivity"
-        onClearLogoutReason={onClear}
-      />,
-    );
+    render(<Login onLogin={() => {}} logoutReason="inactivity" onClearLogoutReason={onClear} />);
     expect(screen.getByText('auth:session.expired')).toBeInTheDocument();
     expect(screen.getByText('auth:session.expiredMessage')).toBeInTheDocument();
 
@@ -160,7 +153,7 @@ describe('<Login />', () => {
   });
 
   test('without logoutReason banner does not render', () => {
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     expect(screen.queryByText('auth:session.expired')).not.toBeInTheDocument();
   });
 
@@ -175,7 +168,7 @@ describe('<Login />', () => {
         }),
     );
 
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     fireEvent.change(screen.getByPlaceholderText('auth:login.username'), {
       target: { value: 'admin' },
     });
@@ -191,7 +184,7 @@ describe('<Login />', () => {
   });
 
   test('typing clears the field error', () => {
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
     expect(screen.getByText('common:validation.usernameRequired')).toBeInTheDocument();
 
@@ -206,7 +199,7 @@ describe('<Login />', () => {
       { protocol: 'oidc', slug: 'keycloak', name: 'Keycloak' },
     ]);
 
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
     const button = await screen.findByRole('button', { name: /Keycloak/ });
 
     fireEvent.click(button);
@@ -218,7 +211,7 @@ describe('<Login />', () => {
     setTestUrl('http://localhost/?sso_ticket=ticket-1');
     apiAuthConsumeSsoTicket.mockImplementation(() => new Promise(() => {}));
 
-    render(<Login users={[]} onLogin={() => {}} />);
+    render(<Login onLogin={() => {}} />);
 
     await waitFor(() => {
       expect(apiAuthConsumeSsoTicket).toHaveBeenCalledWith('ticket-1');
