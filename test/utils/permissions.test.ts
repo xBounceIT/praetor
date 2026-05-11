@@ -181,6 +181,24 @@ describe('hasViewAccess', () => {
   test('does not allow a scoped view with write permission only', () => {
     expect(hasViewAccess(['crm.clients_all.update'], 'crm/clients')).toBe(false);
   });
+
+  test('allows administration/user-management with either base or all-scope view', () => {
+    expect(
+      hasViewAccess(['administration.user_management.view'], 'administration/user-management'),
+    ).toBe(true);
+    expect(
+      hasViewAccess(['administration.user_management_all.view'], 'administration/user-management'),
+    ).toBe(true);
+  });
+
+  test('does not allow administration/user-management with non-view all-scope permission', () => {
+    expect(
+      hasViewAccess(
+        ['administration.user_management_all.update'],
+        'administration/user-management',
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('VIEW_PERMISSION_MAP', () => {

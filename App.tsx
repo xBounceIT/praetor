@@ -2506,10 +2506,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/user-management'],
-            ) &&
+            {hasViewAccess(currentUser.permissions, 'administration/user-management') &&
               activeView === 'administration/user-management' && (
                 <UserManagement
                   clients={clients}
