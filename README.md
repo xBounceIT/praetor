@@ -108,7 +108,7 @@ The workflow runs on `v*` git tags and can also be run manually.
 ## Usage Guide
 
 - **Login**:
-  - Bootstrap Admin: `admin` / `password`
+  - Bootstrap Admin: `admin` / one-time password printed at first startup (or `ADMIN_DEFAULT_PASSWORD` env value if you set one). Existing installs that still use the legacy `password` default keep working until rotated.
   - Demo Manager: `manager` / `password` when `DEMO_SEEDING=true`
   - Demo User: `user` / `password` when `DEMO_SEEDING=true`
   

@@ -4,6 +4,7 @@ import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
+  COMPATIBILITY_DEFAULTS,
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
@@ -22,7 +23,7 @@ import {
   DEMO_USERS,
   DEMO_WORK_UNITS,
 } from './demoSeedManifest.ts';
-import pool, { query } from './index.ts';
+import pool from './index.ts';
 
 const logger = createChildLogger({ module: 'db:demo-seed' });
 
@@ -466,25 +467,31 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     }),
   );
 
+  // Tasks must be deleted before projects (FK), and we sweep both the demo namespace
+  // and the legacy compatibility-default IDs ('t1'..'t4') so re-seeds stay idempotent.
+  incrementCount(
+    cleanupCountsByTable,
+    'tasks',
+    await executeDelete(client, 'tasks', (builder) => {
+      pushTextArrayPredicate(builder, 'project_id', DEMO_IDS.projects);
+      pushTextArrayPredicate(builder, 'id', COMPATIBILITY_DEFAULTS.tasks);
+    }),
+  );
+
   incrementCount(
     cleanupCountsByTable,
     'projects',
     await executeDelete(client, 'projects', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.projects);
+      pushTextArrayPredicate(builder, 'id', [
+        ...DEMO_IDS.projects,
+        ...COMPATIBILITY_DEFAULTS.projects,
+      ]);
       pushTextArrayPredicate(
         builder,
         'name',
         DEMO_PROJECTS.map((project) => project.name),
       );
       pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
-    'tasks',
-    await executeDelete(client, 'tasks', (builder) => {
-      pushTextArrayPredicate(builder, 'project_id', DEMO_IDS.projects);
     }),
   );
 
@@ -505,7 +512,10 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     cleanupCountsByTable,
     'clients',
     await executeDelete(client, 'clients', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', [
+        ...DEMO_IDS.clients,
+        ...COMPATIBILITY_DEFAULTS.clients,
+      ]);
       pushTextArrayPredicate(
         builder,
         'client_code',
@@ -665,13 +675,13 @@ const verificationSteps: VerificationStep[] = [
   { table: 'time_entries', ids: DEMO_IDS.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
 ];
 
-const verifyDemoDataset = async () => {
+const verifyDemoDataset = async (client: PoolClient) => {
   const verificationCountsByTable: Record<string, number> = {};
   const mismatches: Array<{ table: string; expected: number; actual: number }> = [];
 
   for (const step of verificationSteps) {
     const countColumn = step.countColumn ?? 'id';
-    const result = await query(
+    const result = await client.query(
       `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])`,
       [step.ids],
     );
@@ -705,6 +715,11 @@ const collectDemoUserCleanupIds = async (client: PoolClient) => {
   return selectDemoUserCleanupIds(result.rows);
 };
 
+// The bootstrap admin lives OUTSIDE the demo seed transaction by design:
+// `ensureBootstrapAdmin` is idempotent (ON CONFLICT DO NOTHING + check-before-insert)
+// and runs on every server startup, so it is safe to call before BEGIN. Demo data is
+// keyed on the `u2..u9` namespace and does not depend on the admin row, so a rollback
+// of the seed transaction leaves the admin untouched and the system still usable.
 export const runDemoSeedRefresh = async ({
   source,
 }: {
@@ -736,14 +751,19 @@ export const runDemoSeedRefresh = async ({
       throw new Error('Demo seed insert phase failed');
     }
 
+    const verification = await verifyDemoDataset(client);
+    verificationCountsByTable = verification.verificationCountsByTable;
+
+    if (verification.mismatches.length > 0) {
+      throw new Error(
+        `Demo seed verification failed for ${verification.mismatches
+          .map((item) => `${item.table} expected ${item.expected} got ${item.actual}`)
+          .join(', ')}`,
+      );
+    }
+
     await client.query('COMMIT');
     inTransaction = false;
-
-    for (const user of DEMO_USERS) {
-      if (user.role === 'top_manager') {
-        await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id);
-      }
-    }
   } catch (err) {
     if (inTransaction) {
       await client.query('ROLLBACK');
@@ -755,61 +775,31 @@ export const runDemoSeedRefresh = async ({
         source,
         cleanupCountsByTable,
         insertCountsByTable,
+        verificationCountsByTable,
         failedStatements,
         err: serializeError(err),
       },
-      'Demo seed refresh failed during cleanup or insert phase',
+      'Demo seed refresh failed; transaction rolled back',
     );
     throw err;
   } finally {
     client.release();
   }
 
-  try {
-    const verification = await verifyDemoDataset();
-    verificationCountsByTable = verification.verificationCountsByTable;
-
-    if (verification.mismatches.length > 0) {
-      logger.error(
-        {
-          demoSeedingEnabled: true,
-          source,
-          cleanupCountsByTable,
-          insertCountsByTable,
-          verificationCountsByTable,
-          verificationMismatches: verification.mismatches,
-        },
-        'Demo seed verification failed',
-      );
-      throw new Error(
-        `Demo seed verification failed for ${verification.mismatches
-          .map((item) => `${item.table} expected ${item.expected} got ${item.actual}`)
-          .join(', ')}`,
-      );
+  for (const user of DEMO_USERS) {
+    if (user.role === 'top_manager') {
+      await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id);
     }
-
-    const result: DemoSeedResult = {
-      demoSeedingEnabled: true,
-      source,
-      cleanupCountsByTable,
-      insertCountsByTable,
-      verificationCountsByTable,
-    };
-
-    logger.info(result, 'Demo seed refresh completed');
-    return result;
-  } catch (err) {
-    logger.error(
-      {
-        demoSeedingEnabled: true,
-        source,
-        cleanupCountsByTable,
-        insertCountsByTable,
-        verificationCountsByTable,
-        err: serializeError(err),
-      },
-      'Demo seed refresh failed after insert phase',
-    );
-    throw err;
   }
+
+  const result: DemoSeedResult = {
+    demoSeedingEnabled: true,
+    source,
+    cleanupCountsByTable,
+    insertCountsByTable,
+    verificationCountsByTable,
+  };
+
+  logger.info(result, 'Demo seed refresh completed');
+  return result;
 };
