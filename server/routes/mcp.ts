@@ -104,6 +104,9 @@ const updateTimeEntryInputSchema = z.object({
   location: z.string().optional(),
 });
 
+const bulkItemsSchema = <T extends z.ZodType>(schema: T) =>
+  z.array(schema).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS);
+
 const enforceAny = (
   user: McpAuthenticatedUser,
   permissions: readonly string[],
@@ -397,7 +400,7 @@ const buildServer = () => {
       description:
         'Create multiple time entries with per-item results using the same validation and permissions as the app.',
       inputSchema: z.object({
-        entries: z.array(createTimeEntryInputSchema).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS),
+        entries: bulkItemsSchema(createTimeEntryInputSchema),
       }),
       annotations: { destructiveHint: false, idempotentHint: false },
     },
@@ -430,7 +433,7 @@ const buildServer = () => {
       description:
         'Update multiple time entries with per-item results using the same validation and permissions as the app.',
       inputSchema: z.object({
-        entries: z.array(updateTimeEntryInputSchema).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS),
+        entries: bulkItemsSchema(updateTimeEntryInputSchema),
       }),
       annotations: { destructiveHint: false, idempotentHint: false },
     },
@@ -462,7 +465,7 @@ const buildServer = () => {
       title: 'Bulk Delete Time Entries',
       description:
         'Delete multiple time entries by ID with per-item results using the same permissions as the app.',
-      inputSchema: z.object({ ids: z.array(z.string()).min(1).max(MAX_BULK_TIME_ENTRY_ITEMS) }),
+      inputSchema: z.object({ ids: bulkItemsSchema(z.string()) }),
       annotations: { destructiveHint: true, idempotentHint: false },
     },
     async ({ ids }, ctx) => {

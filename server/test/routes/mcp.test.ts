@@ -265,6 +265,10 @@ const makeCreateTimeEntryArgs = (task: string) => ({
   duration: 1,
 });
 
+const expectOneBulkSuccessAndOneFailure = (summary: unknown) => {
+  expect(summary).toEqual({ requested: 2, succeeded: 1, failed: 1 });
+};
+
 describe('/api/mcp', () => {
   test('supports initialize over Streamable HTTP', async () => {
     const res = await rpc({
@@ -482,11 +486,7 @@ describe('/api/mcp', () => {
 
     expect(res.statusCode).toBe(200);
     const body = parseMcpBody(res.body);
-    expect(body.result.structuredContent.summary).toEqual({
-      requested: 2,
-      succeeded: 1,
-      failed: 1,
-    });
+    expectOneBulkSuccessAndOneFailure(body.result.structuredContent.summary);
     expect(body.result.structuredContent.results).toEqual([
       {
         index: 0,
@@ -528,11 +528,7 @@ describe('/api/mcp', () => {
 
     expect(res.statusCode).toBe(200);
     const body = parseMcpBody(res.body);
-    expect(body.result.structuredContent.summary).toEqual({
-      requested: 2,
-      succeeded: 1,
-      failed: 1,
-    });
+    expectOneBulkSuccessAndOneFailure(body.result.structuredContent.summary);
     expect(body.result.structuredContent.results).toEqual([
       { index: 0, success: true, entry: { id: 'te-1', duration: 2, notes: 'Done' } },
       { index: 1, success: false, error: 'Entry not found' },
@@ -569,11 +565,7 @@ describe('/api/mcp', () => {
 
     expect(res.statusCode).toBe(200);
     const body = parseMcpBody(res.body);
-    expect(body.result.structuredContent.summary).toEqual({
-      requested: 2,
-      succeeded: 1,
-      failed: 1,
-    });
+    expectOneBulkSuccessAndOneFailure(body.result.structuredContent.summary);
     expect(body.result.structuredContent.results).toEqual([
       { index: 0, success: true, message: 'Entry deleted' },
       { index: 1, success: false, error: 'Entry not found' },
