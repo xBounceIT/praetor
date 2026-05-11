@@ -159,6 +159,9 @@ const groupBy = <T>(items: T[], getKey: (item: T) => string) => {
   return grouped;
 };
 
+const listIfAllowed = <T>(allowed: boolean, list: () => Promise<T[]>): Promise<T[]> =>
+  allowed ? list() : Promise.resolve([]);
+
 const isClientQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
   if (status === 'confirmed') return false;
   if (!expirationDate) return false;
@@ -346,10 +349,10 @@ const buildServer = () => {
       const canViewSupplierQuotes = hasPermission(user, 'sales.supplier_quotes.view');
       const [clientQuotes, clientQuoteItems, supplierQuotes, supplierQuoteItems] =
         await Promise.all([
-          canViewClientQuotes ? clientQuotesRepo.listAll() : Promise.resolve([]),
-          canViewClientQuotes ? clientQuotesRepo.listAllItems() : Promise.resolve([]),
-          canViewSupplierQuotes ? supplierQuotesRepo.listAll() : Promise.resolve([]),
-          canViewSupplierQuotes ? supplierQuotesRepo.listAllItems() : Promise.resolve([]),
+          listIfAllowed(canViewClientQuotes, clientQuotesRepo.listAll),
+          listIfAllowed(canViewClientQuotes, clientQuotesRepo.listAllItems),
+          listIfAllowed(canViewSupplierQuotes, supplierQuotesRepo.listAll),
+          listIfAllowed(canViewSupplierQuotes, supplierQuotesRepo.listAllItems),
         ]);
 
       const clientItemsByQuote = groupBy(clientQuoteItems, (item) => item.quoteId);
@@ -421,10 +424,10 @@ const buildServer = () => {
       const canViewSupplierOrders = hasPermission(user, 'accounting.supplier_orders.view');
       const [clientOrders, clientOrderItems, supplierOrders, supplierOrderItems] =
         await Promise.all([
-          canViewClientOrders ? clientsOrdersRepo.listAll() : Promise.resolve([]),
-          canViewClientOrders ? clientsOrdersRepo.listAllItems() : Promise.resolve([]),
-          canViewSupplierOrders ? supplierOrdersRepo.listAll() : Promise.resolve([]),
-          canViewSupplierOrders ? supplierOrdersRepo.listAllItems() : Promise.resolve([]),
+          listIfAllowed(canViewClientOrders, clientsOrdersRepo.listAll),
+          listIfAllowed(canViewClientOrders, clientsOrdersRepo.listAllItems),
+          listIfAllowed(canViewSupplierOrders, supplierOrdersRepo.listAll),
+          listIfAllowed(canViewSupplierOrders, supplierOrdersRepo.listAllItems),
         ]);
 
       const clientItemsByOrder = groupBy(clientOrderItems, (item) => item.orderId);
@@ -463,9 +466,9 @@ const buildServer = () => {
       const canViewClientInvoices = hasPermission(user, 'accounting.clients_invoices.view');
       const canViewSupplierInvoices = hasPermission(user, 'accounting.supplier_invoices.view');
       const [clientInvoices, supplierInvoices, supplierInvoiceItems] = await Promise.all([
-        canViewClientInvoices ? invoicesRepo.listAllWithItems() : Promise.resolve([]),
-        canViewSupplierInvoices ? supplierInvoicesRepo.listAll() : Promise.resolve([]),
-        canViewSupplierInvoices ? supplierInvoicesRepo.listAllItems() : Promise.resolve([]),
+        listIfAllowed(canViewClientInvoices, invoicesRepo.listAllWithItems),
+        listIfAllowed(canViewSupplierInvoices, supplierInvoicesRepo.listAll),
+        listIfAllowed(canViewSupplierInvoices, supplierInvoicesRepo.listAllItems),
       ]);
 
       const supplierItemsByInvoice = groupBy(supplierInvoiceItems, (item) => item.invoiceId);
