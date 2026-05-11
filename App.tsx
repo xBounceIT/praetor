@@ -407,12 +407,12 @@ const TrackerView: React.FC<{
                     <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-end gap-2 shrink-0">
                   {!isViewingSelf && (
                     <Button
                       onClick={() => onViewUserChange(currentUser.id)}
-                      size="xs"
-                      className="rounded-full bg-praetor hover:bg-praetor/90 text-white text-[10px] font-bold uppercase tracking-widest"
+                      variant="outline"
+                      size="sm"
                     >
                       {t('tracker.backToMe')}
                     </Button>

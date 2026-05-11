@@ -429,12 +429,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         </div>
 
         {availableUsers.length > 1 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-end gap-2">
             {currentUserId && viewingUserId !== currentUserId && (
               <Button
                 onClick={() => onViewUserChange(currentUserId)}
-                size="xs"
-                className="rounded-full bg-praetor hover:bg-praetor/90 text-white text-[10px] font-bold uppercase tracking-widest shrink-0"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
               >
                 {t('tracker.backToMe')}
               </Button>

@@ -141,7 +141,7 @@ const PlainSelectControl = ({
           <SelectGroup>
             {options.map((option) => (
               <SelectItem key={option.id || EMPTY_VALUE_SENTINEL} value={toSelectValue(option.id)}>
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 min-w-0 flex-1">
                   <span className="truncate">{option.name}</span>
                   {option.badge && (
                     <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
