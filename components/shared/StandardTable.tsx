@@ -838,6 +838,8 @@ const StandardTable = <T extends object>({
         className={ACTION_MENU_BUTTON_CLASSNAME}
         onClick={(event) => {
           event.stopPropagation();
+          setOpenActionMenuRowId(null);
+          setOpenContextMenuRowId(null);
           props.onClick?.(event);
         }}
       >

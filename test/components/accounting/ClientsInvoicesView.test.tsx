@@ -29,4 +29,15 @@ describe('ClientsInvoicesView modal styling', () => {
       '<textarea',
     ]);
   });
+
+  test('notes section header matches other modal section headers', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      '<span className="size-1.5 rounded-full bg-primary"></span>',
+      '<FieldLabel htmlFor="client-invoice-notes" className="sr-only">',
+      'id="client-invoice-notes"',
+    ]);
+  });
 });

@@ -123,4 +123,15 @@ describe('<ClientsOrdersView />', () => {
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);
   });
+
+  test('notes section header matches other modal section headers', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      '<span className="size-1.5 rounded-full bg-primary"></span>',
+      '<FieldLabel htmlFor="client-order-notes" className="sr-only">',
+      'id="client-order-notes"',
+    ]);
+  });
 });

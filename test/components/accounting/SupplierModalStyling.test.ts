@@ -59,4 +59,18 @@ describe('supplier accounting modal styling', () => {
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
   });
+
+  test.each([
+    ['supplier order', 'accounting/SupplierOrdersView.tsx', 'supplier-order-notes'],
+    ['supplier invoice', 'accounting/SupplierInvoicesView.tsx', 'supplier-invoice-notes'],
+  ])('%s notes section header matches other modal section headers', async (_name, path, notesId) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      '<span className="size-1.5 rounded-full bg-primary"></span>',
+      `<FieldLabel htmlFor="${notesId}" className="sr-only">`,
+      `id="${notesId}"`,
+    ]);
+  });
 });

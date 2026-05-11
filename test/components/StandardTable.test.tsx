@@ -1048,6 +1048,7 @@ describe('<StandardTable />', () => {
 
     await userEvent.click(action);
     expect(onAction).toHaveBeenCalledWith('2');
+    await waitFor(() => expect(screen.queryByTestId('context-action-2')).not.toBeInTheDocument());
   });
 
   test('saved views cannot hide the actions column or disable row context actions', async () => {

@@ -764,7 +764,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
               <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
                 <Field className="md:w-2/3">
-                  <FieldLabel htmlFor="client-invoice-notes">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsInvoices.notes')}
+                  </h4>
+                  <FieldLabel htmlFor="client-invoice-notes" className="sr-only">
                     {t('accounting:clientsInvoices.notes')}
                   </FieldLabel>
                   <Textarea
