@@ -128,6 +128,18 @@ describe('lockNameAndClientById', () => {
   });
 });
 
+describe('findBillingById', () => {
+  test('returns stored billing fields without deriving mixed', async () => {
+    exec.enqueue({ rows: [makeRow(['retainer', 'one_time'])] });
+
+    const result = await projectsRepo.findBillingById('p-1', testDb);
+
+    expect(result).toEqual({ billingType: 'retainer', billingFrequency: 'one_time' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('case');
+  });
+});
+
 describe('create', () => {
   test('inserts and returns mapped row, defaulting orderId to null', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });

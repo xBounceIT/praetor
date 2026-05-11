@@ -171,6 +171,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
+  const [projectBillingChanged, setProjectBillingChanged] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Draft tasks state (create modal only)
@@ -280,6 +281,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setTempIsDisabled(false);
     setBillingType('time_and_materials');
     setBillingFrequency('monthly');
+    setProjectBillingChanged(false);
     setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
@@ -303,6 +305,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         ? 'monthly'
         : (project.billingFrequency ?? 'monthly'),
     );
+    setProjectBillingChanged(false);
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
@@ -337,6 +340,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setTaskEdits({});
     setProjectTaskHours({});
     setHoursLoadState('idle');
+    setProjectBillingChanged(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -361,15 +365,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
 
     if (editingProject) {
-      onUpdateProject(editingProject.id, {
+      const updates: Partial<Project> = {
         name,
         clientId,
         description,
         color,
         isDisabled: tempIsDisabled,
-        billingType,
-        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-      });
+      };
+      if (editingProject.billingType !== 'mixed' || projectBillingChanged) {
+        updates.billingType = billingType;
+        updates.billingFrequency =
+          billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
+      }
+      onUpdateProject(editingProject.id, updates);
     } else {
       const taskInputs: DraftTaskInput[] = draftTasks
         .filter((t) => t.name.trim())
@@ -1039,6 +1047,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={billingType}
                       onChange={(val) => {
                         const nextBillingType = val as StoredBillingType;
+                        setProjectBillingChanged(true);
                         setBillingType(nextBillingType);
                         if (nextBillingType === 'time_and_materials')
                           setBillingFrequency('monthly');
@@ -1057,7 +1066,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             )
                       }
                       value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
-                      onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                      onChange={(val) => {
+                        setProjectBillingChanged(true);
+                        setBillingFrequency(val as BillingFrequency);
+                      }}
                       label={t('projects:projects.billingFrequency')}
                       disabled={billingType === 'time_and_materials'}
                       searchable={false}
