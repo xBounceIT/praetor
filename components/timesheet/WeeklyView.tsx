@@ -85,7 +85,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       const d = new Date(currentWeekStart);
       d.setDate(d.getDate() + offset);
       const dateStr = toLocalISOString(d);
-      const holidayName = isItalianHoliday(new Date(dateStr + 'T00:00:00'));
+      const holidayKey = isItalianHoliday(new Date(dateStr + 'T00:00:00'));
+      const holidayName = holidayKey ? t(holidayKey, { ns: 'holidays' }) : null;
       const isSunday = d.getDay() === 0;
       const isSaturday = d.getDay() === 6;
       const isWeekendOrHoliday =

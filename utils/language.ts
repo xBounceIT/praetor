@@ -10,7 +10,12 @@ export const applyLanguagePreference = (lang: string | undefined): void => {
     const detectedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(browserLang)
       ? browserLang
       : 'en';
-    i18n.changeLanguage(detectedLang);
+    // changeLanguage triggers the localStorage cache to write the detected language
+    // back. For 'auto', re-clear after the call so future reloads keep using the
+    // navigator detection instead of pinning to whatever was current.
+    void i18n.changeLanguage(detectedLang).finally(() => {
+      localStorage.removeItem('i18nextLng');
+    });
     return;
   }
   localStorage.setItem('i18nextLng', lang);

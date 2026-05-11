@@ -1804,9 +1804,9 @@ const App: React.FC = () => {
         // Skip disabled days: Sundays, Saturdays (if configured), and holidays
         const isSunday = d.getDay() === 0;
         const isSaturday = d.getDay() === 6;
-        const holidayName = isItalianHoliday(d);
+        const holidayKey = isItalianHoliday(d);
         const isDisabledDay =
-          isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
+          isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayKey;
         if (isDisabledDay) continue;
 
         const dateStr = getLocalDateString(d);

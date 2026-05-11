@@ -154,13 +154,27 @@ describe('formatInsertDate', () => {
     expect(formatInsertDate(Number.NaN)).toBe('-');
   });
 
-  test('formats a valid timestamp as DD/MM/YYYY', () => {
+  test('formats a valid timestamp using the Italian locale (DD/MM/YYYY)', () => {
     const ts = new Date(2026, 4, 15).getTime();
-    expect(formatInsertDate(ts)).toBe('15/05/2026');
+    expect(formatInsertDate(ts, 'it-IT')).toBe('15/05/2026');
   });
 
-  test('zero-pads single-digit days/months', () => {
+  test('zero-pads single-digit days/months in Italian locale', () => {
     const ts = new Date(2026, 0, 5).getTime();
-    expect(formatInsertDate(ts)).toBe('05/01/2026');
+    expect(formatInsertDate(ts, 'it-IT')).toBe('05/01/2026');
+  });
+
+  test('uses MM/DD/YYYY when the locale is en-US', () => {
+    const ts = new Date(2026, 4, 15).getTime();
+    // The runtime can use NBSP or ASCII slashes — normalize before comparing.
+    expect(formatInsertDate(ts, 'en-US').replace(/ /g, ' ')).toBe('05/15/2026');
+  });
+
+  test('falls back to the runtime default locale when none is passed', () => {
+    const ts = new Date(2026, 4, 15).getTime();
+    const formatted = formatInsertDate(ts);
+    expect(formatted).toMatch(/2026/);
+    expect(formatted).toMatch(/15/);
+    expect(formatted).toMatch(/05/);
   });
 });

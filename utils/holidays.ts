@@ -14,40 +14,48 @@ export const getEaster = (y: number): Date => {
   return new Date(y, m - 1, d);
 };
 
+/**
+ * Returns a translation key (e.g. `newYear`) under the `holidays` namespace for
+ * the Italian public holiday that falls on `date`, or `null` if the date is not
+ * a holiday.
+ *
+ * Callers should resolve with `t(key, { ns: 'holidays' })` so the displayed
+ * name follows the user's language preference. The key is intentionally bare
+ * (no `holidays.` prefix) to avoid the double-namespace lookup
+ * (`holidays.holidays.newYear`) when callers also pass `ns: 'holidays'`.
+ */
 export const isItalianHoliday = (date: Date): string | null => {
   const d = date.getDate();
   const m = date.getMonth() + 1; // 1-based
   const y = date.getFullYear();
 
-  // Fixed holidays (Month-Day)
   const fixedHolidays: Record<string, string> = {
-    '1-1': 'Capodanno',
-    '1-6': 'Epifania',
-    '4-25': 'Liberazione',
-    '5-1': 'Lavoro',
-    '6-2': 'Repubblica',
-    '8-15': 'Ferragosto',
-    '11-1': 'Ognissanti',
-    '12-8': 'Immacolata',
-    '12-25': 'Natale',
-    '12-26': 'S. Stefano',
+    '1-1': 'newYear',
+    '1-6': 'epiphany',
+    '4-25': 'liberationDay',
+    '5-1': 'laborDay',
+    '6-2': 'republicDay',
+    '8-15': 'assumption',
+    '11-1': 'allSaints',
+    '12-8': 'immaculateConception',
+    '12-25': 'christmas',
+    '12-26': 'stStephen',
   };
 
   const key = `${m}-${d}`;
   if (fixedHolidays[key]) return fixedHolidays[key];
 
-  // Dynamic holidays
   const easter = getEaster(y);
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate();
 
-  if (isSameDay(date, easter)) return 'Pasqua';
+  if (isSameDay(date, easter)) return 'easter';
 
   const easterMonday = new Date(easter);
   easterMonday.setDate(easter.getDate() + 1);
-  if (isSameDay(date, easterMonday)) return "Lunedì dell'Angelo";
+  if (isSameDay(date, easterMonday)) return 'easterMonday';
 
   return null;
 };

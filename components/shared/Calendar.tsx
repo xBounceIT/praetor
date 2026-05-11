@@ -175,7 +175,8 @@ const Calendar: React.FC<CalendarProps> = ({
     const hasActivity = entryDates.has(dateStr);
 
     const dayOfWeek = dateObj.getDay();
-    const holidayName = isItalianHoliday(dateObj);
+    const holidayKey = isItalianHoliday(dateObj);
+    const holidayName = holidayKey ? t(holidayKey, { ns: 'holidays' }) : null;
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
