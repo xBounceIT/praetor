@@ -47,6 +47,36 @@ describe('formatRecurrencePattern', () => {
     );
   });
 
+  test('falls back to custom when day index is non-numeric (e.g. parseInt garbage)', () => {
+    expect(formatRecurrencePattern('monthly:first:abc', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+    expect(formatRecurrencePattern('monthly:first:', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+    expect(formatRecurrencePattern('monthly:first:NaN', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+  });
+
+  test('falls back to custom when day index is out of range', () => {
+    expect(formatRecurrencePattern('monthly:first:-1', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+    expect(formatRecurrencePattern('monthly:first:7', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+    expect(formatRecurrencePattern('monthly:first:1.5', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+  });
+
+  test('falls back to custom when occurrence is empty', () => {
+    expect(formatRecurrencePattern('monthly::1', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
+  });
+
   test('WEEKDAY_NAMES indexes match JavaScript Date.getDay() (0=Sunday)', () => {
     expect(WEEKDAY_NAMES[0]).toBe('Sunday');
     expect(WEEKDAY_NAMES[1]).toBe('Monday');

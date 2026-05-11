@@ -9,6 +9,8 @@ import {
   getItemPricingContext,
   type PricingItem,
   parseNumberInputValue,
+  parseOptionalNumberInputValue,
+  roundCurrency,
 } from '../../utils/numbers';
 
 describe('parseNumberInputValue', () => {
@@ -30,6 +32,50 @@ describe('parseNumberInputValue', () => {
 
   test('parses negative numbers', () => {
     expect(parseNumberInputValue('-3.14')).toBe(-3.14);
+  });
+
+  test('always returns a number (never undefined) for all valid call shapes', () => {
+    // The return type is `number`, so these are compile-time guarantees.
+    const fromEmpty: number = parseNumberInputValue('');
+    const fromGarbage: number = parseNumberInputValue('abc');
+    const fromExplicitFallback: number = parseNumberInputValue('abc', 42);
+    expect(fromEmpty).toBe(0);
+    expect(fromGarbage).toBe(0);
+    expect(fromExplicitFallback).toBe(42);
+  });
+});
+
+describe('parseOptionalNumberInputValue', () => {
+  test('returns undefined for an empty string (distinguishes "cleared" from 0)', () => {
+    expect(parseOptionalNumberInputValue('')).toBeUndefined();
+  });
+
+  test('returns undefined for non-numeric input', () => {
+    expect(parseOptionalNumberInputValue('abc')).toBeUndefined();
+  });
+
+  test('parses valid numbers', () => {
+    expect(parseOptionalNumberInputValue('0')).toBe(0);
+    expect(parseOptionalNumberInputValue('3.14')).toBe(3.14);
+    expect(parseOptionalNumberInputValue('-5')).toBe(-5);
+  });
+});
+
+describe('roundCurrency', () => {
+  test('rounds to 2 decimal places (pinning FP drift like 0.1 * 0.2)', () => {
+    expect(roundCurrency(0.1 * 0.2)).toBe(0.02);
+    expect(roundCurrency(1.004)).toBe(1.0);
+    expect(roundCurrency(1.006)).toBe(1.01);
+  });
+
+  test('rounds halves up (1 * 0.005 → 0.01)', () => {
+    expect(roundCurrency(1 * 0.005)).toBe(0.01);
+  });
+
+  test('passes through whole and zero values', () => {
+    expect(roundCurrency(0)).toBe(0);
+    expect(roundCurrency(1)).toBe(1);
+    expect(roundCurrency(-5)).toBe(-5);
   });
 });
 
@@ -194,6 +240,29 @@ describe('calculatePricingTotals', () => {
     expect(t.total).toBe(0);
     expect(t.margin).toBe(0);
     expect(t.marginPercentage).toBe(0);
+  });
+
+  test('rounds to 2 decimal places matching server computeInvoiceTotals (0.1 * 0.2 → 0.02)', () => {
+    const items: PricingItem[] = [{ unitPrice: 0.2, quantity: 0.1 }];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.subtotal).toBe(0.02);
+    expect(t.total).toBe(0.02);
+  });
+
+  test('rounds bankers-style penny edge case', () => {
+    const items: PricingItem[] = [{ unitPrice: 0.005, quantity: 1 }];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.subtotal).toBe(0.01);
+    expect(t.total).toBe(0.01);
+  });
+
+  test('rounds margin and totalCost to 2 decimal places', () => {
+    const items: PricingItem[] = [{ unitPrice: 0.2, quantity: 0.1, productCost: 0.1 }];
+    const t = calculatePricingTotals(items, 0);
+    // totalCost = 0.1 * 0.1 = 0.010000000000000002 → 0.01
+    expect(t.totalCost).toBe(0.01);
+    // margin = 0.02 - 0.01 = 0.01
+    expect(t.margin).toBe(0.01);
   });
 });
 

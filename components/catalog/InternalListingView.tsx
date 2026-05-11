@@ -14,7 +14,7 @@ import type {
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
+import { calcProductSalePrice, parseOptionalNumberInputValue } from '../../utils/numbers';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -274,7 +274,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   const handleNumericValueChange = (field: 'costo' | 'molPercentage') => (value: string) => {
-    const parsed = parseNumberInputValue(value, undefined);
+    const parsed = parseOptionalNumberInputValue(value);
     setFormData((prev) => ({ ...prev, [field]: parsed }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));

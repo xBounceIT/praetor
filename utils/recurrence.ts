@@ -21,14 +21,18 @@ export const formatRecurrencePattern = (pattern: string | undefined, t: TFunctio
   if (pattern === 'monthly') return t('timesheets:entry.recurrencePatterns.monthly');
   if (pattern.startsWith('monthly:')) {
     const parts = pattern.split(':');
-    if (parts.length === 3) {
-      const occurrence = parts[1];
-      const dayIdx = parseInt(parts[2], 10);
-      const dayName = WEEKDAY_NAMES[dayIdx];
-      const key = `timesheets:entry.recurrencePatterns.every${
-        occurrence.charAt(0).toUpperCase() + occurrence.slice(1)
-      }`;
-      return t(key, { day: dayName });
+    const [, occurrence, dayIdxStr] = parts;
+    // Require exactly 3 segments and an all-digit dayIdx so junk like '',
+    // 'NaN', '1.5', or '-1' falls through to the custom label instead of
+    // producing a misleading weekday name.
+    if (parts.length === 3 && occurrence && /^\d+$/.test(dayIdxStr)) {
+      const dayIdx = Number(dayIdxStr);
+      if (dayIdx < WEEKDAY_NAMES.length) {
+        const key = `timesheets:entry.recurrencePatterns.every${
+          occurrence.charAt(0).toUpperCase() + occurrence.slice(1)
+        }`;
+        return t(key, { day: WEEKDAY_NAMES[dayIdx] });
+      }
     }
   }
   return t('timesheets:entry.recurrencePatterns.custom');

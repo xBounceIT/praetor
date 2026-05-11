@@ -82,5 +82,11 @@ export const applyTheme = (theme: Theme) => {
   unsubscribeAutoTheme();
   applyResolvedTheme(resolveTheme(theme));
   if (theme === 'auto') subscribeAutoTheme();
-  localStorage.setItem(STORAGE_KEY, theme);
+  // localStorage can throw in Safari private mode, when quota is exceeded,
+  // or when access is blocked by browser settings — degrade to in-memory only.
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch (error) {
+    console.warn('Unable to persist theme to localStorage', error);
+  }
 };

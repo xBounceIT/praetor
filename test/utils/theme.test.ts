@@ -217,4 +217,36 @@ describe('applyTheme', () => {
       expect(getTheme()).toBe(theme);
     }
   });
+
+  test('still applies the theme when localStorage.setItem throws (Safari private mode / quota)', () => {
+    const scope = appendThemeScope();
+    const originalSetItem = localStorage.setItem;
+    const originalWarn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = ((...args: unknown[]) => {
+      warnings.push(args);
+    }) as typeof console.warn;
+    // Stub setItem on the live localStorage instance so applyTheme's write
+    // path exercises the try/catch added for Safari private mode / quota.
+    Object.defineProperty(localStorage, 'setItem', {
+      configurable: true,
+      writable: true,
+      value: function failingSetItem(): void {
+        throw new Error('QuotaExceededError');
+      },
+    });
+    try {
+      expect(() => applyTheme('dark')).not.toThrow();
+      expect(scope.classList.contains('dark')).toBe(true);
+      expect(scope.dataset.shadcnTheme).toBe('dark');
+      expect(warnings.length).toBe(1);
+    } finally {
+      Object.defineProperty(localStorage, 'setItem', {
+        configurable: true,
+        writable: true,
+        value: originalSetItem,
+      });
+      console.warn = originalWarn;
+    }
+  });
 });
