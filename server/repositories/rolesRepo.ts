@@ -134,10 +134,19 @@ export const clearPermissions = async (roleId: string, exec: DbExecutor = db): P
 };
 
 export const isRoleInUse = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
-  const rows = await exec
+  // Check both the primary role assignment (`users.role`) and secondary assignments
+  // (`user_roles.role_id`). Migration 0025 flipped `user_roles.role_id` to ON DELETE
+  // RESTRICT, so a delete would now fail at the DB level if we only checked `users.role`.
+  const primary = await exec
     .select({ exists: sql`1` })
     .from(users)
     .where(eq(users.role, roleId))
     .limit(1);
-  return rows.length > 0;
+  if (primary.length > 0) return true;
+  const secondary = await exec
+    .select({ exists: sql`1` })
+    .from(userRoles)
+    .where(eq(userRoles.roleId, roleId))
+    .limit(1);
+  return secondary.length > 0;
 };
