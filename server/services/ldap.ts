@@ -388,7 +388,8 @@ class LDAPService {
 
         const existing = await usersRepo.findLoginUserByUsername(username);
         const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
-        const roleIds = mapExternalGroupsToRoleIds(groups, this.getRoleMappings());
+        const roleMappings = this.getRoleMappings();
+        const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
 
         if (existing) {
           if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
@@ -399,7 +400,7 @@ class LDAPService {
             continue;
           }
           await usersRepo.updateNameByUsername(username, name);
-          await applyExternalRolesForUser(existing.id, groups, this.getRoleMappings());
+          await applyExternalRolesForUser(existing.id, groups, roleMappings);
           syncedCount++;
         } else {
           const id = generatePrefixedId('u');
@@ -413,7 +414,7 @@ class LDAPService {
             authMethod: 'ldap',
             authProviderId: null,
           });
-          await applyExternalRolesForUser(id, groups, this.getRoleMappings());
+          await applyExternalRolesForUser(id, groups, roleMappings);
           createdCount++;
         }
       }

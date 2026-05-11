@@ -114,7 +114,8 @@ export const applyExternalRoleIdsForUser = async (
 export const resolveExternalIdentity = async (
   input: ResolveExternalIdentityInput,
 ): Promise<ResolvedExternalUser> => {
-  const normalizedUsername = normalizeExternalUsername(input.username);
+  const username = input.username.trim();
+  const normalizedUsername = normalizeExternalUsername(username);
   if (!normalizedUsername) {
     throw new Error('External identity did not include a username');
   }
@@ -149,16 +150,17 @@ export const resolveExternalIdentity = async (
     } else {
       user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
       if (!user) {
-        const name = input.name?.trim() || input.username.trim();
+        const name = input.name?.trim() || username;
+        const avatarInitials = computeAvatarInitials(name);
         const id = generatePrefixedId('u');
         await usersRepo.insertUser(
           {
             id,
             name,
-            username: input.username.trim(),
+            username,
             passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: primaryRole,
-            avatarInitials: computeAvatarInitials(name),
+            avatarInitials,
             costPerHour: 0,
             isDisabled: false,
             employeeType: 'app_user',
@@ -175,9 +177,9 @@ export const resolveExternalIdentity = async (
         user = {
           id,
           name,
-          username: input.username.trim(),
+          username,
           role: primaryRole,
-          avatarInitials: computeAvatarInitials(name),
+          avatarInitials,
           isDisabled: false,
           passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
           employeeType: 'app_user',

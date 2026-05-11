@@ -98,11 +98,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      if (user.isDisabled) {
-        return reply.code(401).send({ error: 'Invalid username or password' });
-      }
-
-      if (user.employeeType !== 'app_user') {
+      if (user.isDisabled || user.employeeType !== 'app_user') {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
