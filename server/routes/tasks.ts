@@ -11,6 +11,14 @@ import {
 } from '../schemas/common.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import {
+  BILLING_FREQUENCIES,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  normalizeStoredBillingType,
+  STORED_BILLING_TYPES,
+} from '../utils/billing.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -19,6 +27,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalEnum,
   optionalLocalizedNonNegativeNumber,
   parseBoolean,
   parseDateString,
@@ -47,10 +56,13 @@ const taskSchema = {
     recurrenceEnd: { type: ['string', 'null'] },
     recurrenceDuration: { type: 'number' },
     expectedEffort: { type: 'number' },
+    monthlyEffort: { type: 'number' },
     revenue: { type: 'number' },
     notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
   required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
 } as const;
@@ -66,8 +78,11 @@ const taskCreateBodySchema = {
     recurrenceStart: { type: 'string' },
     recurrenceDuration: { type: 'number' },
     expectedEffort: { type: 'number' },
+    monthlyEffort: { type: 'number' },
     revenue: { type: 'number' },
     notes: { type: 'string' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
   required: ['name', 'projectId'],
 } as const;
@@ -83,9 +98,12 @@ const taskUpdateBodySchema = {
     recurrenceEnd: { type: 'string' },
     recurrenceDuration: { type: 'number' },
     expectedEffort: { type: 'number' },
+    monthlyEffort: { type: 'number' },
     revenue: { type: 'number' },
     notes: { type: 'string' },
     isDisabled: { type: 'boolean' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
 } as const;
 
@@ -168,8 +186,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceStart,
         recurrenceDuration,
         expectedEffort,
+        monthlyEffort,
         revenue,
         notes,
+        billingType,
+        billingFrequency,
       } = request.body as {
         name: string;
         projectId: string;
@@ -179,8 +200,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceStart?: string;
         recurrenceDuration?: number;
         expectedEffort?: number;
+        monthlyEffort?: number;
         revenue?: number;
         notes?: string;
+        billingType?: string;
+        billingFrequency?: string;
       };
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -196,6 +220,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
+      const expectedEffortResult = optionalLocalizedNonNegativeNumber(
+        expectedEffort,
+        'expectedEffort',
+      );
+      if (!expectedEffortResult.ok) return badRequest(reply, expectedEffortResult.message);
+      const monthlyEffortResult = optionalLocalizedNonNegativeNumber(
+        monthlyEffort,
+        'monthlyEffort',
+      );
+      if (!monthlyEffortResult.ok) return badRequest(reply, monthlyEffortResult.message);
+      const revenueResult = optionalLocalizedNonNegativeNumber(revenue, 'revenue');
+      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
+
+      const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingFrequencyResult = optionalEnum(
+        billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
+
+      const projectBilling = billingTypeResult.value
+        ? null
+        : await projectsRepo.findBillingById(projectIdResult.value);
+      const taskBillingType =
+        billingTypeResult.value ??
+        normalizeStoredBillingType(projectBilling?.billingType ?? DEFAULT_BILLING_TYPE);
+      const taskBillingFrequency = normalizeBillingFrequency(
+        taskBillingType,
+        billingFrequencyResult.value ??
+          projectBilling?.billingFrequency ??
+          DEFAULT_BILLING_FREQUENCY,
+      );
 
       const isRecurringValue = parseBoolean(isRecurring);
       let start: string | null = null;
@@ -219,10 +277,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           recurrencePattern: recurrencePattern || null,
           recurrenceStart: start,
           recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffort ?? 0,
-          revenue: revenue ?? 0,
+          expectedEffort: expectedEffortResult.value ?? 0,
+          monthlyEffort: monthlyEffortResult.value ?? 0,
+          revenue: revenueResult.value ?? 0,
           notes: notes || null,
           isDisabled: false,
+          billingType: taskBillingType,
+          billingFrequency: taskBillingFrequency,
         });
 
         const clientId = await projectsRepo.findClientId(projectIdResult.value);
@@ -394,8 +455,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isDisabled?: boolean;
         recurrenceDuration?: number;
         expectedEffort?: number;
+        monthlyEffort?: number;
         revenue?: number;
         notes?: string;
+        billingType?: string;
+        billingFrequency?: string;
       };
       const {
         name,
@@ -406,9 +470,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceEnd,
         recurrenceDuration,
         expectedEffort,
+        monthlyEffort,
         revenue,
         isDisabled,
         notes,
+        billingType,
+        billingFrequency,
       } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -420,6 +487,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
+      const expectedEffortResult = optionalLocalizedNonNegativeNumber(
+        expectedEffort,
+        'expectedEffort',
+      );
+      if (!expectedEffortResult.ok) return badRequest(reply, expectedEffortResult.message);
+      const monthlyEffortResult = optionalLocalizedNonNegativeNumber(
+        monthlyEffort,
+        'monthlyEffort',
+      );
+      if (!monthlyEffortResult.ok) return badRequest(reply, monthlyEffortResult.message);
+      const revenueResult = optionalLocalizedNonNegativeNumber(revenue, 'revenue');
+      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
+      const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingFrequencyResult = optionalEnum(
+        billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
 
       if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
         const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
@@ -446,9 +533,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // existing recurrence_duration. Forward undefined instead so the column is left alone.
         recurrenceDuration: durationResult.value ?? undefined,
         isDisabled,
-        expectedEffort,
-        revenue,
+        expectedEffort: expectedEffortResult.value ?? undefined,
+        monthlyEffort: monthlyEffortResult.value ?? undefined,
+        revenue: revenueResult.value ?? undefined,
         notes,
+        billingType: billingTypeResult.value ?? undefined,
+        billingFrequency: billingFrequencyResult.value ?? undefined,
       });
 
       if (!updated) {
@@ -464,6 +554,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           recurrenceStart,
           recurrenceEnd,
           recurrenceDuration,
+          expectedEffort,
+          monthlyEffort,
+          revenue,
+          billingType,
+          billingFrequency,
           isDisabled,
         }),
         'isDisabled',

@@ -21,6 +21,10 @@ Update the listing when costs, margins, or sales conditions change so new docume
 
 Projects connect customers, tasks, and time entries. Create clear reusable tasks with names that describe the actual work.
 
+For each project and task, you can set the billing type: retainer or time and materials. Time-and-materials tasks are always monthly; retainers can be monthly or one-time. If tasks use a billing type that differs from the project, the project is shown as mixed.
+
+Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
+
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
 ## Work units

@@ -7,7 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api';
-import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import type {
+  BillingFrequency,
+  Client,
+  Project,
+  ProjectTask,
+  Role,
+  StoredBillingType,
+  User,
+} from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -31,6 +39,16 @@ const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
+const billingTypeOptions = [
+  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
+  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
+];
+
+const billingFrequencyOptions = [
+  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
+  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
+];
+
 export interface TasksViewProps {
   tasks: ProjectTask[];
   projects: Project[];
@@ -44,6 +62,10 @@ export interface TasksViewProps {
     projectId: string,
     recurringConfig?: RecurringConfig,
     description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
   ) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
@@ -70,6 +92,12 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
+  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
+  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
+  const [monthlyEffort, setMonthlyEffort] = useState('');
+  const [expectedEffort, setExpectedEffort] = useState('');
+  const [revenue, setRevenue] = useState('');
+  const [notes, setNotes] = useState('');
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -82,6 +110,24 @@ const TasksView: React.FC<TasksViewProps> = ({
   const fetchHoursGenRef = useRef(0);
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const translatedBillingTypeOptions = useMemo(
+    () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    [t],
+  );
+  const translatedBillingFrequencyOptions = useMemo(
+    () => billingFrequencyOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    [t],
+  );
+  const formatBillingType = useCallback(
+    (value: ProjectTask['billingType']) =>
+      translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingTypeOptions],
+  );
+  const formatBillingFrequency = useCallback(
+    (value: BillingFrequency | undefined) =>
+      translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingFrequencyOptions],
+  );
 
   useEffect(() => {
     if (projectIds.length === 0) {
@@ -127,6 +173,12 @@ const TasksView: React.FC<TasksViewProps> = ({
     setName('');
     setProjectId('');
     setDescription('');
+    setBillingType('time_and_materials');
+    setBillingFrequency('monthly');
+    setMonthlyEffort('');
+    setExpectedEffort('');
+    setRevenue('');
+    setNotes('');
     setTempIsDisabled(false);
     setIsModalOpen(true);
   }, [canCreateTasks]);
@@ -138,6 +190,16 @@ const TasksView: React.FC<TasksViewProps> = ({
       setName(task.name);
       setProjectId(task.projectId);
       setDescription(task.description || '');
+      setBillingType(task.billingType ?? 'time_and_materials');
+      setBillingFrequency(
+        task.billingType === 'time_and_materials'
+          ? 'monthly'
+          : (task.billingFrequency ?? 'monthly'),
+      );
+      setMonthlyEffort(task.monthlyEffort !== undefined ? String(task.monthlyEffort) : '');
+      setExpectedEffort(task.expectedEffort !== undefined ? String(task.expectedEffort) : '');
+      setRevenue(task.revenue !== undefined ? String(task.revenue) : '');
+      setNotes(task.notes ?? '');
       setTempIsDisabled(task.isDisabled || false);
       setIsModalOpen(true);
     },
@@ -248,6 +310,36 @@ const TasksView: React.FC<TasksViewProps> = ({
               )}
             </p>
           );
+        },
+      },
+      {
+        header: t('projects:projects.billingType'),
+        id: 'billingType',
+        accessorFn: (task) => formatBillingType(task.billingType),
+        cell: ({ row }) => (
+          <span className="text-xs font-bold text-zinc-600">
+            {formatBillingType(row.billingType)}
+          </span>
+        ),
+      },
+      {
+        header: t('projects:projects.billingFrequency'),
+        id: 'billingFrequency',
+        accessorFn: (task) => formatBillingFrequency(task.billingFrequency),
+        cell: ({ row }) => (
+          <span className="text-xs text-zinc-500">
+            {formatBillingFrequency(row.billingFrequency)}
+          </span>
+        ),
+      },
+      {
+        header: t('projects:projects.monthlyEffort'),
+        id: 'monthlyEffort',
+        accessorFn: (task) => task.monthlyEffort ?? 0,
+        cell: ({ row }) => {
+          const effort = row.monthlyEffort;
+          if (!effort) return <span className="text-xs text-zinc-400">-</span>;
+          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
         },
       },
       {
@@ -460,6 +552,8 @@ const TasksView: React.FC<TasksViewProps> = ({
       currency,
       taskHours,
       hoursLoadState,
+      formatBillingType,
+      formatBillingFrequency,
     ],
   );
 
@@ -468,10 +562,24 @@ const TasksView: React.FC<TasksViewProps> = ({
     if (editingTask && !canUpdateTasks) return;
     if (!editingTask && !canCreateTasks) return;
     if (name && projectId) {
+      const details = {
+        billingType,
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+        monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
+        expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
+        revenue: revenue ? parseFloat(revenue) : undefined,
+        notes: notes.trim() || undefined,
+      };
       if (editingTask) {
-        onUpdateTask(editingTask.id, { name, projectId, description, isDisabled: tempIsDisabled });
+        onUpdateTask(editingTask.id, {
+          name,
+          projectId,
+          description,
+          isDisabled: tempIsDisabled,
+          ...details,
+        });
       } else {
-        onAddTask(name, projectId, undefined, description);
+        onAddTask(name, projectId, undefined, description, details);
       }
       closeModal();
     }
@@ -484,6 +592,12 @@ const TasksView: React.FC<TasksViewProps> = ({
     setName('');
     setProjectId('');
     setDescription('');
+    setBillingType('time_and_materials');
+    setBillingFrequency('monthly');
+    setMonthlyEffort('');
+    setExpectedEffort('');
+    setRevenue('');
+    setNotes('');
   };
 
   const cancelDelete = () => {
@@ -540,7 +654,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <ModalContent size="lg">
+        <ModalContent size="2xl">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
             <ModalHeader>
               <ModalTitle className="gap-3">
@@ -590,27 +704,43 @@ const TasksView: React.FC<TasksViewProps> = ({
               })()}
 
               <div className="space-y-4">
-                <SelectControl
-                  id="task-project"
-                  options={projectSelectOptions}
-                  value={projectId}
-                  onChange={(val) => setProjectId(val as string)}
-                  label={t('tasks.project')}
-                  placeholder={t('common:labels.selectOption')}
-                  searchable={true}
-                  buttonClassName="h-9"
-                />
-
-                <Field>
-                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
-                  <Input
-                    id="task-name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('tasks.taskNamePlaceholder')}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectControl
+                    id="task-project"
+                    options={projectSelectOptions}
+                    value={projectId}
+                    onChange={(val) => {
+                      const nextProjectId = val as string;
+                      setProjectId(nextProjectId);
+                      if (!editingTask) {
+                        const project = projects.find((item) => item.id === nextProjectId);
+                        const nextBillingType =
+                          project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+                        setBillingType(nextBillingType);
+                        setBillingFrequency(
+                          nextBillingType === 'time_and_materials'
+                            ? 'monthly'
+                            : (project?.billingFrequency ?? 'monthly'),
+                        );
+                      }
+                    }}
+                    label={t('tasks.project')}
+                    placeholder={t('common:labels.selectOption')}
+                    searchable={true}
+                    buttonClassName="h-9"
                   />
-                </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                    <Input
+                      id="task-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('tasks.taskNamePlaceholder')}
+                    />
+                  </Field>
+                </div>
 
                 <Field>
                   <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
@@ -619,6 +749,92 @@ const TasksView: React.FC<TasksViewProps> = ({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder={t('tasks.taskDescriptionPlaceholder')}
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <SelectControl
+                    id="task-billing-type"
+                    options={translatedBillingTypeOptions}
+                    value={billingType}
+                    onChange={(val) => {
+                      const nextBillingType = val as StoredBillingType;
+                      setBillingType(nextBillingType);
+                      if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
+                    }}
+                    label={t('projects:projects.billingType')}
+                    searchable={false}
+                    buttonClassName="h-9"
+                  />
+                  <SelectControl
+                    id="task-billing-frequency"
+                    options={
+                      billingType === 'retainer'
+                        ? translatedBillingFrequencyOptions
+                        : translatedBillingFrequencyOptions.filter(
+                            (option) => option.id === 'monthly',
+                          )
+                    }
+                    value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                    onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                    label={t('projects:projects.billingFrequency')}
+                    disabled={billingType === 'time_and_materials'}
+                    searchable={false}
+                    buttonClassName="h-9"
+                  />
+                  <Field>
+                    <FieldLabel htmlFor="task-monthly-effort">
+                      {t('projects:projects.monthlyEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-monthly-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={monthlyEffort}
+                      onChange={(e) => setMonthlyEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-expected-effort">
+                      {t('projects:projects.expectedEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-expected-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={expectedEffort}
+                      onChange={(e) => setExpectedEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-revenue">
+                      {`${t('projects:projects.taskRevenue')} (${currency})`}
+                    </FieldLabel>
+                    <Input
+                      id="task-revenue"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={revenue}
+                      onChange={(e) => setRevenue(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>
+                  <Textarea
+                    id="task-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t('common:form.placeholderNotes')}
                     rows={3}
                     className="min-h-20 resize-none"
                   />

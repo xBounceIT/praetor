@@ -10,6 +10,14 @@ import {
 } from '../schemas/common.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import {
+  BILLING_FREQUENCIES,
+  BILLING_TYPES,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  STORED_BILLING_TYPES,
+} from '../utils/billing.ts';
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
@@ -17,6 +25,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
+  optionalEnum,
   requireNonEmptyString,
   validateHexColor,
 } from '../utils/validation.ts';
@@ -48,8 +57,10 @@ const projectSchema = {
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
     orderId: { type: ['string', 'null'] },
+    billingType: { type: 'string', enum: BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
-  required: ['id', 'name', 'clientId', 'color', 'isDisabled'],
+  required: ['id', 'name', 'clientId', 'color', 'isDisabled', 'billingType', 'billingFrequency'],
 } as const;
 
 const projectCreateBodySchema = {
@@ -60,6 +71,8 @@ const projectCreateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     orderId: { type: 'string' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
   required: ['name', 'clientId'],
 } as const;
@@ -72,6 +85,8 @@ const projectUpdateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     isDisabled: { type: 'boolean' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
 } as const;
 
@@ -146,7 +161,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description?: string;
         color?: string;
         orderId?: string;
+        billingType?: string;
+        billingFrequency?: string;
       };
+      const body = request.body as { billingType?: string; billingFrequency?: string };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -156,6 +174,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await canAccessClient(request, clientIdResult.value))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
+
+      const billingTypeResult = optionalEnum(body.billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingType = billingTypeResult.value ?? DEFAULT_BILLING_TYPE;
+      const billingFrequencyResult = optionalEnum(
+        body.billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
+      const billingFrequency = normalizeBillingFrequency(
+        billingType,
+        billingFrequencyResult.value ?? DEFAULT_BILLING_FREQUENCY,
+      );
 
       const id = generatePrefixedId('p');
       let projectColor = '#3b82f6';
@@ -174,6 +206,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description: description || null,
           isDisabled: false,
           orderId: orderId || null,
+          billingType,
+          billingFrequency,
         });
 
         await Promise.all([
@@ -289,8 +323,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description?: string;
         color?: string;
         isDisabled?: boolean;
+        billingType?: string;
+        billingFrequency?: string;
       };
-      const { name, clientId, description, color, isDisabled } = body;
+      const { name, clientId, description, color, isDisabled, billingType, billingFrequency } =
+        body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value))) {
@@ -302,6 +339,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
         normalizedColor = colorResult.value;
       }
+
+      const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingFrequencyResult = optionalEnum(
+        billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
 
       let updatedProject: {
         updated: projectsRepo.Project;
@@ -337,6 +383,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               color: normalizedColor || undefined,
               description: description || undefined,
               isDisabled,
+              billingType: billingTypeResult.value ?? undefined,
+              billingFrequency: billingFrequencyResult.value ?? undefined,
             },
             tx,
           );
