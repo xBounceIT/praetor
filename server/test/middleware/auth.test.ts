@@ -192,13 +192,15 @@ describe('authenticateToken', () => {
     expect(reply.body).toEqual({ error: 'User not found' });
   });
 
-  test('401 when user.isDisabled is true', async () => {
+  test('403 Account is disabled when user.isDisabled is true', async () => {
     findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, isDisabled: true });
     const request = buildFakeRequest(signToken({ userId: 'u1' }));
     const reply = buildFakeReply();
     await authenticateToken(request as never, reply as never);
-    expect(reply.statusCode).toBe(401);
-    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Account is disabled' });
+    // Sliding-window token must not be rotated for disabled accounts.
+    expect(reply.headers?.['x-auth-token']).toBeUndefined();
   });
 
   test('403 when rolesRepo.userHasRole returns false', async () => {
@@ -366,15 +368,15 @@ describe('authenticateToken', () => {
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 
-  test('PAT rejects disabled users', async () => {
+  test('PAT rejects disabled users with 403 Account is disabled', async () => {
     findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, isDisabled: true });
     const request = buildFakeRequest('praetor_pat_valid-token');
     const reply = buildFakeReply();
 
     await authenticateToken(request as never, reply as never);
 
-    expect(reply.statusCode).toBe(401);
-    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Account is disabled' });
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 
