@@ -360,7 +360,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={handleDurationInputChange}
               placeholder="0.0"
               aria-invalid={!!errors.hours}
-              className="h-10 rounded-lg"
+              className="h-9 min-h-9 max-h-9 rounded-lg py-2"
             />
             <FieldError>{errors.hours}</FieldError>
           </Field>
