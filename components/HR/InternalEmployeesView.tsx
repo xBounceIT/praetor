@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { UpdateUserInput } from '../../services/api/users';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -31,7 +32,7 @@ export interface InternalEmployeesViewProps {
     name: string,
     costPerHour?: number,
   ) => Promise<{ success: boolean; error?: string }>;
-  onUpdateEmployee: (id: string, updates: Partial<User>) => void;
+  onUpdateEmployee: (id: string, updates: UpdateUserInput) => void;
   onDeleteEmployee: (id: string) => void;
   currency: string;
   permissions: string[];
@@ -147,7 +148,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
 
     try {
       if (editingEmployee) {
-        const updates: Partial<User> = {
+        const updates: UpdateUserInput = {
           name: formData.name.trim(),
         };
 

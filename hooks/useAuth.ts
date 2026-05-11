@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api, { getAuthToken, type Settings, setAuthToken } from '../services/api';
+import { type ApiError, isApiError } from '../services/api/client';
 import type { User } from '../types';
 import { applyLanguagePreference } from '../utils/language';
 
@@ -8,6 +9,38 @@ const DEFAULT_SETTINGS: Settings = {
   email: '',
   language: 'auto',
 };
+
+const CACHED_USER_STORAGE_KEY = 'praetor_cached_auth_user';
+
+const readCachedUser = (): User | null => {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as User;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.id !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedUser = (user: User | null) => {
+  try {
+    if (user) {
+      localStorage.setItem(CACHED_USER_STORAGE_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(CACHED_USER_STORAGE_KEY);
+    }
+  } catch {
+    // Storage may be full or unavailable (private mode). Cache is best-effort.
+  }
+};
+
+// 401/403 = real auth failure (clear the token). Anything else (network blip,
+// 5xx, parse failures) is treated as transient so we don't log the user out on
+// a flaky connection.
+const isAuthFailure = (err: unknown): err is ApiError =>
+  isApiError(err) && (err.statusCode === 401 || err.statusCode === 403);
 
 export type UseAuthOptions = {
   onLogin?: (user: User) => void;
@@ -46,10 +79,21 @@ export function useAuth(opts: UseAuthOptions = {}) {
           const user = await api.auth.me();
           if (cancelled) return;
           setCurrentUser(user);
+          writeCachedUser(user);
           await loadUserSettings();
-        } catch {
+        } catch (err) {
           if (cancelled) return;
-          setAuthToken(null);
+          if (isAuthFailure(err)) {
+            // Server explicitly rejected the token - clear it and any cache.
+            setAuthToken(null);
+            writeCachedUser(null);
+          } else {
+            // Transient (network/5xx). Keep the token; restore the previously
+            // cached user so the UI stays usable until the next successful
+            // request rotates the token or surfaces a real auth failure.
+            const cached = readCachedUser();
+            if (cached) setCurrentUser(cached);
+          }
         }
       }
       if (!cancelled) setIsLoading(false);
@@ -68,6 +112,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
       // a login or role-switch can briefly resurface the previous session's data.
       onLoginRef.current?.(user);
       setCurrentUser(user);
+      writeCachedUser(user);
       await loadUserSettings();
     },
     [loadUserSettings],
@@ -76,6 +121,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
   const logout = useCallback((reason?: 'inactivity') => {
     setAuthToken(null);
     setCurrentUser(null);
+    writeCachedUser(null);
     const finalReason = reason ?? null;
     setLogoutReason(finalReason);
     onLogoutRef.current?.(finalReason);

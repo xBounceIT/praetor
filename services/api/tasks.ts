@@ -42,24 +42,27 @@ export const tasksApi = {
       body: JSON.stringify(updates),
     }).then(normalizeTask),
 
-  delete: (id: string): Promise<void> => fetchApi(`/tasks/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> => fetchApi<void>(`/tasks/${id}`, { method: 'DELETE' }),
 
   getHours: (projectId: string, signal?: AbortSignal): Promise<Record<string, number>> =>
-    fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`, { signal }),
+    fetchApi<Record<string, number>>(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`, {
+      signal,
+    }),
 
   getHoursForProjects: (
     projectIds: string[],
     signal?: AbortSignal,
   ): Promise<Record<string, Record<string, number>>> =>
-    fetchApi(`/tasks/hours/batch?projectIds=${projectIds.map(encodeURIComponent).join(',')}`, {
-      signal,
-    }),
+    fetchApi<Record<string, Record<string, number>>>(
+      `/tasks/hours/batch?projectIds=${projectIds.map(encodeURIComponent).join(',')}`,
+      { signal },
+    ),
 
   getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
-    fetchApi(`/tasks/${id}/users`, { signal }),
+    fetchApi<string[]>(`/tasks/${id}/users`, { signal }),
 
   updateUsers: (id: string, userIds: string[]): Promise<void> =>
-    fetchApi(`/tasks/${id}/users`, {
+    fetchApi<void>(`/tasks/${id}/users`, {
       method: 'POST',
       body: JSON.stringify({ userIds }),
     }),

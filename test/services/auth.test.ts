@@ -15,15 +15,23 @@ const { authApi } = await import('../../services/api/auth');
 const { getAuthToken, setAuthToken } = await import('../../services/api/client');
 
 // Canonical user shape that passes every guard inside `normalizeAuthUser`.
+// Mirrors the full server contract: email, costPerHour, employeeType, and
+// authMethod must all be present - the normalizer rejects partial payloads.
 const canonicalUser = {
   id: 'u-1',
   name: 'Canonical User',
   username: 'canonical',
   role: 'admin',
   avatarInitials: 'CU',
+  email: 'canonical@example.com',
+  costPerHour: 42.5,
+  employeeType: 'app_user' as const,
+  authMethod: 'local' as const,
+  authProviderId: null,
+  authProviderName: null,
+  isDisabled: false,
   availableRoles: [{ id: 'admin', name: 'Admin', isAdmin: true, permissions: [] }],
   permissions: ['*'],
-  costPerHour: 0,
   hasTopManagerRole: false,
   isAdminOnly: false,
 };
@@ -134,8 +142,34 @@ describe('authApi', () => {
       expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/me');
     });
 
+    test('propagates canonical user fields (email, costPerHour, employeeType)', async () => {
+      programRoutes({
+        '/auth/me': {
+          ...canonicalUser,
+          email: 'real@user.com',
+          costPerHour: 99.5,
+          employeeType: 'internal',
+        },
+      });
+
+      const user = await authApi.me();
+      expect(user.email).toBe('real@user.com');
+      expect(user.costPerHour).toBe(99.5);
+      expect(user.employeeType).toBe('internal');
+    });
+
     test('throws when /auth/me responds with an empty available roles list', async () => {
       programRoutes({ '/auth/me': { ...canonicalUser, availableRoles: [] } });
+      await expect(authApi.me()).rejects.toThrow('Invalid authentication response');
+    });
+
+    test.each([
+      ['email', { email: undefined }],
+      ['costPerHour', { costPerHour: undefined }],
+      ['employeeType', { employeeType: undefined }],
+      ['authMethod', { authMethod: undefined }],
+    ])('throws when /auth/me is missing %s instead of inventing a default', async (_field, patch) => {
+      programRoutes({ '/auth/me': { ...canonicalUser, ...patch } });
       await expect(authApi.me()).rejects.toThrow('Invalid authentication response');
     });
   });
