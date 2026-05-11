@@ -11,8 +11,11 @@ export const customerOfferItems = pgTable(
     offerId: varchar('offer_id', { length: 100 })
       .notNull()
       .references(() => customerOffers.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    // RESTRICT: customer offers are open documents (like quotes/sales/orders) — deleting a
+    // referenced product must be blocked while the offer line still points at it. Closed-doc
+    // line items (invoice_items / supplier_invoice_items) use SET NULL instead.
     productId: varchar('product_id', { length: 50 }).references(() => products.id, {
-      onDelete: 'set null',
+      onDelete: 'restrict',
     }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),

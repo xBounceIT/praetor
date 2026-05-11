@@ -11,7 +11,7 @@ export const users = pgTable(
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: varchar('role', { length: 50 })
       .notNull()
-      .references(() => roles.id, { onDelete: 'restrict' }),
+      .references(() => roles.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
     avatarInitials: varchar('avatar_initials', { length: 5 }).notNull(),
     costPerHour: numeric('cost_per_hour', { precision: 10, scale: 2 }).default('0'),
     isDisabled: boolean('is_disabled').default(false),
