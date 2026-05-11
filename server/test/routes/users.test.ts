@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
+import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -17,6 +18,7 @@ import { signToken } from '../helpers/jwt.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const settingsRepoSnap = { ...realSettingsRepo };
+const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
@@ -36,6 +38,7 @@ const existsByUsernameMock = mock();
 const insertUserMock = mock();
 const deleteByIdMock = mock();
 const updateUserDynamicMock = mock();
+const updateAuthMethodMock = mock();
 const addUserRoleMock = mock();
 const replaceUserRolesMock = mock();
 const setPrimaryRoleMock = mock();
@@ -46,6 +49,9 @@ const getAssignmentsMock = mock();
 // rolesRepo
 const rolesFindByIdMock = mock();
 const rolesFindExistingIdsMock = mock();
+
+// ssoProvidersRepo
+const ssoFindByIdMock = mock();
 
 // settingsRepo
 const settingsUpsertForUserMock = mock();
@@ -82,6 +88,7 @@ beforeAll(async () => {
     insertUser: insertUserMock,
     deleteById: deleteByIdMock,
     updateUserDynamic: updateUserDynamicMock,
+    updateAuthMethod: updateAuthMethodMock,
     addUserRole: addUserRoleMock,
     replaceUserRoles: replaceUserRolesMock,
     setPrimaryRole: setPrimaryRoleMock,
@@ -98,6 +105,10 @@ beforeAll(async () => {
   mock.module('../../repositories/settingsRepo.ts', () => ({
     ...settingsRepoSnap,
     upsertForUser: settingsUpsertForUserMock,
+  }));
+  mock.module('../../repositories/ssoProvidersRepo.ts', () => ({
+    ...ssoProvidersRepoSnap,
+    findById: ssoFindByIdMock,
   }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
@@ -133,6 +144,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
+  mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -201,6 +213,9 @@ const SAMPLE_USER_ROW = {
   costPerHour: 50,
   isDisabled: false,
   employeeType: 'app_user' as const,
+  authMethod: 'local' as const,
+  authProviderId: null,
+  authProviderName: null,
   hasTopManagerRole: false,
   isAdminOnly: false,
 };
@@ -211,6 +226,8 @@ const SAMPLE_USER_CORE = {
   username: 'target',
   role: 'user',
   employeeType: 'app_user' as const,
+  authMethod: 'local' as const,
+  authProviderId: null,
 };
 
 const allMocks = [
@@ -225,6 +242,7 @@ const allMocks = [
   insertUserMock,
   deleteByIdMock,
   updateUserDynamicMock,
+  updateAuthMethodMock,
   addUserRoleMock,
   replaceUserRolesMock,
   setPrimaryRoleMock,
@@ -233,6 +251,7 @@ const allMocks = [
   getAssignmentsMock,
   rolesFindByIdMock,
   rolesFindExistingIdsMock,
+  ssoFindByIdMock,
   settingsUpsertForUserMock,
   userHasTopManagerRoleMock,
   syncTopManagerAssignmentsForUserMock,
@@ -858,6 +877,192 @@ describe('PUT /api/users/:id', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// =========================================================================
+// PUT /api/users/:id/auth-method
+// =========================================================================
+
+describe('PUT /api/users/:id/auth-method', () => {
+  test('200 changes app user to LDAP', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateAuthMethodMock.mockResolvedValue({ ...SAMPLE_USER_ROW, authMethod: 'ldap' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'ldap', null);
+    expect(JSON.parse(res.body).authMethod).toBe('ldap');
+  });
+
+  test('200 changes app user to OIDC with enabled matching provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue({
+      id: 'sso-1',
+      protocol: 'oidc',
+      name: 'Keycloak',
+      enabled: true,
+    });
+    updateAuthMethodMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'oidc',
+      authProviderId: 'sso-1',
+      authProviderName: 'Keycloak',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'oidc', 'sso-1');
+    expect(JSON.parse(res.body)).toMatchObject({
+      authMethod: 'oidc',
+      authProviderId: 'sso-1',
+      authProviderName: 'Keycloak',
+    });
+  });
+
+  test('400 rejects OIDC without provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects OIDC with a missing provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects OIDC with a disabled provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue({
+      id: 'sso-1',
+      protocol: 'oidc',
+      name: 'OIDC',
+      enabled: false,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects provider with wrong protocol', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue({
+      id: 'sso-1',
+      protocol: 'saml',
+      name: 'SAML',
+      enabled: true,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects non app users', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, employeeType: 'internal' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  test('400 rejects changing your own authentication method', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: ADMIN_USER.id,
+      username: ADMIN_USER.username,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${ADMIN_USER.id}/auth-method`,
+      headers: adminAuth(),
+      payload: { authMethod: 'local' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('403 rejects users without update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.view']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  test('403 manager cannot change auth method for unmanaged app_user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: managerAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
   });
 });
 

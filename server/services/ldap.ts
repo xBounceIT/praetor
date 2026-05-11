@@ -388,11 +388,19 @@ class LDAPService {
 
         const existing = await usersRepo.findLoginUserByUsername(username);
         const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
-        const roleIds = mapExternalGroupsToRoleIds(groups, this.getRoleMappings());
+        const roleMappings = this.getRoleMappings();
+        const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
 
         if (existing) {
+          if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
+            logger.warn(
+              { username },
+              'Skipping LDAP sync for a matching Praetor user not bound to LDAP',
+            );
+            continue;
+          }
           await usersRepo.updateNameByUsername(username, name);
-          await applyExternalRolesForUser(existing.id, groups, this.getRoleMappings());
+          await applyExternalRolesForUser(existing.id, groups, roleMappings);
           syncedCount++;
         } else {
           const id = generatePrefixedId('u');
@@ -403,8 +411,10 @@ class LDAPService {
             passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: roleIds[0],
             avatarInitials: computeAvatarInitials(name),
+            authMethod: 'ldap',
+            authProviderId: null,
           });
-          await applyExternalRolesForUser(id, groups, this.getRoleMappings());
+          await applyExternalRolesForUser(id, groups, roleMappings);
           createdCount++;
         }
       }

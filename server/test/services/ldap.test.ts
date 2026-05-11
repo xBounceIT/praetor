@@ -174,6 +174,19 @@ const ENABLED_LDAP_CONFIG = {
   tlsCaCertificate: '',
 };
 
+const LDAP_LOGIN_USER = {
+  id: 'u-old',
+  name: 'Alice Old',
+  username: 'alice',
+  role: 'user',
+  passwordHash: realUsersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
+  avatarInitials: 'AO',
+  isDisabled: false,
+  employeeType: 'app_user' as const,
+  authMethod: 'ldap' as const,
+  authProviderId: null,
+};
+
 const resetService = () => {
   (ldapService as unknown as { config: unknown }).config = null;
 };
@@ -535,6 +548,8 @@ describe('syncUsers', () => {
       passwordHash: realUsersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
       role: 'user',
       avatarInitials: 'CA',
+      authMethod: 'ldap',
+      authProviderId: null,
     });
     expect(result).toEqual({ synced: 0, created: 1 });
   });
@@ -589,11 +604,58 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue({ id: 'u-old' });
+    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
     const result = await ldapService.syncUsers();
     expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 1, created: 0 });
+  });
+
+  test('does not mutate an existing app user until it is bound to LDAP', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice LDAP' } }],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      authMethod: 'local',
+      passwordHash: '$2a$local',
+    });
+
+    const result = await ldapService.syncUsers();
+
+    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ synced: 0, created: 0 });
+  });
+
+  test('does not mutate an existing non-app user with a matching LDAP username', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice LDAP' } }],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      employeeType: 'internal',
+    });
+
+    const result = await ldapService.syncUsers();
+
+    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ synced: 0, created: 0 });
   });
 
   test('skips entries without a username (no uid and no sAMAccountName)', async () => {

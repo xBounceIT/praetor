@@ -1914,6 +1914,7 @@ const App: React.FC = () => {
 
   const handleUpdateUser = userHandlers.updateUser;
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
+  const handleUpdateUserAuthMethod = userHandlers.updateUserAuthMethod;
 
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
@@ -2488,9 +2489,11 @@ const App: React.FC = () => {
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
                   onUpdateUserRoles={handleUpdateUserRoles}
+                  onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}
+                  ssoProviders={ssoProviders}
                   currency={getCurrencySymbol(generalSettings.currency)}
                 />
               )}
