@@ -55,6 +55,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
+  // Submission guard to prevent double-submits while the parent handler is awaiting.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const openCreateModal = () => {
     setName('');
     setSelectedManagerIds([]);
@@ -75,6 +78,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -87,12 +91,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       return;
     }
 
-    await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
-    setIsCreateModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
+      setIsCreateModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -104,9 +114,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     }
 
     if (editingUnit && name) {
-      await onUpdateWorkUnit(editingUnit.id, { name, managerIds: selectedManagerIds, description });
-      setIsEditModalOpen(false);
-      setEditingUnit(null);
+      setIsSubmitting(true);
+      try {
+        await onUpdateWorkUnit(editingUnit.id, {
+          name,
+          managerIds: selectedManagerIds,
+          description,
+        });
+        setIsEditModalOpen(false);
+        setEditingUnit(null);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -401,7 +420,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={selectedManagerIds.length === 0}
+                disabled={selectedManagerIds.length === 0 || isSubmitting}
                 className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
                 {t('hr:workUnits.createUnit')}
@@ -482,7 +501,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
                 {t('hr:workUnits.saveChanges')}
               </button>

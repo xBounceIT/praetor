@@ -66,9 +66,9 @@ export interface TasksViewProps {
       ProjectTask,
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
-  ) => void;
-  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
-  onDeleteTask: (id: string) => void;
+  ) => void | Promise<void>;
+  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+  onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;
 }
 
@@ -102,6 +102,8 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  // Submission guard to prevent double-submits while the parent handler is awaiting.
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
 
@@ -557,8 +559,9 @@ const TasksView: React.FC<TasksViewProps> = ({
     ],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (editingTask && !canUpdateTasks) return;
     if (!editingTask && !canCreateTasks) return;
     if (name && projectId) {
@@ -570,18 +573,23 @@ const TasksView: React.FC<TasksViewProps> = ({
         revenue: revenue ? parseFloat(revenue) : undefined,
         notes: notes.trim() || undefined,
       };
-      if (editingTask) {
-        onUpdateTask(editingTask.id, {
-          name,
-          projectId,
-          description,
-          isDisabled: tempIsDisabled,
-          ...details,
-        });
-      } else {
-        onAddTask(name, projectId, undefined, description, details);
+      setIsSubmitting(true);
+      try {
+        if (editingTask) {
+          await onUpdateTask(editingTask.id, {
+            name,
+            projectId,
+            description,
+            isDisabled: tempIsDisabled,
+            ...details,
+          });
+        } else {
+          await onAddTask(name, projectId, undefined, description, details);
+        }
+        closeModal();
+      } finally {
+        setIsSubmitting(false);
       }
-      closeModal();
     }
   };
 
@@ -910,7 +918,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
                 </Button>
-                <Button type="submit" disabled={!canSubmit}>
+                <Button type="submit" disabled={!canSubmit || isSubmitting}>
                   {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
                 </Button>
               </div>

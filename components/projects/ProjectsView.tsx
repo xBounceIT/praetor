@@ -304,9 +304,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
+    setIsModalOpen(true);
+    // Reuse the bulk-fetched hours for this project when available to avoid a
+    // redundant single-project request on every edit-modal open.
+    const cachedHours = allProjectHours?.[project.id];
+    if (cachedHours) {
+      fetchHoursAbortRef.current?.abort();
+      fetchHoursAbortRef.current = null;
+      setProjectTaskHours(cachedHours);
+      setHoursLoadState('idle');
+      return;
+    }
     setProjectTaskHours({});
     setHoursLoadState('loading');
-    setIsModalOpen(true);
     fetchHoursAbortRef.current?.abort();
     const ac = new AbortController();
     fetchHoursAbortRef.current = ac;

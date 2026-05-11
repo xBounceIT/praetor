@@ -62,6 +62,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form State
@@ -186,12 +187,13 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
 
   const handleDelete = () => {
     if (!canDeleteSuppliers) return;
-    if (supplierToDelete) {
-      onDeleteSupplier(supplierToDelete.id).then(() => {
-        setIsDeleteConfirmOpen(false);
-        setSupplierToDelete(null);
-      });
-    }
+    if (!supplierToDelete || isDeleting) return;
+    setIsDeleting(true);
+    onDeleteSupplier(supplierToDelete.id).finally(() => {
+      setIsDeleting(false);
+      setIsDeleteConfirmOpen(false);
+      setSupplierToDelete(null);
+    });
   };
 
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
@@ -584,6 +586,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
         onConfirm={handleDelete}
+        loading={isDeleting}
         title={t('crm:suppliers.deleteSupplier')}
         description={`${t('common:messages.deleteConfirmNamed', {
           name: supplierToDelete?.name,

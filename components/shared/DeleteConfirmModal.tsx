@@ -10,6 +10,11 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   title: React.ReactNode;
   description?: React.ReactNode;
+  /**
+   * When true, both buttons render in a loading state and the confirm button
+   * is disabled to block double-clicks while the parent's delete is in flight.
+   */
+  loading?: boolean;
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -18,10 +23,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onConfirm,
   title,
   description,
+  loading = false,
 }) => {
   const { t } = useTranslation('common');
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+    <Modal isOpen={isOpen} onClose={loading ? () => {} : onClose} ariaLabel={null}>
       {() => (
         <ModalContent size="sm">
           <ModalHeader className="justify-center text-center">
@@ -38,10 +44,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             </ModalBody>
           )}
           <ModalFooter className="grid grid-cols-2 sm:flex">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               {t('buttons.noGoBack')}
             </Button>
-            <Button type="button" variant="destructive" onClick={onConfirm}>
+            <Button type="button" variant="destructive" onClick={onConfirm} disabled={loading}>
+              {loading && <i className="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>}
               {t('buttons.yesDelete')}
             </Button>
           </ModalFooter>

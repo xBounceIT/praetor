@@ -128,3 +128,42 @@ describe('<ClientsView /> contact validation', () => {
     expect(screen.getByText('common:validation.required')).toBeInTheDocument();
   });
 });
+
+describe('<ClientsView /> disable toggle confirmation', () => {
+  test('routes the disable action through a confirmation dialog instead of an immediate update', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/CRM/ClientsView.tsx', import.meta.url),
+    ).text();
+
+    // The row action invokes requestToggleDisabled rather than onUpdateClient directly.
+    expect(source).toContain('requestToggleDisabled(row);');
+    expect(source).not.toMatch(
+      /onUpdateClient\(row\.id,\s*\{\s*isDisabled:\s*!row\.isDisabled\s*\}\)/,
+    );
+
+    // Confirmation state and handlers are present.
+    expect(source).toContain(
+      'const [isToggleDisabledOpen, setIsToggleDisabledOpen] = useState(false);',
+    );
+    expect(source).toContain(
+      'const [isTogglingDisabled, setIsTogglingDisabled] = useState(false);',
+    );
+    expect(source).toContain('const requestToggleDisabled = useCallback');
+    expect(source).toContain('const cancelToggleDisabled = ');
+    expect(source).toContain('const handleToggleDisabled = async () => {');
+
+    // The confirm handler only fires onUpdateClient when the user confirms and not while in flight.
+    expect(source).toContain(
+      'if (!canUpdateClients || !clientToToggleDisabled || isTogglingDisabled) return;',
+    );
+    expect(source).toContain('setIsTogglingDisabled(true);');
+    expect(source).toContain('isDisabled: !clientToToggleDisabled.isDisabled,');
+
+    // A confirmation modal is rendered for the toggle action with the new translation keys.
+    expect(source).toContain('isOpen={isToggleDisabledOpen && !!clientToToggleDisabled}');
+    expect(source).toContain("'crm:clients.disableConfirmTitle'");
+    expect(source).toContain("'crm:clients.enableConfirmTitle'");
+    expect(source).toContain("'crm:clients.confirmDisable'");
+    expect(source).toContain("'crm:clients.confirmEnable'");
+  });
+});
