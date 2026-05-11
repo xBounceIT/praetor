@@ -112,19 +112,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     };
   }, [projectIds]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_tasks_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_tasks_rowsPerPage', value.toString());
-    setCurrentPage(1);
-  };
-
   const checkInheritedDisabled = useCallback(
     (task: ProjectTask) => {
       const project = projects.find((p) => p.id === task.projectId);
@@ -169,11 +156,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     },
     [canUpdateTasks],
   );
-
-  // Pagination Logic
-  const totalPages = Math.ceil(tasks.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedTasks = tasks.slice(startIndex, startIndex + rowsPerPage);
 
   // Column definitions for StandardTable
   const columns: Column<ProjectTask>[] = useMemo(
@@ -738,9 +720,9 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       <StandardTable<ProjectTask>
         title={t('tasks.tasksDirectory')}
-        data={paginatedTasks}
+        data={tasks}
         columns={columns}
-        defaultRowsPerPage={rowsPerPage}
+        defaultRowsPerPage={5}
         onRowClick={canUpdateTasks ? openEditModal : undefined}
         rowClassName={(row) => {
           const project = projects.find((p) => p.id === row.projectId);
@@ -749,66 +731,6 @@ const TasksView: React.FC<TasksViewProps> = ({
             ? 'opacity-70 grayscale hover:grayscale-0'
             : '';
         }}
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-zinc-500">
-                {t('common:labels.rowsPerPage')}
-              </span>
-              <SelectControl
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-zinc-200 text-xs font-bold text-zinc-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-zinc-400 ml-2">
-                {t('common:pagination.showing', {
-                  start: paginatedTasks.length > 0 ? startIndex + 1 : 0,
-                  end: Math.min(startIndex + rowsPerPage, tasks.length),
-                  total: tasks.length,
-                })}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`size-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-zinc-200'
-                        : 'text-zinc-500 hover:bg-zinc-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="size-8 flex items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          </>
-        }
       />
     </div>
   );
