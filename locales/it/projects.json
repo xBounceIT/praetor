@@ -56,8 +56,8 @@
     "addTaskRow": "Aggiungi Attività",
     "taskName": "Nome Attività",
     "expectedEffort": "Impegno totale (h)",
-    "monthlyEffort": "Stima impegno mensile (h)",
-    "billingType": "Tipo di consuntivazione",
+    "monthlyEffort": "Impegno mensile (h)",
+    "billingType": "Consuntivazione",
     "billingFrequency": "Frequenza",
     "billingTypes": {
       "retainer": "Canone",

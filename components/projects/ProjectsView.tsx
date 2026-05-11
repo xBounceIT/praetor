@@ -10,6 +10,7 @@ import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
 import type {
   BillingFrequency,
+  BillingType,
   Client,
   ClientsOrder,
   Project,
@@ -81,6 +82,9 @@ const billingFrequencyOptions = [
   { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
   { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
 ];
+
+const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
+  value === 'retainer' ? 'retainer' : 'time_and_materials';
 
 export interface ProjectsViewProps {
   projects: Project[];
@@ -372,7 +376,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         color,
         isDisabled: tempIsDisabled,
       };
-      if (editingProject.billingType !== 'mixed' || projectBillingChanged) {
+      if (displayProjectBillingType !== 'mixed' || projectBillingChanged) {
         updates.billingType = billingType;
         updates.billingFrequency =
           billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
@@ -506,11 +510,33 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     () => (editingProject ? tasks.filter((t) => t.projectId === editingProject.id) : []),
     [tasks, editingProject],
   );
+  const getDerivedProjectBillingType = (project: Project): BillingType => {
+    if (project.billingType === 'mixed') return 'mixed';
+    const storedProjectBillingType = toStoredBillingType(project.billingType);
+    const taskBillingTypes = new Set(
+      tasks
+        .filter((task) => task.projectId === project.id)
+        .map((task) => task.billingType ?? 'time_and_materials'),
+    );
+    if (taskBillingTypes.size === 0) return storedProjectBillingType;
+    if (taskBillingTypes.size > 1) return 'mixed';
+    return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
+  };
+  const displayProjectBillingType: BillingType = editingProject
+    ? getDerivedProjectBillingType(editingProject)
+    : billingType;
 
   const translatedBillingTypeOptions = billingTypeOptions.map((option) => ({
     id: option.id,
     name: t(option.name),
   }));
+  const projectBillingTypeOptions =
+    displayProjectBillingType === 'mixed'
+      ? [
+          ...translatedBillingTypeOptions,
+          { id: 'mixed', name: t('projects:projects.billingTypes.mixed') },
+        ]
+      : translatedBillingTypeOptions;
   const translatedBillingFrequencyOptions = billingFrequencyOptions.map((option) => ({
     id: option.id,
     name: t(option.name),
@@ -1043,8 +1069,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <div className="grid gap-4 md:grid-cols-2">
                     <SelectControl
                       id="project-billing-type"
-                      options={translatedBillingTypeOptions}
-                      value={billingType}
+                      options={projectBillingTypeOptions}
+                      value={displayProjectBillingType}
                       onChange={(val) => {
                         const nextBillingType = val as StoredBillingType;
                         setProjectBillingChanged(true);
@@ -1053,6 +1079,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           setBillingFrequency('monthly');
                       }}
                       label={t('projects:projects.billingType')}
+                      disabled={displayProjectBillingType === 'mixed'}
                       searchable={false}
                       buttonClassName="h-9"
                     />
@@ -1065,13 +1092,22 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                               (option) => option.id === 'monthly',
                             )
                       }
-                      value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                      value={
+                        displayProjectBillingType === 'mixed'
+                          ? 'monthly'
+                          : billingType === 'time_and_materials'
+                            ? 'monthly'
+                            : billingFrequency
+                      }
                       onChange={(val) => {
                         setProjectBillingChanged(true);
                         setBillingFrequency(val as BillingFrequency);
                       }}
                       label={t('projects:projects.billingFrequency')}
-                      disabled={billingType === 'time_and_materials'}
+                      disabled={
+                        displayProjectBillingType === 'mixed' ||
+                        billingType === 'time_and_materials'
+                      }
                       searchable={false}
                       buttonClassName="h-9"
                     />
@@ -1373,10 +1409,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             {
               header: t('projects:projects.billingType'),
               id: 'billingType',
-              accessorFn: (row) => formatBillingType(row.billingType),
+              accessorFn: (row) => formatBillingType(getDerivedProjectBillingType(row)),
               cell: ({ row }) => (
                 <span className="text-xs font-bold text-zinc-600">
-                  {formatBillingType(row.billingType)}
+                  {formatBillingType(getDerivedProjectBillingType(row))}
                 </span>
               ),
             },
@@ -1386,7 +1422,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               accessorFn: (row) => formatBillingFrequency(row.billingFrequency),
               cell: ({ row }) => (
                 <span className="text-xs text-zinc-500">
-                  {row.billingType === 'mixed' ? '-' : formatBillingFrequency(row.billingFrequency)}
+                  {getDerivedProjectBillingType(row) === 'mixed'
+                    ? '-'
+                    : formatBillingFrequency(row.billingFrequency)}
                 </span>
               ),
             },
