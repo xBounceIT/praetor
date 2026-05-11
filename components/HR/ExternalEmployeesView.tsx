@@ -1,11 +1,23 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
@@ -273,126 +285,96 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingEmployee ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingEmployee
-                ? t('externalEmployees.editEmployee')
-                : t('externalEmployees.addEmployee')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="md">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingEmployee ? 'fa-pen-to-square' : 'fa-plus'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingEmployee
+                  ? t('externalEmployees.editEmployee')
+                  : t('externalEmployees.addEmployee')}
+              </ModalTitle>
+              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
-            {errors.submit && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                {errors.submit}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 ml-1">
-                {t('externalEmployees.name')} *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className={`w-full px-4 py-3 border ${
-                  errors.name ? 'border-red-300' : 'border-zinc-200'
-                } rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-zinc-50/50`}
-                placeholder={t('externalEmployees.name')}
-              />
-              {errors.name && <p className="text-xs text-red-500 mt-1 ml-1">{errors.name}</p>}
-            </div>
-
-            {canViewCosts && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 ml-1">
-                  {t('externalEmployees.costPerHour')}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-medium">
-                    {currency}
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.costPerHour}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, costPerHour: e.target.value }))
-                    }
-                    className="w-full pl-8 pr-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-zinc-50/50"
-                    placeholder="0.00"
-                    disabled={!canUpdateCosts}
-                  />
+            <ModalBody className="space-y-4">
+              {errors.submit && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errors.submit}
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
-              >
+              <Field data-invalid={Boolean(errors.name)}>
+                <FieldLabel htmlFor="external-employee-name">
+                  {t('externalEmployees.name')} *
+                </FieldLabel>
+                <Input
+                  id="external-employee-name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  aria-invalid={Boolean(errors.name)}
+                  placeholder={t('externalEmployees.name')}
+                />
+                <FieldError className="text-xs">{errors.name}</FieldError>
+              </Field>
+
+              {canViewCosts && (
+                <Field>
+                  <FieldLabel htmlFor="external-employee-cost">
+                    {t('externalEmployees.costPerHour')}
+                  </FieldLabel>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                      {currency}
+                    </span>
+                    <Input
+                      id="external-employee-cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.costPerHour}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, costPerHour: e.target.value }))
+                      }
+                      className="pl-8"
+                      placeholder="0.00"
+                      disabled={!canUpdateCosts}
+                    />
+                  </div>
+                </Field>
+              )}
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <i className="fa-solid fa-spinner fa-spin"></i>
+                  <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
                 ) : (
                   t('externalEmployees.saveChanges')
                 )}
-              </button>
-            </div>
+              </Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center">
-            <div className="size-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i className="fa-solid fa-trash text-2xl text-red-600"></i>
-            </div>
-            <h3 className="text-xl font-semibold text-zinc-800 mb-2">
-              {t('externalEmployees.deleteEmployee')}
-            </h3>
-            <p className="text-zinc-500">
-              {t('externalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
-            </p>
-          </div>
-          <div className="flex border-t border-zinc-100">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 px-6 py-4 text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex-1 px-6 py-4 bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
-            >
-              {t('externalEmployees.yesDelete')}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title={t('externalEmployees.deleteEmployee')}
+        description={t('externalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
+      />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

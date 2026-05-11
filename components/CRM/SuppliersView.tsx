@@ -1,12 +1,25 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 
@@ -367,265 +380,215 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-            <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-              <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingSupplier ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingSupplier ? t('crm:suppliers.editSupplier') : t('crm:suppliers.addSupplier')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="2xl" className="max-h-[90vh]">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingSupplier ? 'fa-pen-to-square' : 'fa-plus'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingSupplier ? t('crm:suppliers.editSupplier') : t('crm:suppliers.addSupplier')}
+              </ModalTitle>
+              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
-            {/* Section 1: Supplier Details */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-praetor"></span>
-                {t('crm:suppliers.identifyingData')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.code')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.supplierCode}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, supplierCode: e.target.value }));
-                      if (errors.supplierCode) setErrors((prev) => ({ ...prev, supplierCode: '' }));
-                    }}
-                    placeholder={t('crm:suppliers.codePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.supplierCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                    }`}
-                  />
-                  {errors.supplierCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.supplierCode}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.name')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, name: e.target.value }));
-                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                    }}
-                    placeholder={t('crm:suppliers.namePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                    }`}
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                  )}
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.contactName')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contactName}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, contactName: e.target.value }))
-                    }
-                    placeholder={t('crm:suppliers.contactPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
+            <ModalBody className="flex-1 space-y-8">
+              {/* Section 1: Supplier Details */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('crm:suppliers.identifyingData')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field data-invalid={Boolean(errors.supplierCode)}>
+                    <FieldLabel htmlFor="supplier-code">{t('crm:suppliers.code')}</FieldLabel>
+                    <Input
+                      id="supplier-code"
+                      type="text"
+                      value={formData.supplierCode}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, supplierCode: e.target.value }));
+                        if (errors.supplierCode)
+                          setErrors((prev) => ({ ...prev, supplierCode: '' }));
+                      }}
+                      placeholder={t('crm:suppliers.codePlaceholder')}
+                      aria-invalid={Boolean(errors.supplierCode)}
+                    />
+                    <FieldError className="text-xs">{errors.supplierCode}</FieldError>
+                  </Field>
+                  <Field data-invalid={Boolean(errors.name)}>
+                    <FieldLabel htmlFor="supplier-name">{t('crm:suppliers.name')}</FieldLabel>
+                    <Input
+                      id="supplier-name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, name: e.target.value }));
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                      }}
+                      placeholder={t('crm:suppliers.namePlaceholder')}
+                      aria-invalid={Boolean(errors.name)}
+                    />
+                    <FieldError className="text-xs">{errors.name}</FieldError>
+                  </Field>
+                  <Field className="col-span-full">
+                    <FieldLabel htmlFor="supplier-contact-name">
+                      {t('crm:suppliers.contactName')}
+                    </FieldLabel>
+                    <Input
+                      id="supplier-contact-name"
+                      type="text"
+                      value={formData.contactName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, contactName: e.target.value }))
+                      }
+                      placeholder={t('crm:suppliers.contactPlaceholder')}
+                    />
+                  </Field>
                 </div>
               </div>
-            </div>
 
-            {/* Section 2: Contacts */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-praetor"></span>
-                {t('crm:suppliers.contacts')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.email')}
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                    placeholder={t('crm:suppliers.emailPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.phone')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                    placeholder={t('crm:suppliers.phonePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.address')}
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formData.address}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-                    placeholder={t('crm:suppliers.addressPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                  />
+              {/* Section 2: Contacts */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('crm:suppliers.contacts')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="supplier-email">{t('crm:suppliers.email')}</FieldLabel>
+                    <Input
+                      id="supplier-email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder={t('crm:suppliers.emailPlaceholder')}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="supplier-phone">{t('crm:suppliers.phone')}</FieldLabel>
+                    <Input
+                      id="supplier-phone"
+                      type="text"
+                      value={formData.phone}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder={t('crm:suppliers.phonePlaceholder')}
+                    />
+                  </Field>
+                  <Field className="col-span-full">
+                    <FieldLabel htmlFor="supplier-address">{t('crm:suppliers.address')}</FieldLabel>
+                    <Textarea
+                      id="supplier-address"
+                      rows={2}
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, address: e.target.value }))
+                      }
+                      placeholder={t('crm:suppliers.addressPlaceholder')}
+                      className="resize-none"
+                    />
+                  </Field>
                 </div>
               </div>
-            </div>
 
-            {/* Section 3: Administrative */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-praetor"></span>
-                {t('crm:suppliers.adminFiscal')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.vatNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.vatNumber}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, vatNumber: e.target.value }));
-                      if (errors.vatNumber) setErrors((prev) => ({ ...prev, vatNumber: '' }));
-                    }}
-                    placeholder={t('crm:suppliers.vatPlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.vatNumber ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                    }`}
-                  />
-                  {errors.vatNumber && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.vatNumber}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.taxCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.taxCode}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, taxCode: e.target.value }))}
-                    placeholder={t('crm:suppliers.taxCodePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.paymentTerms')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.paymentTerms}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, paymentTerms: e.target.value }))
-                    }
-                    placeholder={t('crm:suppliers.paymentTermsPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 ml-1">
-                    {t('crm:suppliers.notes')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.notes}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                    placeholder={t('crm:suppliers.notesPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
+              {/* Section 3: Administrative */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('crm:suppliers.adminFiscal')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field data-invalid={Boolean(errors.vatNumber)}>
+                    <FieldLabel htmlFor="supplier-vat-number">
+                      {t('crm:suppliers.vatNumber')}
+                    </FieldLabel>
+                    <Input
+                      id="supplier-vat-number"
+                      type="text"
+                      value={formData.vatNumber}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, vatNumber: e.target.value }));
+                        if (errors.vatNumber) setErrors((prev) => ({ ...prev, vatNumber: '' }));
+                      }}
+                      placeholder={t('crm:suppliers.vatPlaceholder')}
+                      aria-invalid={Boolean(errors.vatNumber)}
+                    />
+                    <FieldError className="text-xs">{errors.vatNumber}</FieldError>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="supplier-tax-code">
+                      {t('crm:suppliers.taxCode')}
+                    </FieldLabel>
+                    <Input
+                      id="supplier-tax-code"
+                      type="text"
+                      value={formData.taxCode}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, taxCode: e.target.value }))
+                      }
+                      placeholder={t('crm:suppliers.taxCodePlaceholder')}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="supplier-payment-terms">
+                      {t('crm:suppliers.paymentTerms')}
+                    </FieldLabel>
+                    <Input
+                      id="supplier-payment-terms"
+                      type="text"
+                      value={formData.paymentTerms}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, paymentTerms: e.target.value }))
+                      }
+                      placeholder={t('crm:suppliers.paymentTermsPlaceholder')}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="supplier-notes">{t('crm:suppliers.notes')}</FieldLabel>
+                    <Input
+                      id="supplier-notes"
+                      type="text"
+                      value={formData.notes}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder={t('crm:suppliers.notesPlaceholder')}
+                    />
+                  </Field>
                 </div>
               </div>
-            </div>
 
-            {errors.general && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
-                <i className="fa-solid fa-circle-exclamation text-lg"></i>
-                <p className="text-sm font-bold">{errors.general}</p>
-              </div>
-            )}
+              {errors.general && (
+                <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+                  <i className="fa-solid fa-circle-exclamation text-lg" aria-hidden="true"></i>
+                  <p className="text-sm font-bold">{errors.general}</p>
+                </div>
+              )}
+            </ModalBody>
 
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-100">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-8 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-200"
-              >
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-                  canSubmit
-                    ? 'bg-praetor shadow-zinc-200 hover:bg-zinc-700'
-                    : 'bg-zinc-300 shadow-none cursor-not-allowed'
-                }`}
-              >
+              </Button>
+              <Button type="submit" disabled={!canSubmit}>
                 {editingSupplier ? t('common:buttons.update') : t('common:buttons.save')}
-              </button>
-            </div>
+              </Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
-                {t('crm:suppliers.deleteSupplier')}
-              </h3>
-              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: supplierToDelete?.name })}
-                {t('crm:suppliers.deleteConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title={t('crm:suppliers.deleteSupplier')}
+        description={`${t('common:messages.deleteConfirmNamed', {
+          name: supplierToDelete?.name,
+        })}${t('crm:suppliers.deleteConfirm')}`}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

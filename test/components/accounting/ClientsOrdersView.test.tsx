@@ -2,6 +2,11 @@ import { describe, expect, mock, test } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import type { Client, ClientsOrder } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -82,24 +87,24 @@ describe('<ClientsOrdersView />', () => {
   });
 
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
-    const source = await Bun.file(
-      new URL('../../../components/accounting/ClientsOrdersView.tsx', import.meta.url),
-    ).text();
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
-    expect(source).toContain("import { Button } from '@/components/ui/button';");
-    expect(source).toContain(
+    expectSourceContainsAll(source, [
+      "import { Button } from '@/components/ui/button';",
       "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
-    );
-    expect(source).toContain("import { Textarea } from '@/components/ui/textarea';");
-    expect(source).toContain('<ModalContent size="full"');
-    expect(source).toContain('<ModalHeader>');
-    expect(source).toContain('<ModalBody className="flex-1 space-y-5">');
-    expect(source).toContain('<ModalFooter>');
-    expect(source).toContain('id="client-order-client"');
-    expect(source).toContain('id="client-order-notes"');
-    expect(source).toContain('<DeleteConfirmModal');
-    expect(source).not.toContain('rounded-2xl bg-white');
-    expect(source).not.toContain('shadow-lg shadow-zinc-200');
-    expect(source).not.toContain('<textarea');
+      "import { Textarea } from '@/components/ui/textarea';",
+      '<ModalContent size="full"',
+      '<ModalHeader>',
+      '<ModalBody className="flex-1 space-y-5">',
+      '<ModalFooter>',
+      'id="client-order-client"',
+      'id="client-order-notes"',
+      '<DeleteConfirmModal',
+    ]);
+    expectSourceOmitsAll(source, [
+      'rounded-2xl bg-white',
+      'shadow-lg shadow-zinc-200',
+      '<textarea',
+    ]);
   });
 });
