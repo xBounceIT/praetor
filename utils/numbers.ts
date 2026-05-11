@@ -1,9 +1,22 @@
 import type { DiscountType, SupplierUnitType } from '../types';
 
-export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
+// Rounds a currency value to 2 decimal places, matching the server's
+// `roundCurrency` in `server/utils/invoice-math.ts` so the frontend
+// previews stay in sync with persisted invoice totals.
+export const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
+
+export const parseNumberInputValue = (value: string, fallback: number = 0): number => {
   if (value === '') return fallback;
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+// Variant for callers that need to distinguish "cleared" (undefined) from
+// "typed 0" — e.g. validation that requires the user to enter a value.
+export const parseOptionalNumberInputValue = (value: string): number | undefined => {
+  if (value === '') return undefined;
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
 };
 
 export const convertUnitPrice = (
@@ -91,15 +104,24 @@ export const calculatePricingTotals = (
       convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType);
   });
 
-  const discountAmount =
+  const rawDiscountAmount =
     discountType === 'currency'
       ? Math.min(Math.max(globalDiscount, 0), subtotal)
       : subtotal * (globalDiscount / 100);
-  const total = subtotal - discountAmount;
-  const margin = total - totalCost;
-  const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
-
-  return { subtotal, discountAmount, total, totalCost, margin, marginPercentage };
+  const rawTotal = subtotal - rawDiscountAmount;
+  const rawMargin = rawTotal - totalCost;
+  // Round to 2dp to match `computeInvoiceTotals` on the server and avoid
+  // floating-point drift in previews (e.g. 0.1 * 0.2 → 0.020000000000000004).
+  const total = roundCurrency(rawTotal);
+  const margin = roundCurrency(rawMargin);
+  return {
+    subtotal: roundCurrency(subtotal),
+    discountAmount: roundCurrency(rawDiscountAmount),
+    total,
+    totalCost: roundCurrency(totalCost),
+    margin,
+    marginPercentage: total > 0 ? roundCurrency((margin / total) * 100) : 0,
+  };
 };
 
 export const formatDiscountValue = (
