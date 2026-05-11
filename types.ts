@@ -1,5 +1,22 @@
-export type UserRole = string;
-export type Permission = string;
+/**
+ * Built-in role identifiers seeded by the backend.
+ * Custom roles created via Roles administration are also valid `UserRole`
+ * values — they keep the same `string` shape but are not known at compile
+ * time, hence the `(string & {})` fallback that preserves autocomplete on the
+ * literals while still accepting arbitrary DB-defined IDs.
+ */
+export type SystemRoleId = 'admin' | 'manager' | 'user' | 'top_manager';
+export type UserRole = SystemRoleId | (string & {});
+
+/**
+ * Permissions follow the `${resource}.${action}` shape (see
+ * `server/utils/permissions.ts`). The canonical set is generated from
+ * `PERMISSION_DEFINITIONS`; we accept any `string` here to stay flexible for
+ * custom permissions while keeping the type narrower than `unknown`.
+ */
+export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
+export type Permission = `${string}.${PermissionAction}` | (string & {});
+
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type DiscountType = 'percentage' | 'currency';
@@ -7,6 +24,23 @@ export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'tran
 export type StoredBillingType = 'retainer' | 'time_and_materials';
 export type BillingType = StoredBillingType | 'mixed';
 export type BillingFrequency = 'monthly' | 'one_time';
+
+/**
+ * Payment terms shared by quotes, offers, orders, and supplier-side
+ * documents. Centralised so the literal union doesn't drift between domains.
+ */
+export type PaymentTerm =
+  | 'immediate'
+  | '15gg'
+  | '21gg'
+  | '30gg'
+  | '45gg'
+  | '60gg'
+  | '90gg'
+  | '120gg'
+  | '180gg'
+  | '240gg'
+  | '365gg';
 
 export interface RoleSummary {
   id: string;
@@ -313,18 +347,7 @@ export interface Quote {
   clientId: string;
   clientName: string;
   items: QuoteItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
+  paymentTerms: PaymentTerm;
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
@@ -381,18 +404,7 @@ export interface ClientOffer {
   clientId: string;
   clientName: string;
   items: ClientOfferItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
+  paymentTerms: PaymentTerm;
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
@@ -451,18 +463,7 @@ export interface ClientsOrder {
   clientId: string;
   clientName: string;
   items: ClientsOrderItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
+  paymentTerms: PaymentTerm;
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'confirmed' | 'denied';
@@ -592,7 +593,6 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
-  linkedOrderId?: string;
   linkedSaleId?: string;
   clientId: string;
   clientName: string;
@@ -642,18 +642,7 @@ export interface SupplierQuote {
   supplierId: string;
   supplierName: string;
   items: SupplierQuoteItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
+  paymentTerms: PaymentTerm;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOrderId?: string;
@@ -709,18 +698,7 @@ export interface SupplierSaleOrder {
   supplierId: string;
   supplierName: string;
   items: SupplierSaleOrderItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
+  paymentTerms: PaymentTerm;
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'sent';
