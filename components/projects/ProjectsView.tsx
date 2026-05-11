@@ -10,7 +10,7 @@ import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
 import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -103,25 +103,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common', 'form']);
-  const canCreateProjects = hasPermission(
-    permissions,
-    buildPermission('projects.manage', 'create'),
-  );
-  const canUpdateProjects = hasPermission(
-    permissions,
-    buildPermission('projects.manage', 'update'),
-  );
-  const canDeleteProjects = hasPermission(
-    permissions,
-    buildPermission('projects.manage', 'delete'),
-  );
+  const canCreateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'create');
+  const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
+  const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
   const canManageAssignments = hasPermission(
     permissions,
     buildPermission('projects.assignments', 'update'),
   );
-  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
-  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
-  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
+  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
+  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);

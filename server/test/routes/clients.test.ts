@@ -136,6 +136,9 @@ const HAPPY_USER = {
 const ALL_PERMS = [
   'crm.clients.view',
   'crm.clients_all.view',
+  'crm.clients_all.create',
+  'crm.clients_all.update',
+  'crm.clients_all.delete',
   'crm.clients.create',
   'crm.clients.update',
   'crm.clients.delete',
@@ -324,6 +327,23 @@ describe('POST /api/clients', () => {
     );
   });
 
+  test('201 accepts crm.clients_all.create without base create', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients_all.create']);
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+  });
+
   test('400 whitespace-only name (handler validation)', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -464,6 +484,24 @@ describe('PUT /api/clients/:id', () => {
     );
   });
 
+  test('200 crm.clients_all.update bypasses assigned-client check', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients_all.update']);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+    findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
+    updateClientMock.mockResolvedValue({ ...SAMPLE_CLIENT, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isClientAssignedToUserMock).not.toHaveBeenCalled();
+    expect(updateClientMock).toHaveBeenCalled();
+  });
+
   test('404 when current client missing', async () => {
     findContactsForUpdateMock.mockResolvedValue(null);
 
@@ -555,6 +593,22 @@ describe('DELETE /api/clients/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.deleted', entityId: 'c-1' }),
     );
+  });
+
+  test('200 crm.clients_all.delete bypasses assigned-client check', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients_all.delete']);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+    deleteClientByIdMock.mockResolvedValue({ id: 'c-1', name: 'ACME', clientCode: 'ACME-01' });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isClientAssignedToUserMock).not.toHaveBeenCalled();
+    expect(deleteClientByIdMock).toHaveBeenCalledWith('c-1');
   });
 
   test('404 not found', async () => {

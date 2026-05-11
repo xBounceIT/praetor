@@ -87,10 +87,12 @@ import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
   buildPermission,
+  equivalentPermissionsFor,
   getDefaultViewForPermissions,
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasViewAccess,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
@@ -777,11 +779,8 @@ const App: React.FC = () => {
       clearAuthScopedAppState();
       setViewingUserId(user.id);
       const defaultView = getDefaultViewForPermissions(user.permissions || [], VALID_VIEWS);
-      const activePermission =
-        activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
-      const canAccessActive = activePermission
-        ? hasPermission(user.permissions || [], activePermission)
-        : false;
+      const canAccessActive =
+        activeView !== '404' ? hasViewAccess(user.permissions || [], activeView as View) : false;
       if (activeView === '404' || !canAccessActive) {
         setActiveView(defaultView);
       }
@@ -949,8 +948,7 @@ const App: React.FC = () => {
       if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
     }
 
-    const permission = VIEW_PERMISSION_MAP[activeView as View];
-    return permission ? hasPermission(currentUser.permissions, permission) : false;
+    return hasViewAccess(currentUser.permissions, activeView as View);
   }, [activeView, currentUser, hasLoadedGeneralSettings, generalSettings.enableAiReporting]);
 
   // Redirect to 404 if route is not accessible
@@ -1119,14 +1117,13 @@ const App: React.FC = () => {
       try {
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canViewHr = hasAnyPermission(permissions, [
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
-          buildPermission('hr.work_units', 'view'),
-          buildPermission('hr.work_units_all', 'view'),
+          ...equivalentPermissionsFor('hr.work_units', 'view'),
         ]);
         const canViewConfiguration = hasAnyPermission(permissions, [
           buildPermission('administration.user_management', 'view'),
@@ -1138,10 +1135,8 @@ const App: React.FC = () => {
           buildPermission('administration.email', 'view'),
         ]);
         const canViewCrm = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
+          ...equivalentPermissionsFor('crm.clients', 'view'),
+          ...equivalentPermissionsFor('crm.suppliers', 'view'),
         ]);
         const canViewSales = hasAnyPermission(permissions, [
           buildPermission('sales.client_quotes', 'view'),
@@ -1159,8 +1154,8 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canViewProjects = hasAnyPermission(permissions, [
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
         ]);
         const canViewSuppliersModule = hasPermission(
           permissions,
@@ -1168,12 +1163,11 @@ const App: React.FC = () => {
         );
 
         const canListClients = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('crm.clients', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
           buildPermission('sales.client_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.clients_orders', 'view'),
@@ -1183,15 +1177,15 @@ const App: React.FC = () => {
           buildPermission('administration.user_management', 'update'),
         ]);
         const canListProjects = hasAnyPermission(permissions, [
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListTasks = hasAnyPermission(permissions, [
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListUsers = hasAnyPermission(permissions, [
@@ -1200,10 +1194,10 @@ const App: React.FC = () => {
           buildPermission('administration.user_management', 'update'),
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('hr.work_units', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('hr.work_units', 'view'),
         ]);
         const canListQuotes = hasPermission(
           permissions,
@@ -1221,8 +1215,7 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canListSuppliers = hasAnyPermission(permissions, [
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
+          ...equivalentPermissionsFor('crm.suppliers', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
@@ -1247,10 +1240,7 @@ const App: React.FC = () => {
           permissions,
           buildPermission('accounting.supplier_invoices', 'view'),
         );
-        const canListWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('hr.work_units', 'view'),
-          buildPermission('hr.work_units_all', 'view'),
-        ]);
+        const canListWorkUnits = hasViewAccess(permissions, 'hr/work-units');
         const canManageEmployeeAssignments = hasPermission(
           permissions,
           buildPermission('hr.employee_assignments', 'update'),
@@ -1273,14 +1263,8 @@ const App: React.FC = () => {
           permissions,
           buildPermission('administration.email', 'view'),
         );
-        const canViewCrmClients = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-        ]);
-        const canViewCrmSuppliers = hasAnyPermission(permissions, [
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
-        ]);
+        const canViewCrmClients = hasViewAccess(permissions, 'crm/clients');
+        const canViewCrmSuppliers = hasViewAccess(permissions, 'crm/suppliers');
         const canViewCatalogInternal = hasPermission(
           permissions,
           buildPermission('catalog.internal_listing', 'view'),
@@ -2163,7 +2147,7 @@ const App: React.FC = () => {
                 defaultLocation={generalSettings.defaultLocation}
               />
             )}
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/clients']) &&
+            {hasViewAccess(currentUser.permissions, 'crm/clients') &&
               activeView === 'crm/clients' && (
                 <ClientsView
                   clients={clients}
@@ -2375,7 +2359,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/suppliers']) &&
+            {hasViewAccess(currentUser.permissions, 'crm/suppliers') &&
               activeView === 'crm/suppliers' && (
                 <SuppliersView
                   suppliers={suppliers}
@@ -2418,62 +2402,64 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'projects/manage' && (
-              <ProjectsView
-                projects={projects}
-                clients={clients}
-                orders={clientsOrders}
-                currency={generalSettings.currency}
-                permissions={currentUser.permissions || []}
-                users={availableUsers}
-                roles={roles}
-                tasks={projectTasks}
-                onAddProject={addProject}
-                onUpdateProject={handleUpdateProject}
-                onDeleteProject={handleDeleteProject}
-                onAddTask={addProjectTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={async (id) => {
-                  try {
-                    await api.tasks.delete(id);
-                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                  } catch (err) {
-                    console.error('Failed to delete task:', err);
-                  }
-                }}
-                onViewOrder={(orderId) => {
-                  setClientsOrderFilterId(orderId);
-                  setActiveView('accounting/clients-orders');
-                }}
-              />
-            )}
+            {hasViewAccess(currentUser.permissions, 'projects/manage') &&
+              activeView === 'projects/manage' && (
+                <ProjectsView
+                  projects={projects}
+                  clients={clients}
+                  orders={clientsOrders}
+                  currency={generalSettings.currency}
+                  permissions={currentUser.permissions || []}
+                  users={availableUsers}
+                  roles={roles}
+                  tasks={projectTasks}
+                  onAddProject={addProject}
+                  onUpdateProject={handleUpdateProject}
+                  onDeleteProject={handleDeleteProject}
+                  onAddTask={addProjectTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={async (id) => {
+                    try {
+                      await api.tasks.delete(id);
+                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                    } catch (err) {
+                      console.error('Failed to delete task:', err);
+                    }
+                  }}
+                  onViewOrder={(orderId) => {
+                    setClientsOrderFilterId(orderId);
+                    setActiveView('accounting/clients-orders');
+                  }}
+                />
+              )}
 
-            {activeView === 'projects/tasks' && (
-              <TasksView
-                tasks={projectTasks}
-                projects={projects}
-                clients={clients}
-                permissions={currentUser.permissions || []}
-                users={availableUsers}
-                roles={roles}
-                currency={generalSettings.currency}
-                onAddTask={addProjectTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={async (id) => {
-                  try {
-                    await api.tasks.delete(id);
-                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                  } catch (err) {
-                    console.error('Failed to delete task:', err);
-                    alert('Failed to delete task');
-                  }
-                }}
-                onViewOrder={(orderId) => {
-                  setClientsOrderFilterId(orderId);
-                  setActiveView('accounting/clients-orders');
-                }}
-              />
-            )}
+            {hasViewAccess(currentUser.permissions, 'projects/tasks') &&
+              activeView === 'projects/tasks' && (
+                <TasksView
+                  tasks={projectTasks}
+                  projects={projects}
+                  clients={clients}
+                  permissions={currentUser.permissions || []}
+                  users={availableUsers}
+                  roles={roles}
+                  currency={generalSettings.currency}
+                  onAddTask={addProjectTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={async (id) => {
+                    try {
+                      await api.tasks.delete(id);
+                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                    } catch (err) {
+                      console.error('Failed to delete task:', err);
+                      alert('Failed to delete task');
+                    }
+                  }}
+                  onViewOrder={(orderId) => {
+                    setClientsOrderFilterId(orderId);
+                    setActiveView('accounting/clients-orders');
+                  }}
+                />
+              )}
 
             {hasPermission(
               currentUser.permissions,
@@ -2498,7 +2484,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/work-units']) &&
+            {hasViewAccess(currentUser.permissions, 'hr/work-units') &&
               activeView === 'hr/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
-import { buildPermission, hasAnyPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
@@ -216,9 +216,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
 
-  const canCreateCustomTask = hasAnyPermission(permissions, [
-    buildPermission('projects.tasks', 'create'),
-  ]);
+  const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));

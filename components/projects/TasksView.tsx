@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -64,9 +64,9 @@ const TasksView: React.FC<TasksViewProps> = ({
   onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
-  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
-  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
-  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
+  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
+  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');

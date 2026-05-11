@@ -8,6 +8,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { hasScopedActionPermission } from '../utils/permissions.ts';
 import {
   isWeekendDate,
   optionalLocalizedNonNegativeNumber,
@@ -37,6 +38,11 @@ export class TimeEntryServiceError extends Error {
 const hasPermission = (actor: AuthenticatedActor, permission: string) =>
   actor.permissions.includes(permission);
 
+const hasTrackerPermission = (
+  actor: AuthenticatedActor,
+  action: 'view' | 'create' | 'update' | 'delete',
+) => hasScopedActionPermission(actor.permissions, 'timesheets.tracker', action);
+
 const fail = (statusCode: number, message: string): never => {
   throw new TimeEntryServiceError(statusCode, message);
 };
@@ -52,7 +58,7 @@ export const listTimeEntries = async (
   actor: AuthenticatedActor,
   input: { userId?: unknown; limit?: unknown; cursor?: unknown },
 ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
-  if (!hasPermission(actor, 'timesheets.tracker.view')) fail(403, 'Insufficient permissions');
+  if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
 
   const userId = typeof input.userId === 'string' ? input.userId : undefined;
   const limit =
@@ -99,7 +105,7 @@ export const createTimeEntry = async (
     location?: unknown;
   },
 ): Promise<TimeEntry> => {
-  if (!hasPermission(actor, 'timesheets.tracker.create')) fail(403, 'Insufficient permissions');
+  if (!hasTrackerPermission(actor, 'create')) fail(403, 'Insufficient permissions');
 
   const date = requireValid(parseDateString(input.date, 'date'));
 
@@ -121,7 +127,7 @@ export const createTimeEntry = async (
   if (input.userId) {
     targetUserId = requireValid(requireNonEmptyString(input.userId, 'userId'));
 
-    if (targetUserId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.view')) {
+    if (targetUserId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.create')) {
       const allowed = await workUnitsRepo.isUserManagedBy(actor.id, targetUserId);
       if (!allowed) fail(403, 'Not authorized to create entries for this user');
     }
@@ -135,7 +141,7 @@ export const createTimeEntry = async (
     badRequest('Project does not belong to the selected client');
   }
 
-  if (!hasPermission(actor, 'timesheets.tracker_all.view')) {
+  if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
       userAssignmentsRepo.isClientAssignedToUser(targetUserId, clientId),
       userAssignmentsRepo.isProjectAssignedToUser(targetUserId, projectId),
@@ -174,7 +180,7 @@ export const updateTimeEntry = async (
   id: unknown,
   input: { duration?: unknown; notes?: unknown; isPlaceholder?: unknown; location?: unknown },
 ): Promise<TimeEntry> => {
-  if (!hasPermission(actor, 'timesheets.tracker.update')) fail(403, 'Insufficient permissions');
+  if (!hasTrackerPermission(actor, 'update')) fail(403, 'Insufficient permissions');
   const entryId = requireValid(requireNonEmptyString(id, 'id'));
 
   let parsedDuration: number | undefined;
@@ -190,7 +196,7 @@ export const updateTimeEntry = async (
   const context = await entriesRepo.findContext(entryId);
   if (context === null) return fail(404, 'Entry not found');
 
-  if (context.userId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.view')) {
+  if (context.userId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.update')) {
     const allowed = await workUnitsRepo.isUserManagedBy(actor.id, context.userId);
     if (!allowed) fail(403, 'Not authorized to update this entry');
   }
@@ -218,12 +224,12 @@ export const deleteTimeEntry = async (
   actor: AuthenticatedActor,
   id: unknown,
 ): Promise<{ message: string }> => {
-  if (!hasPermission(actor, 'timesheets.tracker.delete')) fail(403, 'Insufficient permissions');
+  if (!hasTrackerPermission(actor, 'delete')) fail(403, 'Insufficient permissions');
   const entryId = requireValid(requireNonEmptyString(id, 'id'));
 
   const ownerId = await entriesRepo.findOwner(entryId);
   if (ownerId === null) return fail(404, 'Entry not found');
-  if (ownerId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.view')) {
+  if (ownerId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.delete')) {
     const allowed = await workUnitsRepo.isUserManagedBy(actor.id, ownerId);
     if (!allowed) fail(403, 'Not authorized to delete this entry');
   }
@@ -248,7 +254,7 @@ export const bulkDeleteTimeEntries = async (
 
   const futureOnlyValue = parseQueryBoolean(input.futureOnly) ?? false;
   const placeholderOnlyValue = parseQueryBoolean(input.placeholderOnly) ?? false;
-  const restrictToManagerScopeOf = hasPermission(actor, 'timesheets.tracker_all.view')
+  const restrictToManagerScopeOf = hasPermission(actor, 'timesheets.tracker_all.delete')
     ? undefined
     : actor.id;
 

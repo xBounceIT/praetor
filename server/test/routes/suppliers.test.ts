@@ -81,6 +81,9 @@ const HAPPY_USER = {
 const ALL_PERMS = [
   'crm.suppliers.view',
   'crm.suppliers_all.view',
+  'crm.suppliers_all.create',
+  'crm.suppliers_all.update',
+  'crm.suppliers_all.delete',
   'crm.suppliers.create',
   'crm.suppliers.update',
   'crm.suppliers.delete',
@@ -188,6 +191,24 @@ describe('POST /api/suppliers', () => {
     );
   });
 
+  test('201 accepts crm.suppliers_all.create without base create', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers_all.create']);
+    createMock.mockResolvedValue(SAMPLE_SUPPLIER);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
   test('400 missing name', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -290,6 +311,21 @@ describe('PUT /api/suppliers/:id', () => {
     );
   });
 
+  test('200 accepts crm.suppliers_all.update without base update', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers_all.update']);
+    updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, name: 'ACME 2' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { name: 'ACME 2' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ name: 'ACME 2' }));
+  });
+
   test('404 when repo returns null', async () => {
     updateMock.mockResolvedValue(null);
 
@@ -353,6 +389,20 @@ describe('DELETE /api/suppliers/:id', () => {
         entityId: 's-1',
       }),
     );
+  });
+
+  test('204 accepts crm.suppliers_all.delete without base delete', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers_all.delete']);
+    deleteByIdMock.mockResolvedValue({ name: 'ACME', supplierCode: 'ACM' });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(deleteByIdMock).toHaveBeenCalledWith('s-1');
   });
 
   test('404 when not found', async () => {

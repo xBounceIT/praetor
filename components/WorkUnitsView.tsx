@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api';
 import type { User, WorkUnit } from '../types';
-import { buildPermission, hasPermission } from '../utils/permissions';
+import { hasScopedActionPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
 import HeaderAddButton from './shared/HeaderAddButton';
 import Modal from './shared/Modal';
@@ -175,9 +175,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const managerOptions = users.map((u) => ({ id: u.id, name: u.name }));
 
-  const canCreateWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'create'));
-  const canUpdateWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'update'));
-  const canDeleteWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'delete'));
+  const canCreateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'create');
+  const canUpdateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'update');
+  const canDeleteWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'delete');
   const canManageMembers = canUpdateWorkUnits;
 
   return (

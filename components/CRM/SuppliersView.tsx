@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -55,9 +55,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   permissions,
 }) => {
   const { t } = useTranslation(['crm', 'common']);
-  const canCreateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'create'));
-  const canUpdateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'update'));
-  const canDeleteSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'delete'));
+  const canCreateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'create');
+  const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
+  const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);

@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
@@ -97,15 +101,23 @@ const userIdsSchema = {
   required: ['userIds'],
 } as const;
 
-const canAccessProject = (request: FastifyRequest, projectId: string) => {
-  if (hasPermission(request, 'projects.manage_all.view')) return Promise.resolve(true);
+const canAccessProject = (
+  request: FastifyRequest,
+  projectId: string,
+  allScopePermission = 'projects.manage_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
   const userId = request.user?.id;
   if (!userId) return Promise.resolve(false);
   return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
 };
 
-const canAccessTask = (request: FastifyRequest, taskId: string) => {
-  if (hasPermission(request, 'projects.tasks_all.view')) return Promise.resolve(true);
+const canAccessTask = (
+  request: FastifyRequest,
+  taskId: string,
+  allScopePermission = 'projects.tasks_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
   const userId = request.user?.id;
   if (!userId) return Promise.resolve(false);
   return userAssignmentsRepo.isTaskAssignedToUser(userId, taskId);
@@ -121,8 +133,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         authenticateToken,
         requireAnyPermission(
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
         ),
       ],
@@ -146,7 +161,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('projects.tasks.create')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'create')],
       schema: {
         tags: ['tasks'],
         summary: 'Create task',
@@ -187,7 +202,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
-      if (!(await canAccessProject(request, projectIdResult.value))) {
+      if (
+        !hasPermission(request, 'projects.tasks_all.create') &&
+        !(await canAccessProject(request, projectIdResult.value))
+      ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -266,8 +284,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         authenticateToken,
         requireAnyPermission(
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
         ),
       ],
@@ -328,8 +349,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         authenticateToken,
         requireAnyPermission(
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
         ),
       ],
@@ -370,7 +394,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'update')],
       schema: {
         tags: ['tasks'],
         summary: 'Update task',
@@ -412,7 +436,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value))) {
+      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
       const durationResult = optionalLocalizedNonNegativeNumber(
@@ -491,7 +515,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.tasks.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'delete')],
       schema: {
         tags: ['tasks'],
         summary: 'Delete task',
@@ -506,7 +530,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value))) {
+      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.delete'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -533,7 +557,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'update')],
       schema: {
         tags: ['tasks'],
         summary: 'Get task user assignments',
@@ -548,7 +572,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value))) {
+      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
       return tasksRepo.findAssignedUserIds(idResult.value);
@@ -559,7 +583,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'update')],
       schema: {
         tags: ['tasks'],
         summary: 'Update task user assignments',
@@ -576,7 +600,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value))) {
+      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 

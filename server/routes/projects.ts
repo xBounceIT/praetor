@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requirePermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
@@ -77,15 +82,23 @@ const projectUpdateBodySchema = {
 
 class PermissionError extends Error {}
 
-const canAccessClient = (request: FastifyRequest, clientId: string) => {
-  if (hasPermission(request, 'crm.clients_all.view')) return Promise.resolve(true);
+const canAccessClient = (
+  request: FastifyRequest,
+  clientId: string,
+  allScopePermission = 'crm.clients_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
   const userId = request.user?.id;
   if (!userId) return Promise.resolve(false);
   return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
 };
 
-const canAccessProject = (request: FastifyRequest, projectId: string) => {
-  if (hasPermission(request, 'projects.manage_all.view')) return Promise.resolve(true);
+const canAccessProject = (
+  request: FastifyRequest,
+  projectId: string,
+  allScopePermission = 'projects.manage_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
   const userId = request.user?.id;
   if (!userId) return Promise.resolve(false);
   return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
@@ -101,8 +114,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         authenticateToken,
         requireAnyPermission(
           'projects.manage.view',
+          'projects.manage_all.view',
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
         ),
       ],
@@ -127,7 +143,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.create')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'create')],
       schema: {
         tags: ['projects'],
         summary: 'Create project',
@@ -153,7 +169,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
-      if (!(await canAccessClient(request, clientIdResult.value))) {
+      if (
+        !hasPermission(request, 'projects.manage_all.create') &&
+        !(await canAccessClient(request, clientIdResult.value))
+      ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -206,7 +225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'delete')],
       schema: {
         tags: ['projects'],
         summary: 'Delete project',
@@ -221,7 +240,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.delete'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -269,7 +288,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.update')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'update')],
       schema: {
         tags: ['projects'],
         summary: 'Update project',
@@ -293,7 +312,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { name, clientId, description, color, isDisabled } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.update'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
       let normalizedColor = color;
@@ -320,6 +339,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
           if (
             requestedClientId !== previousClientId &&
+            !hasPermission(request, 'projects.manage_all.update') &&
             !(await canAccessClient(request, requestedClientId))
           ) {
             throw new PermissionError();
