@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -137,7 +141,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
-        requirePermission('timesheets.tracker.view'),
+        requireScopedPermission('timesheets.tracker', 'view'),
       ],
       schema: {
         tags: ['entries'],
@@ -169,7 +173,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('timesheets.tracker.create')],
+      onRequest: [authenticateToken, requireScopedPermission('timesheets.tracker', 'create')],
       schema: {
         tags: ['entries'],
         summary: 'Create time entry',
@@ -196,7 +200,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('timesheets.tracker.update')],
+      onRequest: [authenticateToken, requireScopedPermission('timesheets.tracker', 'update')],
       schema: {
         tags: ['entries'],
         summary: 'Update time entry',
@@ -224,7 +228,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('timesheets.tracker.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('timesheets.tracker', 'delete')],
       schema: {
         tags: ['entries'],
         summary: 'Delete time entry',
@@ -254,7 +258,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
-        requireAnyPermission('timesheets.tracker.delete', 'timesheets.recurring.delete'),
+        requireAnyPermission(
+          'timesheets.tracker.delete',
+          'timesheets.tracker_all.delete',
+          'timesheets.recurring.delete',
+        ),
       ],
       schema: {
         tags: ['entries'],

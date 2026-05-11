@@ -328,9 +328,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'hr.internal.view',
           'hr.external.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'hr.work_units.view',
+          'hr.work_units_all.view',
         ),
       ],
       schema: {
@@ -348,7 +352,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
         hasPermission(request, 'timesheets.tracker.view') ||
+        hasPermission(request, 'timesheets.tracker_all.view') ||
         hasPermission(request, 'hr.work_units.view') ||
+        hasPermission(request, 'hr.work_units_all.view') ||
         canViewUserManagement;
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');

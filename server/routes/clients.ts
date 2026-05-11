@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
@@ -289,8 +293,12 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
-const canAccessClient = (request: FastifyRequest, clientId: string) => {
-  if (hasPermission(request, 'crm.clients_all.view')) return Promise.resolve(true);
+const canAccessClient = (
+  request: FastifyRequest,
+  clientId: string,
+  allScopePermission = 'crm.clients_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
   const userId = request.user?.id;
   if (!userId) return Promise.resolve(false);
   return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
@@ -307,9 +315,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'crm.clients.view',
           'crm.clients_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'sales.client_quotes.view',
           'sales.client_offers.view',
           'accounting.clients_orders.view',
@@ -357,7 +368,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.create')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'create')],
       schema: {
         tags: ['clients'],
         summary: 'Create client',
@@ -554,7 +565,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.update')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'update')],
       schema: {
         tags: ['clients'],
         summary: 'Update client',
@@ -573,7 +584,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (!(await canAccessClient(request, idResult.value))) {
+      if (!(await canAccessClient(request, idResult.value, 'crm.clients_all.update'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -804,7 +815,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'delete')],
       schema: {
         tags: ['clients'],
         summary: 'Delete client',
@@ -820,7 +831,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (!(await canAccessClient(request, idResult.value))) {
+      if (!(await canAccessClient(request, idResult.value, 'crm.clients_all.delete'))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -849,7 +860,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
-        requireAnyPermission('crm.clients.view', 'crm.clients_all.view'),
+        requireScopedPermission('crm.clients', 'view'),
       ],
       schema: {
         tags: ['clients'],
@@ -874,7 +885,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/profile-options/:category',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.update')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'update')],
       schema: {
         tags: ['clients'],
         summary: 'Create client profile option',
@@ -937,7 +948,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/profile-options/:category/:id',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.update')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'update')],
       schema: {
         tags: ['clients'],
         summary: 'Update client profile option',
@@ -1022,7 +1033,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/profile-options/:category/:id',
     {
-      onRequest: [authenticateToken, requirePermission('crm.clients.update')],
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'update')],
       schema: {
         tags: ['clients'],
         summary: 'Delete client profile option',

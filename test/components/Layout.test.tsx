@@ -263,6 +263,20 @@ describe('<Layout />', () => {
     expect(screen.queryByText('modules.accounting')).toBeNull();
   });
 
+  test('all-scope client view permission exposes the CRM clients route', () => {
+    renderLayout({
+      currentUser: {
+        ...mockUser,
+        permissions: ['timesheets.tracker.view', 'crm.clients_all.view'],
+      },
+    });
+
+    expect(screen.getByText('modules.crm')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'modules.crm' }));
+    expect(screen.getByRole('button', { name: 'routes.clients' })).toBeDefined();
+    expect(screen.queryByText('routes.suppliers')).toBeNull();
+  });
+
   test('reports module stays visible with disabled AI reporting route when feature is off', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const onViewChange = mock(() => {});

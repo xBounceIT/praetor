@@ -8,6 +8,8 @@ import {
   formatPermissionLabel,
   hasAnyPermission,
   hasPermission,
+  hasScopedActionPermission,
+  hasViewAccess,
   isTopManagerOnlyPermission,
   PERMISSION_DEFINITIONS,
   ROLE_EDITOR_EXCLUDED_MODULES,
@@ -42,7 +44,11 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
 
   test('contains expected representative permissions', () => {
     expect(ALL_PERMISSIONS).toContain('crm.clients.view');
+    expect(ALL_PERMISSIONS).toContain('crm.clients_all.create');
+    expect(ALL_PERMISSIONS).toContain('projects.tasks_all.update');
+    expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
+    expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.update');
   });
 });
@@ -75,6 +81,8 @@ describe('isTopManagerOnlyPermission', () => {
 
   test('matches hr.work_units_all.* scope permissions', () => {
     expect(isTopManagerOnlyPermission('hr.work_units_all.view')).toBe(true);
+    expect(isTopManagerOnlyPermission('hr.work_units_all.update')).toBe(true);
+    expect(isTopManagerOnlyPermission('hr.work_units_all.delete')).toBe(true);
   });
 
   test('does not match unrelated permissions', () => {
@@ -143,6 +151,35 @@ describe('hasAnyPermission', () => {
 
   test('returns false when required is empty', () => {
     expect(hasAnyPermission(['crm.clients.view'], [])).toBe(false);
+  });
+});
+
+describe('hasScopedActionPermission', () => {
+  test('returns true for the base action permission', () => {
+    expect(hasScopedActionPermission(['crm.clients.create'], 'crm.clients', 'create')).toBe(true);
+  });
+
+  test('returns true for the matching all-scope action permission', () => {
+    expect(hasScopedActionPermission(['crm.clients_all.delete'], 'crm.clients', 'delete')).toBe(
+      true,
+    );
+  });
+
+  test('does not treat all-scope view as an all-scope write', () => {
+    expect(hasScopedActionPermission(['crm.clients_all.view'], 'crm.clients', 'update')).toBe(
+      false,
+    );
+  });
+});
+
+describe('hasViewAccess', () => {
+  test('allows a scoped view with either base view or all-scope view', () => {
+    expect(hasViewAccess(['crm.clients.view'], 'crm/clients')).toBe(true);
+    expect(hasViewAccess(['crm.clients_all.view'], 'crm/clients')).toBe(true);
+  });
+
+  test('does not allow a scoped view with write permission only', () => {
+    expect(hasViewAccess(['crm.clients_all.update'], 'crm/clients')).toBe(false);
   });
 });
 
