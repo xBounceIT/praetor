@@ -1,11 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realInvoicesRepo from '../../repositories/invoicesRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../../utils/rate-limit.ts';
 import {
   installAuthMiddlewareMock,
   restoreAuthMiddlewareMock,
@@ -785,5 +786,30 @@ describe('DELETE /api/invoices/:id', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'Cannot delete invoice because it is referenced by other records',
     });
+  });
+});
+
+// Rate-limit configuration regression: mutating handlers must opt in to the standard
+// per-route rate limit, not only GET. Without this an attacker can trivially flood
+// the database with POST/PUT/DELETE traffic.
+describe('rate-limit configuration on invoice mutations', () => {
+  test('GET, POST, PUT, DELETE all install fastify.rateLimit with STANDARD_ROUTE_RATE_LIMIT', async () => {
+    // Spy on the rateLimit decorator instead of the no-op in buildRouteTestApp so we can
+    // assert which route options reach it.
+    const rateLimitMock = mock((_options: unknown) => async () => {});
+    const app = Fastify({ logger: false });
+    app.decorate('rateLimit', rateLimitMock);
+    await app.register(invoicesRoutePlugin, { prefix: '/api/invoices' });
+    await app.ready();
+
+    // One call per route (GET, POST, PUT, DELETE) - four total. Every call must use the
+    // standard config so abuse on mutations is gated the same way as the listing.
+    expect(rateLimitMock).toHaveBeenCalledTimes(4);
+    expect(rateLimitMock).toHaveBeenNthCalledWith(1, STANDARD_ROUTE_RATE_LIMIT);
+    expect(rateLimitMock).toHaveBeenNthCalledWith(2, STANDARD_ROUTE_RATE_LIMIT);
+    expect(rateLimitMock).toHaveBeenNthCalledWith(3, STANDARD_ROUTE_RATE_LIMIT);
+    expect(rateLimitMock).toHaveBeenNthCalledWith(4, STANDARD_ROUTE_RATE_LIMIT);
+
+    await app.close();
   });
 });
