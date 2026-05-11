@@ -15,11 +15,14 @@ export const getEaster = (y: number): Date => {
 };
 
 /**
- * Returns a translation key (e.g. `holidays.newYear`) for the Italian public
- * holiday that falls on `date`, or `null` if the date is not a holiday.
+ * Returns a translation key (e.g. `newYear`) under the `holidays` namespace for
+ * the Italian public holiday that falls on `date`, or `null` if the date is not
+ * a holiday.
  *
- * Callers should resolve the key with `t(key)` (or `useTranslation('holidays')`)
- * so the displayed name follows the user's language preference.
+ * Callers should resolve with `t(key, { ns: 'holidays' })` so the displayed
+ * name follows the user's language preference. The key is intentionally bare
+ * (no `holidays.` prefix) to avoid the double-namespace lookup
+ * (`holidays.holidays.newYear`) when callers also pass `ns: 'holidays'`.
  */
 export const isItalianHoliday = (date: Date): string | null => {
   const d = date.getDate();
@@ -27,16 +30,16 @@ export const isItalianHoliday = (date: Date): string | null => {
   const y = date.getFullYear();
 
   const fixedHolidays: Record<string, string> = {
-    '1-1': 'holidays.newYear',
-    '1-6': 'holidays.epiphany',
-    '4-25': 'holidays.liberationDay',
-    '5-1': 'holidays.laborDay',
-    '6-2': 'holidays.republicDay',
-    '8-15': 'holidays.assumption',
-    '11-1': 'holidays.allSaints',
-    '12-8': 'holidays.immaculateConception',
-    '12-25': 'holidays.christmas',
-    '12-26': 'holidays.stStephen',
+    '1-1': 'newYear',
+    '1-6': 'epiphany',
+    '4-25': 'liberationDay',
+    '5-1': 'laborDay',
+    '6-2': 'republicDay',
+    '8-15': 'assumption',
+    '11-1': 'allSaints',
+    '12-8': 'immaculateConception',
+    '12-25': 'christmas',
+    '12-26': 'stStephen',
   };
 
   const key = `${m}-${d}`;
@@ -48,11 +51,11 @@ export const isItalianHoliday = (date: Date): string | null => {
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate();
 
-  if (isSameDay(date, easter)) return 'holidays.easter';
+  if (isSameDay(date, easter)) return 'easter';
 
   const easterMonday = new Date(easter);
   easterMonday.setDate(easter.getDate() + 1);
-  if (isSameDay(date, easterMonday)) return 'holidays.easterMonday';
+  if (isSameDay(date, easterMonday)) return 'easterMonday';
 
   return null;
 };

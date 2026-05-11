@@ -28,16 +28,16 @@ describe('getEaster', () => {
 
 describe('isItalianHoliday - fixed dates', () => {
   test.each([
-    ['2026-01-01', 'holidays.newYear'],
-    ['2026-01-06', 'holidays.epiphany'],
-    ['2026-04-25', 'holidays.liberationDay'],
-    ['2026-05-01', 'holidays.laborDay'],
-    ['2026-06-02', 'holidays.republicDay'],
-    ['2026-08-15', 'holidays.assumption'],
-    ['2026-11-01', 'holidays.allSaints'],
-    ['2026-12-08', 'holidays.immaculateConception'],
-    ['2026-12-25', 'holidays.christmas'],
-    ['2026-12-26', 'holidays.stStephen'],
+    ['2026-01-01', 'newYear'],
+    ['2026-01-06', 'epiphany'],
+    ['2026-04-25', 'liberationDay'],
+    ['2026-05-01', 'laborDay'],
+    ['2026-06-02', 'republicDay'],
+    ['2026-08-15', 'assumption'],
+    ['2026-11-01', 'allSaints'],
+    ['2026-12-08', 'immaculateConception'],
+    ['2026-12-25', 'christmas'],
+    ['2026-12-26', 'stStephen'],
   ])('%s → %s', (dateStr, expected) => {
     const [y, m, d] = dateStr.split('-').map(Number);
     expect(isItalianHoliday(new Date(y, m - 1, d))).toBe(expected);
@@ -46,11 +46,11 @@ describe('isItalianHoliday - fixed dates', () => {
 
 describe('isItalianHoliday - moveable feasts', () => {
   test('returns the Easter key on Easter Sunday', () => {
-    expect(isItalianHoliday(new Date(2026, 3, 5))).toBe('holidays.easter');
+    expect(isItalianHoliday(new Date(2026, 3, 5))).toBe('easter');
   });
 
   test('returns the Easter Monday key the day after Easter', () => {
-    expect(isItalianHoliday(new Date(2026, 3, 6))).toBe('holidays.easterMonday');
+    expect(isItalianHoliday(new Date(2026, 3, 6))).toBe('easterMonday');
   });
 
   test('returns null for the day before Easter (Good Saturday is not a public holiday in Italy)', () => {
@@ -58,14 +58,14 @@ describe('isItalianHoliday - moveable feasts', () => {
   });
 
   test('Easter Monday rolls forward correctly when Easter is on March 31 (boundary into April)', () => {
-    expect(isItalianHoliday(new Date(2024, 2, 31))).toBe('holidays.easter');
-    expect(isItalianHoliday(new Date(2024, 3, 1))).toBe('holidays.easterMonday');
+    expect(isItalianHoliday(new Date(2024, 2, 31))).toBe('easter');
+    expect(isItalianHoliday(new Date(2024, 3, 1))).toBe('easterMonday');
   });
 
   test('returned key resolves through the holidays namespace in both languages', () => {
     const key = isItalianHoliday(new Date(2026, 0, 1));
     expect(key).not.toBeNull();
-    const lookupKey = (key as string).split('.')[1] as keyof typeof itHolidays;
+    const lookupKey = key as keyof typeof itHolidays;
     expect(itHolidays[lookupKey]).toBe('Capodanno');
     expect(enHolidays[lookupKey]).toBe("New Year's Day");
   });
