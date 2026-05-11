@@ -137,7 +137,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-  const { t } = useTranslation(['projects', 'common', 'form']);
+  const { t, i18n } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'create');
   const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
   const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
@@ -1362,7 +1362,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               accessorFn: (row) => row.createdAt ?? 0,
               cell: ({ row }) => (
                 <span className="text-xs text-zinc-500 whitespace-nowrap">
-                  {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
+                  {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '-'}
                 </span>
               ),
             },

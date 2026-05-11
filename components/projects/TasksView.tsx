@@ -85,7 +85,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-  const { t } = useTranslation(['projects', 'common']);
+  const { t, i18n } = useTranslation(['projects', 'common']);
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
@@ -250,7 +250,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => task.createdAt ?? 0,
         cell: ({ row }) => (
           <span className="text-xs text-zinc-500 whitespace-nowrap">
-            {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
+            {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '-'}
           </span>
         ),
       },
@@ -540,6 +540,7 @@ const TasksView: React.FC<TasksViewProps> = ({
     ],
     [
       t,
+      i18n.language,
       projects,
       clients,
       canUpdateTasks,

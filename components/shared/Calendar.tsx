@@ -161,13 +161,16 @@ const Calendar: React.FC<CalendarProps> = ({
     const hasActivity = entryDates.has(dateStr);
 
     const dayOfWeek = dateObj.getDay();
-    const holidayName = isItalianHoliday(dateObj);
+    const holidayKey = isItalianHoliday(dateObj);
+    const holidayName = holidayKey ? t(holidayKey, { ns: 'holidays' }) : null;
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
     const isForbidden = !allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday;
-    const holidayLabel =
-      holidayName || (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '');
+    let weekendLabel = '';
+    if (isSunday) weekendLabel = t('recurring.dayNames.sunday');
+    else if (isSaturday && treatSaturdayAsHoliday) weekendLabel = t('recurring.dayNames.saturday');
+    const holidayLabel = holidayName || weekendLabel;
 
     days.push(
       <Tooltip key={d} disabled={!holidayLabel}>

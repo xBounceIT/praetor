@@ -158,11 +158,27 @@ describe('<Calendar />', () => {
         allowWeekendSelection={false}
       />,
     );
-    // 2025-01-01 (Capodanno) - disabled because it's a national holiday
+    // 2025-01-01 (New Year's Day) - disabled because it's a national holiday
     const day1Buttons = screen.getAllByText('1').map((el) => el.closest('button'));
     // The first "1" in the calendar grid is Jan 1, 2025 (Wednesday)
     const jan1Button = day1Buttons.find((btn) => btn?.disabled);
     expect(jan1Button).toBeDefined();
     expect(jan1Button).toBeDisabled();
+  });
+
+  test('Italian holidays are routed through i18n (no hardcoded Italian strings)', () => {
+    // Regression test for the hardcoded-holiday-name bug: when an Italian
+    // holiday falls inside the rendered month, the calendar must hand its
+    // translation key to `t(...)` rather than emitting the raw Italian
+    // string. With the identity i18n mock, t(key) returns the key — so the
+    // rendered tree never contains "Capodanno", regardless of UI language.
+    const { baseElement } = render(
+      <Calendar selectedDate="2025-01-15" startOfWeek="Monday" allowWeekendSelection={false} />,
+    );
+
+    // The hidden Radix tooltip content is rendered into a portal on
+    // document.body. `baseElement` (the testing-library default) covers the
+    // full document, so it sees portaled content too.
+    expect(baseElement.innerHTML).not.toContain('Capodanno');
   });
 });

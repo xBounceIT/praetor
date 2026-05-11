@@ -53,17 +53,25 @@ export const isDateOnlyAfterToday = (
 ): boolean => normalizeDateOnlyString(dateOnly) > normalizeDateOnlyString(today);
 
 /**
- * Formats a Unix timestamp (milliseconds) to a DD/MM/YYYY date string.
- * Returns '-' for invalid, null, or undefined timestamps.
+ * Formats a Unix timestamp (milliseconds) to a localized short date string.
+ *
+ * The `locales` argument is passed straight to `Intl.DateTimeFormat`, so
+ * callers should pass `i18n.language` (or any BCP-47 tag). When omitted, the
+ * runtime default locale is used. Returns '-' for invalid, null, or undefined
+ * timestamps.
  */
-export const formatInsertDate = (timestamp: number | null | undefined): string => {
+export const formatInsertDate = (
+  timestamp: number | null | undefined,
+  locales?: string | string[],
+): string => {
   if (timestamp === null || timestamp === undefined) return '-';
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '-';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  return date.toLocaleDateString(locales, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
 };
 
 export const formatInsertDateTime = (

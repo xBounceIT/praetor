@@ -6,6 +6,7 @@ import enAdministration from './locales/en/administration.json';
 import enAuth from './locales/en/auth.json';
 import enCommon from './locales/en/common.json';
 import enCrm from './locales/en/crm.json';
+import enHolidays from './locales/en/holidays.json';
 import enHr from './locales/en/hr.json';
 import enLayout from './locales/en/layout.json';
 import enNotifications from './locales/en/notifications.json';
@@ -20,6 +21,7 @@ import itAdministration from './locales/it/administration.json';
 import itAuth from './locales/it/auth.json';
 import itCommon from './locales/it/common.json';
 import itCrm from './locales/it/crm.json';
+import itHolidays from './locales/it/holidays.json';
 import itHr from './locales/it/hr.json';
 import itLayout from './locales/it/layout.json';
 import itNotifications from './locales/it/notifications.json';
@@ -47,6 +49,7 @@ const resources = {
     sales: enSales,
     administration: enAdministration,
     reports: enReports,
+    holidays: enHolidays,
   },
   it: {
     common: itCommon,
@@ -64,6 +67,7 @@ const resources = {
     sales: itSales,
     administration: itAdministration,
     reports: itReports,
+    holidays: itHolidays,
   },
 };
 
@@ -89,12 +93,14 @@ i18n
       'sales',
       'administration',
       'reports',
+      'holidays',
     ],
     resources,
     detection: {
-      order: ['querystring', 'navigator'],
-      caches: [],
+      order: ['querystring', 'localStorage', 'navigator'],
+      caches: ['localStorage'],
       lookupQuerystring: 'lng',
+      lookupLocalStorage: 'i18nextLng',
     },
     interpolation: {
       escapeValue: false,
