@@ -270,12 +270,19 @@ describe('makeUserHandlers - users', () => {
     expect(ctx.viewingUserId.get()).toBe('u-other');
   });
 
-  test('deleteUser swallows errors', async () => {
+  test('deleteUser rethrows on api error and leaves viewingUserId untouched', async () => {
     apiMocks.usersDelete.mockImplementation(() => Promise.reject(new Error('boom')));
-    const ctx = buildHandlers({ users: [{ id: 'u1' }] });
+    const ctx = buildHandlers({
+      users: [{ id: 'u1' }, { id: 'u2' }],
+      currentUser: { id: 'u-current' } as never,
+      viewingUserId: 'u1',
+    });
     const restore = silenceConsole();
     try {
-      await ctx.handlers.deleteUser('u1');
+      await expect(ctx.handlers.deleteUser('u1')).rejects.toThrow('boom');
+      // State must NOT change when delete fails.
+      expect(ctx.viewingUserId.get()).toBe('u1');
+      expect(ctx.users.get()).toEqual([{ id: 'u1' }, { id: 'u2' }]);
     } finally {
       restore();
     }

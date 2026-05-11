@@ -164,4 +164,27 @@ describe('makeProductHandlers', () => {
     });
     await expect(handlers.deleteInternalCategory('cat-1')).rejects.toThrow('cannot delete');
   });
+
+  test('deleteProductType refetches products list after delete', async () => {
+    apiMocks.productsDeleteProductType.mockImplementation(() => Promise.resolve());
+    apiMocks.productsList.mockImplementation(() => Promise.resolve([{ id: 'p-fresh' }]));
+    const products = makeStubSetter<ProductLike>([{ id: 'p-stale' }]);
+    const handlers = makeProductHandlers({ setProducts: products.setter });
+
+    await handlers.deleteProductType('pt-1');
+    expect(apiMocks.productsDeleteProductType).toHaveBeenCalledWith('pt-1');
+    expect(apiMocks.productsList).toHaveBeenCalled();
+    expect(products.get()).toEqual([{ id: 'p-fresh' }]);
+  });
+
+  test('deleteProductType does not refresh on api error', async () => {
+    apiMocks.productsDeleteProductType.mockImplementation(() =>
+      Promise.reject(new Error('cannot delete')),
+    );
+    const handlers = makeProductHandlers({
+      setProducts: makeStubSetter<ProductLike>([]).setter,
+    });
+    await expect(handlers.deleteProductType('pt-1')).rejects.toThrow('cannot delete');
+    expect(apiMocks.productsList).not.toHaveBeenCalled();
+  });
 });

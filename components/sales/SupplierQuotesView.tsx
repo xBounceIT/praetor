@@ -552,7 +552,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         onClick={(event) => {
                           event.stopPropagation();
                           if (isCreateOrderDisabled) return;
-                          onCreateOrder(row);
+                          void Promise.resolve(onCreateOrder(row)).catch((err) => {
+                            console.error('Failed to create supplier order:', err);
+                          });
                         }}
                         disabled={isCreateOrderDisabled}
                         className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}

@@ -730,7 +730,10 @@ describe('DELETE /api/entries (bulk)', () => {
   });
 
   test('200 admin scope deletes across all users', async () => {
-    getRolePermissionsMock.mockResolvedValue(TRACKER_ALL_PERMS);
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_ALL_PERMS,
+      'timesheets.tracker_all.delete',
+    ]);
     entriesBulkDeleteMock.mockResolvedValue(7);
 
     const res = await testApp.inject({
@@ -780,5 +783,47 @@ describe('DELETE /api/entries (bulk)', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
+  });
+
+  test('200 with only timesheets.tracker_all.delete widens scope across users', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.delete']);
+    entriesBulkDeleteMock.mockResolvedValue(5);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 5 entries' });
+    expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        task: 'Dev',
+        restrictToManagerScopeOf: undefined,
+      }),
+    );
+  });
+
+  test('200 with only timesheets.recurring.delete stays restricted to actor', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.recurring.delete']);
+    entriesBulkDeleteMock.mockResolvedValue(2);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 2 entries' });
+    expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        task: 'Dev',
+        restrictToManagerScopeOf: 'u1',
+      }),
+    );
   });
 });

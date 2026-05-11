@@ -344,9 +344,17 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       });
       setProviderDrafts((current) => ({ ...current, [protocol]: saved }));
       showSaved();
+    } catch (err) {
+      console.error('Failed to save SSO provider:', err);
     } finally {
       setSavingProvider(null);
     }
+  };
+
+  const handleDeleteProvider = (id: string) => {
+    void Promise.resolve(onDeleteSsoProvider(id)).catch((err) => {
+      console.error('Failed to delete SSO provider:', err);
+    });
   };
 
   const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: string, label: string) => (
@@ -413,7 +421,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onDeleteSsoProvider(provider.id)}
+                  onClick={() => handleDeleteProvider(provider.id)}
                   className="text-zinc-400 hover:text-red-500 p-2"
                   title={t('admin.sso.deleteProvider', 'Delete provider')}
                 >

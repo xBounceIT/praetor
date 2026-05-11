@@ -18,6 +18,7 @@ export type PermissionDefinition = {
 
 const getModuleId = (resource: string) => resource.split('.')[0];
 const ADMINISTRATION_MODULE = 'administration';
+export const ADMIN_ROLE_ID = 'admin';
 export const TOP_MANAGER_ROLE_ID = 'top_manager';
 
 export const ALWAYS_GRANTED_MODULES: string[] = ['docs', 'settings', 'notifications'];

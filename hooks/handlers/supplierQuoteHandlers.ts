@@ -92,6 +92,17 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
 
   const createSupplierOrderFromQuote = async (quote: SupplierQuote) => {
     try {
+      const items = quote.items.map((item) => {
+        if (!item.productId) {
+          throw new Error('Cannot create supplier order: one or more items have no product.');
+        }
+        return {
+          ...item,
+          id: makeTempId(),
+          orderId: '',
+          productId: item.productId,
+        };
+      });
       await api.supplierOrders.create({
         linkedQuoteId: quote.id,
         supplierId: quote.supplierId,
@@ -99,12 +110,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
         paymentTerms: quote.paymentTerms,
         status: 'draft',
         notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: makeTempId(),
-          orderId: '',
-          productId: item.productId ?? '',
-        })),
+        items,
       });
       setSupplierQuoteFilterId(quote.id);
       setActiveView('accounting/supplier-orders');
@@ -116,6 +122,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
     } catch (err) {
       console.error('Failed to create supplier order from quote:', err);
       alert((err as Error).message || 'Failed to create supplier order from quote');
+      throw err;
     }
   };
 

@@ -135,6 +135,8 @@ export const makeProductHandlers = (deps: ProductHandlersDeps) => {
   const deleteProductType = async (id: string) => {
     try {
       await api.products.deleteProductType(id);
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
     } catch (err) {
       console.error('Failed to delete product type:', err);
       throw err;

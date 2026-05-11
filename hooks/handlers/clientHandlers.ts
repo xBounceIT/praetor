@@ -86,6 +86,8 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
   ): Promise<void> => {
     try {
       await api.clients.deleteProfileOption(category, id);
+      const refreshedClients = await api.clients.list();
+      setClients(refreshedClients);
     } catch (err) {
       console.error('Failed to delete client profile option:', err);
       throw err;
