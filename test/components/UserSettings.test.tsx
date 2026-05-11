@@ -290,4 +290,41 @@ describe('<UserSettings /> Profile tab', () => {
       'Alice Edited',
     );
   });
+
+  test('syncs the form from settings when it loads asynchronously after mount', () => {
+    const initialSettings: Settings = {
+      fullName: 'placeholder',
+      email: 'placeholder@example.com',
+      language: 'auto',
+    };
+    const props = {
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    } as const;
+    const { rerender } = render(<UserSettings settings={initialSettings} {...props} />);
+
+    // Form mounts with the parent's placeholder values.
+    expect((screen.getByDisplayValue('placeholder') as HTMLInputElement).value).toBe(
+      'placeholder',
+    );
+
+    // Parent finishes loading and passes real settings.
+    rerender(
+      <UserSettings
+        settings={{ fullName: 'Bob', email: 'bob@example.com', language: 'en' }}
+        {...props}
+      />,
+    );
+
+    // Untouched fields should reflect the loaded values.
+    expect((screen.getByDisplayValue('Bob') as HTMLInputElement).value).toBe('Bob');
+    expect(
+      (screen.getByDisplayValue('bob@example.com') as HTMLInputElement).value,
+    ).toBe('bob@example.com');
+  });
 });
