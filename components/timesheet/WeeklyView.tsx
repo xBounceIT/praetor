@@ -31,6 +31,24 @@ const toLocalISOString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+// Number of days in a week rendered by this view.
+const WEEK_LENGTH = 7;
+
+const startOfWeekDayIndex = (startOfWeek: 'Monday' | 'Sunday') =>
+  startOfWeek === 'Sunday' ? 0 : 1;
+
+// Returns midnight on the first day of the week that contains `date`,
+// where the configured start of the week is `startOfWeek`.
+const computeWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday') => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const weekStartIdx = startOfWeekDayIndex(startOfWeek);
+  // Days to subtract so we land on the configured first day of the week.
+  const diff = (start.getDay() - weekStartIdx + 7) % 7;
+  start.setDate(start.getDate() - diff);
+  return start;
+};
+
 const WeeklyView: React.FC<WeeklyViewProps> = ({
   entries,
   clients,
@@ -42,22 +60,25 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   viewingUserId,
   availableUsers,
   onViewUserChange,
+  startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
   defaultLocation = 'remote',
 }) => {
   const { t, i18n } = useTranslation('timesheets');
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-    const start = new Date(d.setDate(diff));
-    start.setHours(0, 0, 0, 0);
-    return start;
-  });
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    computeWeekStart(new Date(), startOfWeek),
+  );
+
+  // If the configured start of the week changes (e.g. via Administration settings),
+  // re-align the visible week so days still line up under the right headers.
+  const expectedStartIdx = startOfWeekDayIndex(startOfWeek);
+  if (currentWeekStart.getDay() !== expectedStartIdx) {
+    setCurrentWeekStart(computeWeekStart(currentWeekStart, startOfWeek));
+  }
 
   const weekDays = useMemo(() => {
-    return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
+    return Array.from({ length: WEEK_LENGTH }, (_, offset) => {
       const d = new Date(currentWeekStart);
       d.setDate(d.getDate() + offset);
       const dateStr = toLocalISOString(d);
@@ -408,7 +429,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               })}{' '}
               -{' '}
               {new Date(
-                new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 4),
+                new Date(currentWeekStart).setDate(currentWeekStart.getDate() + WEEK_LENGTH - 1),
               ).toLocaleDateString(i18n.language, {
                 month: 'short',
                 day: 'numeric',
@@ -424,14 +445,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             <i className="fa-solid fa-chevron-right"></i>
           </button>
           <button
-            onClick={() => {
-              const d = new Date();
-              const day = d.getDay();
-              const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-              const start = new Date(d.setDate(diff));
-              start.setHours(0, 0, 0, 0);
-              setCurrentWeekStart(start);
-            }}
+            onClick={() => setCurrentWeekStart(computeWeekStart(new Date(), startOfWeek))}
             className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest ml-2 px-3 py-1.5 rounded-full transition-colors"
           >
             {t('weekly.goToToday')}

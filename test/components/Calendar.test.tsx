@@ -8,19 +8,28 @@ installI18nMock();
 const Calendar = (await import('../../components/shared/Calendar')).default;
 
 describe('<Calendar />', () => {
-  test('renders Italian day headers in Monday-first order', () => {
+  test('renders English day headers in Monday-first order (locale-driven via Intl)', () => {
     render(<Calendar startOfWeek="Monday" />);
-    const headers = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+    const headers = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     headers.forEach((h) => {
       expect(screen.getByText(h)).toBeInTheDocument();
     });
+    // No Italian abbreviations should leak through anymore.
+    expect(screen.queryByText('Lun')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dom')).not.toBeInTheDocument();
   });
 
-  test('Sunday-first order swaps headers', () => {
+  test('Sunday-first order rotates English headers', () => {
     render(<Calendar startOfWeek="Sunday" />);
-    const headers = screen.getAllByText(/^(Lun|Mar|Mer|Gio|Ven|Sab|Dom)$/);
-    expect(headers[0].textContent).toBe('Dom');
-    expect(headers[6].textContent).toBe('Sab');
+    const headers = screen.getAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+    expect(headers[0].textContent).toBe('Sun');
+    expect(headers[6].textContent).toBe('Sat');
+  });
+
+  test('header month name is localized (English January, not Gennaio)', () => {
+    render(<Calendar selectedDate="2024-01-15" startOfWeek="Monday" />);
+    expect(screen.getByText('January')).toBeInTheDocument();
+    expect(screen.queryByText('Gennaio')).not.toBeInTheDocument();
   });
 
   test('clicking a non-weekend day calls onDateSelect', () => {
@@ -116,7 +125,8 @@ describe('<Calendar />', () => {
   test('Today button selects today in single mode', () => {
     const onDateSelect = mock((_d: string) => {});
     render(<Calendar onDateSelect={onDateSelect} startOfWeek="Monday" allowWeekendSelection />);
-    fireEvent.click(screen.getByText('Oggi'));
+    // Translation mock returns the key, so the button label is the i18n key.
+    fireEvent.click(screen.getByText('common:time.today'));
     expect(onDateSelect).toHaveBeenCalled();
     const arg = onDateSelect.mock.calls[0][0] as string;
     expect(arg).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -124,12 +134,12 @@ describe('<Calendar />', () => {
 
   test('month picker opens on click and selects a month', () => {
     render(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
-    // Click the month-name button in the header (March in Italian = "Marzo")
-    fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated names - click "Mag" for May
-    fireEvent.click(screen.getByText('Mag'));
-    // Header should now show full name "Maggio"
-    expect(screen.getByText('Maggio')).toBeInTheDocument();
+    // Click the month-name button in the header (English: March)
+    fireEvent.click(screen.getByText('March'));
+    // Picker shows abbreviated names - click "May"
+    fireEvent.click(screen.getByText('May'));
+    // Header should now show full name "May"
+    expect(screen.getByText('May')).toBeInTheDocument();
   });
 
   test('mousedown outside container closes the open picker', () => {
@@ -139,7 +149,7 @@ describe('<Calendar />', () => {
         <Calendar selectedDate="2024-03-15" startOfWeek="Monday" />
       </div>,
     );
-    fireEvent.click(screen.getByText('Marzo'));
+    fireEvent.click(screen.getByText('March'));
     // Picker shows abbreviated month names - "Apr" appears only when picker is open
     expect(screen.getByText('Apr')).toBeInTheDocument();
 
