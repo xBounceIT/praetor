@@ -391,6 +391,13 @@ class LDAPService {
         const roleIds = mapExternalGroupsToRoleIds(groups, this.getRoleMappings());
 
         if (existing) {
+          if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
+            logger.warn(
+              { username },
+              'Skipping LDAP sync for a matching Praetor user not bound to LDAP',
+            );
+            continue;
+          }
           await usersRepo.updateNameByUsername(username, name);
           await applyExternalRolesForUser(existing.id, groups, this.getRoleMappings());
           syncedCount++;

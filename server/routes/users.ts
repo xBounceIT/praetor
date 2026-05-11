@@ -725,11 +725,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
-      if (idResult.value === request.user?.id && methodResult.value !== 'local') {
-        return badRequest(
-          reply,
-          'Cannot change your own account to an external authentication method',
-        );
+      if (idResult.value === request.user?.id) {
+        return badRequest(reply, 'Cannot change your own authentication method');
       }
 
       let resolvedProviderId: string | null = null;

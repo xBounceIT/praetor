@@ -104,6 +104,7 @@ const HAPPY_USER = {
 const LOGIN_USER = {
   ...HAPPY_USER,
   passwordHash: '$2a$hashed',
+  employeeType: 'app_user' as const,
   authMethod: 'local' as const,
   authProviderId: null,
 };
@@ -326,6 +327,22 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+  });
+
+  test('401 non-app user cannot sign in with a local password', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, employeeType: 'internal' });
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+    expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
   });
 
   test('401 wrong password (LDAP off, bcrypt fails)', async () => {

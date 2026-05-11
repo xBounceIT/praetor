@@ -58,9 +58,23 @@ describe('findAuthUserById', () => {
 
 describe('findLoginUserByUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
-    // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled, authMethod, authProviderId
+    // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,
+    // employeeType, authMethod, authProviderId
     exec.enqueue({
-      rows: [['user-1', 'Alice', 'alice', 'manager', '$2b$10$abc', 'AL', false, 'local', null]],
+      rows: [
+        [
+          'user-1',
+          'Alice',
+          'alice',
+          'manager',
+          '$2b$10$abc',
+          'AL',
+          false,
+          'app_user',
+          'local',
+          null,
+        ],
+      ],
     });
     const result = await usersRepo.findLoginUserByUsername('alice', testDb);
     expect(result).toEqual({
@@ -71,6 +85,7 @@ describe('findLoginUserByUsername', () => {
       passwordHash: '$2b$10$abc',
       avatarInitials: 'AL',
       isDisabled: false,
+      employeeType: 'app_user',
       authMethod: 'local',
       authProviderId: null,
     });

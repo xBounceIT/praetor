@@ -946,6 +946,41 @@ describe('PUT /api/users/:id/auth-method', () => {
     expect(updateAuthMethodMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects OIDC with a missing provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects OIDC with a disabled provider', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    ssoFindByIdMock.mockResolvedValue({
+      id: 'sso-1',
+      protocol: 'oidc',
+      name: 'OIDC',
+      enabled: false,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
   test('400 rejects provider with wrong protocol', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     ssoFindByIdMock.mockResolvedValue({
@@ -977,6 +1012,24 @@ describe('PUT /api/users/:id/auth-method', () => {
     });
 
     expect(res.statusCode).toBe(409);
+  });
+
+  test('400 rejects changing your own authentication method', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: ADMIN_USER.id,
+      username: ADMIN_USER.username,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${ADMIN_USER.id}/auth-method`,
+      headers: adminAuth(),
+      payload: { authMethod: 'local' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateAuthMethodMock).not.toHaveBeenCalled();
   });
 
   test('403 rejects users without update permission', async () => {

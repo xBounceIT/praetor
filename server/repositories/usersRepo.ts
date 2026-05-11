@@ -17,7 +17,10 @@ export type AuthUser = {
   isDisabled: boolean;
 };
 
-export type LoginUser = AuthUser & { passwordHash: string | null };
+export type LoginUser = AuthUser & {
+  passwordHash: string | null;
+  employeeType: EmployeeType;
+};
 export type LoginUserWithAuth = LoginUser & {
   authMethod: AuthMethod;
   authProviderId: string | null;
@@ -31,6 +34,7 @@ const LOGIN_USER_PROJECTION = {
   passwordHash: users.passwordHash,
   avatarInitials: users.avatarInitials,
   isDisabled: users.isDisabled,
+  employeeType: users.employeeType,
   authMethod: users.authMethod,
   authProviderId: users.authProviderId,
 } as const;
@@ -43,6 +47,7 @@ type LoginUserRow = {
   passwordHash: string | null;
   avatarInitials: string | null;
   isDisabled: boolean | null;
+  employeeType: string | null;
   authMethod: AuthMethod | null;
   authProviderId: string | null;
 };
@@ -55,6 +60,7 @@ const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
   passwordHash: row.passwordHash,
   avatarInitials: row.avatarInitials ?? '',
   isDisabled: row.isDisabled ?? false,
+  employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
   authMethod: row.authMethod ?? 'local',
   authProviderId: row.authProviderId ?? null,
 });

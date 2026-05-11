@@ -105,6 +105,19 @@ const input = {
   roleMappings: [],
 };
 
+const matchingSsoUser = {
+  id: 'u1',
+  name: 'Alice',
+  username: 'alice',
+  role: 'user',
+  avatarInitials: 'AL',
+  isDisabled: false,
+  passwordHash: 'hash',
+  employeeType: 'app_user' as const,
+  authMethod: 'oidc' as const,
+  authProviderId: 'sso-1',
+};
+
 describe('resolveExternalIdentity auth method enforcement', () => {
   test('binds existing username only when method and provider match', async () => {
     findByIdentityMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
@@ -115,17 +128,7 @@ describe('resolveExternalIdentity auth method enforcement', () => {
       subject: input.subject,
       userId: 'u1',
     });
-    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
-      id: 'u1',
-      name: 'Alice',
-      username: 'alice',
-      role: 'user',
-      avatarInitials: 'AL',
-      isDisabled: false,
-      passwordHash: 'hash',
-      authMethod: 'oidc',
-      authProviderId: 'sso-1',
-    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
 
     const result = await resolveExternalIdentity(input);
 
@@ -136,15 +139,41 @@ describe('resolveExternalIdentity auth method enforcement', () => {
   test('rejects existing username when provider does not match', async () => {
     findByIdentityMock.mockResolvedValue(null);
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({
-      id: 'u1',
-      name: 'Alice',
-      username: 'alice',
-      role: 'user',
-      avatarInitials: 'AL',
-      isDisabled: false,
-      passwordHash: 'hash',
-      authMethod: 'oidc',
+      ...matchingSsoUser,
       authProviderId: 'sso-other',
+    });
+
+    await expect(resolveExternalIdentity(input)).rejects.toThrow(
+      'External identity is not allowed for this Praetor user',
+    );
+    expect(insertIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects existing username when the matching Praetor row is not an app user', async () => {
+    findByIdentityMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...matchingSsoUser,
+      employeeType: 'internal',
+    });
+
+    await expect(resolveExternalIdentity(input)).rejects.toThrow(
+      'External identity is not allowed for this Praetor user',
+    );
+    expect(insertIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects existing external identity bound to a non-app user', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue({
+      ...matchingSsoUser,
+      employeeType: 'external',
     });
 
     await expect(resolveExternalIdentity(input)).rejects.toThrow(

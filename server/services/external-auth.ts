@@ -33,10 +33,14 @@ export type ResolveExternalIdentityInput = {
 };
 
 const assertUserAllowsExternalProvider = (
-  user: Pick<usersRepo.LoginUserWithAuth, 'authMethod' | 'authProviderId'>,
+  user: Pick<usersRepo.LoginUserWithAuth, 'employeeType' | 'authMethod' | 'authProviderId'>,
   input: ResolveExternalIdentityInput,
 ): void => {
-  if (user.authMethod !== input.protocol || user.authProviderId !== input.providerId) {
+  if (
+    user.employeeType !== 'app_user' ||
+    user.authMethod !== input.protocol ||
+    user.authProviderId !== input.providerId
+  ) {
     throw new Error('External identity is not allowed for this Praetor user');
   }
 };
@@ -176,6 +180,7 @@ export const resolveExternalIdentity = async (
           avatarInitials: computeAvatarInitials(name),
           isDisabled: false,
           passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+          employeeType: 'app_user',
           authMethod: input.protocol,
           authProviderId: input.providerId,
         };

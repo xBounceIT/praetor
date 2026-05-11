@@ -18,11 +18,13 @@ SET
   "auth_provider_id" = latest_external_identity."provider_id"
 FROM latest_external_identity
 WHERE latest_external_identity."rank" = 1
-  AND latest_external_identity."user_id" = "users"."id";--> statement-breakpoint
+  AND latest_external_identity."user_id" = "users"."id"
+  AND COALESCE("users"."employee_type", 'app_user') = 'app_user';--> statement-breakpoint
 UPDATE "users"
 SET "auth_method" = 'ldap', "auth_provider_id" = NULL
 WHERE "auth_provider_id" IS NULL
-  AND "password_hash" = '$2a$10$invalidpasswordhashforldapuser00000000000000';--> statement-breakpoint
+  AND "password_hash" = '$2a$10$invalidpasswordhashforldapuser00000000000000'
+  AND COALESCE("employee_type", 'app_user') = 'app_user';--> statement-breakpoint
 UPDATE "users" SET "auth_method" = 'local' WHERE "auth_method" IS NULL;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_auth_provider_id_sso_providers_id_fk" FOREIGN KEY ("auth_provider_id") REFERENCES "public"."sso_providers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_users_auth_provider_id" ON "users" USING btree ("auth_provider_id");--> statement-breakpoint
