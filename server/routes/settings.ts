@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken } from '../middleware/auth.ts';
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
+import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -12,6 +13,11 @@ import {
 } from '../schemas/common.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import {
+  generatePersonalAccessToken,
+  getPersonalAccessTokenDisplayPrefix,
+  hashPersonalAccessToken,
+} from '../utils/personal-access-token.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -82,6 +88,41 @@ const mcpTokenCreateResponseSchema = {
 } as const;
 
 const MAX_ACTIVE_MCP_TOKENS_PER_USER = 20;
+
+const personalAccessTokenSchema = {
+  type: 'object',
+  properties: {
+    tokenPrefix: { type: 'string' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    lastUsedAt: { type: 'string', format: 'date-time', nullable: true },
+    token: { type: 'string' },
+  },
+  required: ['tokenPrefix', 'createdAt', 'updatedAt', 'lastUsedAt'],
+} as const;
+
+const toIsoString = (value: Date | string) =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+const mapPersonalAccessTokenResponse = (
+  record: personalAccessTokensRepo.PersonalAccessTokenRecord,
+  token?: string,
+) => ({
+  tokenPrefix: record.tokenPrefix,
+  createdAt: toIsoString(record.createdAt),
+  updatedAt: toIsoString(record.updatedAt),
+  lastUsedAt: record.lastUsedAt ? toIsoString(record.lastUsedAt) : null,
+  ...(token ? { token } : {}),
+});
+
+const buildTokenParts = () => {
+  const token = generatePersonalAccessToken();
+  return {
+    token,
+    tokenHash: hashPersonalAccessToken(token),
+    tokenPrefix: getPersonalAccessTokenDisplayPrefix(token),
+  };
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get current user's settings
@@ -293,6 +334,65 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return { message: 'Password updated successfully' };
+    },
+  );
+
+  // GET /personal-access-token - Get current user's PAT metadata, creating one if missing
+  fastify.get(
+    '/personal-access-token',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Get current user personal access token metadata',
+        response: {
+          200: personalAccessTokenSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const existing = await personalAccessTokensRepo.findByUserId(request.user.id);
+      if (existing) return mapPersonalAccessTokenResponse(existing);
+
+      const nextToken = buildTokenParts();
+      const { record, created } = await personalAccessTokensRepo.createForUserIfMissing(
+        request.user.id,
+        nextToken.tokenHash,
+        nextToken.tokenPrefix,
+      );
+
+      return mapPersonalAccessTokenResponse(record, created ? nextToken.token : undefined);
+    },
+  );
+
+  // POST /personal-access-token/renew - Rotate current user's PAT
+  fastify.post(
+    '/personal-access-token/renew',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Renew current user personal access token',
+        response: {
+          200: personalAccessTokenSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const nextToken = buildTokenParts();
+      const record = await personalAccessTokensRepo.renewForUser(
+        request.user.id,
+        nextToken.tokenHash,
+        nextToken.tokenPrefix,
+      );
+
+      return mapPersonalAccessTokenResponse(record, nextToken.token);
     },
   );
 }
