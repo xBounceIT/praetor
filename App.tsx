@@ -234,8 +234,13 @@ const TrackerView: React.FC<{
   const isViewingSelf = viewingUserId === currentUser.id;
 
   const userOptions = useMemo(
-    () => availableUsers.map((u) => ({ id: u.id, name: u.name })),
-    [availableUsers],
+    () =>
+      availableUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        badge: u.id === currentUser.id ? t('tracker.you') : undefined,
+      })),
+    [availableUsers, currentUser.id, t],
   );
 
   const activityColumns = useMemo<Column<TimeEntry>[]>(
@@ -373,6 +378,7 @@ const TrackerView: React.FC<{
           onDeleteEntry={onDeleteEntry}
           onUpdateEntry={onUpdateEntry}
           viewingUserId={viewingUserId}
+          currentUserId={currentUser.id}
           availableUsers={availableUsers}
           onViewUserChange={onViewUserChange}
           onAddBulkEntries={onAddBulkEntries}
@@ -400,14 +406,24 @@ const TrackerView: React.FC<{
                     <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-                <div className="w-full sm:w-56 shrink-0">
-                  <SelectControl
-                    options={userOptions}
-                    value={viewingUserId}
-                    onChange={(val) => onViewUserChange(val as string)}
-                    label={t('tracker.switchUserView')}
-                    searchable={true}
-                  />
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isViewingSelf && (
+                    <button
+                      onClick={() => onViewUserChange(currentUser.id)}
+                      className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors whitespace-nowrap"
+                    >
+                      {t('tracker.backToMe')}
+                    </button>
+                  )}
+                  <div className="w-full sm:w-56">
+                    <SelectControl
+                      options={userOptions}
+                      value={viewingUserId}
+                      onChange={(val) => onViewUserChange(val as string)}
+                      label={t('tracker.switchUserView')}
+                      searchable={true}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

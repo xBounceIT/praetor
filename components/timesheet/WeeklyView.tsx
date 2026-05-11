@@ -16,6 +16,7 @@ export interface WeeklyViewProps {
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   viewingUserId: string;
+  currentUserId?: string;
   availableUsers: User[];
   onViewUserChange: (id: string) => void;
   startOfWeek: 'Monday' | 'Sunday';
@@ -426,14 +427,28 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         </div>
 
         {availableUsers.length > 1 && (
-          <div className="w-64">
-            <SelectControl
-              options={availableUsers.map((u) => ({ id: u.id, name: u.name }))}
-              value={viewingUserId}
-              onChange={(val) => onViewUserChange(val as string)}
-              label={t('weekly.viewingUser')}
-              searchable={true}
-            />
+          <div className="flex items-center gap-2">
+            {currentUserId && viewingUserId !== currentUserId && (
+              <button
+                onClick={() => onViewUserChange(currentUserId)}
+                className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors whitespace-nowrap shrink-0"
+              >
+                {t('tracker.backToMe')}
+              </button>
+            )}
+            <div className="w-64">
+              <SelectControl
+                options={availableUsers.map((u) => ({
+                  id: u.id,
+                  name: u.name,
+                  badge: u.id === currentUserId ? t('tracker.you') : undefined,
+                }))}
+                value={viewingUserId}
+                onChange={(val) => onViewUserChange(val as string)}
+                label={t('weekly.viewingUser')}
+                searchable={true}
+              />
+            </div>
           </div>
         )}
       </div>

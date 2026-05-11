@@ -8,6 +8,8 @@
     "myTimesheet": "Il Mio Timesheet",
     "managingUser": "Gestione Utente",
     "switchUserView": "Cambia Visualizzazione Utente",
+    "you": "Tu",
+    "backToMe": "Torna a me",
     "activityFor": "Attività per {{date}}",
     "logsForDate": "Registri specificamente per questa data",
     "dayTotal": "Totale Giornaliero",

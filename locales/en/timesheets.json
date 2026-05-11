@@ -8,6 +8,8 @@
     "myTimesheet": "My Timesheet",
     "managingUser": "Managing User",
     "switchUserView": "Switch User View",
+    "you": "You",
+    "backToMe": "Back to me",
     "activityFor": "Activity for {{date}}",
     "logsForDate": "Logs specifically for this date",
     "dayTotal": "Day Total",
