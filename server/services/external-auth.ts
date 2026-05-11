@@ -32,6 +32,19 @@ export type ResolveExternalIdentityInput = {
   roleMappings: ExternalRoleMapping[];
 };
 
+const assertUserAllowsExternalProvider = (
+  user: Pick<usersRepo.LoginUserWithAuth, 'employeeType' | 'authMethod' | 'authProviderId'>,
+  input: ResolveExternalIdentityInput,
+): void => {
+  if (
+    user.employeeType !== 'app_user' ||
+    user.authMethod !== input.protocol ||
+    user.authProviderId !== input.providerId
+  ) {
+    throw new Error('External identity is not allowed for this Praetor user');
+  }
+};
+
 export const normalizeExternalUsername = (username: string): string =>
   username.trim().toLowerCase();
 
@@ -101,7 +114,8 @@ export const applyExternalRoleIdsForUser = async (
 export const resolveExternalIdentity = async (
   input: ResolveExternalIdentityInput,
 ): Promise<ResolvedExternalUser> => {
-  const normalizedUsername = normalizeExternalUsername(input.username);
+  const username = input.username.trim();
+  const normalizedUsername = normalizeExternalUsername(username);
   if (!normalizedUsername) {
     throw new Error('External identity did not include a username');
   }
@@ -125,30 +139,33 @@ export const resolveExternalIdentity = async (
       tx,
     );
 
-    let user: usersRepo.LoginUser | null = null;
+    let user: usersRepo.LoginUserWithAuth | null = null;
     let wasCreated = false;
     let wasBound = false;
 
     if (existingIdentity) {
-      const authUser = await usersRepo.findAuthUserById(existingIdentity.userId, tx);
-      if (!authUser) throw new Error('Bound Praetor user no longer exists');
-      user = { ...authUser, passwordHash: null };
+      user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
+      if (!user) throw new Error('Bound Praetor user no longer exists');
+      assertUserAllowsExternalProvider(user, input);
     } else {
       user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
       if (!user) {
-        const name = input.name?.trim() || input.username.trim();
+        const name = input.name?.trim() || username;
+        const avatarInitials = computeAvatarInitials(name);
         const id = generatePrefixedId('u');
         await usersRepo.insertUser(
           {
             id,
             name,
-            username: input.username.trim(),
+            username,
             passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: primaryRole,
-            avatarInitials: computeAvatarInitials(name),
+            avatarInitials,
             costPerHour: 0,
             isDisabled: false,
             employeeType: 'app_user',
+            authMethod: input.protocol,
+            authProviderId: input.providerId,
           },
           tx,
         );
@@ -160,13 +177,18 @@ export const resolveExternalIdentity = async (
         user = {
           id,
           name,
-          username: input.username.trim(),
+          username,
           role: primaryRole,
-          avatarInitials: computeAvatarInitials(name),
+          avatarInitials,
           isDisabled: false,
           passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+          employeeType: 'app_user',
+          authMethod: input.protocol,
+          authProviderId: input.providerId,
         };
         wasCreated = true;
+      } else {
+        assertUserAllowsExternalProvider(user, input);
       }
 
       await externalIdentitiesRepo.insert(

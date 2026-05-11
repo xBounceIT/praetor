@@ -1,6 +1,7 @@
 export type UserRole = string;
 export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 export type StoredBillingType = 'retainer' | 'time_and_materials';
@@ -29,6 +30,9 @@ export interface User {
   costPerHour?: number;
   isDisabled?: boolean;
   employeeType?: EmployeeType;
+  authMethod?: UserAuthMethod;
+  authProviderId?: string | null;
+  authProviderName?: string | null;
 }
 
 export interface Role {

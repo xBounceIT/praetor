@@ -31,6 +31,8 @@ const users: User[] = [
     avatarInitials: 'AA',
     username: 'alice.admin',
     email: 'alice@example.com',
+    employeeType: 'app_user',
+    authMethod: 'local',
   },
   {
     id: 'u2',
@@ -38,6 +40,8 @@ const users: User[] = [
     role: 'manager',
     avatarInitials: 'BB',
     username: 'bob.brown',
+    employeeType: 'app_user',
+    authMethod: 'local',
   },
 ];
 
@@ -51,9 +55,36 @@ const renderUserManagement = (overrides: Partial<ComponentProps<typeof UserManag
     onDeleteUser: mock(() => {}),
     onUpdateUser: mock(() => {}),
     onUpdateUserRoles: mock(async () => {}),
+    onUpdateUserAuthMethod: mock(async () => {}),
     currentUserId: 'u1',
     permissions: [updatePermission, deletePermission],
     roles: [],
+    ssoProviders: [
+      {
+        id: 'sso-1',
+        protocol: 'oidc',
+        slug: 'keycloak',
+        name: 'Keycloak',
+        enabled: true,
+        issuerUrl: '',
+        clientId: '',
+        clientSecret: '',
+        scopes: '',
+        metadataUrl: '',
+        metadataXml: '',
+        entryPoint: '',
+        idpIssuer: '',
+        idpCert: '',
+        spIssuer: '',
+        privateKey: '',
+        publicCert: '',
+        usernameAttribute: '',
+        nameAttribute: '',
+        emailAttribute: '',
+        groupsAttribute: '',
+        roleMappings: [],
+      },
+    ],
     currency: '$',
     ...overrides,
   };
@@ -133,5 +164,24 @@ describe('<UserManagement />', () => {
     expect(screen.getByText('hr:workforce.noUsers')).toBeInTheDocument();
     expect(screen.queryByText('Alice Admin')).not.toBeInTheDocument();
     expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
+  });
+
+  test('opens authentication method dialog from row actions and saves', async () => {
+    const user = userEvent.setup();
+    const props = renderUserManagement();
+    const bobRow = getRowFor('Bob Brown');
+    const actionButton = bobRow.querySelector('[aria-label="table.rowActions"]');
+    if (!actionButton) throw new Error('Could not find row actions button');
+
+    await user.click(actionButton);
+    await user.click(
+      await screen.findByRole('button', { name: 'hr:workforce.authMethod.changeAction' }),
+    );
+
+    expect(screen.getByText('hr:workforce.authMethod.description')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    expect(props.onUpdateUserAuthMethod).toHaveBeenCalledWith('u2', 'local', null);
   });
 });

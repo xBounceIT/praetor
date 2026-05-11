@@ -23,6 +23,7 @@ import type {
   SupplierSaleOrderItem,
   TimeEntry,
   User,
+  UserAuthMethod,
 } from '../../types';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
@@ -112,6 +113,13 @@ const normalizeEmployeeType = (value: unknown): EmployeeType => {
   return 'app_user';
 };
 
+const normalizeUserAuthMethod = (value: unknown): UserAuthMethod => {
+  if (value === 'ldap' || value === 'oidc' || value === 'saml' || value === 'local') {
+    return value;
+  }
+  return 'local';
+};
+
 const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) return [];
@@ -153,6 +161,9 @@ export const normalizeUser = (u: User): User => {
     availableRoles: normalizeAvailableRoles(u.availableRoles),
     costPerHour: Number.isFinite(normalizedCostPerHour) ? normalizedCostPerHour : 0,
     employeeType: normalizeEmployeeType(u.employeeType),
+    authMethod: normalizeUserAuthMethod(u.authMethod),
+    authProviderId: normalizeTrimmedString(u.authProviderId) || null,
+    authProviderName: normalizeTrimmedString(u.authProviderName) || null,
   };
 };
 
