@@ -15,10 +15,11 @@ export const projects = pgTable(
     description: text('description'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    // `order_id` → `sales.id` FK lives only in `schema.sql` (`ON DELETE SET NULL`, auto-named
-    // `projects_order_id_fkey`); intentionally not modeled here so the projects schema doesn't
-    // import from sales. `projectsRepo` still keys off the constraint name when handling FK
-    // violation errors.
+    // `order_id` → `sales.id` FK (`ON DELETE SET NULL`, auto-named `projects_order_id_fkey`)
+    // is created out-of-band by `schema.sql:1116` on legacy bootstraps and by
+    // `migrations/0025_align_schema_sql_parity.sql` on Drizzle-only bootstraps; intentionally
+    // not modeled here so the projects schema doesn't import from sales. `projectsRepo` still
+    // keys off the constraint name when handling FK violation errors.
     orderId: varchar('order_id', { length: 100 }),
     billingType: varchar('billing_type', { length: 30 })
       .$type<'retainer' | 'time_and_materials'>()

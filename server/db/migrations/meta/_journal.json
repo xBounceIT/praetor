@@ -218,6 +218,13 @@
       "when": 1778522405231,
       "tag": "0030_add_project_task_billing_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1778536948560,
+      "tag": "0031_align_schema_sql_parity",
+      "breakpoints": true
     }
   ]
 }

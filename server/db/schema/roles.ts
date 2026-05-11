@@ -32,9 +32,11 @@ export const userRoles = pgTable(
     userId: varchar('user_id', { length: 50 })
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Deleting a role must not silently destroy user/role assignments. Use RESTRICT so the
+    // caller has to clear the join rows (or reassign users) before dropping the role.
     roleId: varchar('role_id', { length: 50 })
       .notNull()
-      .references(() => roles.id, { onDelete: 'cascade' }),
+      .references(() => roles.id, { onDelete: 'restrict' }),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
