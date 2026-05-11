@@ -1297,7 +1297,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
                       <FieldLabel>{t('crm:internalListing.type')}</FieldLabel>
                       <Button
                         type="button"
@@ -1327,7 +1327,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
                       <FieldLabel>{t('crm:internalListing.category')}</FieldLabel>
                       <Button
                         type="button"
@@ -1357,7 +1357,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
+                    <div className="flex min-h-6 items-center justify-between gap-2">
                       <FieldLabel>{t('crm:internalListing.subcategory')}</FieldLabel>
                       <Button
                         type="button"

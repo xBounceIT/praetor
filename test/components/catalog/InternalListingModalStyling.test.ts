@@ -22,4 +22,17 @@ describe('InternalListingView modal styling', () => {
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
   });
+
+  test('product modal manage actions align with their field labels', async () => {
+    const source = await readComponentSource('catalog/InternalListingView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex min-h-6 items-center justify-between gap-2"',
+      'size="xs"',
+      'onClick={handleOpenManageTypes}',
+      'onClick={handleOpenManageCategories}',
+      'onClick={handleOpenManageSubcategories}',
+    ]);
+    expectSourceOmitsAll(source, ['items-end justify-between ml-1 min-h-5']);
+  });
 });

@@ -1120,10 +1120,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
                 <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
                   <Field className="w-full md:w-2/3">
-                    <FieldLabel
-                      htmlFor="supplier-quote-notes"
-                      className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary"
-                    >
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
                       <span className="size-1.5 rounded-full bg-primary"></span>
                       {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
                       <FieldTooltip
@@ -1133,6 +1130,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         status={readOnlyStatus}
                         statusLabel={statusLabel}
                       />
+                    </h4>
+                    <FieldLabel htmlFor="supplier-quote-notes" className="sr-only">
+                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
                     </FieldLabel>
                     <Textarea
                       id="supplier-quote-notes"

@@ -1845,10 +1845,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {/* Notes & Cost Summary */}
                 <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
                   <Field className="w-full md:w-2/3">
-                    <FieldLabel
-                      htmlFor="client-quote-notes"
-                      className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary"
-                    >
+                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
                       <span className="size-1.5 rounded-full bg-primary"></span>
                       {t('sales:clientQuotes.notesLabel')}
                       <FieldTooltip
@@ -1858,6 +1855,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         status={readOnlyStatus}
                         statusLabel={statusLabel}
                       />
+                    </h4>
+                    <FieldLabel htmlFor="client-quote-notes" className="sr-only">
+                      {t('sales:clientQuotes.notesLabel')}
                     </FieldLabel>
                     <Textarea
                       id="client-quote-notes"

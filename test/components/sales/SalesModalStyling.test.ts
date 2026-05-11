@@ -29,6 +29,21 @@ describe('sales modal styling', () => {
   });
 
   test.each([
+    ['client quotes', 'sales/ClientQuotesView.tsx', 'client-quote-notes'],
+    ['client offers', 'sales/ClientOffersView.tsx', 'client-offer-notes'],
+    ['supplier quotes', 'sales/SupplierQuotesView.tsx', 'supplier-quote-notes'],
+  ])('%s notes section header matches other modal section headers', async (_name, path, notesId) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      '<h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">',
+      `<FieldLabel htmlFor="${notesId}" className="sr-only">`,
+      `id="${notesId}"`,
+      "description={t('sales:fieldInfo.notes'",
+    ]);
+  });
+
+  test.each([
     ['quote versions', 'sales/QuoteVersionsPanel.tsx'],
     ['offer versions', 'sales/OfferVersionsPanel.tsx'],
     ['supplier quote versions', 'sales/SupplierQuoteVersionsPanel.tsx'],
