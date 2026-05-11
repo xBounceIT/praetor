@@ -4,14 +4,14 @@ import type { ProjectTask, TimeEntry } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 
 export type TaskHandlersDeps = {
-  projectTasks: ProjectTask[];
+  getProjectTasks: () => ProjectTask[];
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
   generateRecurringEntries: () => Promise<void> | void;
 };
 
 export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
-  const { projectTasks, setProjectTasks, setEntries, generateRecurringEntries } = deps;
+  const { getProjectTasks, setProjectTasks, setEntries, generateRecurringEntries } = deps;
 
   const update = async (id: string, updates: Partial<ProjectTask>) => {
     try {
@@ -34,7 +34,7 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
       // so generateRecurringEntries doesn't leave behind orphans from the old
       // pattern/date range (e.g. weekly → monthly, or moving end date earlier).
       // No-op for the first-time "make recurring" flow.
-      const existing = projectTasks.find((t) => t.id === taskId);
+      const existing = getProjectTasks().find((t) => t.id === taskId);
       if (existing?.isRecurring) {
         await api.entries.bulkDelete(existing.projectId, existing.name, {
           placeholderOnly: true,
@@ -55,9 +55,7 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
         recurrenceDuration: duration,
       });
       setProjectTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-      setTimeout(() => {
-        void generateRecurringEntries();
-      }, 100);
+      await generateRecurringEntries();
     } catch (err) {
       console.error('Failed to make task recurring:', err);
     }
@@ -67,7 +65,7 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
     taskId: string,
     action: 'stop' | 'delete_future' | 'delete_all',
   ) => {
-    const task = projectTasks.find((t) => t.id === taskId);
+    const task = getProjectTasks().find((t) => t.id === taskId);
     if (!task) return;
 
     try {
