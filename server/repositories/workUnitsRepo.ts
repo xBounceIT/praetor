@@ -161,6 +161,20 @@ export const findUserIds = async (unitId: string, exec: DbExecutor = db): Promis
   return rows.map((r) => r.id);
 };
 
+export const listUserIdsByUnitIds = async (
+  unitIds: string[],
+  exec: DbExecutor = db,
+): Promise<Array<{ workUnitId: string; userId: string }>> => {
+  if (unitIds.length === 0) return [];
+  return executeRows<{ workUnitId: string; userId: string }>(
+    exec,
+    sql`SELECT work_unit_id AS "workUnitId", user_id AS "userId"
+          FROM user_work_units
+         WHERE work_unit_id = ANY(${sql.param(unitIds)}::text[])
+         ORDER BY work_unit_id, user_id`,
+  );
+};
+
 export const findNameById = async (
   unitId: string,
   exec: DbExecutor = db,

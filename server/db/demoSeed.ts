@@ -60,6 +60,11 @@ type VerificationStep = {
   expected: number;
 };
 
+type DemoUserCleanupIds = {
+  dependentUserIds: string[];
+  userIdsToDelete: string[];
+};
+
 const nonEmpty = <T>(values: readonly (T | null | undefined)[]) =>
   values.filter((value): value is T => value !== null && value !== undefined);
 
@@ -236,7 +241,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
   incrementCount(counts, 'settings', settingsResult.rowCount ?? 0);
 };
 
-const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: string[]) => {
+const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCleanupIds) => {
   const cleanupCountsByTable: Record<string, number> = {};
 
   incrementCount(
@@ -518,7 +523,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     cleanupCountsByTable,
     'settings',
     await executeDelete(client, 'settings', (builder) => {
-      pushTextArrayPredicate(builder, 'user_id', demoUserIdsToDelete);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -526,7 +531,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     cleanupCountsByTable,
     'user_roles',
     await executeDelete(client, 'user_roles', (builder) => {
-      pushTextArrayPredicate(builder, 'user_id', demoUserIdsToDelete);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -534,7 +539,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     cleanupCountsByTable,
     'users',
     await executeDelete(client, 'users', (builder) => {
-      pushTextArrayPredicate(builder, 'id', demoUserIdsToDelete);
+      pushTextArrayPredicate(builder, 'id', demoUserIds.userIdsToDelete);
     }),
   );
 
@@ -680,7 +685,16 @@ const verifyDemoDataset = async () => {
   return { verificationCountsByTable, mismatches };
 };
 
-const collectDemoUserIdsToDelete = async (client: PoolClient) => {
+export const selectDemoUserCleanupIds = (rows: Array<{ id: string }>): DemoUserCleanupIds => {
+  const demoUserIdSet = new Set<string>(DEMO_USER_IDS);
+  const dependentUserIds = rows.map((row) => row.id);
+  return {
+    dependentUserIds,
+    userIdsToDelete: dependentUserIds.filter((id) => !demoUserIdSet.has(id)),
+  };
+};
+
+const collectDemoUserCleanupIds = async (client: PoolClient) => {
   const result = await client.query<{ id: string }>(
     `SELECT id
      FROM users
@@ -688,7 +702,7 @@ const collectDemoUserIdsToDelete = async (client: PoolClient) => {
      ORDER BY id`,
     [DEMO_IDS.users, DEMO_USERS.map((user) => user.username)],
   );
-  return result.rows.map((row) => row.id);
+  return selectDemoUserCleanupIds(result.rows);
 };
 
 export const runDemoSeedRefresh = async ({
@@ -707,12 +721,12 @@ export const runDemoSeedRefresh = async ({
   let inTransaction = false;
 
   try {
-    const demoUserIdsToDelete = await collectDemoUserIdsToDelete(client);
+    const demoUserIds = await collectDemoUserCleanupIds(client);
 
     await client.query('BEGIN');
     inTransaction = true;
 
-    cleanupCountsByTable = await cleanupDemoNamespace(client, demoUserIdsToDelete);
+    cleanupCountsByTable = await cleanupDemoNamespace(client, demoUserIds);
     await insertCompatibilityDefaults(client, insertCountsByTable);
     await insertDemoUsersAndSettings(client, insertCountsByTable);
 
