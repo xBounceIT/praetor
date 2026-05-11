@@ -40,4 +40,21 @@ describe('ClientsInvoicesView modal styling', () => {
       'id="client-invoice-notes"',
     ]);
   });
+
+  test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "{t('common:labels.price')}</div>",
+      "{t('common:labels.discount')}</div>",
+      '/',
+      '{currency}',
+      '<span className="shrink-0 text-xs font-medium text-muted-foreground">',
+      '%',
+    ]);
+    expectSourceOmitsAll(source, [
+      "{t('common:labels.price')} ({currency})",
+      "{t('common:labels.discount')}%",
+    ]);
+  });
 });

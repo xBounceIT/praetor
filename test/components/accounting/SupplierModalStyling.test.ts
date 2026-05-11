@@ -73,4 +73,17 @@ describe('supplier accounting modal styling', () => {
       `id="${notesId}"`,
     ]);
   });
+
+  test('supplier invoice item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
+    const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "{t('crm:internalListing.salePrice')}</div>",
+      '<span>/</span>',
+      "{t('accounting:clientsInvoices.unit')}",
+      '{currency}',
+      '%',
+    ]);
+    expectSourceOmitsAll(source, ["{t('crm:internalListing.salePrice')} ({currency})"]);
+  });
 });

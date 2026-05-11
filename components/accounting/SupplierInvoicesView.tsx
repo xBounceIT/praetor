@@ -464,9 +464,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                         {t('accounting:supplierInvoices.descriptionPlaceholder')}
                       </div>
                       <div className="col-span-1">{t('common:labels.quantity')}</div>
-                      <div className="col-span-2">
-                        {t('crm:internalListing.salePrice')} ({currency})
-                      </div>
+                      <div className="col-span-2">{t('crm:internalListing.salePrice')}</div>
                       <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
                       <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                     </div>
@@ -514,32 +512,54 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   }
                                   className="text-center"
                                 />
+                                <div className="mt-1 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground">
+                                  <span>/</span>
+                                  <span>{t('accounting:clientsInvoices.unit')}</span>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                   {t('crm:internalListing.salePrice')}
                                 </FieldLabel>
-                                <ValidatedNumberInput
-                                  value={item.unitPrice}
-                                  formatDecimals={2}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                                  }
-                                  className="text-center"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={item.unitPrice}
+                                    formatDecimals={2}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'unitPrice',
+                                        value === '' ? 0 : Number(value),
+                                      )
+                                    }
+                                    className="min-w-0 text-center"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    {currency}
+                                  </span>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                   {t('accounting:supplierOrders.discount')}
                                 </FieldLabel>
-                                <ValidatedNumberInput
-                                  value={item.discount || 0}
-                                  formatDecimals={2}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                                  }
-                                  className="text-center"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={item.discount || 0}
+                                    formatDecimals={2}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'discount',
+                                        value === '' ? 0 : Number(value),
+                                      )
+                                    }
+                                    className="min-w-0 text-center"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    %
+                                  </span>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -586,33 +606,63 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 />
                               </div>
                               <div className="lg:col-span-1">
-                                <ValidatedNumberInput
-                                  value={item.quantity}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                                  }
-                                  className="font-medium"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={item.quantity}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'quantity',
+                                        value === '' ? 0 : Number(value),
+                                      )
+                                    }
+                                    className="min-w-0 font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    /
+                                  </span>
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    {t('accounting:clientsInvoices.unit')}
+                                  </span>
+                                </div>
                               </div>
                               <div className="lg:col-span-2">
-                                <ValidatedNumberInput
-                                  value={item.unitPrice}
-                                  formatDecimals={2}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                                  }
-                                  className="font-medium"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={item.unitPrice}
+                                    formatDecimals={2}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'unitPrice',
+                                        value === '' ? 0 : Number(value),
+                                      )
+                                    }
+                                    className="min-w-0 font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    {currency}
+                                  </span>
+                                </div>
                               </div>
                               <div className="lg:col-span-1">
-                                <ValidatedNumberInput
-                                  value={item.discount || 0}
-                                  formatDecimals={2}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                                  }
-                                  className="font-medium"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={item.discount || 0}
+                                    formatDecimals={2}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'discount',
+                                        value === '' ? 0 : Number(value),
+                                      )
+                                    }
+                                    className="min-w-0 font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    %
+                                  </span>
+                                </div>
                               </div>
                               <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2">
                                 {lineTotal.toFixed(2)} {currency}

@@ -600,10 +600,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       <div className="col-span-3">{t('common:labels.product')}</div>
                       <div className="col-span-2">{t('common:labels.quantity')}</div>
-                      <div className="col-span-2">
-                        {t('common:labels.price')} ({currency})
-                      </div>
-                      <div className="col-span-2">{t('common:labels.discount')}%</div>
+                      <div className="col-span-2">{t('common:labels.price')}</div>
+                      <div className="col-span-2">{t('common:labels.discount')}</div>
                       <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
                     </div>
                     <div className="w-8 shrink-0"></div>
@@ -665,6 +663,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   className="min-w-0"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  /
+                                </span>
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                   {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
                                     ?.name || t('accounting:clientsInvoices.unit')}
                                 </span>
@@ -672,44 +673,54 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.price')} ({currency})
+                                {t('common:labels.price')}
                               </FieldLabel>
-                              <ValidatedNumberInput
-                                min="0"
-                                step="0.01"
-                                required
-                                value={item.unitPrice}
-                                formatDecimals={2}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateItemRow(
-                                    index,
-                                    'unitPrice',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                className="font-medium"
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                  value={item.unitPrice}
+                                  formatDecimals={2}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'unitPrice',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0 font-medium"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.discount')}%
+                                {t('common:labels.discount')}
                               </FieldLabel>
-                              <ValidatedNumberInput
-                                min="0"
-                                max="100"
-                                value={item.discount || 0}
-                                formatDecimals={2}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateItemRow(
-                                    index,
-                                    'discount',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                className="font-medium"
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  max="100"
+                                  value={item.discount || 0}
+                                  formatDecimals={2}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'discount',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0 font-medium"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  %
+                                </span>
+                              </div>
                             </div>
                             <div className="space-y-1 lg:col-span-3">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
