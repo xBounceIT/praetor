@@ -163,13 +163,15 @@ describe('authenticateToken', () => {
     expect(reply.body).toEqual({ error: 'User not found' });
   });
 
-  test('401 when user.isDisabled is true', async () => {
+  test('403 with "Account is disabled" when user.isDisabled is true (distinct from invalid/expired token)', async () => {
     findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, isDisabled: true });
     const request = buildFakeRequest(signToken({ userId: 'u1' }));
     const reply = buildFakeReply();
     await authenticateToken(request as never, reply as never);
-    expect(reply.statusCode).toBe(401);
-    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Account is disabled' });
+    // No rotated session token: a disabled user must not receive a fresh sliding-window token.
+    expect(reply.headers['x-auth-token']).toBeUndefined();
   });
 
   test('403 when rolesRepo.userHasRole returns false', async () => {

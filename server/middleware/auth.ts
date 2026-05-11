@@ -41,7 +41,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
     }
 
     if (user.isDisabled) {
-      return reply.code(401).send({ error: 'Invalid or expired token' });
+      // 403 (not 401): the token itself is valid; the account is forbidden from
+      // accessing the system. Matches the sibling-route convention for
+      // authenticated-but-forbidden responses (see requireRole/requirePermission).
+      return reply.code(403).send({ error: 'Account is disabled' });
     }
 
     const effectiveRole = decoded.activeRole ?? user.role;
