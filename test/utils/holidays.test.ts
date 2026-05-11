@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import enHolidays from '../../locales/en/holidays.json';
+import itHolidays from '../../locales/it/holidays.json';
 import { getLocalDateString } from '../../utils/date';
 import { getEaster, isItalianHoliday } from '../../utils/holidays';
 
@@ -26,16 +28,16 @@ describe('getEaster', () => {
 
 describe('isItalianHoliday - fixed dates', () => {
   test.each([
-    ['2026-01-01', 'Capodanno'],
-    ['2026-01-06', 'Epifania'],
-    ['2026-04-25', 'Liberazione'],
-    ['2026-05-01', 'Lavoro'],
-    ['2026-06-02', 'Repubblica'],
-    ['2026-08-15', 'Ferragosto'],
-    ['2026-11-01', 'Ognissanti'],
-    ['2026-12-08', 'Immacolata'],
-    ['2026-12-25', 'Natale'],
-    ['2026-12-26', 'S. Stefano'],
+    ['2026-01-01', 'holidays.newYear'],
+    ['2026-01-06', 'holidays.epiphany'],
+    ['2026-04-25', 'holidays.liberationDay'],
+    ['2026-05-01', 'holidays.laborDay'],
+    ['2026-06-02', 'holidays.republicDay'],
+    ['2026-08-15', 'holidays.assumption'],
+    ['2026-11-01', 'holidays.allSaints'],
+    ['2026-12-08', 'holidays.immaculateConception'],
+    ['2026-12-25', 'holidays.christmas'],
+    ['2026-12-26', 'holidays.stStephen'],
   ])('%s → %s', (dateStr, expected) => {
     const [y, m, d] = dateStr.split('-').map(Number);
     expect(isItalianHoliday(new Date(y, m - 1, d))).toBe(expected);
@@ -43,12 +45,12 @@ describe('isItalianHoliday - fixed dates', () => {
 });
 
 describe('isItalianHoliday - moveable feasts', () => {
-  test('returns "Pasqua" on Easter Sunday', () => {
-    expect(isItalianHoliday(new Date(2026, 3, 5))).toBe('Pasqua');
+  test('returns the Easter key on Easter Sunday', () => {
+    expect(isItalianHoliday(new Date(2026, 3, 5))).toBe('holidays.easter');
   });
 
-  test('returns "Lunedì dell\'Angelo" the day after Easter', () => {
-    expect(isItalianHoliday(new Date(2026, 3, 6))).toBe("Lunedì dell'Angelo");
+  test('returns the Easter Monday key the day after Easter', () => {
+    expect(isItalianHoliday(new Date(2026, 3, 6))).toBe('holidays.easterMonday');
   });
 
   test('returns null for the day before Easter (Good Saturday is not a public holiday in Italy)', () => {
@@ -56,8 +58,16 @@ describe('isItalianHoliday - moveable feasts', () => {
   });
 
   test('Easter Monday rolls forward correctly when Easter is on March 31 (boundary into April)', () => {
-    expect(isItalianHoliday(new Date(2024, 2, 31))).toBe('Pasqua');
-    expect(isItalianHoliday(new Date(2024, 3, 1))).toBe("Lunedì dell'Angelo");
+    expect(isItalianHoliday(new Date(2024, 2, 31))).toBe('holidays.easter');
+    expect(isItalianHoliday(new Date(2024, 3, 1))).toBe('holidays.easterMonday');
+  });
+
+  test('returned key resolves through the holidays namespace in both languages', () => {
+    const key = isItalianHoliday(new Date(2026, 0, 1));
+    expect(key).not.toBeNull();
+    const lookupKey = (key as string).split('.')[1] as keyof typeof itHolidays;
+    expect(itHolidays[lookupKey]).toBe('Capodanno');
+    expect(enHolidays[lookupKey]).toBe("New Year's Day");
   });
 });
 
