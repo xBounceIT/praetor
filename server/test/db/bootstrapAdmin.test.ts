@@ -66,28 +66,98 @@ beforeEach(() => {
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
 });
 
+describe('resolveAdminBootstrapPassword', () => {
+  test('uses env value when provided', () => {
+    const resolved = bootstrapAdmin.resolveAdminBootstrapPassword('s3cret-from-env');
+    expect(resolved).toEqual({ password: 's3cret-from-env', source: 'env' });
+  });
+
+  test('generates a random password when env value is absent', () => {
+    const resolved = bootstrapAdmin.resolveAdminBootstrapPassword(undefined);
+    expect(resolved.source).toBe('generated');
+    expect(resolved.password).not.toBe('password');
+    expect(resolved.password.length).toBeGreaterThanOrEqual(20);
+  });
+
+  test('generates a random password when env value is empty', () => {
+    const resolved = bootstrapAdmin.resolveAdminBootstrapPassword('');
+    expect(resolved.source).toBe('generated');
+    expect(resolved.password).not.toBe('');
+  });
+
+  test('successive generated passwords differ', () => {
+    const a = bootstrapAdmin.resolveAdminBootstrapPassword(undefined);
+    const b = bootstrapAdmin.resolveAdminBootstrapPassword(undefined);
+    expect(a.password).not.toBe(b.password);
+  });
+});
+
 describe('ensureBootstrapAdmin', () => {
-  test('creates a fresh admin with the literal default password', async () => {
+  const ORIGINAL_ENV = process.env.ADMIN_DEFAULT_PASSWORD;
+
+  beforeEach(() => {
+    delete process.env.ADMIN_DEFAULT_PASSWORD;
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_ENV === undefined) {
+      delete process.env.ADMIN_DEFAULT_PASSWORD;
+    } else {
+      process.env.ADMIN_DEFAULT_PASSWORD = ORIGINAL_ENV;
+    }
+  });
+
+  test('creates a fresh admin with a generated password when env is unset', async () => {
     queryMock
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    bcryptHashMock.mockResolvedValue('$2a$password-hash');
-    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$generated-hash');
+    bcryptCompareMock.mockResolvedValue(false);
 
     const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
 
     expect(adminId).toBe('u1');
-    expect(bcryptHashMock).toHaveBeenCalledWith('password', 12);
+    expect(bcryptHashMock).toHaveBeenCalledTimes(1);
+    const [hashedPassword, cost] = bcryptHashMock.mock.calls[0];
+    expect(hashedPassword).not.toBe('password');
+    expect(typeof hashedPassword).toBe('string');
+    expect((hashedPassword as string).length).toBeGreaterThanOrEqual(20);
+    expect(cost).toBe(12);
     expect(createUserMock).toHaveBeenCalledWith({
       id: 'u1',
       name: 'Admin User',
       username: 'admin',
-      passwordHash: '$2a$password-hash',
+      passwordHash: '$2a$generated-hash',
       role: 'admin',
       avatarInitials: 'AD',
     });
-    expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
+    // Random password is not the legacy default so we must NOT raise the warning.
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('creates a fresh admin with the env-supplied password when set', async () => {
+    process.env.ADMIN_DEFAULT_PASSWORD = 'operator-chosen';
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    bcryptHashMock.mockResolvedValue('$2a$env-hash');
+    bcryptCompareMock.mockResolvedValue(false);
+
+    const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
+
+    expect(adminId).toBe('u1');
+    expect(bcryptHashMock).toHaveBeenCalledWith('operator-chosen', 12);
+    expect(createUserMock).toHaveBeenCalledWith({
+      id: 'u1',
+      name: 'Admin User',
+      username: 'admin',
+      passwordHash: '$2a$env-hash',
+      role: 'admin',
+      avatarInitials: 'AD',
+    });
   });
 
   test('existing admin with default password gets the warning', async () => {

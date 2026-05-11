@@ -19,8 +19,13 @@ Set at least:
 - `ENCRYPTION_KEY`
 - `FRONTEND_URL`
 
-Fresh installs create the bootstrap admin as `admin` / `password`. Change that password after
-the first login.
+Fresh installs create the bootstrap admin user `admin` with a one-time random password that is
+written to the backend logs at startup under the `db:bootstrap-admin` module. Capture it before
+your first login and rotate it from the Security tab. To choose your own password instead, set
+`ADMIN_DEFAULT_PASSWORD` in the env file before the first run.
+
+Existing installs that already use the legacy `password` default continue to work; the app shows
+a persistent notification until the password is changed.
 
 ## 2) Authenticate to Registry (if private)
 
