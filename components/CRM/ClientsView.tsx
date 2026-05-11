@@ -441,10 +441,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       newErrors.fiscalCode = t('common:validation.required');
     }
 
-    if (normalizedContacts.length === 0 || !primaryContact) {
-      newErrors.contacts = t('common:validation.required');
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -454,10 +450,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       name: trimmedName,
       type: formData.type,
       contacts: normalizedContacts,
-      contactName: primaryContact.fullName,
+      contactName: primaryContact?.fullName,
       clientCode: trimmedClientCode,
-      email: primaryContact.email?.trim() || undefined,
-      phone: primaryContact.phone?.trim() || '',
+      email: primaryContact?.email?.trim() || undefined,
+      phone: primaryContact?.phone?.trim() || undefined,
       addressCountry: formData.addressCountry?.trim() || '',
       addressState: formData.addressState?.trim() || '',
       addressCap: formData.addressCap?.trim() || '',
