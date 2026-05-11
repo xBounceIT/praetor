@@ -189,11 +189,19 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     if (!canDeleteSuppliers) return;
     if (!supplierToDelete || isDeleting) return;
     setIsDeleting(true);
-    onDeleteSupplier(supplierToDelete.id).finally(() => {
-      setIsDeleting(false);
-      setIsDeleteConfirmOpen(false);
-      setSupplierToDelete(null);
-    });
+    onDeleteSupplier(supplierToDelete.id)
+      .then(() => {
+        // Only close the modal on success so failures (network/API) leave the
+        // dialog open with the spinner cleared and the user can retry.
+        setIsDeleteConfirmOpen(false);
+        setSupplierToDelete(null);
+      })
+      .catch((err) => {
+        console.error('Failed to delete supplier:', err);
+      })
+      .finally(() => {
+        setIsDeleting(false);
+      });
   };
 
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
