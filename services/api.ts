@@ -23,6 +23,7 @@ export { productsApi } from './api/products';
 export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
 export { rolesApi } from './api/roles';
+export type { CreatedMcpToken, McpToken } from './api/settings';
 export { settingsApi } from './api/settings';
 export { ssoApi } from './api/sso';
 export { supplierInvoicesApi } from './api/supplierInvoices';

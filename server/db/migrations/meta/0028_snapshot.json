@@ -1,6 +1,6 @@
 {
-  "id": "d111f233-8e39-498a-b132-e2362ebad50d",
-  "prevId": "8b899fee-5f22-4b19-99b7-092c9f7ae909",
+  "id": "7f1231f4-2583-4dbd-8fa2-450aca4b75d9",
+  "prevId": "d111f233-8e39-498a-b132-e2362ebad50d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5961,9 +5961,38 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'app_user'"
+        },
+        "auth_method": {
+          "name": "auth_method",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'local'"
+        },
+        "auth_provider_id": {
+          "name": "auth_provider_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_users_auth_provider_id": {
+          "name": "idx_users_auth_provider_id",
+          "columns": [
+            {
+              "expression": "auth_provider_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "users_role_roles_id_fk": {
           "name": "users_role_roles_id_fk",
@@ -5972,6 +6001,15 @@
           "columnsFrom": ["role"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "users_auth_provider_id_sso_providers_id_fk": {
+          "name": "users_auth_provider_id_sso_providers_id_fk",
+          "tableFrom": "users",
+          "tableTo": "sso_providers",
+          "columnsFrom": ["auth_provider_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -5988,6 +6026,10 @@
         "users_employee_type_check": {
           "name": "users_employee_type_check",
           "value": "\"users\".\"employee_type\" IN ('app_user', 'internal', 'external')"
+        },
+        "users_auth_method_check": {
+          "name": "users_auth_method_check",
+          "value": "\"users\".\"auth_method\" IN ('local', 'ldap', 'oidc', 'saml')"
         }
       },
       "isRLSEnabled": false

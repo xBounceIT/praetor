@@ -1954,6 +1954,12 @@ const App: React.FC = () => {
     }
   };
 
+  const handleListMcpTokens = () => api.settings.listMcpTokens();
+
+  const handleCreateMcpToken = (name: string) => api.settings.createMcpToken(name);
+
+  const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
+
   const handleNotFoundReturn = () => {
     setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
   };
@@ -2559,6 +2565,9 @@ const App: React.FC = () => {
                 settings={userSettings}
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
+                onListMcpTokens={handleListMcpTokens}
+                onCreateMcpToken={handleCreateMcpToken}
+                onRevokeMcpToken={handleRevokeMcpToken}
               />
             )}
             {activeView === 'reports/ai-reporting' &&
