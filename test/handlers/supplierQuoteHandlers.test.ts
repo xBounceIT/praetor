@@ -291,41 +291,68 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-1' }]);
   });
 
-  test('createSupplierOrderFromQuote handles missing productId by defaulting to empty string', async () => {
+  test('createSupplierOrderFromQuote rejects with a clear error when an item has no productId', async () => {
     apiMocks.supplierOrdersCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'so-new', ...(data as object) }),
     );
     apiMocks.supplierQuotesList.mockImplementation(() => Promise.resolve([]));
     apiMocks.supplierOrdersList.mockImplementation(() => Promise.resolve([]));
     const ctx = buildHandlers();
-
-    await ctx.handlers.createSupplierOrderFromQuote({
-      id: 'sq-1',
-      supplierId: 's',
-      supplierName: 'S',
-      paymentTerms: '30',
-      notes: '',
-      items: [{ quantity: 1, unitPrice: 10 }],
-    } as never);
-
-    const callArg = apiMocks.supplierOrdersCreate.mock.calls[0][0] as Record<string, unknown>;
-    const items = callArg.items as Array<Record<string, unknown>>;
-    expect(items[0].productId).toBe('');
+    const restore = silenceConsole();
+    try {
+      await expect(
+        ctx.handlers.createSupplierOrderFromQuote({
+          id: 'sq-1',
+          supplierId: 's',
+          supplierName: 'S',
+          paymentTerms: '30',
+          notes: '',
+          items: [{ quantity: 1, unitPrice: 10 }],
+        } as never),
+      ).rejects.toThrow(/no product/);
+      // Validation must run before the API call.
+      expect(apiMocks.supplierOrdersCreate).not.toHaveBeenCalled();
+      expect(ctx.setActiveView).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
   });
 
-  test('createSupplierOrderFromQuote alerts on create error', async () => {
+  test('createSupplierOrderFromQuote rejects when productId is an empty string', async () => {
+    const ctx = buildHandlers();
+    const restore = silenceConsole();
+    try {
+      await expect(
+        ctx.handlers.createSupplierOrderFromQuote({
+          id: 'sq-1',
+          supplierId: 's',
+          supplierName: 'S',
+          paymentTerms: '30',
+          notes: '',
+          items: [{ productId: '', quantity: 1, unitPrice: 10 }],
+        } as never),
+      ).rejects.toThrow(/no product/);
+      expect(apiMocks.supplierOrdersCreate).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  });
+
+  test('createSupplierOrderFromQuote rethrows on create error', async () => {
     apiMocks.supplierOrdersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.createSupplierOrderFromQuote({
-        id: 'sq-1',
-        supplierId: 's',
-        supplierName: 'S',
-        paymentTerms: '30',
-        notes: '',
-        items: [],
-      } as never);
+      await expect(
+        ctx.handlers.createSupplierOrderFromQuote({
+          id: 'sq-1',
+          supplierId: 's',
+          supplierName: 'S',
+          paymentTerms: '30',
+          notes: '',
+          items: [],
+        } as never),
+      ).rejects.toThrow('boom');
       expect(ctx.setActiveView).not.toHaveBeenCalled();
     } finally {
       restore();

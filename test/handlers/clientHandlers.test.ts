@@ -185,16 +185,34 @@ describe('makeClientHandlers', () => {
     );
   });
 
-  test('deleteProfileOption awaits api call', async () => {
+  test('deleteProfileOption refetches and replaces clients after delete', async () => {
     apiMocks.clientsDeleteProfileOption.mockImplementation(() => Promise.resolve());
+    apiMocks.clientsList.mockImplementation(() =>
+      Promise.resolve([{ id: 'c-fresh', name: 'fresh' }]),
+    );
+    const clients = makeStubSetter<ClientLike>([{ id: 'c-stale' }]);
     const handlers = makeClientHandlers({
       projects: [],
-      setClients: makeStubSetter<ClientLike>([]).setter,
+      setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
     });
 
     await handlers.deleteProfileOption('industry' as never, 'po-2');
     expect(apiMocks.clientsDeleteProfileOption).toHaveBeenCalledWith('industry', 'po-2');
+    expect(apiMocks.clientsList).toHaveBeenCalled();
+    expect(clients.get()).toEqual([{ id: 'c-fresh', name: 'fresh' }]);
+  });
+
+  test('deleteProfileOption does not refresh when api call fails', async () => {
+    apiMocks.clientsDeleteProfileOption.mockImplementation(() => Promise.reject(new Error('nope')));
+    const handlers = makeClientHandlers({
+      projects: [],
+      setClients: makeStubSetter<ClientLike>([]).setter,
+      setProjects: makeStubSetter<ProjectLike>([]).setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+    });
+    await expect(handlers.deleteProfileOption('industry' as never, 'po-2')).rejects.toThrow('nope');
+    expect(apiMocks.clientsList).not.toHaveBeenCalled();
   });
 });

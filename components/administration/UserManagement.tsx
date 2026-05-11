@@ -53,7 +53,7 @@ export interface UserManagementProps {
     role: string,
     email?: string,
   ) => Promise<{ success: boolean; error?: string }>;
-  onDeleteUser: (id: string) => void;
+  onDeleteUser: (id: string) => Promise<void>;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   onUpdateUserRoles: (id: string, roleIds: string[], primaryRoleId: string) => Promise<void>;
   onUpdateUserAuthMethod: (
@@ -433,11 +433,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setUserToDelete(null);
   };
 
-  const handleDelete = () => {
-    if (userToDelete) {
-      onDeleteUser(userToDelete.id);
+  const handleDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      await onDeleteUser(userToDelete.id);
       setIsDeleteConfirmOpen(false);
       setUserToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete user:', err);
     }
   };
 

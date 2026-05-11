@@ -34,7 +34,9 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
 
   const createFromOrder = async (order: SupplierSaleOrder) => {
     try {
-      const paymentDays = Number.parseInt(order.paymentTerms?.replace(/\D/g, '') || '30', 10) || 30;
+      const rawPaymentDays = order.paymentTerms?.replace(/\D/g, '') ?? '';
+      const parsedPaymentDays = Number.parseInt(rawPaymentDays, 10);
+      const paymentDays = Number.isFinite(parsedPaymentDays) ? parsedPaymentDays : 30;
       const issueDate = getLocalDateString();
       const dueDate = addDaysToDateOnly(issueDate, paymentDays);
       const items = order.items.map((item) => ({

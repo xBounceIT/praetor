@@ -208,6 +208,53 @@ describe('makeSupplierInvoiceHandlers', () => {
     const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.subtotal).toBe(0);
     expect(callArg.total).toBe(0);
+    // 30-day default applied: dueDate should differ from issueDate.
+    expect(callArg.issueDate).not.toBe(callArg.dueDate);
+  });
+
+  test('createFromOrder honors explicit 0-day paymentTerms (does not fall back to 30)', async () => {
+    apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'si-new', ...(data as object) }),
+    );
+    const handlers = makeSupplierInvoiceHandlers({
+      setSupplierInvoices: makeStubSetter<SupplierInvoiceLike>([]).setter,
+      setActiveView: mock(() => {}) as never,
+    });
+
+    await handlers.createFromOrder({
+      id: 'order-1',
+      supplierId: 's1',
+      supplierName: 'S',
+      paymentTerms: '0',
+      notes: '',
+      items: [],
+    } as never);
+
+    const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
+    // 0-day payment terms means the invoice is due on the same day it is issued.
+    expect(callArg.issueDate).toBe(callArg.dueDate);
+  });
+
+  test('createFromOrder honors explicit "0 days" paymentTerms (does not fall back to 30)', async () => {
+    apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'si-new', ...(data as object) }),
+    );
+    const handlers = makeSupplierInvoiceHandlers({
+      setSupplierInvoices: makeStubSetter<SupplierInvoiceLike>([]).setter,
+      setActiveView: mock(() => {}) as never,
+    });
+
+    await handlers.createFromOrder({
+      id: 'order-1',
+      supplierId: 's1',
+      supplierName: 'S',
+      paymentTerms: '0 days',
+      notes: '',
+      items: [],
+    } as never);
+
+    const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.issueDate).toBe(callArg.dueDate);
   });
 
   test('createFromOrder alerts and swallows on api error', async () => {

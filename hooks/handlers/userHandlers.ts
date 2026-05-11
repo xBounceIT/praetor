@@ -1,7 +1,7 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
-import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 
 export type UserHandlersDeps = {
   currentUser: User | null;
@@ -46,7 +46,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
       const hasTopManagerRole = roleIds.includes(TOP_MANAGER_ROLE_ID);
-      const isAdminOnly = roleIds.length === 1 && roleIds.includes('admin');
+      const isAdminOnly = roleIds.length === 1 && roleIds.includes(ADMIN_ROLE_ID);
       setUsers((prev) =>
         prev.map((u) =>
           u.id === id
@@ -83,13 +83,14 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
 
   const deleteUser = async (id: string) => {
     try {
+      await api.users.delete(id);
       if (viewingUserId === id) {
         setViewingUserId(currentUser?.id || '');
       }
-      await api.users.delete(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
+      throw err;
     }
   };
 
