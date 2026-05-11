@@ -42,6 +42,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
   onUpdateEntry,
   viewingUserId,
+  currentUserId,
   availableUsers,
   onViewUserChange,
   treatSaturdayAsHoliday,
