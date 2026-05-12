@@ -87,6 +87,7 @@ import {
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
+import { clearStaleModuleScopedState } from './utils/moduleScopedState';
 import {
   buildPermission,
   equivalentPermissionsFor,
@@ -1078,6 +1079,30 @@ const App: React.FC = () => {
     const module = getModuleFromView(activeView);
     if (!module || module === 'settings') return;
     if (loadedModules.has(module)) return;
+
+    // Clear module-scoped arrays the incoming module isn't going to refresh,
+    // so leftover data from a previously-visited module doesn't leak into the
+    // new UI before the module's own datasets load.
+    clearStaleModuleScopedState(module, {
+      clients: () => setClients([]),
+      suppliers: () => setSuppliers([]),
+      projects: () => setProjects([]),
+      projectTasks: () => setProjectTasks([]),
+      products: () => setProducts([]),
+      quotes: () => setQuotes([]),
+      clientOffers: () => setClientOffers([]),
+      clientsOrders: () => setClientsOrders([]),
+      invoices: () => setInvoices([]),
+      supplierQuotes: () => setSupplierQuotes([]),
+      supplierOrders: () => setSupplierOrders([]),
+      supplierInvoices: () => setSupplierInvoices([]),
+      entries: () => {
+        entriesStreamTokenRef.current++;
+        setEntries([]);
+      },
+      workUnits: () => setWorkUnits([]),
+      users: () => setUsers([]),
+    });
 
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
