@@ -5,18 +5,18 @@ import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
-import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 // 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
-// sync prevents a save flow where a 32–64 KB chain passes the picker but fails the API.
+// sync prevents a save flow where a 32-64 KB chain passes the picker but fails the API.
 const TLS_CA_MAX_LENGTH = 65536;
 const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
 
 // Returns the patch fragment to merge into ldapRepo.update():
-//   - omitted body field   → {} (preserve existing column)
-//   - null / empty / blank → { tlsCaCertificate: '' } (clear the column)
-//   - non-empty PEM        → { tlsCaCertificate: <canonical PEM> }
+//   - omitted body field   -> {} (preserve existing column)
+//   - null / empty / blank -> { tlsCaCertificate: '' } (clear the column)
+//   - non-empty PEM        -> { tlsCaCertificate: <canonical PEM> }
 // AuthSettings.tsx does a lighter marker-only check for fast UI feedback;
 // this is the authoritative parse via X509Certificate.
 const parseTlsCaForPatch = (
@@ -102,6 +102,29 @@ const ldapConfigUpdateBodySchema = {
   },
 } as const;
 
+const ldapTestBodySchema = {
+  type: 'object',
+  properties: {
+    username: { type: 'string' },
+    password: { type: 'string' },
+  },
+  required: ['username', 'password'],
+} as const;
+
+const ldapTestResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    authenticated: { type: 'boolean' },
+    username: { type: 'string' },
+    message: { type: 'string' },
+    userDn: { type: 'string' },
+    groups: { type: 'array', items: { type: 'string' } },
+    roleIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['success', 'authenticated', 'username', 'message', 'groups', 'roleIds'],
+} as const;
+
 const ldapSyncResponseSchema = {
   type: 'object',
   properties: {
@@ -174,6 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, tlsCaResult.message);
       }
       let normalizedUserFilter = userFilter;
+      let normalizedGroupFilter = groupFilter;
 
       if (enabledValue) {
         const serverUrlResult = requireNonEmptyString(serverUrl, 'serverUrl');
@@ -195,6 +219,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const groupFilterResult = requireNonEmptyString(groupFilter, 'groupFilter');
         if (!groupFilterResult.ok) return badRequest(reply, groupFilterResult.message);
+        const groupFilterTemplateResult = validateGroupFilterTemplate(groupFilterResult.value);
+        if (!groupFilterTemplateResult.ok) {
+          return badRequest(reply, groupFilterTemplateResult.message);
+        }
+        normalizedGroupFilter = groupFilterTemplateResult.value;
       }
 
       const hasBindDn = bindDn !== undefined && bindDn !== null && bindDn !== '';
@@ -247,7 +276,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         bindPassword,
         userFilter: normalizedUserFilter,
         groupBaseDn,
-        groupFilter,
+        groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
         ...tlsCaResult.patch,
       });
@@ -263,9 +292,56 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         action: 'ldap_config.updated',
         entityType: 'ldap_config',
-        details: { secondaryLabel: updated.serverUrl },
+        details: {
+          secondaryLabel: updated.serverUrl,
+        },
       });
       return updated;
+    },
+  );
+
+  // POST /test - Test LDAP authentication for supplied credentials (admin only)
+  fastify.post(
+    '/test',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.authentication.update')],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Test LDAP authentication',
+        body: ldapTestBodySchema,
+        response: {
+          200: ldapTestResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { username, password } = request.body as { username: unknown; password: unknown };
+
+      const usernameResult = requireNonEmptyString(username, 'username');
+      if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
+
+      const passwordResult = requireNonEmptyString(password, 'password');
+      if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
+
+      const ldapService = (await import('../services/ldap.ts')).default;
+      const result = await ldapService.authenticateWithProfile(
+        usernameResult.value,
+        passwordResult.value,
+      );
+      const authenticated = result.authenticated;
+
+      return {
+        success: authenticated,
+        authenticated,
+        username: usernameResult.value,
+        message: authenticated
+          ? 'LDAP authentication succeeded'
+          : 'LDAP authentication failed. Verify the credentials and saved LDAP configuration.',
+        userDn: result.userDn,
+        groups: authenticated ? result.groups : [],
+        roleIds: authenticated ? result.roleIds : [],
+      };
     },
   );
 

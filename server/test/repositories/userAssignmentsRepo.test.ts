@@ -54,7 +54,7 @@ describe.each([
   test('CASE merge orders manual > top_manager_auto > existing', async () => {
     exec.enqueue({ rows: [] });
     await fn('u-1', 'x-1', undefined, testDb);
-    // Both branches reference excluded.assignment_source — the proposed-insert row.
+    // Both branches reference excluded.assignment_source - the proposed-insert row.
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('excluded.assignment_source');
     expect(exec.calls[0].params).toContain(MANUAL_ASSIGNMENT_SOURCE);
@@ -185,7 +185,7 @@ describe('syncTopManagerAssignmentsForUser', () => {
     test('runs no top-manager INSERT...SELECT FROM clients/projects/tasks', async () => {
       enqueueNonTopManager();
       await syncTopManagerAssignmentsForUser('u-1', testDb);
-      // The non-TM branch's only INSERT touches user_clients via project_cascade — never
+      // The non-TM branch's only INSERT touches user_clients via project_cascade - never
       // SELECT id FROM clients/projects/tasks.
       const wrongInsert = exec.calls.find(
         (c) => /from\s+(clients|projects|tasks)\b/i.test(c.sql) && /insert\s+into/i.test(c.sql),

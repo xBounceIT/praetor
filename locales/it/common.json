@@ -248,6 +248,8 @@
     "decreaseFont": "Riduci dimensione testo",
     "columnSettings": "Impostazioni colonne",
     "columns": "Colonne",
+    "filters": "Filtri",
+    "rowActions": "Azioni riga",
     "resetColumns": "Ripristina colonne",
     "export": "Esporta",
     "exportToCsv": "Esporta in CSV",

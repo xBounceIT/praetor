@@ -11,7 +11,7 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// findById/listAll/listManagedBy use executeRows with raw SQL — rows come back with
+// findById/listAll/listManagedBy use executeRows with raw SQL - rows come back with
 // the camelCase keys that the SELECT aliases produce ("isDisabled", "userCount", etc.).
 // Other functions use the Drizzle query builder, which returns rows in `rowMode: 'array'`
 // (positional arrays). Fixtures below are tagged with the path they exercise.
@@ -194,6 +194,33 @@ describe('findUserIds', () => {
     const result = await workUnitsRepo.findUserIds('wu-1', testDb);
     expect(result).toEqual(['u-1', 'u-2']);
     expect(exec.calls[0].params).toContain('wu-1');
+  });
+});
+
+describe('listUserIdsByUnitIds', () => {
+  test('skips query when unitIds is empty', async () => {
+    const result = await workUnitsRepo.listUserIdsByUnitIds([], testDb);
+    expect(result).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('binds unitIds as a text array and returns unit/user pairs', async () => {
+    exec.enqueue({
+      rows: [
+        { workUnitId: 'wu-1', userId: 'u-1' },
+        { workUnitId: 'wu-2', userId: 'u-2' },
+      ],
+    });
+
+    const result = await workUnitsRepo.listUserIdsByUnitIds(['wu-1', 'wu-2'], testDb);
+
+    expect(result).toEqual([
+      { workUnitId: 'wu-1', userId: 'u-1' },
+      { workUnitId: 'wu-2', userId: 'u-2' },
+    ]);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from user_work_units');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('any(');
+    expect(exec.calls[0].params).toContainEqual(['wu-1', 'wu-2']);
   });
 });
 

@@ -148,6 +148,24 @@ describe('list', () => {
   });
 });
 
+describe('listByIds', () => {
+  test('returns mapped clients for the provided ids without aggregate totals', async () => {
+    exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
+
+    const result = await clientsRepo.listByIds(['c-1'], testDb);
+
+    expect(exec.calls[0].sql).toContain('WHERE c.id = ANY');
+    expect(exec.calls[0].params).toContain('c-1');
+    expect(result[0].id).toBe('c-1');
+    expect(result[0].totalSentQuotes).toBeUndefined();
+  });
+
+  test('returns empty array without querying for empty ids', async () => {
+    expect(await clientsRepo.listByIds([], testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
 describe('findContactsForUpdate', () => {
   test('returns parsed contacts when client exists', async () => {
     exec.enqueue({ rows: [[[{ fullName: 'A' }]]] });

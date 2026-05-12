@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -105,7 +109,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [requirePermission('crm.suppliers.create')],
+      onRequest: [requireScopedPermission('crm.suppliers', 'create')],
       schema: {
         tags: ['suppliers'],
         summary: 'Create supplier',
@@ -205,7 +209,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [requirePermission('crm.suppliers.update')],
+      onRequest: [requireScopedPermission('crm.suppliers', 'update')],
       schema: {
         tags: ['suppliers'],
         summary: 'Update supplier',
@@ -344,7 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [requirePermission('crm.suppliers.delete')],
+      onRequest: [requireScopedPermission('crm.suppliers', 'delete')],
       schema: {
         tags: ['suppliers'],
         summary: 'Delete supplier',

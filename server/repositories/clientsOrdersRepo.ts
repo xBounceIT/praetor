@@ -57,7 +57,7 @@ const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
   updatedAt: row.updatedAt?.getTime() ?? 0,
 });
 
-// `sale_items.sale_id` is exposed as `orderId` in the domain type — public API contract.
+// `sale_items.sale_id` is exposed as `orderId` in the domain type - public API contract.
 const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
   id: row.id,
   orderId: row.saleId,

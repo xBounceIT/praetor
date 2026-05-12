@@ -92,7 +92,7 @@ describe('getSnapshots', () => {
 // Product CRUD
 // ===========================================================================
 
-// `findProductById` projection order (shared base — also used by `listAllProducts` with
+// `findProductById` projection order (shared base - also used by `listAllProducts` with
 // `supplier_name` appended at the end):
 // id, name, product_code, created_at, description, costo, mol_percentage, cost_unit,
 // category, subcategory, type, supplier_id, is_disabled
@@ -145,7 +145,7 @@ describe('findProductById / findProductCoreById', () => {
   });
 
   test('findProductCoreById returns just type/supplierId/category', async () => {
-    // Projection: type, supplier_id, category — 3-element positional row.
+    // Projection: type, supplier_id, category - 3-element positional row.
     exec.enqueue({ rows: [['service', 's-1', 'cat-a']] });
     const result = await productsRepo.findProductCoreById('p-1', testDb);
     expect(result).toEqual({ type: 'service', supplierId: 's-1', category: 'cat-a' });
@@ -266,7 +266,7 @@ describe('updateProductDynamic', () => {
 
 describe('deleteProductById', () => {
   test('returns the {name, productCode} from RETURNING', async () => {
-    // RETURNING { name, productCode } — 2-element positional row.
+    // RETURNING { name, productCode } - 2-element positional row.
     exec.enqueue({ rows: [['Widget', 'WGT-001']], rowCount: 1 });
     const result = await productsRepo.deleteProductById('p-1', testDb);
     expect(result).toEqual({ name: 'Widget', productCode: 'WGT-001' });
@@ -332,7 +332,7 @@ describe('existsProductTypeByName', () => {
 
 describe('findProductTypeById / insertProductType / updateProductTypeFields', () => {
   test('findProductTypeById returns the mapped row or null', async () => {
-    // Projection: id, name, costUnit — 3-element positional row.
+    // Projection: id, name, costUnit - 3-element positional row.
     exec.enqueue({ rows: [['pt-1', 'good', 'unit']] });
     const result = await productsRepo.findProductTypeById('pt-1', testDb);
     expect(result).toEqual({ id: 'pt-1', name: 'good', costUnit: 'unit' });
@@ -461,7 +461,7 @@ describe('listInternalCategoriesByType', () => {
 
 describe('findInternalCategoryById / findCategoryIdByNameAndType', () => {
   test('findInternalCategoryById returns {id, name, type} or null', async () => {
-    // Projection: id, name, type — 3-element positional row.
+    // Projection: id, name, type - 3-element positional row.
     exec.enqueue({ rows: [['ipc-1', 'Mechanical', 'good']] });
     expect(await productsRepo.findInternalCategoryById('ipc-1', testDb)).toEqual({
       id: 'ipc-1',
@@ -474,7 +474,7 @@ describe('findInternalCategoryById / findCategoryIdByNameAndType', () => {
   });
 
   test('findCategoryIdByNameAndType returns the id string or null', async () => {
-    // Projection: id — 1-element positional row.
+    // Projection: id - 1-element positional row.
     exec.enqueue({ rows: [['ipc-1']] });
     expect(await productsRepo.findCategoryIdByNameAndType('Mechanical', 'good', testDb)).toBe(
       'ipc-1',
@@ -591,7 +591,7 @@ describe('deleteInternalCategoryById / countProductsForCategory', () => {
 
 describe('listInternalSubcategoriesByType', () => {
   test('binds categoryId and parses productCount', async () => {
-    // executeRows path — object row.
+    // executeRows path - object row.
     exec.enqueue({
       rows: [{ name: 'sub-a', productCount: '2', hasLinkedProducts: false }],
     });
@@ -623,7 +623,7 @@ describe('existsInternalSubcategoryByNameInCategory', () => {
 
 describe('insertInternalSubcategory / updateInternalSubcategoryName', () => {
   test('insertInternalSubcategory binds [id, categoryId, name] and returns the row name', async () => {
-    // RETURNING { name } — 1-element positional row.
+    // RETURNING { name } - 1-element positional row.
     exec.enqueue({ rows: [['sub-a']], rowCount: 1 });
     const result = await productsRepo.insertInternalSubcategory('ips-1', 'ipc-1', 'sub-a', testDb);
     const params = exec.calls[0].params;
@@ -634,7 +634,7 @@ describe('insertInternalSubcategory / updateInternalSubcategoryName', () => {
   });
 
   test('updateInternalSubcategoryName binds [newName, categoryId, oldName]', async () => {
-    // RETURNING { id } — 1-element positional row.
+    // RETURNING { id } - 1-element positional row.
     exec.enqueue({ rows: [['ips-1']], rowCount: 1 });
     const result = await productsRepo.updateInternalSubcategoryName('ipc-1', 'old', 'new', testDb);
     const params = exec.calls[0].params;
@@ -766,7 +766,7 @@ describe('checkProductsLinkedToTransactions', () => {
     expect(linkSql).toContain('supplier_quote_items');
     expect(linkSql).toContain('supplier_sale_items');
     expect(linkSql).toContain('supplier_invoice_items');
-    // Product ids never leave Postgres — the matched-ids CTE feeds all 7 subqueries directly.
+    // Product ids never leave Postgres - the matched-ids CTE feeds all 7 subqueries directly.
     expect(linkSql).toMatch(/with\s+matched\s+as/i);
     expect(exec.calls[0].params).toEqual(['cat-a', 'good']);
   });

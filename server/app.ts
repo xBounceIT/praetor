@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
@@ -15,12 +16,15 @@ import generalSettingsRoutes from './routes/general-settings.ts';
 import invoicesRoutes from './routes/invoices.ts';
 import ldapRoutes from './routes/ldap.ts';
 import logsRoutes from './routes/logs.ts';
+import mcpRoutes from './routes/mcp.ts';
 import notificationsRoutes from './routes/notifications.ts';
 import productsRoutes from './routes/products.ts';
 import projectsRoutes from './routes/projects.ts';
 import reportsRoutes from './routes/reports.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
+import ssoRoutes from './routes/sso.ts';
+import ssoAuthRoutes from './routes/sso-auth.ts';
 import supplierInvoicesRoutes from './routes/supplier-invoices.ts';
 import supplierOrdersRoutes from './routes/supplier-orders.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
@@ -75,12 +79,20 @@ export const buildApp = async () => {
     }),
   });
 
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+      files: 1,
+      fields: 0,
+    },
+  });
+
   await fastify.register(swagger, {
     openapi: {
       info: {
         title: 'Praetor API',
         description: 'Praetor API documentation',
-        version: '0.5.0',
+        version: '0.6.0',
       },
       components: {
         securitySchemes: {
@@ -96,6 +108,7 @@ export const buildApp = async () => {
   });
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
+  await fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
   await fastify.register(aiRoutes, { prefix: '/api/ai' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(clientsRoutes, { prefix: '/api/clients' });
@@ -103,6 +116,7 @@ export const buildApp = async () => {
   await fastify.register(tasksRoutes, { prefix: '/api/tasks' });
   await fastify.register(entriesRoutes, { prefix: '/api/entries' });
   await fastify.register(settingsRoutes, { prefix: '/api/settings' });
+  await fastify.register(ssoRoutes, { prefix: '/api/sso' });
   await fastify.register(ldapRoutes, { prefix: '/api/ldap' });
   await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
   await fastify.register(productsRoutes, { prefix: '/api/products' });
@@ -121,6 +135,7 @@ export const buildApp = async () => {
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });
   await fastify.register(reportsRoutes, { prefix: '/api/reports' });
   await fastify.register(logsRoutes, { prefix: '/api/logs' });
+  await fastify.register(mcpRoutes, { prefix: '/api/mcp' });
 
   fastify.get(
     '/api/health',

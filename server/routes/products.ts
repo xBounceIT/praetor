@@ -964,7 +964,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Block rename when products are already linked — preserves historical references.
+      // Block rename when products are already linked - preserves historical references.
       const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
         categoryResult.value,
         typeResult.value,

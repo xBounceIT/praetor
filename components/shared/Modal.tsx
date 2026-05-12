@@ -1,64 +1,196 @@
 import type React from 'react';
-import { useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
+import { cn } from '@/lib/utils';
+import { ModalThemeContext } from './ModalThemeContext';
 
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  children: React.ReactNode;
+  children: React.ReactNode | (() => React.ReactNode);
+  ariaLabel?: string | null;
   zIndex?: number;
   closeOnBackdrop?: boolean;
   closeOnEsc?: boolean;
   backdropClass?: string;
 }
 
+const AUTOFOCUS_SELECTOR = '[data-autofocus]:not([disabled])';
+
+const FOCUSABLE_SELECTOR = [
+  AUTOFOCUS_SELECTOR,
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const TEXT_LIKE_INPUT_TYPES = new Set([
+  '',
+  'date',
+  'datetime-local',
+  'email',
+  'month',
+  'number',
+  'password',
+  'search',
+  'tel',
+  'text',
+  'time',
+  'url',
+  'week',
+]);
+
+const isTextLikeInput = (props: React.ComponentProps<'input'>) =>
+  TEXT_LIKE_INPUT_TYPES.has(String(props.type ?? '').toLowerCase());
+
+const renderWithShadcnFormPrimitives = (node: React.ReactNode): React.ReactNode => {
+  if (!isValidElement(node)) return node;
+
+  const props = node.props as { children?: React.ReactNode };
+  const children =
+    props.children === undefined
+      ? props.children
+      : Children.map(props.children, renderWithShadcnFormPrimitives);
+  const nextProps = children === props.children ? undefined : { children };
+
+  if (node.type === 'button' && !(node.props as React.ComponentProps<'button'>).className) {
+    return <Button {...(node.props as React.ComponentProps<'button'>)}>{children}</Button>;
+  }
+
+  if (node.type === 'input' && isTextLikeInput(node.props as React.ComponentProps<'input'>)) {
+    return <Input {...(node.props as React.ComponentProps<'input'>)} />;
+  }
+
+  if (node.type === 'textarea') {
+    return <Textarea {...(node.props as React.ComponentProps<'textarea'>)}>{children}</Textarea>;
+  }
+
+  if (node.type === 'label' && (node.props as React.ComponentProps<'label'>).htmlFor) {
+    return <FieldLabel {...(node.props as React.ComponentProps<'label'>)}>{children}</FieldLabel>;
+  }
+
+  return nextProps ? cloneElement(node, nextProps) : node;
+};
+
 const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   children,
+  ariaLabel = 'Dialog',
   zIndex = 60,
   closeOnBackdrop = true,
   closeOnEsc = true,
   backdropClass = 'bg-black/60 backdrop-blur-sm',
 }) => {
-  const handleEscKey = useCallback(
-    (e: KeyboardEvent) => {
-      if (closeOnEsc && e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose, closeOnEsc],
-  );
+  const contentRef = useRef<HTMLDivElement>(null);
+  const focusRunIdRef = useRef(0);
+  const resolvedTheme = useResolvedShadcnTheme();
+  const normalizedChildren = useMemo(() => {
+    if (!isOpen) return null;
+    const content = typeof children === 'function' ? children() : children;
+    return Children.map(content, renderWithShadcnFormPrimitives);
+  }, [children, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
-      document.addEventListener('keydown', handleEscKey);
       document.body.style.overflow = 'hidden';
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscKey);
+      focusRunIdRef.current += 1;
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleEscKey]);
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  const focusModalContentNow = useCallback(() => {
+    const content = contentRef.current;
+    if (!content) return;
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (closeOnBackdrop && e.target === e.currentTarget) {
+    const focusTarget =
+      content.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR) ??
+      content.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      content;
+    focusTarget.focus();
+  }, []);
+
+  const focusModalContent = useCallback(() => {
+    const focusRunId = focusRunIdRef.current + 1;
+    focusRunIdRef.current = focusRunId;
+    focusModalContentNow();
+
+    queueMicrotask(() => {
+      if (focusRunId !== focusRunIdRef.current) return;
+      focusModalContentNow();
+    });
+  }, [focusModalContentNow]);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
       onClose();
     }
   };
 
-  return createPortal(
-    <div
-      className={`fixed inset-0 flex items-center justify-center p-4 ${backdropClass}`}
-      style={{ zIndex }}
-      onClick={handleBackdropClick}
-    >
-      {children}
-    </div>,
-    document.body,
+  const handleBackdropClick = () => {
+    if (closeOnBackdrop) {
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        ref={contentRef}
+        showCloseButton={false}
+        overlayClassName={backdropClass}
+        overlayProps={{ onClick: handleBackdropClick }}
+        overlayStyle={{ zIndex }}
+        data-shadcn-theme-scope=""
+        data-shadcn-theme={resolvedTheme}
+        aria-modal="true"
+        aria-describedby={undefined}
+        className={cn(
+          'shadcn-theme-bridge fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none',
+          getShadcnThemeClassName(resolvedTheme),
+        )}
+        style={{ zIndex: zIndex + 1 }}
+        tabIndex={-1}
+        onEscapeKeyDown={(e) => {
+          if (!closeOnEsc) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (!closeOnBackdrop) {
+            e.preventDefault();
+          }
+        }}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          focusModalContent();
+        }}
+      >
+        <ModalThemeContext.Provider value={resolvedTheme}>
+          {ariaLabel ? <DialogTitle className="sr-only">{ariaLabel}</DialogTitle> : null}
+          {normalizedChildren}
+        </ModalThemeContext.Provider>
+      </DialogContent>
+    </Dialog>
   );
 };
 

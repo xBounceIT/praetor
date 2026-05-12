@@ -1,6 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { Role, User, WorkUnit } from '../../types';
+import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
 import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 
 export type UserHandlersDeps = {
@@ -62,6 +62,21 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     } catch (err) {
       console.error('Failed to update user roles:', err);
       alert('Failed to update user roles: ' + (err as Error).message);
+      throw err;
+    }
+  };
+
+  const updateUserAuthMethod = async (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ) => {
+    try {
+      const updated = await api.users.updateAuthMethod(id, authMethod, authProviderId);
+      setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+    } catch (err) {
+      console.error('Failed to update user authentication method:', err);
+      alert('Failed to update user authentication method: ' + (err as Error).message);
       throw err;
     }
   };
@@ -203,6 +218,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     addUser,
     updateUser,
     updateUserRoles,
+    updateUserAuthMethod,
     deleteUser,
     addInternalEmployee,
     addExternalEmployee,

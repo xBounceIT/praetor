@@ -191,7 +191,7 @@ describe('schema invariants', () => {
   // a column reorder in `db/schema/generalSettings.ts` (or one added without updating the
   // projection) would silently desync `rowMode: 'array'` decoding from the projection map.
   // The other tests would surface this as a wrong-shaped row, but failing here gives a
-  // direct signal — "schema column order changed" — instead of cascading expectation
+  // direct signal - "schema column order changed" - instead of cascading expectation
   // mismatches.
   test('PROJECTION_KEYS match the schema column order (excluding id and updatedAt)', () => {
     const schemaColumnNames = Object.keys(getTableColumns(generalSettings));
@@ -207,7 +207,7 @@ describe('schema invariants', () => {
   // `DEFAULT_FALLBACKS` const. Those fallbacks duplicate the `.default(...)` values declared
   // on the Drizzle schema (and, by transit, the DEFAULTs in schema.sql:693-720). This test
   // builds a row where those four columns are null and asserts mapRow's fallback values
-  // match the schema column defaults — so any drift between schema.sql, the Drizzle schema,
+  // match the schema column defaults - so any drift between schema.sql, the Drizzle schema,
   // and the repo's fallback const fails CI rather than silently shipping a wrong default.
   test('mapRow defaults match the schema column defaults (drift guard)', async () => {
     const cols = getTableColumns(generalSettings);

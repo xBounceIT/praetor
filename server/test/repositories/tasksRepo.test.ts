@@ -13,7 +13,8 @@ beforeEach(() => {
 
 // `tasks` columns in schema declaration order:
 // id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start,
-// recurrence_end, recurrence_duration, expected_effort, revenue, notes, is_disabled, created_at
+// recurrence_end, recurrence_duration, expected_effort, revenue, notes, is_disabled, created_at,
+// billing_type, billing_frequency, monthly_effort
 const TASK_BASE: readonly unknown[] = [
   't-1',
   'Build feature',
@@ -29,6 +30,9 @@ const TASK_BASE: readonly unknown[] = [
   'n',
   false,
   new Date('2026-04-30T12:00:00Z'),
+  'retainer',
+  'one_time',
+  '2',
 ];
 const taskRow = (overrides: Record<number, unknown> = {}) => makeRow(TASK_BASE, overrides);
 
@@ -44,8 +48,11 @@ describe('listAll', () => {
       isRecurring: false,
       recurrenceDuration: 0,
       expectedEffort: 5,
+      monthlyEffort: 2,
       revenue: 120.5,
       isDisabled: false,
+      billingType: 'retainer',
+      billingFrequency: 'one_time',
     });
   });
 
@@ -94,9 +101,12 @@ describe('create', () => {
         recurrenceStart: '2026-04-30',
         recurrenceDuration: 1,
         expectedEffort: 5,
+        monthlyEffort: 2,
         revenue: 100,
         notes: null,
         isDisabled: false,
+        billingType: 'retainer',
+        billingFrequency: 'one_time',
       },
       testDb,
     );
@@ -109,6 +119,8 @@ describe('create', () => {
     expect(exec.calls[0].params).toContain('p-1');
     expect(exec.calls[0].params).toContain('WEEKLY');
     expect(exec.calls[0].params).toContain('2026-04-30');
+    expect(exec.calls[0].params).toContain('retainer');
+    expect(exec.calls[0].params).toContain('one_time');
   });
 });
 
@@ -146,6 +158,18 @@ describe('update', () => {
     // Two explicit nulls and the id are the only meaningful params.
     expect(exec.calls[0].params).toContain(null);
     expect(exec.calls[0].params).toContain('t-1');
+  });
+
+  test('normalizes billingFrequency-only update against stored billing type', async () => {
+    exec.enqueue({ rows: [makeRow(['time_and_materials'])] });
+    exec.enqueue({ rows: [taskRow({ 14: 'time_and_materials', 15: 'monthly' })] });
+
+    await tasksRepo.update('t-1', { billingFrequency: 'one_time' }, testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "tasks"');
+    expect(exec.calls[1].params).toContain('monthly');
+    expect(exec.calls[1].params).not.toContain('one_time');
   });
 
   test('returns null when UPDATE finds no row', async () => {
@@ -246,10 +270,10 @@ describe('hours aggregation', () => {
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].params).toContain('p-1');
 
-    // Both JOIN branches must sit inside the same `JOIN tasks t ON …` clause, OR-combined.
+    // Both JOIN branches must sit inside the same `JOIN tasks t ON ...` clause, OR-combined.
     // Asserting against the extracted ON clause (rather than the whole SQL) prevents a
     // regression that moves one branch into an unrelated CTE or WHERE filter from passing
-    // silently — both predicates have to live in the same join condition. Helper is shared
+    // silently - both predicates have to live in the same join condition. Helper is shared
     // with reportsHoursRepo.test.ts (test/helpers/sqlAssertions.ts).
     const onClause = extractTasksJoinOn(sql);
     expect(onClause).not.toBeNull();
