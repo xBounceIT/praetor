@@ -304,12 +304,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const handleLanguageChange = async (lang: LanguagePreference) => {
     if (lang === language) return;
+    const previousLang = language;
     applyLanguagePreference(lang);
     setLanguage(lang);
     try {
       await onUpdate({ fullName, email, language: lang });
     } catch (err) {
       console.error('Failed to update language:', err);
+      // Roll the optimistic update back so the user can retry the same option.
+      applyLanguagePreference(previousLang);
+      setLanguage(previousLang);
     }
   };
 
