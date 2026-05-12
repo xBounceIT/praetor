@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { siOpenid } from 'simple-icons';
 import { ldapApi } from '../../services/api';
 import { getApiBase } from '../../services/api/client';
 import type {
@@ -64,10 +65,18 @@ const buildDefaultProvider = (protocol: SsoProtocol): Partial<SsoProvider> => ({
   roleMappings: [],
 });
 
-const providerIcons: Record<SsoProtocol, string> = {
-  oidc: 'fa-key',
-  saml: 'fa-building-shield',
-};
+const OpenIdIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg aria-hidden="true" className={className} role="img" viewBox="0 0 24 24" fill="currentColor">
+    <path d={siOpenid.path} />
+  </svg>
+);
+
+const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
+  protocol === 'oidc' ? (
+    <OpenIdIcon className={className} />
+  ) : (
+    <i className={`fa-solid fa-building-shield ${className ?? ''}`.trim()}></i>
+  );
 
 const buildSamlAcsUrl = (slug: string): string =>
   `${getApiBase()}/auth/sso/saml/${encodeURIComponent(slug)}/callback`;
@@ -350,7 +359,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
-  const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: string, label: string) => (
+  const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: React.ReactNode, label: string) => (
     <Button
       type="button"
       variant="ghost"
@@ -358,7 +367,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       onClick={() => setActiveTab(tab)}
       className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent dark:hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
     >
-      <i className={`fa-solid ${icon}`}></i>
+      {icon}
       {label}
       {activeTab === tab && (
         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
@@ -377,7 +386,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const renderProviderList = (protocol: SsoProtocol) => (
     <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
       <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
-        <i className={`fa-solid ${providerIcons[protocol]} text-praetor`}></i>
+        {renderProviderIcon(protocol, 'size-4 text-praetor')}
         <h3 className="font-semibold text-zinc-800">
           {protocol === 'oidc'
             ? t('admin.sso.oidcProviders', 'OpenID Connect Providers')
@@ -666,9 +675,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </div>
 
       <div className="flex border-b border-zinc-200 gap-8">
-        {renderTabButton('ldap', 'fa-folder-tree', t('admin.tabs.ldap', 'LDAP / Active Directory'))}
-        {renderTabButton('oidc', 'fa-key', t('admin.tabs.oidc', 'OpenID Connect'))}
-        {renderTabButton('saml', 'fa-building-shield', t('admin.tabs.saml', 'SAML'))}
+        {renderTabButton(
+          'ldap',
+          <i className="fa-solid fa-folder-tree"></i>,
+          t('admin.tabs.ldap', 'LDAP / Active Directory'),
+        )}
+        {renderTabButton(
+          'oidc',
+          <OpenIdIcon className="size-4" />,
+          t('admin.tabs.oidc', 'OpenID Connect'),
+        )}
+        {renderTabButton(
+          'saml',
+          <i className="fa-solid fa-building-shield"></i>,
+          t('admin.tabs.saml', 'SAML'),
+        )}
       </div>
 
       {activeTab === 'ldap' && (
