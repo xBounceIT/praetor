@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
+import { THEME_STORAGE_KEY } from '../../../utils/theme';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
@@ -167,23 +168,96 @@ describe('<UserManagement />', () => {
     expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
   });
 
-  test('opens authentication method dialog from row actions and saves', async () => {
+  const openAuthMethodDialog = async (
+    rowName = 'Bob Brown',
+    overrides: Partial<ComponentProps<typeof UserManagement>> = {},
+  ) => {
     const user = userEvent.setup();
-    const props = renderUserManagement();
-    const bobRow = getRowFor('Bob Brown');
-    const actionButton = bobRow.querySelector('[aria-label="table.rowActions"]');
+    const props = renderUserManagement(overrides);
+    const row = getRowFor(rowName);
+    const actionButton = row.querySelector('[aria-label="table.rowActions"]');
     if (!actionButton) throw new Error('Could not find row actions button');
 
     await user.click(actionButton);
     await user.click(
       await screen.findByRole('button', { name: 'hr:workforce.authMethod.changeAction' }),
     );
+    return { user, props };
+  };
+
+  test('opens authentication method dialog from row actions and saves', async () => {
+    const { user, props } = await openAuthMethodDialog();
 
     expect(screen.getByText('hr:workforce.authMethod.description')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 
     expect(props.onUpdateUserAuthMethod).toHaveBeenCalledWith('u2', 'local', null);
+  });
+
+  test('auth-method dialog carries the resolved shadcn theme scope', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+
+    await openAuthMethodDialog();
+
+    const dialogContent = await waitFor(() => {
+      const node = document.body.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+      if (!node) throw new Error('Dialog content not rendered yet');
+      return node;
+    });
+
+    expect(dialogContent.getAttribute('data-shadcn-theme-scope')).toBe('');
+    expect(dialogContent.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(dialogContent.className).toContain('dark');
+  });
+
+  test('auth-method select opens via popper and lists all four protocols', async () => {
+    const { user } = await openAuthMethodDialog();
+
+    const trigger = screen.getAllByRole('combobox')[0];
+    if (!trigger) throw new Error('Auth-method select trigger not rendered');
+
+    await user.click(trigger);
+
+    // position="popper" renders the listbox in a portal at body level. Wait
+    // for it to appear and assert all four protocol labels are mounted.
+    const listbox = await waitFor(() => {
+      const node = document.body.querySelector<HTMLElement>('[role="listbox"]');
+      if (!node) throw new Error('Listbox not rendered yet');
+      return node;
+    });
+
+    const optionTexts = Array.from(listbox.querySelectorAll<HTMLElement>('[role="option"]')).map(
+      (opt) => opt.textContent ?? '',
+    );
+
+    expect(optionTexts).toEqual(
+      expect.arrayContaining([
+        'hr:workforce.authMethod.local',
+        'hr:workforce.authMethod.ldap',
+        'hr:workforce.authMethod.oidc',
+        'hr:workforce.authMethod.saml',
+      ]),
+    );
+  });
+
+  test('provider select appears when the user is already on an SSO method', async () => {
+    const ssoUser: User = {
+      id: 'u3',
+      name: 'Carla SSO',
+      role: 'user',
+      avatarInitials: 'CS',
+      username: 'carla.sso',
+      email: 'carla@example.com',
+      employeeType: 'app_user',
+      authMethod: 'oidc',
+      authProviderId: 'sso-1',
+      authProviderName: 'Keycloak',
+    };
+
+    await openAuthMethodDialog('Carla SSO', { users: [...users, ssoUser] });
+
+    expect(await screen.findByText('hr:workforce.authMethod.providerLabel')).toBeInTheDocument();
   });
 
   const openCreateUserModal = async () => {

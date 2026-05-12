@@ -1065,7 +1065,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" sideOffset={4}>
                   <SelectGroup>
                     {authMethodOptions.map((option) => (
                       <SelectItem key={option.id} value={option.id}>
@@ -1092,7 +1092,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={t('hr:workforce.authMethod.providerPlaceholder')} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={4}>
                     <SelectGroup>
                       {providerOptions.map((provider) => (
                         <SelectItem key={provider.id} value={provider.id}>

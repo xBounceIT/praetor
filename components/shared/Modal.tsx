@@ -13,8 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
-import { cn } from '@/lib/utils';
+import { useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { ModalThemeContext } from './ModalThemeContext';
 
 export interface ModalProps {
@@ -160,14 +159,9 @@ const Modal: React.FC<ModalProps> = ({
         overlayClassName={backdropClass}
         overlayProps={{ onClick: handleBackdropClick }}
         overlayStyle={{ zIndex }}
-        data-shadcn-theme-scope=""
-        data-shadcn-theme={resolvedTheme}
         aria-modal="true"
         aria-describedby={undefined}
-        className={cn(
-          'shadcn-theme-bridge fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none',
-          getShadcnThemeClassName(resolvedTheme),
-        )}
+        className="shadcn-theme-bridge fixed inset-0 top-0 left-0 z-auto flex h-dvh w-dvw max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 rounded-none border-0 bg-transparent p-4 text-foreground shadow-none duration-0 outline-none pointer-events-none [&>*]:pointer-events-auto sm:max-w-none"
         style={{ zIndex: zIndex + 1 }}
         tabIndex={-1}
         onEscapeKeyDown={(e) => {

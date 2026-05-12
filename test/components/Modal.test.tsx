@@ -258,7 +258,8 @@ describe('<Modal />', () => {
       const themeSubscriptions = addEventListenerSpy.mock.calls.filter(
         ([eventName]) => eventName === THEME_CHANGE_EVENT,
       );
-      expect(themeSubscriptions).toHaveLength(1);
+      // Modal + DialogContent each subscribe; ModalContent must read from ModalThemeContext, not add a third.
+      expect(themeSubscriptions).toHaveLength(2);
     } finally {
       addEventListenerSpy.mockRestore();
     }
