@@ -350,7 +350,7 @@ const Calendar: React.FC<CalendarProps> = ({
           <button
             type="button"
             onClick={handleTodayClick}
-            className={`font-bold uppercase tracking-wider text-secondary hover:bg-muted rounded-lg transition-colors ${
+            className={`font-bold uppercase tracking-wider text-secondary-foreground hover:bg-muted rounded-lg transition-colors ${
               isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
             }`}
           >
