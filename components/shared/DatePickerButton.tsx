@@ -191,7 +191,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
             data-shadcn-theme={resolvedTheme}
             style={dropdownStyles}
             className={cn(
-              'w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5',
+              'w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-md',
               themeClassName,
             )}
           >
@@ -213,7 +213,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums text-foreground dark:[color-scheme:dark]"
+                  className="h-9 flex-1 rounded-full bg-transparent px-4 text-sm font-semibold tabular-nums text-foreground dark:bg-transparent dark:[color-scheme:dark]"
                 />
                 <Button
                   type="button"
@@ -222,7 +222,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   onClick={handleApply}
                   aria-label={t('buttons.apply')}
                   title={t('buttons.apply')}
-                  className="rounded-full text-foreground"
+                  className="rounded-full bg-transparent text-foreground dark:bg-transparent"
                 >
                   <ArrowUp aria-hidden="true" />
                 </Button>

@@ -244,8 +244,10 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className={`bg-card rounded-lg border border-border shadow-sm w-full relative ${
-        isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
+      className={`w-full relative ${
+        isCompact
+          ? 'p-0 h-full flex flex-col'
+          : 'bg-card rounded-lg border border-border shadow-sm p-4'
       }`}
       ref={containerRef}
     >
