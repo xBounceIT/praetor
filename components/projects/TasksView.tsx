@@ -492,7 +492,16 @@ const TasksView: React.FC<TasksViewProps> = ({
     setDescription('');
   };
 
+  // User-driven close paths must be inert while a save/delete is in flight:
+  // otherwise the user could close, open a new modal, and the resolving await
+  // would call closeModal() — wiping the newer modal's state.
+  const requestCloseModal = () => {
+    if (isSubmitting || isDeleting) return;
+    closeModal();
+  };
+
   const cancelDelete = () => {
+    if (isDeleting) return;
     setIsDeleteConfirmOpen(false);
   };
 
@@ -550,7 +559,7 @@ const TasksView: React.FC<TasksViewProps> = ({
       />
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
+      <Modal isOpen={isModalOpen} onClose={requestCloseModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
@@ -560,8 +569,9 @@ const TasksView: React.FC<TasksViewProps> = ({
               {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
             </h3>
             <button
-              onClick={closeModal}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              onClick={requestCloseModal}
+              disabled={isSubmitting || isDeleting}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -698,8 +708,9 @@ const TasksView: React.FC<TasksViewProps> = ({
               <div className="flex gap-3 ml-auto">
                 <button
                   type="button"
-                  onClick={closeModal}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                  onClick={requestCloseModal}
+                  disabled={isSubmitting || isDeleting}
+                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t('common:buttons.cancel')}
                 </button>

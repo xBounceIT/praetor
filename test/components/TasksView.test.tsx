@@ -188,4 +188,63 @@ describe('<TasksView /> double-submit prevention', () => {
       expect(onUpdateTask).toHaveBeenCalledTimes(1);
     });
   });
+
+  test('close controls are inert while a submit is in flight', async () => {
+    // Regression: if Cancel/X stayed active during the await, a user could
+    // close, open a new task modal, then the resolving await would call
+    // closeModal() — wiping the newer modal's state.
+    let resolveAdd: (() => void) | undefined;
+    const onAddTask = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAdd = resolve;
+        }),
+    );
+
+    render(
+      <TasksView
+        tasks={[]}
+        projects={[project]}
+        clients={[client]}
+        permissions={basePerms}
+        users={[user]}
+        roles={[role]}
+        currency="EUR"
+        onAddTask={onAddTask}
+        onUpdateTask={() => {}}
+        onDeleteTask={() => {}}
+      />,
+    );
+
+    const addButtons = screen.getAllByText('tasks.addTask');
+    fireEvent.click(addButtons[0] as HTMLElement);
+
+    const modal = screen.getByTestId('modal');
+    const selectTrigger = modal.querySelector('button[type="button"]') as HTMLButtonElement;
+    fireEvent.click(selectTrigger);
+    fireEvent.click(screen.getByText(project.name));
+
+    const nameInput = screen.getByPlaceholderText('tasks.taskNamePlaceholder') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'New Task' } });
+
+    const form = modal.querySelector('form') as HTMLFormElement;
+    fireEvent.submit(form);
+
+    // Cancel button should be disabled while the submit is in flight.
+    const cancelButton = await waitFor(() => {
+      const btn = screen.getByText('common:buttons.cancel').closest('button') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+      return btn;
+    });
+
+    // Clicking the still-disabled Cancel must not close the modal.
+    fireEvent.click(cancelButton);
+    expect(screen.queryByTestId('modal')).not.toBeNull();
+
+    resolveAdd?.();
+
+    await waitFor(() => {
+      expect(onAddTask).toHaveBeenCalledTimes(1);
+    });
+  });
 });
