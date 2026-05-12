@@ -39,6 +39,8 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import OfferVersionsPanel from './OfferVersionsPanel';
 
 export interface ClientOffersViewProps {
@@ -107,6 +109,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     ],
     [t],
   );
+  const searchLabel = t('sales:clientOffers.searchPlaceholder', {
+    defaultValue: 'Search offers...',
+  });
+  const filterByStatusLabel = t('sales:clientOffers.filterByStatus', {
+    defaultValue: 'Filter by status',
+  });
+  const allStatusesLabel = t('sales:clientOffers.allStatuses', {
+    defaultValue: 'All statuses',
+  });
 
   const activeClients = useMemo(() => clients.filter((client) => !client.isDisabled), [clients]);
   const clientOptions = useMemo(
@@ -218,8 +229,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
-  const [searchTerm, _setSearchTerm] = useState('');
-  const [filterStatus, _setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1525,6 +1536,30 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        <Input
+          type="search"
+          aria-label={searchLabel}
+          placeholder={searchLabel}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1"
+        />
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger aria-label={filterByStatusLabel} className="w-[12rem]">
+            <SelectValue placeholder={allStatusesLabel} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{allStatusesLabel}</SelectItem>
+            {STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                {option.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <StandardTable<ClientOffer>
