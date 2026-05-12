@@ -72,6 +72,44 @@ export type LdapAuthResult = {
   userDn?: string;
   groups: string[];
   roleIds: string[];
+  canonicalUsername?: string;
+  displayName?: string;
+};
+
+export type LdapUserEntry = {
+  dn: string;
+  attributes: Record<string, unknown>;
+};
+
+const pickFirstString = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed.length > 0) return trimmed;
+      }
+    }
+  }
+  return undefined;
+};
+
+const deriveCanonicalUsername = (
+  attributes: Record<string, unknown>,
+  typedUsername: string,
+): string =>
+  pickFirstString(attributes.uid) ?? pickFirstString(attributes.sAMAccountName) ?? typedUsername;
+
+const deriveDisplayName = (attributes: Record<string, unknown>, fallback: string): string =>
+  pickFirstString(attributes.cn) ?? pickFirstString(attributes.displayName) ?? fallback;
+
+const isUniqueViolationError = (err: unknown): boolean => {
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as { code?: unknown }).code;
+  return code === '23505';
 };
 
 class LDAPService {
@@ -158,11 +196,13 @@ class LDAPService {
         });
       });
 
-      // Find user DN
-      const userDn = await this.findUserDn(ldapClient, username);
-      if (!userDn) {
+      // Find user entry (DN + attributes for canonical username/display name)
+      const userEntry = await this.findUserEntry(ldapClient, username);
+      if (!userEntry) {
         return { authenticated: false, groups: [], roleIds: ['user'] };
       }
+      const userDn = userEntry.dn;
+      const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
 
       const groups = await this.findUserGroups(ldapClient, userDn, username);
 
@@ -181,6 +221,8 @@ class LDAPService {
         userDn,
         groups,
         roleIds: mapExternalGroupsToRoleIds(groups, this.getRoleMappings()),
+        canonicalUsername,
+        displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
       };
     } catch (err) {
       logger.error({ err: serializeError(err), username }, 'LDAP auth error');
@@ -194,6 +236,83 @@ class LDAPService {
         });
       }
     }
+  }
+
+  async authenticateAndProvision(
+    username: string,
+    password: string,
+  ): Promise<{
+    authenticated: boolean;
+    userId?: string;
+    created?: boolean;
+    canonicalUsername?: string;
+  }> {
+    const result = await this.authenticateWithProfile(username, password);
+    if (!result.authenticated) {
+      return { authenticated: false };
+    }
+    const canonicalUsername = result.canonicalUsername ?? username;
+    const roleMappings = this.getRoleMappings();
+
+    const existingByCanonical = await usersRepo.findLoginUserByUsername(canonicalUsername);
+    if (existingByCanonical) {
+      if (
+        existingByCanonical.employeeType !== 'app_user' ||
+        existingByCanonical.authMethod !== 'ldap'
+      ) {
+        logger.warn(
+          { username: canonicalUsername },
+          'LDAP login matched a local Praetor user not bound to LDAP; refusing auto-provision',
+        );
+        return { authenticated: false };
+      }
+      await applyExternalRolesForUser(existingByCanonical.id, result.groups, roleMappings);
+      return {
+        authenticated: true,
+        userId: existingByCanonical.id,
+        created: false,
+        canonicalUsername,
+      };
+    }
+
+    const name = result.displayName ?? canonicalUsername;
+    const id = generatePrefixedId('u');
+    const primaryRole = mapExternalGroupsToRoleIds(result.groups, roleMappings)[0];
+
+    try {
+      await usersRepo.createUser({
+        id,
+        name,
+        username: canonicalUsername,
+        passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+        role: primaryRole,
+        avatarInitials: computeAvatarInitials(name),
+        authMethod: 'ldap',
+        authProviderId: null,
+      });
+    } catch (err) {
+      if (isUniqueViolationError(err)) {
+        const racedUser = await usersRepo.findLoginUserByUsername(canonicalUsername);
+        if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
+          await applyExternalRolesForUser(racedUser.id, result.groups, roleMappings);
+          return {
+            authenticated: true,
+            userId: racedUser.id,
+            created: false,
+            canonicalUsername,
+          };
+        }
+        logger.warn(
+          { username: canonicalUsername },
+          'LDAP auto-provision raced with a non-LDAP row; refusing login',
+        );
+        return { authenticated: false };
+      }
+      throw err;
+    }
+
+    await applyExternalRolesForUser(id, result.groups, roleMappings);
+    return { authenticated: true, userId: id, created: true, canonicalUsername };
   }
 
   async authenticate(username: string, password: string): Promise<boolean> {
@@ -250,6 +369,11 @@ class LDAPService {
   }
 
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
+    const entry = await this.findUserEntry(client, username);
+    return entry?.dn ?? null;
+  }
+
+  async findUserEntry(client: LdapClient, username: string): Promise<LdapUserEntry | null> {
     const config = this.config;
     if (!config) {
       return null;
@@ -257,17 +381,20 @@ class LDAPService {
     const searchOptions = {
       scope: 'sub',
       filter: buildUserLookupFilter(config.userFilter, username),
+      attributes: ['uid', 'sAMAccountName', 'cn', 'displayName'],
     };
 
     return new Promise((resolve, reject) => {
       client.search(config.baseDn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
-        let foundDn: string | null = null;
+        let found: LdapUserEntry | null = null;
 
         res.on('searchEntry', (entry: LdapSearchEntry) => {
           // v3 emits a DN object; bind serializes via writeString which throws on non-strings.
-          foundDn = entry.objectName?.toString() ?? null;
+          const dn = entry.objectName?.toString() ?? null;
+          if (!dn) return;
+          found = { dn, attributes: flattenSearchEntryAttributes(entry) };
         });
 
         res.on('error', (err: Error) => {
@@ -278,7 +405,7 @@ class LDAPService {
           if (result.status !== 0) {
             reject(new Error('LDAP search failed status: ' + result.status));
           } else {
-            resolve(foundDn);
+            resolve(found);
           }
         });
       });

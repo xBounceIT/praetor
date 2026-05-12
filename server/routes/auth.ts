@@ -93,9 +93,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+      let ldapAutoProvisionSuccess = false;
+      let ldapAutoProvisioned = false;
 
       if (!user) {
-        return reply.code(401).send({ error: 'Invalid username or password' });
+        try {
+          const ldapService = (await import('../services/ldap.ts')).default;
+          const provision = await ldapService.authenticateAndProvision(
+            usernameResult.value,
+            passwordResult.value,
+          );
+          if (provision.authenticated && provision.userId) {
+            user = await usersRepo.findLoginUserById(provision.userId);
+            ldapAutoProvisionSuccess = !!user;
+            ldapAutoProvisioned = !!provision.created;
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          fastify.log.warn(
+            { username: usernameResult.value, errorMessage },
+            'LDAP auto-provision attempt failed',
+          );
+        }
+        if (!user) {
+          return reply.code(401).send({ error: 'Invalid username or password' });
+        }
       }
 
       if (user.isDisabled || user.employeeType !== 'app_user') {
@@ -105,9 +127,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { authMethod } = user;
 
       // LDAP Authentication
-      let ldapAuthSuccess = false;
+      let ldapAuthSuccess = ldapAutoProvisionSuccess;
       let ldapRoleIds: string[] = [];
-      if (authMethod === 'ldap') {
+      if (!ldapAuthSuccess && authMethod === 'ldap') {
         try {
           const ldapService = (await import('../services/ldap.ts')).default;
           const ldapAuthResult = await ldapService.authenticateWithProfile(
@@ -136,9 +158,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      if (ldapAuthSuccess) {
+      if (ldapAuthSuccess && !ldapAutoProvisionSuccess) {
         const roleIds = await applyExternalRoleIdsForUser(user.id, ldapRoleIds);
         user = { ...user, role: roleIds[0] };
+      }
+
+      if (ldapAutoProvisioned) {
+        await logAudit({
+          request,
+          action: 'user.created',
+          entityType: 'user',
+          entityId: user.id,
+          details: {
+            targetLabel: user.name,
+            secondaryLabel: user.username,
+          },
+          userId: user.id,
+        });
       }
 
       const token = generateToken(user.id, Date.now(), user.role);

@@ -23,6 +23,8 @@ When you bind a user to LDAP, Praetor looks them up in the directory and immedia
 
 LDAP synchronization updates only application users that are already set to LDAP. A local user with the same username remains local until an administrator explicitly changes their authentication method.
 
+When LDAP is enabled, application users that exist in the directory but not yet in Praetor are auto-provisioned on their first successful login. The new account is created with the canonical LDAP username (`uid` or `sAMAccountName`) — not the value typed at the login form — so that subsequent LDAP synchronizations key the same row even when the user signs in with an alias such as their email address. The provisioned user is bound to LDAP authentication and receives the roles mapped from their LDAP groups.
+
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
 ## General and email settings
