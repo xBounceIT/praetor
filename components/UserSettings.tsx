@@ -1,7 +1,6 @@
 import {
   Check,
   Contrast,
-  Copy,
   type LucideIcon,
   Moon,
   RefreshCw,
@@ -15,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
   DialogClose,
@@ -30,7 +30,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
-import { writeTextToClipboard } from '../utils/clipboard';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
 
@@ -200,7 +199,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [isRenewingToken, setIsRenewingToken] = useState(false);
   const [tokenError, setTokenError] = useState('');
-  const [tokenCopied, setTokenCopied] = useState(false);
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
@@ -354,23 +352,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
-  const copyRawMcpToken = async () => {
-    if (!rawMcpToken) return;
-    await writeTextToClipboard(rawMcpToken);
-  };
-
-  const copyMcpEndpointUrl = async () => {
-    await writeTextToClipboard(mcpEndpointUrl);
-  };
-
-  const copyMcpSetupPrompt = async () => {
-    await writeTextToClipboard(mcpSetupPrompt);
-  };
-
   const handleRenewPersonalAccessToken = async () => {
     setIsRenewingToken(true);
     setTokenError('');
-    setTokenCopied(false);
     try {
       const renewed = await onRenewPersonalAccessToken();
       setPersonalAccessToken(renewed);
@@ -380,17 +364,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     } finally {
       setIsRenewingToken(false);
     }
-  };
-
-  const handleCopyPersonalAccessToken = async () => {
-    if (!personalAccessToken?.token) return;
-    const copied = await writeTextToClipboard(personalAccessToken.token);
-    if (!copied) {
-      setTokenError(t('security.copyFailed'));
-      return;
-    }
-    setTokenCopied(true);
-    setTimeout(() => setTokenCopied(false), 3000);
   };
 
   const formatPersonalAccessTokenDate = (value: string | null) =>
@@ -802,17 +775,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     readOnly
                     className="font-mono text-sm"
                   />
-                  <Button
-                    type="button"
+                  <CopyButton
                     variant="secondary"
-                    onClick={handleCopyPersonalAccessToken}
+                    value={personalAccessToken?.token ?? ''}
                     disabled={!personalAccessToken?.token}
-                  >
-                    <Copy aria-hidden="true" className="size-4" />
-                    {tokenCopied
-                      ? t('security.personalAccessToken.copied')
-                      : t('security.personalAccessToken.copy')}
-                  </Button>
+                    label={t('security.personalAccessToken.copy')}
+                    copiedLabel={t('security.personalAccessToken.copied')}
+                    onCopyError={() => setTokenError(t('security.copyFailed'))}
+                  />
                 </div>
                 <p className="mt-2 text-xs text-zinc-500">
                   {personalAccessToken?.token
@@ -872,10 +842,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               <FieldLabel htmlFor="mcp-endpoint-url">{t('mcp.urlLabel')}</FieldLabel>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
                 <Input id="mcp-endpoint-url" readOnly value={mcpEndpointUrl} />
-                <Button type="button" variant="outline" onClick={copyMcpEndpointUrl}>
-                  <Copy aria-hidden="true" className="size-4" />
-                  {t('mcp.copyUrl')}
-                </Button>
+                <CopyButton
+                  variant="outline"
+                  value={mcpEndpointUrl}
+                  label={t('mcp.copyUrl')}
+                  copiedLabel={t('mcp.copyUrlCopied')}
+                />
               </div>
               <FieldDescription>{t('mcp.urlDescription')}</FieldDescription>
             </Field>
@@ -889,10 +861,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 className="min-h-44 resize-y font-mono text-xs"
               />
               <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={copyMcpSetupPrompt}>
-                  <Copy aria-hidden="true" className="size-4" />
-                  {t('mcp.copyPrompt')}
-                </Button>
+                <CopyButton
+                  variant="outline"
+                  value={mcpSetupPrompt}
+                  label={t('mcp.copyPrompt')}
+                  copiedLabel={t('mcp.copyPromptCopied')}
+                />
               </div>
               <FieldDescription>{t('mcp.promptDescription')}</FieldDescription>
             </Field>
@@ -937,16 +911,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       {t('mcp.rawTokenDescription')}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={copyRawMcpToken}
+                  <CopyButton
                     variant="outline"
                     size="sm"
+                    value={rawMcpToken}
+                    label={t('mcp.copy')}
+                    copiedLabel={t('mcp.copied')}
                     className="shrink-0"
-                  >
-                    <Copy aria-hidden="true" className="size-3.5" />
-                    {t('mcp.copy')}
-                  </Button>
+                  />
                 </div>
                 <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
                   {rawMcpToken}
