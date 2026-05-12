@@ -175,6 +175,42 @@ describe('useModuleLoader', () => {
     expect(result.current.moduleLoadErrors.crm).toBeUndefined();
   });
 
+  test('invalidateModules removes named modules from loaded set and their errors', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.markModuleLoaded('crm');
+      result.current.markModuleLoaded('sales');
+      result.current.markModuleLoaded('projects');
+      result.current.recordFailures('crm', ['clients']);
+      result.current.recordFailures('sales', ['quotes']);
+    });
+    expect(result.current.loadedModules.size).toBe(3);
+
+    act(() => {
+      result.current.invalidateModules(['crm', 'sales']);
+    });
+
+    expect(result.current.loadedModules.has('crm')).toBe(false);
+    expect(result.current.loadedModules.has('sales')).toBe(false);
+    expect(result.current.loadedModules.has('projects')).toBe(true);
+    expect(result.current.moduleLoadErrors.crm).toBeUndefined();
+    expect(result.current.moduleLoadErrors.sales).toBeUndefined();
+  });
+
+  test('invalidateModules is a no-op when given an empty list', () => {
+    const { result } = renderHook(() => useModuleLoader());
+    act(() => {
+      result.current.markModuleLoaded('crm');
+    });
+    const before = result.current.loadedModules;
+    act(() => {
+      result.current.invalidateModules([]);
+    });
+    // Same identity — proves we didn't allocate a new Set.
+    expect(result.current.loadedModules).toBe(before);
+  });
+
   test('reset clears loaded modules and errors', () => {
     const { result } = renderHook(() => useModuleLoader());
 
