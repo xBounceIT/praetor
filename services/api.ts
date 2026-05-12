@@ -5,7 +5,7 @@
 
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
-export * from './api/client';
+export { ApiError, getApiBase, getAuthToken, setAuthToken } from './api/client';
 export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
@@ -36,7 +36,7 @@ export { workUnitsApi } from './api/workUnits';
 
 import { aiApi } from './api/ai';
 import { authApi } from './api/auth';
-import { ApiError, getApiBase, getAuthToken, setAuthToken } from './api/client';
+import { getApiBase, getAuthToken, setAuthToken } from './api/client';
 import { clientOffersApi } from './api/clientOffers';
 import { clientQuotesApi } from './api/clientQuotes';
 import { clientsApi } from './api/clients';
@@ -64,7 +64,6 @@ import { usersApi } from './api/users';
 import { workUnitsApi } from './api/workUnits';
 
 export default {
-  ApiError,
   auth: authApi,
   ai: aiApi,
   reports: reportsApi,
