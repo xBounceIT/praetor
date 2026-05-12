@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { boolean, check, integer, numeric, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
 
-// Single-row config table — `id` is pinned to 1 by both the column default and a CHECK.
+// Single-row config table - `id` is pinned to 1 by both the column default and a CHECK.
 // `daily_limit` is `numeric`: pg returns it as a string, the repo `parseFloat`s it in
 // `mapRow`. Same pattern as `settings.dailyGoal`.
 export const generalSettings = pgTable(

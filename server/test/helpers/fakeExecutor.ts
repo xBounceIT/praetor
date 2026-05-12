@@ -13,7 +13,7 @@ export type FakeResponse = {
 type ResponseFactory = (sql: string, params: unknown[]) => FakeResponse;
 
 // Minimal pg-shaped contract Drizzle's `node-postgres` driver invokes via the pool adapter.
-// Defined inline because no production code uses it — only this fake. The fake's role is to
+// Defined inline because no production code uses it - only this fake. The fake's role is to
 // capture the SQL Drizzle generates (via `makePoolAdapter` + a real `drizzle(...)` instance)
 // so tests can assert against the rendered SQL string instead of mocking the query builder.
 type FakeQueryShape = {
@@ -65,12 +65,12 @@ export const makeFakeExecutor = (): FakeExecutor => {
 };
 
 // Drizzle's node-postgres driver invokes `client.query(config, params)` where `config` is
-// a `{ text, rowMode, ... }` object — not a string. This adapter translates both call shapes
+// a `{ text, rowMode, ... }` object - not a string. This adapter translates both call shapes
 // so the fake records the SQL string (rather than the raw config object) and so SQL-string
 // assertions in tests stay readable.
 //
 // Note: only `.query()` is implemented. Drizzle's `db.transaction(...)` calls `.connect()` on
-// the pool, which would fail here — this pattern is for unit-testing non-transactional repo
+// the pool, which would fail here - this pattern is for unit-testing non-transactional repo
 // code paths. Repo functions wrapped in `withDbTransaction` by route code are fine to test
 // individually here because the unit test passes `testDb` directly (no transaction involved).
 export const makePoolAdapter = (fake: FakeExecutor): Pool =>
@@ -82,7 +82,7 @@ export const makePoolAdapter = (fake: FakeExecutor): Pool =>
     },
   }) as unknown as Pool;
 
-// Drizzle's node-postgres driver returns SELECT rows in `rowMode: 'array'` — positional
+// Drizzle's node-postgres driver returns SELECT rows in `rowMode: 'array'` - positional
 // arrays in the column-declaration order from the schema file. Tests use this to build
 // fixture rows without naming each column. Pass a base array matching the schema column
 // order, then override individual positions by index.

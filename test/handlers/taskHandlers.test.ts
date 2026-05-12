@@ -53,11 +53,15 @@ const makeStubSetter = <T>(initial: T[]) => {
 
 describe('makeTaskHandlers.makeRecurring', () => {
   beforeEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockClear());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockClear();
+    });
   });
 
   afterEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockReset());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockReset();
+    });
   });
 
   test('first-time recurring: skips placeholder cleanup, updates task, regenerates', async () => {

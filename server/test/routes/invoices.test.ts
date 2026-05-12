@@ -261,7 +261,7 @@ describe('POST /api/invoices', () => {
       method: 'POST',
       url: '/api/invoices',
       headers: authHeader(),
-      // Client tries to submit bogus 999s — server must override.
+      // Client tries to submit bogus 999s - server must override.
       payload: { ...validBody, subtotal: 999, total: 999 },
     });
 
@@ -520,7 +520,7 @@ describe('PUT /api/invoices/:id', () => {
       headers: authHeader(),
       payload: {
         items: [{ description: 'Replaced', unitOfMeasure: 'unit', quantity: 2, unitPrice: 50 }],
-        // Client tries to submit a bogus 999 — server must override.
+        // Client tries to submit a bogus 999 - server must override.
         subtotal: 999,
         total: 999,
       },
@@ -538,7 +538,7 @@ describe('PUT /api/invoices/:id', () => {
   });
 
   test('400 items replace lowers total below persisted amountPaid (no amountPaid in patch)', async () => {
-    // Persisted invoice was paid 100. New items only sum to 50 — that would leave
+    // Persisted invoice was paid 100. New items only sum to 50 - that would leave
     // amountPaid (100) > new total (50). Must reject.
     findAmountPaidMock.mockResolvedValue(100);
 
@@ -599,7 +599,7 @@ describe('PUT /api/invoices/:id', () => {
       method: 'PUT',
       url: '/api/invoices/inv-1',
       headers: authHeader(),
-      // Client tries to update totals without items — both should be ignored.
+      // Client tries to update totals without items - both should be ignored.
       payload: { status: 'sent', subtotal: 999, total: 999 },
     });
 

@@ -15,8 +15,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
   indeterminate = false,
   size = 'md',
 }) => {
-  const sizeClasses = size === 'sm' ? 'w-3.5 h-3.5' : 'w-5 h-5';
-  const checkmarkSizeClasses = size === 'sm' ? 'w-2 h-2' : 'w-3 h-3';
+  const sizeClasses = size === 'sm' ? 'size-3.5' : 'size-5';
+  const checkmarkSizeClasses = size === 'sm' ? 'size-2' : 'size-3';
   const indeterminateSizeClasses = size === 'sm' ? 'w-1.5 h-0.5' : 'w-2 h-0.5';
 
   return (
@@ -31,7 +31,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
         className="peer sr-only"
       />
       <div
-        className={`${sizeClasses} bg-white border-2 border-slate-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor ${!disabled ? 'group-hover:border-praetor/50' : ''} peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center ${indeterminate && !checked ? 'bg-praetor border-praetor' : ''}`}
+        className={`${sizeClasses} bg-white border-2 border-zinc-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor ${!disabled ? 'group-hover:border-praetor/50' : ''} peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center ${indeterminate && !checked ? 'bg-praetor border-praetor' : ''}`}
       >
         {indeterminate && !checked ? (
           <span className={`${indeterminateSizeClasses} bg-white rounded-full`} />

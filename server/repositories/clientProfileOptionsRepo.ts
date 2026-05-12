@@ -23,7 +23,7 @@ export type ProfileOption = {
 
 // Internal allowlist: maps category to the column on `clients` that stores the option's value.
 // Keeping this private prevents any caller from injecting an arbitrary column name into the
-// cascade UPDATE — only this module touches the SQL.
+// cascade UPDATE - only this module touches the SQL.
 const VALUE_FIELD_BY_CATEGORY: Record<ProfileOptionCategory, string> = {
   sector: 'sector',
   numberOfEmployees: 'number_of_employees',
@@ -155,7 +155,7 @@ export const create = async (
 /**
  * Updates the option row and, when the value changed, cascades the new value to all clients
  * whose corresponding column held the old value. The cascade column is selected internally from
- * the category allowlist — no caller-supplied column names ever reach the SQL.
+ * the category allowlist - no caller-supplied column names ever reach the SQL.
  */
 export const update = async (
   category: ProfileOptionCategory,
@@ -177,7 +177,7 @@ export const update = async (
   if (patch.previousValue !== patch.value) {
     const fieldName = VALUE_FIELD_BY_CATEGORY[category];
     // Cross-table cascade into `clients`. `sql.identifier` pulls the column from the
-    // internal `VALUE_FIELD_BY_CATEGORY` allowlist — no caller input reaches the SQL
+    // internal `VALUE_FIELD_BY_CATEGORY` allowlist - no caller input reaches the SQL
     // identifier.
     await executeRows(
       exec,

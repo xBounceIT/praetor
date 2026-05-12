@@ -25,7 +25,8 @@ beforeEach(() => {
 // query builder (rowMode: 'array' positional rows in schema declaration order). listForUser
 // and the user_projects/user_clients-touching helpers use executeRows (named-key rows).
 //
-// Schema column order: id, name, client_id, color, description, is_disabled, created_at, order_id
+// Schema column order: id, name, client_id, color, description, is_disabled, created_at, order_id,
+// billing_type, billing_frequency
 const PROJECT_ROW: readonly unknown[] = [
   'p-1',
   'Alpha',
@@ -35,9 +36,11 @@ const PROJECT_ROW: readonly unknown[] = [
   false,
   new Date('2026-04-30T12:00:00Z'),
   null,
+  'time_and_materials',
+  'monthly',
 ];
 
-const mappedRow = {
+const mappedRow: projectsRepo.Project = {
   id: 'p-1',
   name: 'Alpha',
   clientId: 'c-1',
@@ -46,36 +49,64 @@ const mappedRow = {
   isDisabled: false,
   createdAt: new Date('2026-04-30T12:00:00Z').getTime(),
   orderId: null,
+  billingType: 'time_and_materials',
+  billingFrequency: 'monthly',
+};
+
+const rawProjectRow = {
+  id: 'p-1',
+  name: 'Alpha',
+  client_id: 'c-1',
+  color: '#3b82f6',
+  description: 'desc',
+  is_disabled: false,
+  created_at: new Date('2026-04-30T12:00:00Z'),
+  order_id: null,
+  billing_type: 'time_and_materials',
+  billing_frequency: 'monthly',
 };
 
 describe('listAll', () => {
   test('returns mapped rows', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
     expect(await projectsRepo.listAll(testDb)).toEqual([mappedRow]);
     expect(exec.calls[0].params).toEqual([]);
+    expect(exec.calls[0].sql).toContain('billing_type');
+  });
+
+  test('maps derived mixed billing type', async () => {
+    exec.enqueue({ rows: [{ ...rawProjectRow, billing_type: 'mixed' }] });
+    const result = await projectsRepo.listAll(testDb);
+    expect(result[0].billingType).toBe('mixed');
   });
 });
 
 describe('listForUser', () => {
   test('passes userId and joins user_projects (raw SQL)', async () => {
     exec.enqueue({
-      rows: [
-        {
-          id: 'p-1',
-          name: 'Alpha',
-          client_id: 'c-1',
-          color: '#3b82f6',
-          description: 'desc',
-          is_disabled: false,
-          created_at: new Date('2026-04-30T12:00:00Z'),
-          order_id: null,
-        },
-      ],
+      rows: [rawProjectRow],
     });
     const result = await projectsRepo.listForUser('u-1', testDb);
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
     expect(result[0]).toEqual(mappedRow);
+  });
+});
+
+describe('listByIds', () => {
+  test('returns mapped projects for the provided ids', async () => {
+    exec.enqueue({ rows: [rawProjectRow] });
+
+    const result = await projectsRepo.listByIds(['p-1'], testDb);
+
+    expect(exec.calls[0].sql).toContain('WHERE p.id = ANY');
+    expect(exec.calls[0].params).toContain('p-1');
+    expect(result[0]).toEqual(mappedRow);
+  });
+
+  test('returns empty array without querying for empty ids', async () => {
+    expect(await projectsRepo.listByIds([], testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
   });
 });
 
@@ -114,9 +145,22 @@ describe('lockNameAndClientById', () => {
   });
 });
 
+describe('findBillingById', () => {
+  test('returns stored billing fields without deriving mixed', async () => {
+    exec.enqueue({ rows: [makeRow(['retainer', 'one_time'])] });
+
+    const result = await projectsRepo.findBillingById('p-1', testDb);
+
+    expect(result).toEqual({ billingType: 'retainer', billingFrequency: 'one_time' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('case');
+  });
+});
+
 describe('create', () => {
   test('inserts and returns mapped row, defaulting orderId to null', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
     const created = await projectsRepo.create(
       {
         id: 'p-1',
@@ -137,6 +181,7 @@ describe('create', () => {
 
   test('forwards orderId when provided', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 7: 'so-7' })] });
+    exec.enqueue({ rows: [{ ...rawProjectRow, order_id: 'so-7' }] });
     const created = await projectsRepo.create(
       {
         id: 'p-1',
@@ -198,6 +243,7 @@ describe('create', () => {
 describe('update', () => {
   test('only sets provided fields and returns mapped row', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
     const result = await projectsRepo.update('p-1', { name: 'New' }, testDb);
     expect(result).toEqual(mappedRow);
     const sql = exec.calls[0].sql.toLowerCase();
@@ -209,14 +255,28 @@ describe('update', () => {
 
   test('explicit null clears the column', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
     await projectsRepo.update('p-1', { description: null }, testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('"description" = $1');
     expect(exec.calls[0].params).toContain(null);
     expect(exec.calls[0].params).toContain('p-1');
   });
 
-  test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
+  test('normalizes billingFrequency-only update against stored billing type', async () => {
+    exec.enqueue({ rows: [makeRow(['time_and_materials'])] });
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
+
+    await projectsRepo.update('p-1', { billingFrequency: 'one_time' }, testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "projects"');
+    expect(exec.calls[1].params).toContain('monthly');
+    expect(exec.calls[1].params).not.toContain('one_time');
+  });
+
+  test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
+    exec.enqueue({ rows: [rawProjectRow] });
     const result = await projectsRepo.update('p-1', {}, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).not.toContain('update');

@@ -18,13 +18,25 @@
   },
   "appearance": {
     "title": "Appearance",
-    "default": {
-      "name": "Default",
-      "description": "The classic Praetor experience with slate blue branding. Professional and distinct."
+    "light": {
+      "name": "Light",
+      "description": "Use light mode for shadcn components."
     },
-    "tempo": {
-      "name": "Tempo",
-      "description": "A vibrant indigo theme. Modern, energetic, and clean."
+    "dark": {
+      "name": "Dark",
+      "description": "Use dark mode for shadcn components."
+    },
+    "zebra": {
+      "name": "Zebra",
+      "description": "Use light mode with a dark sidebar."
+    },
+    "praetor": {
+      "name": "Praetor",
+      "description": "Use light mode with a Praetor-colored dark sidebar."
+    },
+    "auto": {
+      "name": "Auto",
+      "description": "Match your browser or operating system color scheme automatically."
     }
   },
   "password": {
@@ -38,6 +50,54 @@
     "passwordsDoNotMatch": "New passwords do not match",
     "passwordMinLength": "New password must be at least 8 characters long",
     "incorrectPassword": "Incorrect current password"
+  },
+  "mcp": {
+    "title": "MCP Tokens",
+    "urlLabel": "MCP Server URL",
+    "urlDescription": "Use this Streamable HTTP endpoint when adding Praetor to an external MCP client.",
+    "copyUrl": "Copy URL",
+    "promptLabel": "Agent Setup Prompt",
+    "promptDescription": "Create a token, then paste this prompt into an AI agent to configure Praetor automatically.",
+    "copyPrompt": "Copy Prompt",
+    "nameLabel": "Token Name",
+    "namePlaceholder": "Claude Desktop, Codex, or another agent",
+    "create": "Create Token",
+    "copy": "Copy",
+    "revoke": "Revoke",
+    "revokeDialogTitle": "Revoke MCP token?",
+    "revokeDialogDescription": "This immediately disables {{name}}. Agents using this token will lose access to Praetor.",
+    "revokeConfirm": "Revoke token",
+    "loading": "Loading MCP tokens...",
+    "empty": "No active MCP tokens.",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "rawTokenTitle": "Copy this token now",
+    "rawTokenDescription": "Praetor stores only a hash and cannot show this token again.",
+    "loadFailed": "Failed to load MCP tokens",
+    "createFailed": "Failed to create MCP token",
+    "revokeFailed": "Failed to revoke MCP token"
+  },
+  "security": {
+    "title": "Security",
+    "tokenLoadFailed": "Failed to load personal access token",
+    "tokenRenewFailed": "Failed to renew personal access token",
+    "copyFailed": "Unable to copy token",
+    "neverUsed": "Never used",
+    "personalAccessToken": {
+      "title": "Personal Access Token",
+      "description": "Use this token with the API to act as your user account and inherit your current permissions.",
+      "tokenLabel": "API Token",
+      "loading": "Loading token...",
+      "copy": "Copy",
+      "copied": "Copied",
+      "renew": "Renew token",
+      "renewing": "Renewing...",
+      "visibleOnce": "Copy this token now. It will not be shown again after you leave this page.",
+      "masked": "The full token is hidden. Renew it to generate and copy a new one.",
+      "createdAt": "Created",
+      "updatedAt": "Last renewed",
+      "lastUsedAt": "Last used"
+    }
   },
   "general": {
     "title": "General Settings",
