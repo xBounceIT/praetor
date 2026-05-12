@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-<<<<<<< HEAD
-import { fireEvent, render, screen } from '@testing-library/react';
-import { ApiErrorStub } from '../helpers/apiErrorStub';
-=======
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
->>>>>>> origin/main
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();

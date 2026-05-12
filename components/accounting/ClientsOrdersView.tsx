@@ -425,13 +425,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => {
           if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
           return (
-<<<<<<< HEAD
             <span className="text-xs text-slate-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt, i18n.language)}
-=======
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
->>>>>>> origin/main
             </span>
           );
         },
