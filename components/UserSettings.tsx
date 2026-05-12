@@ -149,6 +149,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const { t } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
 
+  // Initialize the editable fields from `settings` once at mount. We deliberately
+  // do not re-sync on later `settings` prop changes: the parent re-creates the
+  // settings object on unrelated re-renders, and re-syncing would clobber the
+  // user's in-progress edits. When the form should be reset (e.g. after a logout
+  // or user switch), the parent unmounts/remounts this component.
   const [fullName, setFullName] = useState(settings.fullName);
   const [email, setEmail] = useState(settings.email);
   const [language, setLanguage] = useState(settings.language || 'auto');
@@ -198,12 +203,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [tokenCopied, setTokenCopied] = useState(false);
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    setFullName(settings.fullName);
-    setEmail(settings.email);
-    setLanguage(settings.language || 'auto');
-  }, [settings]);
 
   useEffect(
     () => () => {
