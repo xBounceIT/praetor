@@ -68,11 +68,15 @@ const makeStubSetter = <T>(initial: T[]) => {
 
 describe('makeProductHandlers', () => {
   beforeEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockClear());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockClear();
+    });
   });
 
   afterEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockReset());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockReset();
+    });
   });
 
   test('add appends product', async () => {

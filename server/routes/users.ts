@@ -3,8 +3,12 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
+import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
+import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -53,6 +57,9 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
+    authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    authProviderName: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     hasTopManagerRole: { type: 'boolean' },
     isAdminOnly: { type: 'boolean' },
   },
@@ -66,6 +73,9 @@ const userSchema = {
     'costPerHour',
     'isDisabled',
     'employeeType',
+    'authMethod',
+    'authProviderId',
+    'authProviderName',
     'hasTopManagerRole',
     'isAdminOnly',
   ],
@@ -106,6 +116,62 @@ const assignmentsSchema = {
   required: ['clientIds', 'projectIds', 'taskIds'],
 } as const;
 
+const trackerCatalogsSchema = {
+  type: 'object',
+  properties: {
+    clients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+        },
+        required: ['id', 'name', 'isDisabled'],
+      },
+    },
+    projects: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          clientId: { type: 'string' },
+          color: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+          billingType: { type: 'string' },
+          billingFrequency: { type: 'string' },
+        },
+        required: [
+          'id',
+          'name',
+          'clientId',
+          'color',
+          'isDisabled',
+          'billingType',
+          'billingFrequency',
+        ],
+      },
+    },
+    projectTasks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          projectId: { type: 'string' },
+          isDisabled: { type: 'boolean' },
+        },
+        required: ['id', 'name', 'projectId', 'isDisabled'],
+      },
+    },
+  },
+  required: ['clients', 'projects', 'projectTasks'],
+} as const;
+
 const assignmentsUpdateBodySchema = {
   type: 'object',
   properties: {
@@ -133,6 +199,18 @@ const userRolesUpdateBodySchema = {
   required: ['roleIds', 'primaryRoleId'],
 } as const;
 
+const authMethodUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
+    authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+  },
+  required: ['authMethod'],
+} as const;
+
+const isSsoAuthMethod = (authMethod: usersRepo.AuthMethod): authMethod is 'oidc' | 'saml' =>
+  authMethod === 'oidc' || authMethod === 'saml';
+
 const canViewUserEmails = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
   hasPermission(request, 'administration.user_management.view');
@@ -140,6 +218,37 @@ const canViewUserEmails = (request: FastifyRequest) =>
 const canViewAllUsers = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management_all.view') ||
   hasPermission(request, 'hr.work_units_all.view');
+
+const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
+  if (request.user?.id === targetUserId) return true;
+
+  const hasAssignmentPermission =
+    hasPermission(request, 'administration.user_management.view') ||
+    hasPermission(request, 'administration.user_management.update') ||
+    hasPermission(request, 'timesheets.tracker.view') ||
+    hasPermission(request, 'timesheets.tracker_all.view') ||
+    hasPermission(request, 'hr.employee_assignments.update');
+
+  if (!hasAssignmentPermission) return false;
+  if (canViewAllUsers(request)) return true;
+
+  return usersRepo.canManageUser(targetUserId, request.user?.id ?? '');
+};
+
+const mergeById = <T extends { id: string }>(items: T[], extraItems: T[]) => {
+  const seen = new Set(items.map((item) => item.id));
+  const merged = [...items];
+  for (const item of extraItems) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+  return merged;
+};
+
+const uniqueMissingIds = (ids: string[], existingIds: Set<string>) =>
+  Array.from(new Set(ids.filter((id) => !existingIds.has(id))));
 
 const CREATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
   app_user: 'administration.user_management.create',
@@ -169,6 +278,42 @@ const maskUserResponse = (
   costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
+const ensureSubmittedAssignmentsInScope = async (
+  request: FastifyRequest,
+  {
+    clientIds,
+    projectIds,
+    taskIds,
+  }: {
+    clientIds?: string[];
+    projectIds?: string[];
+    taskIds?: string[];
+  },
+) => {
+  const userId = request.user?.id;
+  if (!userId || hasPermission(request, 'administration.user_management_all.view')) return true;
+
+  if (clientIds && !hasPermission(request, 'crm.clients_all.view')) {
+    if (clientIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedClientIds(userId, clientIds);
+    if (clientIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  if (projectIds && !hasPermission(request, 'projects.manage_all.view')) {
+    if (projectIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedProjectIds(userId, projectIds);
+    if (projectIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  if (taskIds && !hasPermission(request, 'projects.tasks_all.view')) {
+    if (taskIds.length === 0) return false;
+    const allowed = await userAssignmentsRepo.filterAssignedTaskIds(userId, taskIds);
+    if (taskIds.some((id) => !allowed.has(id))) return false;
+  }
+
+  return true;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List users
   fastify.get(
@@ -183,9 +328,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'hr.internal.view',
           'hr.external.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'projects.manage.view',
+          'projects.manage_all.view',
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'hr.work_units.view',
+          'hr.work_units_all.view',
         ),
       ],
       schema: {
@@ -203,7 +352,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
         hasPermission(request, 'timesheets.tracker.view') ||
+        hasPermission(request, 'timesheets.tracker_all.view') ||
         hasPermission(request, 'hr.work_units.view') ||
+        hasPermission(request, 'hr.work_units_all.view') ||
         canViewUserManagement;
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
@@ -316,7 +467,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Atomic create: user row, primary user_roles entry, settings row, and (for top
         // managers) auto-assignment fan-out commit or roll back together. Mirrors the PUT
         // handler so a failed sync can't leave a user with TOP_MANAGER role but no
-        // auto-assignments — recovering from that requires re-saving the role manually.
+        // auto-assignments - recovering from that requires re-saving the role manually.
         await withDbTransaction(async (tx) => {
           await usersRepo.insertUser(
             {
@@ -371,6 +522,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           costPerHour: costPerHourResult.value || 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
+          authMethod: 'local',
+          authProviderId: null,
+          authProviderName: null,
           hasTopManagerRole: roleValue === TOP_MANAGER_ROLE_ID,
           isAdminOnly: roleValue === ADMIN_ROLE_ID,
         });
@@ -582,7 +736,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Settings upsert must complete before findById — findById LEFT JOINs settings to
+      // Settings upsert must complete before findById - findById LEFT JOINs settings to
       // populate `email`, and parallel reads on different pool connections can observe the
       // pre-update row under read-committed isolation, returning stale email in the response.
       if (fields.name !== undefined || validatedEmail !== undefined) {
@@ -616,6 +770,100 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fullUser,
         hasPermission(request, 'hr.costs.view'),
         canRevealUserEmails,
+      );
+    },
+  );
+
+  // PUT /:id/auth-method - Change an app user's enforced authentication method
+  fastify.put(
+    '/:id/auth-method',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      schema: {
+        tags: ['users'],
+        summary: 'Change user authentication method',
+        params: idParamSchema,
+        body: authMethodUpdateBodySchema,
+        response: {
+          200: userSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { authMethod, authProviderId } = request.body as {
+        authMethod?: unknown;
+        authProviderId?: unknown;
+      };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const methodResult = validateEnum(
+        authMethod,
+        ['local', 'ldap', 'oidc', 'saml'] as const,
+        'authMethod',
+      );
+      if (!methodResult.ok) return badRequest(reply, methodResult.message);
+
+      const targetUser = await usersRepo.findCoreById(idResult.value);
+      if (!targetUser) return reply.code(404).send({ error: 'User not found' });
+      if (targetUser.employeeType !== 'app_user') {
+        return reply
+          .code(409)
+          .send({ error: 'Authentication method can be changed only for app users' });
+      }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        idResult.value !== request.user?.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+      if (idResult.value === request.user?.id) {
+        return badRequest(reply, 'Cannot change your own authentication method');
+      }
+
+      let resolvedProviderId: string | null = null;
+      if (isSsoAuthMethod(methodResult.value)) {
+        const providerIdResult = requireNonEmptyString(authProviderId, 'authProviderId');
+        if (!providerIdResult.ok) return badRequest(reply, providerIdResult.message);
+        const provider = await ssoProvidersRepo.findById(providerIdResult.value);
+        if (!provider) return badRequest(reply, 'Invalid SSO provider');
+        if (!provider.enabled) return badRequest(reply, 'SSO provider must be enabled');
+        if (provider.protocol !== methodResult.value) {
+          return badRequest(reply, 'SSO provider protocol does not match authMethod');
+        }
+        resolvedProviderId = provider.id;
+      } else if (authProviderId !== undefined && authProviderId !== null && authProviderId !== '') {
+        return badRequest(reply, 'authProviderId is allowed only for OIDC or SAML');
+      }
+
+      const updated = await usersRepo.updateAuthMethod(
+        idResult.value,
+        methodResult.value,
+        resolvedProviderId,
+      );
+      if (!updated) return reply.code(404).send({ error: 'User not found' });
+
+      await logAudit({
+        request,
+        action: 'user.auth_method_changed',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: updated.name,
+          secondaryLabel: updated.username,
+          fromValue: targetUser.authMethod,
+          toValue: methodResult.value,
+        },
+      });
+
+      return maskUserResponse(
+        updated,
+        hasPermission(request, 'hr.costs.view'),
+        canViewUserEmails(request),
       );
     },
   );
@@ -746,24 +994,80 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAssignments =
-        request.user?.id === id ||
-        hasPermission(request, 'administration.user_management.view') ||
-        hasPermission(request, 'administration.user_management.update') ||
-        hasPermission(request, 'timesheets.tracker.view') ||
-        hasPermission(request, 'hr.employee_assignments.update');
-
-      if (!canViewAssignments) {
+      if (!(await canViewTargetUserAssignments(request, idResult.value))) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (request.user?.id !== id && !canViewAllUsers(request)) {
-        if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
+      return await usersRepo.getAssignments(idResult.value);
+    },
+  );
+
+  fastify.get(
+    '/:id/tracker-catalogs',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['users'],
+        summary: 'Get tracker catalogs for user',
+        params: idParamSchema,
+        response: {
+          200: trackerCatalogsSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canViewTargetUserAssignments(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      return await usersRepo.getAssignments(idResult.value);
+      const [assignedClients, assignedProjects, projectTasks] = await Promise.all([
+        clientsRepo.list({ canViewAllClients: false, userId: idResult.value }),
+        projectsRepo.listForUser(idResult.value),
+        tasksRepo.listForUser(idResult.value),
+      ]);
+      const assignedProjectIds = new Set(assignedProjects.map((project) => project.id));
+      const taskParentProjectIds = uniqueMissingIds(
+        projectTasks.map((task) => task.projectId),
+        assignedProjectIds,
+      );
+      const taskParentProjects = await projectsRepo.listByIds(taskParentProjectIds);
+      const projects = mergeById(assignedProjects, taskParentProjects);
+
+      const assignedClientIds = new Set(assignedClients.map((client) => client.id));
+      const parentClientIds = uniqueMissingIds(
+        projects.map((project) => project.clientId),
+        assignedClientIds,
+      );
+      const parentClients = await clientsRepo.listByIds(parentClientIds);
+      const clients = mergeById(assignedClients, parentClients);
+
+      return {
+        clients: clients.map((client) => ({
+          id: client.id,
+          name: client.name,
+          isDisabled: client.isDisabled,
+        })),
+        projects: projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          clientId: project.clientId,
+          color: project.color,
+          isDisabled: project.isDisabled,
+          billingType: project.billingType,
+          billingFrequency: project.billingFrequency,
+        })),
+        projectTasks: projectTasks.map((task) => ({
+          id: task.id,
+          name: task.name,
+          projectId: task.projectId,
+          isDisabled: task.isDisabled,
+        })),
+      };
     },
   );
 
@@ -810,6 +1114,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const taskIdsResult = optionalArrayOfStrings(taskIds, 'taskIds');
       if (!taskIdsResult.ok) return badRequest(reply, taskIdsResult.message);
       const resolvedTaskIds = taskIdsResult.value;
+
+      const assignmentsInScope = await ensureSubmittedAssignmentsInScope(request, {
+        clientIds: resolvedClientIds ?? undefined,
+        projectIds: resolvedProjectIds ?? undefined,
+        taskIds: resolvedTaskIds ?? undefined,
+      });
+      if (!assignmentsInScope) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const [targetUser, isTopManager] = await Promise.all([
         usersRepo.findCoreById(idResult.value),

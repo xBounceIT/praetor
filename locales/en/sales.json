@@ -12,6 +12,7 @@
     "items": "Line items for this offer",
     "supplierInformation": "Supplier and document details",
     "supplierItems": "Line items for this quote",
+    "attachments": "Files received from the supplier",
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
@@ -88,6 +89,7 @@
     "productsServices": "Products / Services",
     "addProduct": "Add Product",
     "globalDiscount": "Global Discount",
+    "summary": "Summary",
     "expirationDateLabel": "Expiration Date",
     "notesLabel": "Notes",
     "immediatePayment": "Immediate",
@@ -182,6 +184,7 @@
     "offerCodeRequired": "Offer code is required",
     "paymentTerms": "Payment terms",
     "globalDiscount": "Global Discount",
+    "summary": "Summary",
     "expirationDate": "Expiration date",
     "items": "Items",
     "itemsRequired": "At least one item is required",
@@ -213,6 +216,9 @@
     "markDenied": "Mark as denied",
     "createOrder": "Create sale order",
     "clientLockedByQuote": "Locked due to linked quote",
+    "searchPlaceholder": "Search offers by client or code...",
+    "filterByStatus": "Filter by status",
+    "allStatuses": "All statuses",
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
@@ -256,6 +262,7 @@
     "noItemsAdded": "No items added yet",
     "discount": "Discount %",
     "status": "Status",
+    "summary": "Summary",
     "total": "Total",
     "subtotal": "Subtotal",
     "discountAmount": "Discount",
@@ -295,6 +302,26 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "attachments": {
+      "title": "Attachments",
+      "uploadButton": "Upload file",
+      "dropHere": "Drop a file here or click to upload",
+      "allowedTypes": "Allowed: xlsx, pdf, docx · max 10 MB",
+      "empty": "No attachments yet.",
+      "uploading": "Uploading...",
+      "downloadAction": "Download",
+      "deleteAction": "Delete",
+      "deleteConfirm": "Remove this attachment?",
+      "saveQuoteFirst": "Save the quote first to add attachments.",
+      "loadFailed": "Failed to load attachments.",
+      "errors": {
+        "tooLarge": "File exceeds the 10 MB upload limit",
+        "invalidType": "File type not allowed. Use xlsx, pdf, or docx.",
+        "uploadFailed": "Upload failed",
+        "downloadFailed": "Download failed",
+        "deleteFailed": "Delete failed"
+      }
     }
   }
 }

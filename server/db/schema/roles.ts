@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core';
 // Circular: users.role → roles.id, userRoles.user_id → users.id. Both references are passed
 // as callbacks (`() => users.id`), so resolution is deferred until the schema is materialized
-// — ES modules tolerate the cycle as long as no top-level code reads the imported binding
+// - ES modules tolerate the cycle as long as no top-level code reads the imported binding
 // during evaluation.
 import { users } from './users.ts';
 

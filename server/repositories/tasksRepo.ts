@@ -3,6 +3,13 @@ import { alias } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
+import {
+  type BillingFrequency,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  type StoredBillingType,
+} from '../utils/billing.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
@@ -19,10 +26,13 @@ export type Task = {
   recurrenceEnd: string | undefined;
   recurrenceDuration: number;
   expectedEffort: number | undefined;
+  monthlyEffort: number | undefined;
   revenue: number | undefined;
   notes: string | undefined;
   isDisabled: boolean;
   createdAt: number;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
 };
 
 const mapRow = (row: typeof tasks.$inferSelect): Task => ({
@@ -37,10 +47,13 @@ const mapRow = (row: typeof tasks.$inferSelect): Task => ({
   recurrenceEnd: normalizeNullableDateOnly(row.recurrenceEnd, 'task.recurrenceEnd') ?? undefined,
   recurrenceDuration: parseDbNumber(row.recurrenceDuration, 0),
   expectedEffort: parseDbNumber(row.expectedEffort, undefined),
+  monthlyEffort: parseDbNumber(row.monthlyEffort, undefined),
   revenue: parseDbNumber(row.revenue, undefined),
   notes: row.notes ?? undefined,
   isDisabled: row.isDisabled ?? false,
   createdAt: row.createdAt?.getTime() ?? 0,
+  billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
+  billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
@@ -61,10 +74,13 @@ export const listForUser = async (userId: string, exec: DbExecutor = db): Promis
       recurrenceEnd: tasks.recurrenceEnd,
       recurrenceDuration: tasks.recurrenceDuration,
       expectedEffort: tasks.expectedEffort,
+      monthlyEffort: tasks.monthlyEffort,
       revenue: tasks.revenue,
       notes: tasks.notes,
       isDisabled: tasks.isDisabled,
       createdAt: tasks.createdAt,
+      billingType: tasks.billingType,
+      billingFrequency: tasks.billingFrequency,
     })
     .from(tasks)
     .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
@@ -83,9 +99,12 @@ export type NewTask = {
   recurrenceStart: string | null;
   recurrenceDuration: number;
   expectedEffort: number;
+  monthlyEffort: number;
   revenue: number;
   notes: string | null;
   isDisabled: boolean;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
 };
 
 export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task> => {
@@ -102,9 +121,12 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
         recurrenceStart: task.recurrenceStart,
         recurrenceDuration: numericForDb(task.recurrenceDuration),
         expectedEffort: numericForDb(task.expectedEffort),
+        monthlyEffort: numericForDb(task.monthlyEffort),
         revenue: numericForDb(task.revenue),
         notes: task.notes,
         isDisabled: task.isDisabled,
+        billingType: task.billingType,
+        billingFrequency: normalizeBillingFrequency(task.billingType, task.billingFrequency),
       })
       .returning();
     return mapRow(rows[0]);
@@ -124,8 +146,11 @@ export type TaskUpdate = {
   recurrenceDuration?: number | null;
   isDisabled?: boolean;
   expectedEffort?: number | null;
+  monthlyEffort?: number | null;
   revenue?: number | null;
   notes?: string | null;
+  billingType?: StoredBillingType | null;
+  billingFrequency?: BillingFrequency | null;
 };
 
 export const update = async (
@@ -134,7 +159,7 @@ export const update = async (
   exec: DbExecutor = db,
 ): Promise<Task | null> => {
   // Explicit null clears the column; undefined (key absent) leaves it unchanged. Don't
-  // collapse to `value != null` — that loses the clear-to-null semantic.
+  // collapse to `value != null` - that loses the clear-to-null semantic.
   const set: Record<string, unknown> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
@@ -146,12 +171,27 @@ export const update = async (
     set.recurrenceDuration = numericForDb(patch.recurrenceDuration);
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
   if (patch.expectedEffort !== undefined) set.expectedEffort = numericForDb(patch.expectedEffort);
+  if (patch.monthlyEffort !== undefined) set.monthlyEffort = numericForDb(patch.monthlyEffort);
   if (patch.revenue !== undefined) set.revenue = numericForDb(patch.revenue);
   if (patch.notes !== undefined) set.notes = patch.notes;
+  if (patch.billingType !== undefined) {
+    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+    set.billingType = nextBillingType;
+    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
+  } else if (patch.billingFrequency !== undefined) {
+    const currentRows = await exec
+      .select({ billingType: tasks.billingType })
+      .from(tasks)
+      .where(eq(tasks.id, id));
+    set.billingFrequency = normalizeBillingFrequency(
+      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
+      patch.billingFrequency,
+    );
+  }
 
   if (Object.keys(set).length === 0) {
     // No fields to update. Routes rely on this branch to return the current row when called
-    // with an empty patch — `db.update(tasks).set({})` would emit invalid SQL.
+    // with an empty patch - `db.update(tasks).set({})` would emit invalid SQL.
     const rows = await exec.select().from(tasks).where(eq(tasks.id, id));
     return rows[0] ? mapRow(rows[0]) : null;
   }
@@ -215,15 +255,15 @@ export const addUserAssignments = async (
 
 // Aliased table references shared by the time-entries → tasks join and its callers.
 // Both the JOIN expression and the surrounding query MUST use these same aliases ("te"/"t")
-// — once a table is aliased, Postgres rejects column refs that name the unaliased table.
+// - once a table is aliased, Postgres rejects column refs that name the unaliased table.
 //
 // Caller is expected to write the FROM/JOIN keywords + table-with-alias as raw SQL
 // (`FROM time_entries te`); Drizzle's `${aliasedTable}` in raw templates renders only the
 // alias (`"te"`), not `"time_entries" "te"`, so it can't be used directly in FROM. Column
 // references via `timeEntriesTe.X` / `tasksT.X` correctly compile to `"te"."x"` / `"t"."x"`
-// — that's the part the aliases buy us.
+// - that's the part the aliases buy us.
 //
-// `timeEntriesTe` is module-private — the JOIN chunk and `sumHoursByProjects` are the only
+// `timeEntriesTe` is module-private - the JOIN chunk and `sumHoursByProjects` are the only
 // callers and they all live in this file. `tasksT` is exported because external consumers
 // (e.g. `reportsHoursRepo.getTasksSection`) need to reference `t` columns in their own
 // surrounding SELECT/JOIN/WHERE clauses (e.g. `JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`).

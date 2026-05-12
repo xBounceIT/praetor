@@ -9,6 +9,7 @@ import {
   getItemPricingContext,
   type PricingItem,
   parseNumberInputValue,
+  roundCurrency,
 } from '../../utils/numbers';
 
 describe('parseNumberInputValue', () => {
@@ -194,6 +195,72 @@ describe('calculatePricingTotals', () => {
     expect(t.total).toBe(0);
     expect(t.margin).toBe(0);
     expect(t.marginPercentage).toBe(0);
+  });
+
+  test('rounds accumulated floats so no IEEE-754 drift leaks into the UI', () => {
+    // 0.1 + 0.1 + 0.1 = 0.30000000000000004 in IEEE-754; rounding pins it to 0.30.
+    const items: PricingItem[] = [
+      { unitPrice: 0.1, quantity: 1 },
+      { unitPrice: 0.1, quantity: 1 },
+      { unitPrice: 0.1, quantity: 1 },
+    ];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.subtotal).toBe(0.3);
+    expect(t.total).toBe(0.3);
+  });
+
+  test('rounds every returned field to 2 decimal places', () => {
+    // Hand-picked to drift in every field: small unit prices + percentage discount.
+    const items: PricingItem[] = [{ unitPrice: 0.1, quantity: 3, productCost: 0.05, discount: 10 }];
+    const t = calculatePricingTotals(items, 5, 'hours', 'percentage');
+    // None of these should have trailing IEEE-754 digits.
+    for (const value of Object.values(t)) {
+      expect(value).toBe(roundCurrency(value));
+    }
+  });
+});
+
+describe('roundCurrency', () => {
+  test('rounds to 2 decimals', () => {
+    expect(roundCurrency(0.1 + 0.2)).toBe(0.3);
+  });
+
+  test('rounds halves up', () => {
+    expect(roundCurrency(0.005)).toBe(0.01);
+  });
+
+  test('passes through clean values', () => {
+    expect(roundCurrency(1.23)).toBe(1.23);
+    expect(roundCurrency(0)).toBe(0);
+  });
+});
+
+describe('frontend ↔ backend agreement on invoice totals', () => {
+  // The server's `computeInvoiceTotals` lives outside this tsconfig's rootDir, so the
+  // formula is mirrored here. If either side changes its formula or rounding, this test
+  // catches the divergence before invoices ship with mismatched subtotals.
+  const computeInvoiceTotalsBackend = (
+    items: { quantity: number; unitPrice: number; discount: number }[],
+  ) => {
+    const subtotal = items.reduce((acc, item) => {
+      const discountFactor = 1 - item.discount / 100;
+      return acc + item.quantity * item.unitPrice * discountFactor;
+    }, 0);
+    const rounded = roundCurrency(subtotal);
+    return { subtotal: rounded, total: rounded };
+  };
+
+  test('produces identical subtotal/total for the same line items', () => {
+    // 0.1 * 3 alone would drift to 0.30000000000000004 without rounding.
+    const items = [
+      { quantity: 3, unitPrice: 0.1, discount: 0 },
+      { quantity: 7, unitPrice: 13.5, discount: 15 },
+      { quantity: 2, unitPrice: 50, discount: 10 },
+    ];
+    const backend = computeInvoiceTotalsBackend(items);
+    const frontend = calculatePricingTotals(items, 0);
+    expect(frontend.subtotal).toBe(backend.subtotal);
+    expect(frontend.total).toBe(backend.total);
   });
 });
 

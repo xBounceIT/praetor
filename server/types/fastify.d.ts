@@ -4,7 +4,8 @@ declare module 'fastify' {
   interface FastifyRequest {
     auth?: {
       userId: string;
-      sessionStart: number;
+      sessionStart?: number;
+      source?: 'session' | 'personalAccessToken';
     };
     user?: {
       id: string;

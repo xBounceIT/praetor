@@ -103,6 +103,8 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
           ...item,
           id: makeTempId(),
           orderId: '',
+          // Free-text supplier lines without a linked product are valid;
+          // the server canonicalizes missing productId to NULL.
           productId: item.productId ?? '',
         })),
       });

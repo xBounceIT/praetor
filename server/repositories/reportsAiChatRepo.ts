@@ -56,7 +56,7 @@ export const listSessionsForUser = async (
     id: r.id,
     title: r.title,
     // `created_at`/`updated_at` are nullable in the schema but have DEFAULT
-    // CURRENT_TIMESTAMP — `?? 0` is a TS-strict appeasement for the unreachable branch.
+    // CURRENT_TIMESTAMP - `?? 0` is a TS-strict appeasement for the unreachable branch.
     createdAt: r.createdAt?.getTime() ?? 0,
     updatedAt: r.updatedAt?.getTime() ?? 0,
   }));
@@ -132,7 +132,7 @@ export const updateSessionTitleAndTouch = async (
     .update(reportChatSessions)
     .set({
       updatedAt: sql`CURRENT_TIMESTAMP`,
-      // Only overwrite the title when it's blank or still the default — preserves any
+      // Only overwrite the title when it's blank or still the default - preserves any
       // user-edited title across re-sends.
       title: sql`CASE
         WHEN BTRIM(${reportChatSessions.title}) = '' OR ${reportChatSessions.title} = ${DEFAULT_CHAT_TITLE}
@@ -186,7 +186,7 @@ export const listMessagesForSession = async (
     role: r.role,
     content: r.content,
     thoughtContent: r.thoughtContent || null,
-    // `created_at` is nullable in the schema but has DEFAULT CURRENT_TIMESTAMP —
+    // `created_at` is nullable in the schema but has DEFAULT CURRENT_TIMESTAMP -
     // `?? 0` is a TS-strict appeasement for the unreachable branch.
     createdAt: r.createdAt?.getTime() ?? 0,
   }));

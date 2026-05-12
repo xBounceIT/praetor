@@ -26,6 +26,8 @@ export const installApiMock = () => {
       get: noop,
       update: noop,
       updatePassword: noop,
+      getPersonalAccessToken: noop,
+      renewPersonalAccessToken: noop,
     },
     clients: { list: noopList, create: noop, update: noop, delete: noop },
     projects: { list: noopList, create: noop, update: noop, delete: noop },

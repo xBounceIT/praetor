@@ -55,7 +55,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
       setUserSettings(settings);
       applyLanguagePreference(settings.language);
     } catch {
-      // Settings may not exist yet for a fresh user — non-fatal.
+      // Settings may not exist yet for a fresh user - non-fatal.
     }
   }, []);
 
@@ -113,7 +113,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
     async (user: User, token?: string) => {
       if (token) setAuthToken(token);
       // Run the consumer's reset BEFORE flipping currentUser so any effects keyed on
-      // currentUser see the cleaned auth-scoped state in the same render batch — otherwise
+      // currentUser see the cleaned auth-scoped state in the same render batch - otherwise
       // a login or role-switch can briefly resurface the previous session's data.
       onLoginRef.current?.(user);
       setCurrentUser(user);

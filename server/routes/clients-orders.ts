@@ -1201,7 +1201,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { order, items };
         });
       } catch (error) {
-        // The pre-tx reference check is racy — a referenced client/product can be deleted
+        // The pre-tx reference check is racy - a referenced client/product can be deleted
         // between validation and the restore writes. Translate the resulting FK violation to a
         // 409 instead of leaking a 500.
         if (getForeignKeyViolation(error)) {

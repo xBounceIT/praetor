@@ -7,7 +7,9 @@ import {
   buildPermission,
   buildPermissions,
   DEFAULT_ROLE_PERMISSIONS,
+  equivalentPermissionsFor,
   hasPermission,
+  hasScopedActionPermission,
   isPermissionKnown,
   isTopManagerOnlyPermission,
   normalizePermission,
@@ -38,7 +40,13 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
 
   test('contains expected representative permissions', () => {
     expect(ALL_PERMISSIONS).toContain('crm.clients.view');
+    expect(ALL_PERMISSIONS).toContain('crm.clients_all.create');
+    expect(ALL_PERMISSIONS).toContain('crm.suppliers_all.update');
+    expect(ALL_PERMISSIONS).toContain('projects.manage_all.delete');
+    expect(ALL_PERMISSIONS).toContain('projects.tasks_all.create');
+    expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.update');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
+    expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.create');
     expect(ALL_PERMISSIONS).toContain('notifications.delete');
   });
@@ -102,6 +110,8 @@ describe('isTopManagerOnlyPermission', () => {
 
   test('matches hr.work_units_all.* permissions', () => {
     expect(isTopManagerOnlyPermission('hr.work_units_all.view')).toBe(true);
+    expect(isTopManagerOnlyPermission('hr.work_units_all.create')).toBe(true);
+    expect(isTopManagerOnlyPermission('hr.work_units_all.delete')).toBe(true);
   });
 
   test('does not match unrelated hr permissions', () => {
@@ -172,6 +182,30 @@ describe('DEFAULT_ROLE_PERMISSIONS', () => {
 
   test('user role does not include any administration.* permissions', () => {
     expect(DEFAULT_ROLE_PERMISSIONS.user.some((p) => p.startsWith('administration.'))).toBe(false);
+  });
+});
+
+describe('equivalentPermissionsFor / hasScopedActionPermission', () => {
+  test('returns base and all-scope equivalents for scoped resources', () => {
+    expect(equivalentPermissionsFor('crm.clients', 'update')).toEqual([
+      'crm.clients.update',
+      'crm.clients_all.update',
+    ]);
+  });
+
+  test('returns only base permission for resources without all-scope variants', () => {
+    expect(equivalentPermissionsFor('sales.client_quotes', 'delete')).toEqual([
+      'sales.client_quotes.delete',
+    ]);
+  });
+
+  test('accepts either base or all-scope action permissions', () => {
+    expect(hasScopedActionPermission(['projects.tasks.update'], 'projects.tasks', 'update')).toBe(
+      true,
+    );
+    expect(
+      hasScopedActionPermission(['projects.tasks_all.update'], 'projects.tasks', 'update'),
+    ).toBe(true);
   });
 });
 

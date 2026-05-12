@@ -27,13 +27,13 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD, module: 'timesheets' },
   { id: 'timesheets.recurring', actions: CRUD, module: 'timesheets' },
-  { id: 'timesheets.tracker_all', actions: VIEW_ONLY, isScope: true, module: 'timesheets' },
+  { id: 'timesheets.tracker_all', actions: CRUD, isScope: true, module: 'timesheets' },
 
   // CRM
   { id: 'crm.clients', actions: CRUD, module: 'crm' },
-  { id: 'crm.clients_all', actions: VIEW_ONLY, isScope: true, module: 'crm' },
+  { id: 'crm.clients_all', actions: CRUD, isScope: true, module: 'crm' },
   { id: 'crm.suppliers', actions: CRUD, module: 'crm' },
-  { id: 'crm.suppliers_all', actions: VIEW_ONLY, isScope: true, module: 'crm' },
+  { id: 'crm.suppliers_all', actions: CRUD, isScope: true, module: 'crm' },
 
   // Sales
   { id: 'sales.client_quotes', actions: CRUD, module: 'sales' },
@@ -51,9 +51,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Projects
   { id: 'projects.manage', actions: CRUD, module: 'projects' },
-  { id: 'projects.manage_all', actions: VIEW_ONLY, isScope: true, module: 'projects' },
+  { id: 'projects.manage_all', actions: CRUD, isScope: true, module: 'projects' },
   { id: 'projects.tasks', actions: CRUD, module: 'projects' },
-  { id: 'projects.tasks_all', actions: VIEW_ONLY, isScope: true, module: 'projects' },
+  { id: 'projects.tasks_all', actions: CRUD, isScope: true, module: 'projects' },
   { id: 'projects.assignments', actions: ['update'], module: 'projects' },
 
   // HR
@@ -62,7 +62,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
   { id: 'hr.employee_assignments', actions: ['update'], module: 'hr' },
   { id: 'hr.work_units', actions: CRUD, module: 'hr' },
-  { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true, module: 'hr' },
+  { id: 'hr.work_units_all', actions: CRUD, isScope: true, module: 'hr' },
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
@@ -127,6 +127,27 @@ export const hasPermission = (permissions: Permission[] | undefined, permission:
 export const hasAnyPermission = (permissions: Permission[] | undefined, required: Permission[]) =>
   required.some((permission) => hasPermission(permissions, permission));
 
+export const scopeResourceFor = (resource: PermissionResource): PermissionResource | undefined => {
+  const scoped = `${resource}_all`;
+  return PERMISSION_DEFINITIONS.some((definition) => definition.id === scoped) ? scoped : undefined;
+};
+
+export const equivalentPermissionsFor = (
+  resource: PermissionResource,
+  action: PermissionAction,
+): Permission[] => {
+  const permissions = [buildPermission(resource, action)];
+  const scopeResource = scopeResourceFor(resource);
+  if (scopeResource) permissions.push(buildPermission(scopeResource, action));
+  return permissions;
+};
+
+export const hasScopedActionPermission = (
+  permissions: Permission[] | undefined,
+  resource: PermissionResource,
+  action: PermissionAction,
+) => hasAnyPermission(permissions, equivalentPermissionsFor(resource, action));
+
 export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'timesheets/tracker': buildPermission('timesheets.tracker', 'view'),
   'timesheets/recurring': buildPermission('timesheets.recurring', 'view'),
@@ -153,6 +174,43 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'hr/work-units': buildPermission('hr.work_units', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
+  docs: buildPermission('docs.frontend', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),
   'docs/frontend': buildPermission('docs.frontend', 'view'),
+};
+
+export const VIEW_PERMISSION_OPTIONS: Record<View, Permission[]> = Object.fromEntries(
+  Object.entries(VIEW_PERMISSION_MAP).map(([view, permission]) => {
+    const [resource, action] = permission.split(/\.(?=[^.]+$)/) as [
+      PermissionResource,
+      PermissionAction,
+    ];
+    return [view, equivalentPermissionsFor(resource, action)];
+  }),
+) as Record<View, Permission[]>;
+
+export const hasViewAccess = (permissions: Permission[] | undefined, view: View) =>
+  hasAnyPermission(permissions, VIEW_PERMISSION_OPTIONS[view] ?? []);
+
+export const getDefaultViewForPermissions = (
+  permissions: Permission[] | undefined,
+  validViews: View[],
+): View => {
+  const allowedView = validViews.find((view) => hasViewAccess(permissions, view));
+
+  return allowedView || 'timesheets/tracker';
+};
+
+export const getNotFoundReturnView = (
+  permissions: Permission[] | undefined,
+  validViews: View[],
+): View => {
+  const authSettingsView: View = 'administration/authentication';
+  const authSettingsPermission = VIEW_PERMISSION_MAP[authSettingsView];
+
+  if (hasPermission(permissions, authSettingsPermission)) {
+    return authSettingsView;
+  }
+
+  return getDefaultViewForPermissions(permissions, validViews);
 };

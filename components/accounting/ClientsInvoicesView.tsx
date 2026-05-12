@@ -1,15 +1,29 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
-import CustomSelect from '../shared/CustomSelect';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
+import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -209,7 +223,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const removeItemRow = (index: number) => {
     const nextItems = [...(formData.items || [])];
     nextItems.splice(index, 1);
-    setFormData({ ...formData, items: nextItems });
+    setFormData((prev) => ({ ...prev, items: nextItems }));
   };
 
   const updateItemRow = (
@@ -325,7 +339,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-zinc-700">{row.id}</span>
         ),
       },
       {
@@ -333,7 +347,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-800">{row.clientName}</span>
+          <span className="font-bold text-zinc-800">{row.clientName}</span>
         ),
       },
       {
@@ -343,7 +357,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
@@ -353,7 +367,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
       },
       {
@@ -363,7 +377,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-700">
+          <span className="font-bold text-zinc-700">
             {(row.total ?? 0).toFixed(2)} {currency}
           </span>
         ),
@@ -409,7 +423,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('common:common.more'),
+        header: t('accounting:clientsInvoices.actionsColumn'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -418,31 +432,37 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         align: 'right' as const,
         cell: ({ row }: { row: Invoice }) => (
           <div className="flex justify-end gap-2">
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openEditModal(row);
-                  }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
-                >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEditModal(row);
+                    }}
+                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    confirmDelete(row);
-                  }}
-                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      confirmDelete(row);
+                    }}
+                    className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           </div>
         ),
@@ -454,402 +474,394 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
-                <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingInvoice
-                ? t('accounting:clientsInvoices.editInvoice')
-                : t('accounting:clientsInvoices.addInvoice')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="full" className="max-h-[90vh]">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingInvoice
+                  ? t('accounting:clientsInvoices.editInvoice')
+                  : t('accounting:clientsInvoices.addInvoice')}
+              </ModalTitle>
+              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
-            <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.invoiceDetails')}
-              </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.client')}
-                  </label>
-                  <CustomSelect
-                    options={activeClients.map((client) => ({
-                      id: client.id,
-                      name: client.name,
-                    }))}
-                    value={formData.clientId || ''}
-                    onChange={(value) => handleClientChange(value as string)}
-                    placeholder={t('accounting:clientsInvoices.allClients')}
-                    searchable={true}
-                    className={errors.clientId ? 'border-red-300' : ''}
-                  />
-                  {errors.clientId && (
-                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.clientId}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.invoiceNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.id || ''}
-                    onChange={(event) => setFormData({ ...formData, id: event.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
-                    placeholder="INV-YYYY-XXXX"
-                  />
-                  {errors.id && (
-                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.id}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.issueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.issueDate}
-                    onChange={(event) =>
-                      setFormData({ ...formData, issueDate: event.target.value })
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                  />
-                  {errors.issueDate && (
-                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.dueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.dueDate}
-                    onChange={(event) => setFormData({ ...formData, dueDate: event.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                  />
-                  {errors.dueDate && (
-                    <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.status')}
-                  </label>
-                  <CustomSelect
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(value) =>
-                      setFormData({ ...formData, status: value as Invoice['status'] })
-                    }
-                    searchable={false}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:clientsInvoices.items')}
+            <ModalBody className="flex-1 space-y-5">
+              <div className="space-y-2">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  <span className="size-1.5 rounded-full bg-primary"></span>
+                  {t('accounting:clientsInvoices.invoiceDetails')}
                 </h4>
-                <button
-                  type="button"
-                  onClick={addItemRow}
-                  className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-slate-700"
-                >
-                  <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addItem')}
-                </button>
-              </div>
-              {errors.items && (
-                <p className="ml-1 -mt-2 text-[10px] font-bold text-red-500">{errors.items}</p>
-              )}
-
-              {formData.items && formData.items.length > 0 && (
-                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-3">{t('common:labels.product')}</div>
-                    <div className="col-span-2">{t('common:labels.quantity')}</div>
-                    <div className="col-span-2">
-                      {t('common:labels.price')} ({currency})
-                    </div>
-                    <div className="col-span-2">{t('common:labels.discount')}%</div>
-                    <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
-                  </div>
-                  <div className="w-8 shrink-0"></div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <Field data-invalid={Boolean(errors.clientId)}>
+                    <SelectControl
+                      id="client-invoice-client"
+                      options={activeClients.map((client) => ({
+                        id: client.id,
+                        name: client.name,
+                      }))}
+                      value={formData.clientId || ''}
+                      onChange={(value) => handleClientChange(value as string)}
+                      label={t('accounting:clientsInvoices.client')}
+                      placeholder={t('accounting:clientsInvoices.allClients')}
+                      searchable={true}
+                      buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
+                    />
+                    <FieldError className="text-xs">{errors.clientId}</FieldError>
+                  </Field>
+                  <Field data-invalid={Boolean(errors.id)}>
+                    <FieldLabel htmlFor="client-invoice-number">
+                      {t('accounting:clientsInvoices.invoiceNumber')}
+                    </FieldLabel>
+                    <Input
+                      id="client-invoice-number"
+                      type="text"
+                      required
+                      value={formData.id || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, id: event.target.value }))
+                      }
+                      aria-invalid={Boolean(errors.id)}
+                      className="font-medium"
+                      placeholder="INV-YYYY-XXXX"
+                    />
+                    <FieldError className="text-xs">{errors.id}</FieldError>
+                  </Field>
+                  <Field data-invalid={Boolean(errors.issueDate)}>
+                    <FieldLabel htmlFor="client-invoice-issue-date">
+                      {t('accounting:clientsInvoices.issueDate')}
+                    </FieldLabel>
+                    <Input
+                      id="client-invoice-issue-date"
+                      type="date"
+                      required
+                      value={formData.issueDate}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                      }
+                      aria-invalid={Boolean(errors.issueDate)}
+                    />
+                    <FieldError className="text-xs">{errors.issueDate}</FieldError>
+                  </Field>
+                  <Field data-invalid={Boolean(errors.dueDate)}>
+                    <FieldLabel htmlFor="client-invoice-due-date">
+                      {t('accounting:clientsInvoices.dueDate')}
+                    </FieldLabel>
+                    <Input
+                      id="client-invoice-due-date"
+                      type="date"
+                      required
+                      value={formData.dueDate}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                      }
+                      aria-invalid={Boolean(errors.dueDate)}
+                    />
+                    <FieldError className="text-xs">{errors.dueDate}</FieldError>
+                  </Field>
                 </div>
-              )}
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <Field>
+                    <SelectControl
+                      id="client-invoice-status"
+                      options={statusOptions}
+                      value={formData.status || 'draft'}
+                      onChange={(value) =>
+                        setFormData((prev) => ({ ...prev, status: value as Invoice['status'] }))
+                      }
+                      label={t('accounting:clientsInvoices.status')}
+                      searchable={false}
+                      buttonClassName="h-9"
+                    />
+                  </Field>
+                </div>
+              </div>
 
-              <div className="space-y-3">
-                {formData.items?.map((item, index) => {
-                  const lineTotal = getLineTotal(item);
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsInvoices.items')}
+                  </h4>
+                  <Button type="button" size="sm" onClick={addItemRow}>
+                    <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+                    {t('accounting:clientsInvoices.addItem')}
+                  </Button>
+                </div>
+                <FieldError className="-mt-2 text-xs">{errors.items}</FieldError>
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
-                          <div className="space-y-1 lg:col-span-3 min-w-0">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('common:labels.product')}
-                            </label>
-                            <CustomSelect
-                              options={[
-                                { id: '', name: t('accounting:clientsInvoices.customItem') },
-                                ...activeProducts.map((product) => ({
-                                  id: product.id,
-                                  name: product.name,
-                                })),
-                              ]}
-                              value={item.productId || ''}
-                              onChange={(value) =>
-                                updateItemRow(index, 'productId', (value as string) || undefined)
-                              }
-                              placeholder={t('accounting:clientsInvoices.selectProductPlaceholder')}
-                              searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('common:labels.quantity')}
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <ValidatedNumberInput
-                                min="0"
-                                step="0.01"
-                                required
-                                value={item.quantity}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateItemRow(
-                                    index,
-                                    'quantity',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                              />
-                              <span className="shrink-0 text-xs font-semibold text-slate-400">
-                                {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
-                                  ?.name || t('accounting:clientsInvoices.unit')}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('common:labels.price')} ({currency})
-                            </label>
-                            <ValidatedNumberInput
-                              min="0"
-                              step="0.01"
-                              required
-                              value={item.unitPrice}
-                              formatDecimals={2}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItemRow(
-                                  index,
-                                  'unitPrice',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
-                          </div>
-                          <div className="space-y-1 lg:col-span-2">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('common:labels.discount')}%
-                            </label>
-                            <ValidatedNumberInput
-                              min="0"
-                              max="100"
-                              value={item.discount || 0}
-                              formatDecimals={2}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItemRow(
-                                  index,
-                                  'discount',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
-                          </div>
-                          <div className="space-y-1 lg:col-span-3">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                              {t('common:labels.total')}
-                            </label>
-                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
-                              {lineTotal.toFixed(2)} {currency}
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeItemRow(index)}
-                          className="rounded-lg p-2 text-slate-400 transition-colors hover:text-red-600"
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          {t('common:labels.description')}
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder={t('accounting:clientsInvoices.descriptionPlaceholder')}
-                          value={item.description}
-                          onChange={(event) =>
-                            updateItemRow(index, 'description', event.target.value)
-                          }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                        />
-                      </div>
+                {formData.items && formData.items.length > 0 && (
+                  <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
+                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="col-span-3">{t('common:labels.product')}</div>
+                      <div className="col-span-2">{t('common:labels.quantity')}</div>
+                      <div className="col-span-2">{t('common:labels.price')}</div>
+                      <div className="col-span-2">{t('common:labels.discount')}</div>
+                      <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
                     </div>
-                  );
-                })}
-
-                {(!formData.items || formData.items.length === 0) && (
-                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                    {t('accounting:clientsInvoices.noItems')}
+                    <div className="w-8 shrink-0"></div>
                   </div>
                 )}
-              </div>
-            </div>
 
-            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
-              <div className="md:w-2/3 space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.notes')}
-                </label>
-                <textarea
-                  rows={4}
-                  value={formData.notes || ''}
-                  onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
-                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
-                />
+                <div className="space-y-3">
+                  {formData.items?.map((item, index) => {
+                    const lineTotal = getLineTotal(item);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                            <div className="space-y-1 lg:col-span-3 min-w-0">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('common:labels.product')}
+                              </FieldLabel>
+                              <SelectControl
+                                options={[
+                                  { id: '', name: t('accounting:clientsInvoices.customItem') },
+                                  ...activeProducts.map((product) => ({
+                                    id: product.id,
+                                    name: product.name,
+                                  })),
+                                ]}
+                                value={item.productId || ''}
+                                onChange={(value) =>
+                                  updateItemRow(index, 'productId', (value as string) || undefined)
+                                }
+                                placeholder={t(
+                                  'accounting:clientsInvoices.selectProductPlaceholder',
+                                )}
+                                searchable={true}
+                                buttonClassName="h-9"
+                              />
+                            </div>
+                            <div className="space-y-1 lg:col-span-2">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('common:labels.quantity')}
+                              </FieldLabel>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                  value={item.quantity}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'quantity',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  /
+                                </span>
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
+                                    ?.name || t('accounting:clientsInvoices.unit')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-2">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('common:labels.price')}
+                              </FieldLabel>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                  value={item.unitPrice}
+                                  formatDecimals={2}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'unitPrice',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0 font-medium"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  {currency}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-2">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('common:labels.discount')}
+                              </FieldLabel>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  max="100"
+                                  value={item.discount || 0}
+                                  formatDecimals={2}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'discount',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0 font-medium"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-3">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('common:labels.total')}
+                              </FieldLabel>
+                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
+                                {lineTotal.toFixed(2)} {currency}
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => removeItemRow(index)}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+                            <span className="sr-only">{t('common:buttons.delete')}</span>
+                          </Button>
+                        </div>
+
+                        <Field>
+                          <FieldLabel
+                            htmlFor={`client-invoice-item-description-${index}`}
+                            className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                          >
+                            {t('common:labels.description')}
+                          </FieldLabel>
+                          <Input
+                            id={`client-invoice-item-description-${index}`}
+                            type="text"
+                            required
+                            placeholder={t('accounting:clientsInvoices.descriptionPlaceholder')}
+                            value={item.description}
+                            onChange={(event) =>
+                              updateItemRow(index, 'description', event.target.value)
+                            }
+                          />
+                        </Field>
+                      </div>
+                    );
+                  })}
+
+                  {(!formData.items || formData.items.length === 0) && (
+                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                      {t('accounting:clientsInvoices.noItems')}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="md:w-1/3">
-                <CostSummaryPanel
-                  currency={currency}
-                  subtotal={grossSubtotal}
-                  total={total}
-                  subtotalLabel={t('accounting:clientsInvoices.subtotal')}
-                  totalLabel={t('accounting:clientsInvoices.total')}
-                  discountRow={
-                    totalDiscount > 0
-                      ? {
-                          label: t('accounting:clientsInvoices.totalDiscount'),
-                          amount: totalDiscount,
-                        }
-                      : undefined
-                  }
-                  amountPaid={{
-                    label: t('accounting:clientsInvoices.amountPaid'),
-                    value: formData.amountPaid || 0,
-                    onChange: (value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        amountPaid: value === '' ? 0 : Number(value),
-                      })),
-                  }}
-                  balanceDue={{
-                    label: t('accounting:clientsInvoices.balanceDue'),
-                    amount: total - Number(formData.amountPaid || 0),
-                  }}
-                />
-              </div>
-            </div>
+              <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+                <Field className="md:w-2/3">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsInvoices.notes')}
+                  </h4>
+                  <FieldLabel htmlFor="client-invoice-notes" className="sr-only">
+                    {t('accounting:clientsInvoices.notes')}
+                  </FieldLabel>
+                  <Textarea
+                    id="client-invoice-notes"
+                    rows={4}
+                    value={formData.notes || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    className="min-h-28 resize-none"
+                    placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                  />
+                </Field>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
-              >
+                <div className="space-y-2 md:w-1/3">
+                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                    <span className="size-1.5 rounded-full bg-primary"></span>
+                    {t('accounting:clientsInvoices.summary', { defaultValue: 'Summary' })}
+                  </h4>
+                  <CostSummaryPanel
+                    currency={currency}
+                    subtotal={grossSubtotal}
+                    total={total}
+                    subtotalLabel={t('accounting:clientsInvoices.subtotal')}
+                    totalLabel={t('accounting:clientsInvoices.total')}
+                    discountRow={
+                      totalDiscount > 0
+                        ? {
+                            label: t('accounting:clientsInvoices.totalDiscount'),
+                            amount: totalDiscount,
+                          }
+                        : undefined
+                    }
+                    amountPaid={{
+                      label: t('accounting:clientsInvoices.amountPaid'),
+                      value: formData.amountPaid || 0,
+                      onChange: (value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          amountPaid: value === '' ? 0 : Number(value),
+                        })),
+                    }}
+                    balanceDue={{
+                      label: t('accounting:clientsInvoices.balanceDue'),
+                      amount: total - Number(formData.amountPaid || 0),
+                    }}
+                  />
+                </div>
+              </div>
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
-              >
-                {t('common:buttons.save')}
-              </button>
-            </div>
+              </Button>
+              <Button type="submit">{t('common:buttons.save')}</Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
-            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-          </div>
-          <h3 className="text-lg font-black text-slate-800">
-            {t('accounting:clientsInvoices.deleteTitle')}
-          </h3>
-          <p className="text-sm text-slate-500">
-            {t('accounting:clientsInvoices.deleteMessage', {
-              invoiceNumber: invoiceToDelete?.id || '',
-            })}
-          </p>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
-            >
-              {t('common:buttons.delete')}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title={t('accounting:clientsInvoices.deleteTitle')}
+        description={t('accounting:clientsInvoices.deleteMessage', {
+          invoiceNumber: invoiceToDelete?.id || '',
+        })}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">
+            <h2 className="text-2xl font-semibold text-zinc-800">
               {t('accounting:clientsInvoices.title')}
             </h2>
-            <p className="text-sm text-slate-500">{t('accounting:clientsInvoices.subtitle')}</p>
+            <p className="text-sm text-zinc-500">{t('accounting:clientsInvoices.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
-          >
-            <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addInvoice')}
-          </button>
+          <HeaderAddButton onClick={openAddModal}>
+            {t('accounting:clientsInvoices.addInvoice')}
+          </HeaderAddButton>
         </div>
       </div>
 
