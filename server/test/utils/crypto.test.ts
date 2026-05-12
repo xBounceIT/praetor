@@ -21,7 +21,9 @@ describe('encrypt', () => {
     const out = encrypt('hello');
     const parts = out.split(':');
     expect(parts).toHaveLength(3);
-    parts.forEach((p) => expect(p.length).toBeGreaterThan(0));
+    parts.forEach((p) => {
+      expect(p.length).toBeGreaterThan(0);
+    });
   });
 
   test('produces a different ciphertext on each call (random IV)', () => {
@@ -52,7 +54,7 @@ describe('decrypt', () => {
   });
 
   test('round-trips unicode plaintext', () => {
-    const plaintext = 'Pàssword with émojis 🔐 — ok?';
+    const plaintext = 'Pàssword with émojis 🔐 - ok?';
     expect(decrypt(encrypt(plaintext))).toBe(plaintext);
   });
 

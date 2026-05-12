@@ -16,7 +16,7 @@ async function checkAuth() {
     } else {
       console.log('User "admin" FOUND.');
       const user = result.rows[0];
-      // Don't echo the bcrypt hash to stdout — it's offline-attackable. A presence + length
+      // Don't echo the bcrypt hash to stdout - it's offline-attackable. A presence + length
       // check is enough to confirm the column is populated.
       const hashPresent = typeof user.password_hash === 'string' && user.password_hash.length > 0;
       console.log(

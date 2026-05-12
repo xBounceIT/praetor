@@ -74,7 +74,7 @@ type GeneralSettingsRow = {
 //
 // Other columns with DB defaults (e.g., `enableAiReporting`, `allowWeekendSelection`) are
 // typed `T | null` in the public `GeneralSettings` type, so `mapRow` forwards null without
-// a fallback — route consumers apply their own `?? default`.
+// a fallback - route consumers apply their own `?? default`.
 const DEFAULT_FALLBACKS = {
   currency: '€',
   dailyLimit: '8.00',

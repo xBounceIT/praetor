@@ -231,7 +231,7 @@ describe('insertItems', () => {
       testDb,
     );
     expect(exec.calls[0].sql).toContain('insert into "customer_offer_items"');
-    // Drizzle emits columns in schema declaration order (createdAt is skipped — has
+    // Drizzle emits columns in schema declaration order (createdAt is skipped - has
     // CURRENT_TIMESTAMP default and isn't passed), so unitType lands between note and the
     // supplier_quote_* group rather than at the end of the values list.
     expect(exec.calls[0].params).toEqual([

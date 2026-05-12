@@ -159,7 +159,7 @@ export type ListOptions =
 export const list = async (options: ListOptions, exec: DbExecutor = db): Promise<Client[]> => {
   if (options.canViewAllClients) {
     // Admin path: LEFT JOIN nested aggregates for total_sent_quotes / total_accepted_orders.
-    // Lifted near-verbatim from the legacy SQL — the nested SUM/COALESCE shape is awkward in
+    // Lifted near-verbatim from the legacy SQL - the nested SUM/COALESCE shape is awkward in
     // the query builder and the existing query is well-tested.
     const rows = await executeRows<Record<string, unknown>>(
       exec,
@@ -207,6 +207,21 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
       FROM clients c
       INNER JOIN user_clients uc ON c.id = uc.client_id
       WHERE uc.user_id = ${options.userId}
+      ORDER BY c.name`,
+  );
+  return rows.map(mapClientRow);
+};
+
+export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<Client[]> => {
+  if (ids.length === 0) return [];
+
+  const rows = await executeRows<Record<string, unknown>>(
+    exec,
+    sql`SELECT c.*,
+        NULL::numeric as total_sent_quotes,
+        NULL::numeric as total_accepted_orders
+      FROM clients c
+      WHERE c.id = ANY(${ids})
       ORDER BY c.name`,
   );
   return rows.map(mapClientRow);
@@ -389,7 +404,7 @@ export const update = async (
   exec: DbExecutor = db,
 ): Promise<Client | null> => {
   // The COALESCE/CASE WHEN hybrid encodes two separate semantics (null = keep, *Provided
-  // flag = explicit set). The structure is preserved as-is via executeRows — rewriting in
+  // flag = explicit set). The structure is preserved as-is via executeRows - rewriting in
   // the builder would obscure the dual semantics encoded in the ClientUpdate type.
   const contactsJson = patch.contacts === null ? null : JSON.stringify(patch.contacts);
   const rows = await executeRows<Record<string, unknown>>(

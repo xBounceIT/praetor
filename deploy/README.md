@@ -17,8 +17,10 @@ Set at least:
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET`
 - `ENCRYPTION_KEY`
-- `ADMIN_DEFAULT_PASSWORD`
 - `FRONTEND_URL`
+
+Fresh installs create the bootstrap admin as `admin` / `password`. Change that password after
+the first login.
 
 ## 2) Authenticate to Registry (if private)
 

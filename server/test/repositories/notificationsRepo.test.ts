@@ -109,3 +109,31 @@ describe('markAllReadForUser', () => {
     expect(exec.calls[0].params).toContain('user-1');
   });
 });
+
+describe('admin password warning helpers', () => {
+  test('upsertAdminPasswordWarning inserts a deterministic unread warning', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    const result = await notificationsRepo.upsertAdminPasswordWarning('admin-1', testDb);
+
+    expect(result).toBeUndefined();
+    expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict');
+    expect(exec.calls[0].params).toContain(
+      notificationsRepo.ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+    );
+    expect(exec.calls[0].params).toContain(notificationsRepo.ADMIN_PASSWORD_WARNING_TYPE);
+    expect(exec.calls[0].params).toContain('admin-1');
+    expect(exec.calls[0].params).toContain(false);
+  });
+
+  test('deleteAdminPasswordWarning deletes by deterministic id', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    const result = await notificationsRepo.deleteAdminPasswordWarning(testDb);
+
+    expect(result).toBeUndefined();
+    expect(exec.calls[0].params).toContain(
+      notificationsRepo.ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+    );
+  });
+});

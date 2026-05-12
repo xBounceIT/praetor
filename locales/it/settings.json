@@ -18,13 +18,25 @@
   },
   "appearance": {
     "title": "Aspetto",
-    "default": {
-      "name": "Default",
-      "description": "L'esperienza classica di Praetor con branding blu ardesia. Professionale e distinta."
+    "light": {
+      "name": "Chiaro",
+      "description": "Usa la modalita chiara per i componenti shadcn."
     },
-    "tempo": {
-      "name": "Tempo",
-      "description": "Un tema indaco vibrante. Moderno, energico e pulito."
+    "dark": {
+      "name": "Scuro",
+      "description": "Usa la modalita scura per i componenti shadcn."
+    },
+    "zebra": {
+      "name": "Zebra",
+      "description": "Usa la modalita chiara con una barra laterale scura."
+    },
+    "praetor": {
+      "name": "Praetor",
+      "description": "Usa la modalita chiara con una barra laterale scura color Praetor."
+    },
+    "auto": {
+      "name": "Automatico",
+      "description": "Segue automaticamente il tema del browser o del sistema operativo."
     }
   },
   "password": {
@@ -38,6 +50,54 @@
     "passwordsDoNotMatch": "Le nuove password non corrispondono",
     "passwordMinLength": "La nuova password deve avere almeno 8 caratteri",
     "incorrectPassword": "Password attuale non corretta"
+  },
+  "mcp": {
+    "title": "Token MCP",
+    "urlLabel": "URL server MCP",
+    "urlDescription": "Usa questo endpoint Streamable HTTP quando aggiungi Praetor a un client MCP esterno.",
+    "copyUrl": "Copia URL",
+    "promptLabel": "Prompt di configurazione agente",
+    "promptDescription": "Crea un token, poi incolla questo prompt in un agente AI per configurare Praetor automaticamente.",
+    "copyPrompt": "Copia prompt",
+    "nameLabel": "Nome Token",
+    "namePlaceholder": "Claude Desktop, Codex o un altro agente",
+    "create": "Crea Token",
+    "copy": "Copia",
+    "revoke": "Revoca",
+    "revokeDialogTitle": "Revocare il token MCP?",
+    "revokeDialogDescription": "Questa operazione disabilita subito {{name}}. Gli agenti che usano questo token perderanno l'accesso a Praetor.",
+    "revokeConfirm": "Revoca token",
+    "loading": "Caricamento token MCP...",
+    "empty": "Nessun token MCP attivo.",
+    "created": "Creato",
+    "lastUsed": "Ultimo uso",
+    "rawTokenTitle": "Copia subito questo token",
+    "rawTokenDescription": "Praetor archivia solo un hash e non potrà mostrare di nuovo questo token.",
+    "loadFailed": "Impossibile caricare i token MCP",
+    "createFailed": "Impossibile creare il token MCP",
+    "revokeFailed": "Impossibile revocare il token MCP"
+  },
+  "security": {
+    "title": "Sicurezza",
+    "tokenLoadFailed": "Impossibile caricare il token di accesso personale",
+    "tokenRenewFailed": "Impossibile rinnovare il token di accesso personale",
+    "copyFailed": "Impossibile copiare il token",
+    "neverUsed": "Mai usato",
+    "personalAccessToken": {
+      "title": "Token di Accesso Personale",
+      "description": "Usa questo token con l'API per agire come il tuo utente ed ereditare i tuoi permessi correnti.",
+      "tokenLabel": "Token API",
+      "loading": "Caricamento token...",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "renew": "Rinnova token",
+      "renewing": "Rinnovo...",
+      "visibleOnce": "Copia ora questo token. Non verra mostrato di nuovo dopo aver lasciato questa pagina.",
+      "masked": "Il token completo e nascosto. Rinnovalo per generarne e copiarne uno nuovo.",
+      "createdAt": "Creato",
+      "updatedAt": "Ultimo rinnovo",
+      "lastUsedAt": "Ultimo utilizzo"
+    }
   },
   "general": {
     "title": "Impostazioni Generali",
