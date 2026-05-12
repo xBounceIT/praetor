@@ -87,7 +87,10 @@ import {
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
-import { clearStaleModuleScopedState } from './utils/moduleScopedState';
+import {
+  clearStaleModuleScopedState,
+  getStaleModulesAfterNavigation,
+} from './utils/moduleScopedState';
 import {
   buildPermission,
   equivalentPermissionsFor,
@@ -640,6 +643,7 @@ const App: React.FC = () => {
     isModuleLoading,
     loadDatasets,
     markModuleLoaded,
+    invalidateModules,
     recordFailures,
     reset: resetModuleLoader,
   } = useModuleLoader();
@@ -1077,12 +1081,13 @@ const App: React.FC = () => {
     if (!currentUser) return;
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
-    if (!module || module === 'settings') return;
+    if (!module) return;
     if (loadedModules.has(module)) return;
 
     // Clear module-scoped arrays the incoming module isn't going to refresh,
     // so leftover data from a previously-visited module doesn't leak into the
-    // new UI before the module's own datasets load.
+    // new UI before the module's own datasets load. Runs for settings too —
+    // settings has no datasets but still represents a module-scope transition.
     clearStaleModuleScopedState(module, {
       clients: () => setClients([]),
       suppliers: () => setSuppliers([]),
@@ -1103,6 +1108,17 @@ const App: React.FC = () => {
       workUnits: () => setWorkUnits([]),
       users: () => setUsers([]),
     });
+
+    // Drop the previously-visited modules from the loaded set so that revisiting
+    // them refetches instead of showing the empty arrays we just cleared.
+    invalidateModules(getStaleModulesAfterNavigation(module));
+
+    if (module === 'settings') {
+      // Settings has no datasets to load; mark it loaded so we don't re-clear
+      // and re-invalidate on every render while the user is on this view.
+      markModuleLoaded(module);
+      return;
+    }
 
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
@@ -1610,6 +1626,7 @@ const App: React.FC = () => {
     loadedModules,
     loadDatasets,
     markModuleLoaded,
+    invalidateModules,
     recordFailures,
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,

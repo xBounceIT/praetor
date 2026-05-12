@@ -3,6 +3,7 @@ import {
   ALL_MODULE_SCOPED_KEYS,
   clearStaleModuleScopedState,
   getStaleModuleScopedKeys,
+  getStaleModulesAfterNavigation,
   type ModuleScopedStateKey,
 } from '../../utils/moduleScopedState';
 
@@ -162,6 +163,50 @@ describe('moduleScopedState', () => {
         'supplierQuotes',
       ];
       expect([...cleared].sort()).toEqual([...expected].sort());
+    });
+  });
+
+  describe('getStaleModulesAfterNavigation', () => {
+    test('returns empty array for null module', () => {
+      expect(getStaleModulesAfterNavigation(null)).toEqual([]);
+    });
+
+    test('navigating to reports stales every module with owned state', () => {
+      // Reports owns nothing, so any module that owned state has its data
+      // cleared and must be re-fetched on revisit.
+      const stale = getStaleModulesAfterNavigation('reports');
+      expect(stale).toContain('timesheets');
+      expect(stale).toContain('crm');
+      expect(stale).toContain('sales');
+      expect(stale).toContain('accounting');
+      expect(stale).toContain('catalog');
+      expect(stale).toContain('projects');
+      expect(stale).toContain('suppliers');
+      expect(stale).toContain('hr');
+      expect(stale).toContain('administration');
+      // Modules without owned state are never stale (nothing to clear).
+      expect(stale).not.toContain('reports');
+      expect(stale).not.toContain('settings');
+    });
+
+    test('navigating from CRM to sales does not stale CRM (shared keys preserved)', () => {
+      // CRM owns clients+suppliers; sales also owns clients+suppliers, so
+      // CRM's data is not cleared and CRM should not be invalidated.
+      const stale = getStaleModulesAfterNavigation('sales');
+      expect(stale).not.toContain('crm');
+    });
+
+    test('navigating from timesheets to CRM stales timesheets', () => {
+      // CRM owns only clients+suppliers; timesheets owns entries+clients+
+      // projects+projectTasks+users — its non-overlapping keys get cleared.
+      const stale = getStaleModulesAfterNavigation('crm');
+      expect(stale).toContain('timesheets');
+      // CRM itself should never appear.
+      expect(stale).not.toContain('crm');
+    });
+
+    test('returns empty for unknown module', () => {
+      expect(getStaleModulesAfterNavigation('does-not-exist')).toEqual([]);
     });
   });
 });

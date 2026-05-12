@@ -42,8 +42,9 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
 ];
 
 // Per-module: which state keys are loaded/owned by that module.
-// If a module doesn't appear here, no module-scoped state is associated
-// with it (e.g. reports, settings, administration is users-only).
+// Modules present with an empty array (e.g. reports, settings) own no
+// module-scoped state — entering them stales every leftover key.
+// A module not listed here returns no stale keys (defensive default).
 const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   timesheets: ['entries', 'clients', 'projects', 'projectTasks', 'users'],
   hr: ['users', 'workUnits', 'clients', 'projects', 'projectTasks'],
@@ -84,6 +85,31 @@ export function getStaleModuleScopedKeys(incomingModule: string | null): ModuleS
 }
 
 export type ModuleScopedStateSetters = Partial<Record<ModuleScopedStateKey, () => void>>;
+
+/**
+ * Returns the set of previously-visited module names whose owned state was
+ * cleared by navigating to `incomingModule`. A module is stale if it has at
+ * least one owned key that's NOT also owned by `incomingModule`. Used by
+ * App.tsx to invalidate those modules' "loaded" flag so revisiting refetches
+ * instead of showing an empty UI.
+ */
+export function getStaleModulesAfterNavigation(incomingModule: string | null): string[] {
+  if (!incomingModule) return [];
+  const incomingOwned = MODULE_OWNED_KEYS[incomingModule];
+  // Defensive: an unknown module can't be reasoned about, so report no stale
+  // modules rather than invalidate everything. Mirrors getStaleModuleScopedKeys.
+  if (!incomingOwned) return [];
+  const incomingOwnedSet = new Set<ModuleScopedStateKey>(incomingOwned);
+  const stale: string[] = [];
+  for (const [moduleName, ownedKeys] of Object.entries(MODULE_OWNED_KEYS)) {
+    if (moduleName === incomingModule) continue;
+    if (ownedKeys.length === 0) continue;
+    if (ownedKeys.some((key) => !incomingOwnedSet.has(key))) {
+      stale.push(moduleName);
+    }
+  }
+  return stale;
+}
 
 /**
  * Invokes the empty-array setters for every state key that should be cleared
