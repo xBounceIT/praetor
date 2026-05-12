@@ -654,17 +654,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
       {activeTab === 'security' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
-                  <Lock aria-hidden="true" className="size-4" />
-                </span>
-                {t('password.title')}
-              </CardTitle>
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="flex flex-row items-center gap-3 border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <Lock aria-hidden="true" className="size-4 text-praetor" />
+              <CardTitle className="text-base">{t('password.title')}</CardTitle>
             </CardHeader>
             <form onSubmit={handlePasswordUpdate}>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 p-6">
                 {passwordError && (
                   <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
                     <AlertCircle aria-hidden="true" className="size-4" />
@@ -714,7 +710,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   </Field>
                 </div>
               </CardContent>
-              <CardFooter className="justify-end border-t pt-6">
+              <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
                 {(() => {
                   const { Icon, iconClass, label } = isSavingPassword
                     ? { Icon: Loader2, iconClass: 'animate-spin', label: t('password.updating') }
@@ -741,17 +737,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             </form>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
-                  <Shield aria-hidden="true" className="size-4" />
-                </span>
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <Shield aria-hidden="true" className="size-4 text-praetor" />
                 {t('security.personalAccessToken.title')}
               </CardTitle>
-              <CardDescription className="pl-12">
-                {t('security.personalAccessToken.description')}
-              </CardDescription>
+              <CardDescription>{t('security.personalAccessToken.description')}</CardDescription>
               <CardAction>
                 <Button
                   type="button"
@@ -770,60 +762,56 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 </Button>
               </CardAction>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-6">
               {tokenError && (
                 <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
                   {tokenError}
                 </div>
               )}
 
-              <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
-                <Field>
-                  <FieldLabel htmlFor="security-pat-token">
-                    {t('security.personalAccessToken.tokenLabel')}
-                  </FieldLabel>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="security-pat-token"
-                      value={
-                        isLoadingToken
-                          ? t('security.personalAccessToken.loading')
-                          : tokenDisplayValue
-                      }
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <CopyButton
-                      variant="secondary"
-                      value={personalAccessToken?.token ?? ''}
-                      disabled={!personalAccessToken?.token}
-                      label={t('security.personalAccessToken.copy')}
-                      copiedLabel={t('security.personalAccessToken.copied')}
-                      onCopyError={() => setTokenError(t('security.copyFailed'))}
-                    />
-                  </div>
-                  <FieldDescription>
-                    {personalAccessToken?.token
-                      ? t('security.personalAccessToken.visibleOnce')
-                      : t('security.personalAccessToken.masked')}
-                  </FieldDescription>
-                </Field>
+              <Field>
+                <FieldLabel htmlFor="security-pat-token">
+                  {t('security.personalAccessToken.tokenLabel')}
+                </FieldLabel>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="security-pat-token"
+                    value={
+                      isLoadingToken ? t('security.personalAccessToken.loading') : tokenDisplayValue
+                    }
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                  <CopyButton
+                    variant="secondary"
+                    value={personalAccessToken?.token ?? ''}
+                    disabled={!personalAccessToken?.token}
+                    label={t('security.personalAccessToken.copy')}
+                    copiedLabel={t('security.personalAccessToken.copied')}
+                    onCopyError={() => setTokenError(t('security.copyFailed'))}
+                  />
+                </div>
+                <FieldDescription>
+                  {personalAccessToken?.token
+                    ? t('security.personalAccessToken.visibleOnce')
+                    : t('security.personalAccessToken.masked')}
+                </FieldDescription>
+              </Field>
 
-                {personalAccessToken && (
-                  <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-                    {(['createdAt', 'updatedAt', 'lastUsedAt'] as const).map((field) => (
-                      <div key={field}>
-                        <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          {t(`security.personalAccessToken.${field}`)}
-                        </dt>
-                        <dd className="mt-1 text-foreground">
-                          {formatPersonalAccessTokenDate(personalAccessToken[field])}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </div>
+              {personalAccessToken && (
+                <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                  {(['createdAt', 'updatedAt', 'lastUsedAt'] as const).map((field) => (
+                    <div key={field}>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        {t(`security.personalAccessToken.${field}`)}
+                      </dt>
+                      <dd className="mt-1 text-foreground">
+                        {formatPersonalAccessTokenDate(personalAccessToken[field])}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </CardContent>
           </Card>
         </div>
