@@ -134,24 +134,48 @@ const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
   return normalizedRoles;
 };
 
-export const normalizeUser = (u: User): User => {
-  const normalizedCostPerHour = Number(u.costPerHour ?? 0);
+const assignIfPresent = <V>(
+  source: Record<string, unknown>,
+  target: Record<string, unknown>,
+  key: string,
+  derive: (raw: unknown) => V,
+): void => {
+  if (Object.hasOwn(source, key)) {
+    target[key] = derive(source[key]);
+  }
+};
 
-  return {
-    ...u,
-    id: normalizeTrimmedString(u.id),
-    name: normalizeTrimmedString(u.name),
-    role: normalizeTrimmedString(u.role),
-    avatarInitials: normalizeTrimmedString(u.avatarInitials),
-    username: normalizeTrimmedString(u.username),
-    hasTopManagerRole: !!u.hasTopManagerRole,
-    isAdminOnly: !!u.isAdminOnly,
-    email: normalizeTrimmedString(u.email) || undefined,
-    permissions: normalizeStringArray(u.permissions),
-    availableRoles: normalizeAvailableRoles(u.availableRoles),
-    costPerHour: Number.isFinite(normalizedCostPerHour) ? normalizedCostPerHour : 0,
-    employeeType: normalizeEmployeeType(u.employeeType),
-  };
+const normalizeCostPerHour = (raw: unknown): number => {
+  const n = Number(raw ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const normalizeOptionalString = (raw: unknown): string | undefined =>
+  normalizeTrimmedString(raw) || undefined;
+
+export const normalizeUser = (u: User): User => {
+  // /auth/login and /auth/me only return id, name, username, role,
+  // avatarInitials, permissions, availableRoles. Fabricating defaults for the
+  // other optional fields (costPerHour, employeeType, etc.) hides API contract
+  // drift, so we only touch fields the payload actually carries.
+  const raw = u as unknown as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...u };
+
+  result.id = normalizeTrimmedString(u.id);
+  result.name = normalizeTrimmedString(u.name);
+  result.role = normalizeTrimmedString(u.role);
+  result.avatarInitials = normalizeTrimmedString(u.avatarInitials);
+  result.username = normalizeTrimmedString(u.username);
+  result.permissions = normalizeStringArray(u.permissions);
+  result.availableRoles = normalizeAvailableRoles(u.availableRoles);
+
+  assignIfPresent(raw, result, 'hasTopManagerRole', (v) => !!v);
+  assignIfPresent(raw, result, 'isAdminOnly', (v) => !!v);
+  assignIfPresent(raw, result, 'email', normalizeOptionalString);
+  assignIfPresent(raw, result, 'costPerHour', normalizeCostPerHour);
+  assignIfPresent(raw, result, 'employeeType', normalizeEmployeeType);
+
+  return result as unknown as User;
 };
 
 export const normalizeProduct = (p: Product): Product => ({
