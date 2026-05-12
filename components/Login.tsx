@@ -132,7 +132,6 @@ const Login: React.FC<LoginProps> = ({
           </div>
         )}
 
-<<<<<<< HEAD
         {serverUnreachable && (
           <div
             role="alert"
@@ -155,7 +154,9 @@ const Login: React.FC<LoginProps> = ({
                 <i className="fa-solid fa-xmark"></i>
               </button>
             )}
-=======
+          </div>
+        )}
+
         {ssoProviders.length > 0 && (
           <div className="space-y-3 mb-5">
             {ssoProviders.map((provider) => (
@@ -177,7 +178,6 @@ const Login: React.FC<LoginProps> = ({
               <span>{t('auth:login.orPassword', 'or use password')}</span>
               <div className="h-px flex-1 bg-zinc-100"></div>
             </div>
->>>>>>> origin/main
           </div>
         )}
 

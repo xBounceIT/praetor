@@ -711,13 +711,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
-<<<<<<< HEAD
             <span className="text-xs text-slate-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt, language)}
-=======
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
->>>>>>> origin/main
             </span>
           );
         },

@@ -105,9 +105,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const refreshSupplierQuoteFlow = mock(() => Promise.resolve()) as unknown as () => Promise<void>;
 
   const handlers = makeQuoteHandlers({
-    quotes: quotes.get() as never,
-    clientQuoteFilterId: clientQuoteFilterId.get(),
-    clientOfferFilterId: clientOfferFilterId.get(),
+    getQuotes: (() => quotes.get()) as never,
+    getClientQuoteFilterId: () => clientQuoteFilterId.get(),
+    getClientOfferFilterId: () => clientOfferFilterId.get(),
     setQuotes: quotes.setter as never,
     setClientOffers: clientOffers.setter as never,
     setClientsOrders: clientsOrders.setter as never,

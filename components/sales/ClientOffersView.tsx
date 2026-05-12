@@ -53,7 +53,6 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import OfferVersionsPanel from './OfferVersionsPanel';
 
@@ -359,13 +358,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       cell: ({ row }) => {
         if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
         return (
-<<<<<<< HEAD
           <span className="text-xs text-slate-500 whitespace-nowrap">
             {formatInsertDate(row.createdAt, i18n.language)}
-=======
-          <span className="text-xs text-zinc-500 whitespace-nowrap">
-            {formatInsertDate(row.createdAt)}
->>>>>>> origin/main
           </span>
         );
       },

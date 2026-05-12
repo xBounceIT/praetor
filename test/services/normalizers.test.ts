@@ -401,15 +401,18 @@ describe('normalizeUser', () => {
     expect(normalizeUser(input).employeeType).toBe('app_user');
   });
 
-  test('handles undefined/empty optional fields safely', () => {
+  test('leaves optional fields absent when the payload omits them', () => {
+    // normalizeUser must not fabricate defaults (costPerHour=0, employeeType='app_user',
+    // etc.) for fields the API never sent — that would hide contract drift behind ghost
+    // values. Only permissions/availableRoles are always normalized (to [] / undefined).
     const result = normalizeUser(baseUser);
     expect(result.email).toBeUndefined();
     expect(result.permissions).toEqual([]);
     expect(result.availableRoles).toBeUndefined();
-    expect(result.costPerHour).toBe(0);
-    expect(result.hasTopManagerRole).toBe(false);
-    expect(result.isAdminOnly).toBe(false);
-    expect(result.employeeType).toBe('app_user');
+    expect(result.costPerHour).toBeUndefined();
+    expect(result.hasTopManagerRole).toBeUndefined();
+    expect(result.isAdminOnly).toBeUndefined();
+    expect(result.employeeType).toBeUndefined();
   });
 
   test('returns 0 for non-finite costPerHour input', () => {

@@ -13,12 +13,11 @@ export const setAuthToken = (token: string | null) => {
 
 export const getAuthToken = () => authToken;
 
-<<<<<<< HEAD
-/**
- * Error thrown by the API client. Carries the HTTP status so callers can
- * distinguish auth rejections (401/403) from transient failures (network
- * errors -> status 0, 5xx, etc).
- */
+export const getApiBase = () => API_BASE;
+
+// Error thrown by the API client. Carries the HTTP status so callers can
+// distinguish auth rejections (401/403) from transient failures (network
+// errors -> status 0, 5xx, etc).
 export class ApiError extends Error {
   public readonly status: number;
   public readonly isNetworkError: boolean;
@@ -30,9 +29,6 @@ export class ApiError extends Error {
     this.isNetworkError = isNetworkError;
   }
 }
-=======
-export const getApiBase = () => API_BASE;
->>>>>>> origin/main
 
 export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
   const headers: HeadersInit = {

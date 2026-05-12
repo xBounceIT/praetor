@@ -8,7 +8,7 @@ import { PERMISSION_DEFINITIONS, ROLE_EDITOR_EXCLUDED_MODULES } from '../utils/p
 const ROOT_DIR = process.cwd();
 const SUPPORTED_LANGUAGES = ['en', 'it'];
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
-const IGNORED_DIRECTORIES = new Set(['.git', 'dist', 'docs', 'node_modules', 'server']);
+const IGNORED_DIRECTORIES = new Set(['.claude', '.git', 'dist', 'docs', 'node_modules', 'server']);
 
 const flattenKeys = (value, prefix = '', output = new Set()) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
