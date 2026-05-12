@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { workUnitsApi } from '../services/api';
+import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
 import { buildPermission, hasPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
@@ -54,6 +54,11 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
+  // Submission guards - prevent double-submit on async mutations
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+
   const openCreateModal = () => {
     setName('');
     setSelectedManagerIds([]);
@@ -74,6 +79,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -86,12 +92,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       return;
     }
 
-    await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
-    setIsCreateModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
+      setIsCreateModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -103,9 +115,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     }
 
     if (editingUnit && name) {
-      await onUpdateWorkUnit(editingUnit.id, { name, managerIds: selectedManagerIds, description });
-      setIsEditModalOpen(false);
-      setEditingUnit(null);
+      setIsSubmitting(true);
+      try {
+        await onUpdateWorkUnit(editingUnit.id, {
+          name,
+          managerIds: selectedManagerIds,
+          description,
+        });
+        setIsEditModalOpen(false);
+        setEditingUnit(null);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -115,10 +136,14 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   };
 
   const handleDelete = async () => {
-    if (targetUnit) {
+    if (!targetUnit || isDeleting) return;
+    setIsDeleting(true);
+    try {
       await onDeleteWorkUnit(targetUnit.id);
       setIsDeleteConfirmOpen(false);
       setTargetUnit(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -137,7 +162,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   };
 
   const saveAssignments = async () => {
-    if (!targetUnit) return;
+    if (!targetUnit || isSavingAssignments) return;
+    setIsSavingAssignments(true);
     try {
       await workUnitsApi.updateUsers(targetUnit.id, assignedUserIds);
       await refreshWorkUnits(); // Update counts
@@ -146,6 +172,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     } catch (err) {
       console.error('Failed to save assignments', err);
       alert(t('hr:workUnits.failedToSaveAssignments'));
+    } finally {
+      setIsSavingAssignments(false);
     }
   };
 
@@ -397,10 +425,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={selectedManagerIds.length === 0}
+                disabled={selectedManagerIds.length === 0 || isSubmitting}
                 className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {t('hr:workUnits.createUnit')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.createUnit')}
               </button>
             </div>
           </form>
@@ -476,9 +504,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {t('hr:workUnits.saveChanges')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.saveChanges')}
               </button>
             </div>
           </form>
@@ -571,10 +600,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </button>
             <button
               onClick={saveAssignments}
-              disabled={isLoadingAssignments}
+              disabled={isLoadingAssignments || isSavingAssignments}
               className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50"
             >
-              {t('hr:workUnits.saveAssignments')}
+              {isSavingAssignments ? t('common:buttons.saving') : t('hr:workUnits.saveAssignments')}
             </button>
           </div>
         </div>
@@ -607,9 +636,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {t('hr:workUnits.yesDelete')}
+                {isDeleting ? t('common:buttons.saving') : t('hr:workUnits.yesDelete')}
               </button>
             </div>
           </div>

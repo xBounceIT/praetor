@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { tasksApi } from '../../services/api';
+import { tasksApi } from '../../services/api/tasks';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -31,9 +31,9 @@ export interface TasksViewProps {
     projectId: string,
     recurringConfig?: RecurringConfig,
     description?: string,
-  ) => void;
-  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
-  onDeleteTask: (id: string) => void;
+  ) => void | Promise<void>;
+  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+  onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;
 }
 
@@ -61,6 +61,8 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
 
@@ -456,17 +458,28 @@ const TasksView: React.FC<TasksViewProps> = ({
     ],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (editingTask && !canUpdateTasks) return;
     if (!editingTask && !canCreateTasks) return;
     if (name && projectId) {
-      if (editingTask) {
-        onUpdateTask(editingTask.id, { name, projectId, description, isDisabled: tempIsDisabled });
-      } else {
-        onAddTask(name, projectId, undefined, description);
+      setIsSubmitting(true);
+      try {
+        if (editingTask) {
+          await onUpdateTask(editingTask.id, {
+            name,
+            projectId,
+            description,
+            isDisabled: tempIsDisabled,
+          });
+        } else {
+          await onAddTask(name, projectId, undefined, description);
+        }
+        closeModal();
+      } finally {
+        setIsSubmitting(false);
       }
-      closeModal();
     }
   };
 
@@ -483,11 +496,16 @@ const TasksView: React.FC<TasksViewProps> = ({
     setIsDeleteConfirmOpen(false);
   };
 
-  const handleDelete = () => {
-    if (!canDeleteTasks) return;
+  const handleDelete = async () => {
+    if (!canDeleteTasks || isDeleting) return;
     if (editingTask) {
-      onDeleteTask(editingTask.id);
-      closeModal();
+      setIsDeleting(true);
+      try {
+        await onDeleteTask(editingTask.id);
+        closeModal();
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -687,14 +705,18 @@ const TasksView: React.FC<TasksViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!canSubmit}
+                  disabled={!canSubmit || isSubmitting}
                   className={`px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${
-                    canSubmit
+                    canSubmit && !isSubmitting
                       ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
                       : 'bg-slate-300 shadow-none cursor-not-allowed'
                   }`}
                 >
-                  {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
+                  {isSubmitting
+                    ? t('common:buttons.saving')
+                    : editingTask
+                      ? t('projects.saveChanges')
+                      : t('tasks.addTask')}
                 </button>
               </div>
             </div>
