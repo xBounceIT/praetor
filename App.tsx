@@ -732,11 +732,13 @@ const App: React.FC = () => {
   const quotesRef = useRef(quotes);
   const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
-  useEffect(() => {
-    quotesRef.current = quotes;
-    clientQuoteFilterIdRef.current = clientQuoteFilterId;
-    clientOfferFilterIdRef.current = clientOfferFilterId;
-  }, [quotes, clientQuoteFilterId, clientOfferFilterId]);
+  // Sync in render rather than a passive effect: an in-flight promise can
+  // resume between commit and useEffect (microtask vs effect-task), reading
+  // a stale ref. React allows writing to refs during render as long as the
+  // value is deterministic in the state.
+  quotesRef.current = quotes;
+  clientQuoteFilterIdRef.current = clientQuoteFilterId;
+  clientOfferFilterIdRef.current = clientOfferFilterId;
 
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
