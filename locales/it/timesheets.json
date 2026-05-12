@@ -91,7 +91,32 @@
     "holidays": "Festività",
     "weekend": "Weekend",
     "holidayWeekend": "Festivo / Weekend",
-    "goalReached": "Obiettivo Raggiunto"
+    "goalReached": "Obiettivo Raggiunto",
+    "saturday": "Sabato",
+    "sunday": "Domenica",
+    "months": {
+      "january": "Gennaio",
+      "february": "Febbraio",
+      "march": "Marzo",
+      "april": "Aprile",
+      "may": "Maggio",
+      "june": "Giugno",
+      "july": "Luglio",
+      "august": "Agosto",
+      "september": "Settembre",
+      "october": "Ottobre",
+      "november": "Novembre",
+      "december": "Dicembre"
+    },
+    "daysShort": {
+      "mon": "Lun",
+      "tue": "Mar",
+      "wed": "Mer",
+      "thu": "Gio",
+      "fri": "Ven",
+      "sat": "Sab",
+      "sun": "Dom"
+    }
   },
   "weekly": {
     "title": "Timesheet Settimanale",

@@ -137,10 +137,26 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
+<<<<<<< HEAD
+  const { t, i18n } = useTranslation(['projects', 'common', 'form']);
+  const canCreateProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'create'),
+  );
+  const canUpdateProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'update'),
+  );
+  const canDeleteProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'delete'),
+  );
+=======
   const { t } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'create');
   const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
   const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
+>>>>>>> origin/main
   const canManageAssignments = hasPermission(
     permissions,
     buildPermission('projects.assignments', 'update'),
@@ -1361,8 +1377,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               id: 'createdAt',
               accessorFn: (row) => row.createdAt ?? 0,
               cell: ({ row }) => (
+<<<<<<< HEAD
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
+=======
                 <span className="text-xs text-zinc-500 whitespace-nowrap">
                   {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
+>>>>>>> origin/main
                 </span>
               ),
             },

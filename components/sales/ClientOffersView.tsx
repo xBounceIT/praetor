@@ -359,15 +359,20 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       cell: ({ row }) => {
         if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
         return (
+<<<<<<< HEAD
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {formatInsertDate(row.createdAt, i18n.language)}
+=======
           <span className="text-xs text-zinc-500 whitespace-nowrap">
             {formatInsertDate(row.createdAt)}
+>>>>>>> origin/main
           </span>
         );
       },
       filterFormat: (value) => {
         const timestamp = typeof value === 'number' ? value : Number(value);
         if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-        return formatInsertDate(timestamp);
+        return formatInsertDate(timestamp, i18n.language);
       },
     },
     {

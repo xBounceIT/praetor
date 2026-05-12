@@ -154,13 +154,33 @@ describe('formatInsertDate', () => {
     expect(formatInsertDate(Number.NaN)).toBe('-');
   });
 
-  test('formats a valid timestamp as DD/MM/YYYY', () => {
+  test('formats a valid timestamp using it-IT (DD/MM/YYYY)', () => {
     const ts = new Date(2026, 4, 15).getTime();
-    expect(formatInsertDate(ts)).toBe('15/05/2026');
+    expect(formatInsertDate(ts, 'it-IT')).toBe('15/05/2026');
   });
 
-  test('zero-pads single-digit days/months', () => {
+  test('formats a valid timestamp using en-US (MM/DD/YYYY)', () => {
+    const ts = new Date(2026, 4, 15).getTime();
+    expect(formatInsertDate(ts, 'en-US')).toBe('05/15/2026');
+  });
+
+  test('zero-pads single-digit days/months in it-IT', () => {
     const ts = new Date(2026, 0, 5).getTime();
-    expect(formatInsertDate(ts)).toBe('05/01/2026');
+    expect(formatInsertDate(ts, 'it-IT')).toBe('05/01/2026');
+  });
+
+  test('zero-pads single-digit days/months in en-US', () => {
+    const ts = new Date(2026, 0, 5).getTime();
+    expect(formatInsertDate(ts, 'en-US')).toBe('01/05/2026');
+  });
+
+  test('without a locale, falls back to the runtime default and returns a parseable date', () => {
+    const ts = new Date(2026, 4, 15).getTime();
+    const formatted = formatInsertDate(ts);
+    // The exact format depends on the runtime, but every supported short-date
+    // format for May 15 2026 contains those three numbers.
+    expect(formatted).toMatch(/15/);
+    expect(formatted).toMatch(/05|5/);
+    expect(formatted).toMatch(/2026/);
   });
 });

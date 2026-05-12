@@ -53,17 +53,26 @@ export const isDateOnlyAfterToday = (
 ): boolean => normalizeDateOnlyString(dateOnly) > normalizeDateOnlyString(today);
 
 /**
- * Formats a Unix timestamp (milliseconds) to a DD/MM/YYYY date string.
+ * Formats a Unix timestamp (milliseconds) as a localized short date.
  * Returns '-' for invalid, null, or undefined timestamps.
+ *
+ * The output respects the active locale's short-date conventions (e.g.
+ * `15/05/2026` for `it-IT`, `05/15/2026` for `en-US`). Pass `locales`
+ * explicitly to force a particular format; omit it to use the browser
+ * default — matching the behavior of `formatInsertDateTime`.
  */
-export const formatInsertDate = (timestamp: number | null | undefined): string => {
+export const formatInsertDate = (
+  timestamp: number | null | undefined,
+  locales?: string | string[],
+): string => {
   if (timestamp === null || timestamp === undefined) return '-';
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '-';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  return date.toLocaleDateString(locales, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
 };
 
 export const formatInsertDateTime = (
