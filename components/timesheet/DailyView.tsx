@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
-import { buildPermission, hasAnyPermission } from '../../utils/permissions';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
-import CustomSelect from '../shared/CustomSelect';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import SelectControl from '../shared/SelectControl';
+import { Button } from '../ui/button';
+import { Field, FieldError, FieldLabel } from '../ui/field';
+import { Input } from '../ui/input';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -69,7 +71,15 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const handleDurationChange = (value: string) => {
     setDuration(value);
-    if (errors.hours) setErrors({ ...errors, hours: '' });
+    if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
+  };
+
+  const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+
+  const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
+    handleDurationChange(rawValue.replace(',', '.'));
   };
 
   // Sync internal date when calendar selection changes
@@ -80,47 +90,100 @@ const DailyView: React.FC<DailyViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, date]);
 
-  // Init client selection when clients load
+  // Keep client selection valid when RBAC-scoped catalogs change.
   useEffect(() => {
-    if (!selectedClientId && clients.length > 0) {
+    if (clients.length === 0) {
+      if (selectedClientId !== '') setSelectedClientId('');
+      return;
+    }
+
+    if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId(clients[0].id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, selectedClientId]);
 
   // Filter projects when client changes
-  const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
+  const filteredProjects = useMemo(
+    () => projects.filter((p) => p.clientId === selectedClientId),
+    [projects, selectedClientId],
+  );
   const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
 
   // Filter tasks when project changes
-  const filteredTasks = projectTasks.filter((t) => t.projectId === selectedProjectId);
+  const filteredTasks = useMemo(
+    () => projectTasks.filter((t) => t.projectId === selectedProjectId),
+    [projectTasks, selectedProjectId],
+  );
   const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
   const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
 
-  // Auto-select first project/task when lists change
+  // Keep project/task selections valid when the selected client or scoped catalogs change.
   useEffect(() => {
-    if (filteredProjects.length > 0) {
-      if (selectedProjectId !== firstFilteredProjectId) {
-        setSelectedProjectId(firstFilteredProjectId);
+    if (filteredProjects.length === 0) {
+      if (selectedProjectId !== '') {
+        setSelectedProjectId('');
       }
-    } else if (selectedProjectId !== '') {
-      setSelectedProjectId('');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredProjects.length, firstFilteredProjectId, selectedProjectId]);
+
+    if (!filteredProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(firstFilteredProjectId);
+    }
+  }, [filteredProjects, firstFilteredProjectId, selectedProjectId]);
 
   useEffect(() => {
-    if (filteredTasks.length > 0) {
-      if (selectedTaskId !== firstFilteredTaskId) {
-        setSelectedTaskName(firstFilteredTaskName);
-        setSelectedTaskId(firstFilteredTaskId);
+    if (filteredTasks.length === 0) {
+      if (selectedTaskName === 'custom' && canCreateCustomTask && selectedProjectId !== '') {
+        return;
       }
-    } else if (selectedTaskId !== '') {
-      setSelectedTaskName('');
-      setSelectedTaskId('');
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
+        setSelectedTaskId('');
+        setSelectedTaskName('');
+      }
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredTasks.length, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
+
+    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskId,
+    selectedTaskName,
+    canCreateCustomTask,
+    selectedProjectId,
+  ]);
+
+  useEffect(() => {
+    if (selectedProjectId === '') {
+      if (selectedTaskId !== '' || selectedTaskName !== '') {
+        setSelectedTaskName('');
+        setSelectedTaskId('');
+      }
+      return;
+    }
+
+    if (selectedTaskId && !filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskName(firstFilteredTaskName);
+      setSelectedTaskId(firstFilteredTaskId);
+    }
+  }, [
+    selectedProjectId,
+    selectedTaskId,
+    filteredTasks,
+    firstFilteredTaskId,
+    firstFilteredTaskName,
+    selectedTaskName,
+  ]);
+
+  useEffect(() => {
+    if (selectedClientId === '') {
+      setSelectedProjectId('');
+    }
+  }, [selectedClientId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,7 +270,7 @@ const DailyView: React.FC<DailyViewProps> = ({
         setSelectedTaskId(task.id);
       }
     }
-    if (errors.task) setErrors({ ...errors, task: '' });
+    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
   };
 
   const isExceedingGoal = useMemo(() => {
@@ -215,10 +278,6 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (Number.isNaN(val) || val <= 0) return false;
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
-
-  const canCreateCustomTask = hasAnyPermission(permissions, [
-    buildPermission('projects.tasks', 'create'),
-  ]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));
@@ -231,18 +290,18 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+    <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-5">
       <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 leading-none mb-1">
               {t('entry.loggingFor')}
             </span>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
               <span className="text-base sm:text-lg font-black text-praetor uppercase">
                 {new Date(date).toLocaleDateString(undefined, { weekday: 'long' })}
               </span>
-              <span className="text-sm sm:text-base font-medium text-slate-400">
+              <span className="text-sm sm:text-base font-medium text-zinc-400">
                 {new Date(date).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
@@ -257,13 +316,13 @@ const DailyView: React.FC<DailyViewProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px] gap-4 items-start">
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.client')}
               options={clientOptions}
               value={selectedClientId}
               onChange={(val) => {
                 setSelectedClientId(val as string);
-                if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
               }}
               searchable={true}
               className={errors.clientId ? 'border-red-300' : ''}
@@ -274,13 +333,13 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.project')}
               options={projectOptions}
               value={selectedProjectId}
               onChange={(val) => {
                 setSelectedProjectId(val as string);
-                if (errors.projectId) setErrors({ ...errors, projectId: '' });
+                if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
               }}
               placeholder={
                 filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')
@@ -294,7 +353,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.task')}
               options={taskOptions}
               value={selectedTaskId || (selectedTaskName === 'custom' ? 'custom' : '')}
@@ -313,21 +372,20 @@ const DailyView: React.FC<DailyViewProps> = ({
             {selectedTaskName === 'custom' && canCreateCustomTask && (
               <input
                 type="text"
-                autoFocus
                 placeholder={t('entry.typeCustomTask')}
                 value={selectedTaskName === 'custom' ? '' : selectedTaskName}
                 onChange={(e) => {
                   setSelectedTaskName(e.target.value);
                   setSelectedTaskId('');
-                  if (errors.task) setErrors({ ...errors, task: '' });
+                  if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
                 }}
-                className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
+                className="mt-2 w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
               />
             )}
           </div>
 
           <div className="min-w-0">
-            <CustomSelect
+            <SelectControl
               label={t('entry.location')}
               options={[
                 { id: 'office', name: t('entry.locationTypes.office') },
@@ -340,45 +398,42 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+          <Field className="min-w-0" data-invalid={!!errors.hours}>
+            <FieldLabel htmlFor="daily-entry-hours">
               {t('entry.hours')} <span className="text-red-500">*</span>
-            </label>
-            <ValidatedNumberInput
+            </FieldLabel>
+            <Input
+              id="daily-entry-hours"
+              type="text"
+              inputMode="decimal"
+              pattern="^[0-9]*([.,][0-9]*)?$"
               value={duration}
-              onValueChange={handleDurationChange}
+              onChange={handleDurationInputChange}
               placeholder="0.0"
-              className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
+              aria-invalid={!!errors.hours}
+              className="h-9 min-h-9 max-h-9 rounded-lg py-2"
             />
-            {errors.hours && (
-              <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">
-                {errors.hours}
-              </p>
-            )}
-          </div>
+            <FieldError>{errors.hours}</FieldError>
+          </Field>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
-          <div className="min-w-0">
-            <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
-              {t('entry.notesDescription')}
-            </label>
-            <input
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="daily-entry-notes">{t('entry.notesDescription')}</FieldLabel>
+            <Input
+              id="daily-entry-notes"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+              className="h-10 rounded-lg"
             />
-          </div>
+          </Field>
 
           <div className="min-w-0 flex items-end">
-            <button
-              type="submit"
-              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
-            >
+            <Button type="submit" className="h-10 w-full rounded-lg">
               {t('entry.logTime')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -393,13 +448,13 @@ const DailyView: React.FC<DailyViewProps> = ({
 
         {selectedTaskId && (
           <div
-            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}
+            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-zinc-50 border-zinc-200' : 'bg-transparent border-transparent'}`}
           >
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setMakeRecurring(!makeRecurring)}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50'}`}
               >
                 <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
                 {t('entry.repeatTask')}
@@ -407,8 +462,8 @@ const DailyView: React.FC<DailyViewProps> = ({
 
               {makeRecurring && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
-                  <CustomSelect
+                  <div className="hidden sm:block h-4 w-px bg-zinc-200 mx-1 shrink-0"></div>
+                  <SelectControl
                     options={[
                       { id: 'daily', name: t('entry.recurrencePatterns.daily') },
                       { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
@@ -424,9 +479,9 @@ const DailyView: React.FC<DailyViewProps> = ({
                     onChange={(val) => handleRecurrenceChange(val as string)}
                     className="text-xs min-w-[120px]"
                     placeholder="Pattern..."
-                    buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
+                    buttonClassName="bg-white border border-zinc-200 text-praetor font-medium p-2 text-xs whitespace-nowrap"
                   />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                     {t('entry.until')}
                   </span>
                   <input
@@ -434,9 +489,10 @@ const DailyView: React.FC<DailyViewProps> = ({
                     value={recurrenceEndDate}
                     onChange={(e) => {
                       setRecurrenceEndDate(e.target.value);
-                      if (errors.recurrenceEndDate) setErrors({ ...errors, recurrenceEndDate: '' });
+                      if (errors.recurrenceEndDate)
+                        setErrors((prev) => ({ ...prev, recurrenceEndDate: '' }));
                     }}
-                    className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
+                    className={`text-xs bg-white border rounded-md p-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 text-praetor focus:ring-praetor'} font-medium`}
                   />
                   {errors.recurrenceEndDate && (
                     <p className="text-red-500 text-[10px] font-bold">{errors.recurrenceEndDate}</p>

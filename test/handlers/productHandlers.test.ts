@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   productsCreate: mock(
@@ -45,6 +46,7 @@ mock.module('../../services/api', () => ({
       deleteProductType: (...args: unknown[]) => apiMocks.productsDeleteProductType(...args),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
@@ -66,11 +68,15 @@ const makeStubSetter = <T>(initial: T[]) => {
 
 describe('makeProductHandlers', () => {
   beforeEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockClear());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockClear();
+    });
   });
 
   afterEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockReset());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockReset();
+    });
   });
 
   test('add appends product', async () => {

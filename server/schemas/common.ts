@@ -2,6 +2,11 @@ export const errorResponseSchema = {
   type: 'object',
   properties: {
     error: { type: 'string' },
+    // errorCode lets the client branch on machine-readable reasons (e.g.
+    // 'account_disabled' vs token-expired) without parsing free-text messages.
+    // Declared here because Fastify response serialization drops undeclared
+    // properties, so middleware that emits errorCode would otherwise lose it.
+    errorCode: { type: 'string' },
   },
   required: ['error'],
 } as const;

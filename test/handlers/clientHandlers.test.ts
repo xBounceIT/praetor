@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   clientsCreate: mock(
@@ -31,6 +32,7 @@ mock.module('../../services/api', () => ({
       deleteProfileOption: (...args: unknown[]) => apiMocks.clientsDeleteProfileOption(...args),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));

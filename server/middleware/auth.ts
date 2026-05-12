@@ -1,15 +1,83 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
-import { getRolePermissions } from '../utils/permissions.ts';
+import {
+  equivalentPermissionsFor,
+  getRolePermissions,
+  type PermissionAction,
+  type PermissionResource,
+} from '../utils/permissions.ts';
+import { hashPersonalAccessToken, isPersonalAccessToken } from '../utils/personal-access-token.ts';
+import {
+  INSECURE_DEFAULT_JWT_SECRETS,
+  isInsecureEnvValue,
+  readRequiredNonDefaultEnv,
+  TEST_JWT_SECRET,
+} from '../utils/runtimeConfig.ts';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
+const resolveJwtSecret = () => {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (
+    process.env.NODE_ENV === 'test' &&
+    (!configured || isInsecureEnvValue(configured, INSECURE_DEFAULT_JWT_SECRETS))
+  ) {
+    return TEST_JWT_SECRET;
+  }
+  return readRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS);
+};
+
+const JWT_SECRET = resolveJwtSecret();
 
 type SessionJwtPayload = JwtPayload & {
   userId: string;
   sessionStart?: number;
   activeRole?: string;
+};
+
+const loadAuthenticatedUserContext = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  userId: string,
+  activeRole?: string,
+) => {
+  const user = await usersRepo.findAuthUserById(userId);
+
+  if (!user) {
+    reply.code(401).send({ error: 'User not found' });
+    return null;
+  }
+
+  if (user.isDisabled) {
+    reply.code(403).send({ error: 'Account disabled', errorCode: 'account_disabled' });
+    return null;
+  }
+
+  const effectiveRole = activeRole ?? user.role;
+
+  // Run in parallel: this middleware fires on every authenticated request and the success path
+  // (user has the role) is the hot case. The wasted permissions lookup on a 403 is cheap
+  // compared to the latency saved on the 99%+ success path.
+  const [hasRole, permissions] = await Promise.all([
+    rolesRepo.userHasRole(user.id, effectiveRole),
+    getRolePermissions(effectiveRole),
+  ]);
+  if (!hasRole) {
+    reply.code(403).send({ error: 'Invalid or expired token' });
+    return null;
+  }
+
+  request.user = {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    role: effectiveRole,
+    avatarInitials: user.avatarInitials,
+    permissions,
+  };
+
+  return { effectiveRole };
 };
 
 export const authenticateToken = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -18,6 +86,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
   if (!token) {
     return reply.code(401).send({ error: 'Access token required' });
+  }
+
+  if (isPersonalAccessToken(token)) {
+    return authenticatePersonalAccessToken(request, reply, token);
   }
 
   try {
@@ -32,43 +104,47 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       return reply.code(401).send({ error: 'Session expired (max duration exceeded)' });
     }
 
-    request.auth = { userId: decoded.userId, sessionStart };
+    request.auth = { userId: decoded.userId, sessionStart, source: 'session' };
 
-    const user = await usersRepo.findAuthUserById(decoded.userId);
-
-    if (!user) {
-      return reply.code(401).send({ error: 'User not found' });
-    }
-
-    if (user.isDisabled) {
-      return reply.code(401).send({ error: 'Invalid or expired token' });
-    }
-
-    const effectiveRole = decoded.activeRole ?? user.role;
-
-    // Run in parallel: this middleware fires on every authenticated request and the success path
-    // (user has the role) is the hot case. The wasted permissions lookup on a 403 is cheap
-    // compared to the latency saved on the 99%+ success path.
-    const [hasRole, permissions] = await Promise.all([
-      rolesRepo.userHasRole(user.id, effectiveRole),
-      getRolePermissions(effectiveRole),
-    ]);
-    if (!hasRole) {
-      return reply.code(403).send({ error: 'Invalid or expired token' });
-    }
-    request.user = {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      role: effectiveRole,
-      avatarInitials: user.avatarInitials,
-      permissions,
-    };
+    const userContext = await loadAuthenticatedUserContext(
+      request,
+      reply,
+      decoded.userId,
+      decoded.activeRole,
+    );
+    if (!userContext) return;
 
     // Sliding window: Issue new token with same sessionStart
     // This resets the 30m idle timer but keeps the 8h max session limit
-    const newToken = generateToken(decoded.userId, sessionStart, effectiveRole);
+    const newToken = generateToken(decoded.userId, sessionStart, userContext.effectiveRole);
     reply.header('x-auth-token', newToken);
+  } catch {
+    return reply.code(403).send({ error: 'Invalid or expired token' });
+  }
+};
+
+const authenticatePersonalAccessToken = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  token: string,
+) => {
+  try {
+    const tokenHash = hashPersonalAccessToken(token);
+    const tokenRecord = await personalAccessTokensRepo.findByTokenHash(tokenHash);
+    if (!tokenRecord) {
+      return reply.code(403).send({ error: 'Invalid or expired token' });
+    }
+
+    request.auth = { userId: tokenRecord.userId, source: 'personalAccessToken' };
+
+    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId);
+    if (!userContext) return;
+
+    try {
+      await personalAccessTokensRepo.markUsed(tokenHash);
+    } catch (err) {
+      request.log?.warn({ err }, 'Failed to update personal access token last-used timestamp');
+    }
   } catch {
     return reply.code(403).send({ error: 'Invalid or expired token' });
   }
@@ -114,6 +190,9 @@ export const requireAnyPermission = (...permissions: string[]) => {
   };
 };
 
+export const requireScopedPermission = (resource: PermissionResource, action: PermissionAction) =>
+  requireAnyPermission(...equivalentPermissionsFor(resource, action));
+
 export const generateToken = (
   userId: string,
   sessionStart: number = Date.now(),
@@ -129,5 +208,6 @@ export default {
   requireRole,
   requirePermission,
   requireAnyPermission,
+  requireScopedPermission,
   generateToken,
 };

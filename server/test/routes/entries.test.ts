@@ -2,8 +2,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
+import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -20,6 +22,8 @@ const permissionsSnap = { ...realPermissions };
 const entriesRepoSnap = { ...realEntriesRepo };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
+const projectsRepoSnap = { ...realProjectsRepo };
+const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 
 // Auth-middleware deps (real authenticateToken runs)
@@ -43,6 +47,10 @@ const entriesFindContextMock = mock();
 const entriesFindOwnerMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
+const projectsFindClientIdMock = mock();
+const isClientAssignedToUserMock = mock();
+const isProjectAssignedToUserMock = mock();
+const isTaskAssignedToUserMock = mock();
 
 let entriesRoutePlugin: FastifyPluginAsync;
 
@@ -83,6 +91,16 @@ beforeAll(async () => {
     ...tasksRepoSnap,
     findIdByProjectAndName: findIdByProjectAndNameMock,
   }));
+  mock.module('../../repositories/projectsRepo.ts', () => ({
+    ...projectsRepoSnap,
+    findClientId: projectsFindClientIdMock,
+  }));
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
+    ...userAssignmentsRepoSnap,
+    isClientAssignedToUser: isClientAssignedToUserMock,
+    isProjectAssignedToUser: isProjectAssignedToUserMock,
+    isTaskAssignedToUser: isTaskAssignedToUserMock,
+  }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsRepoSnap,
     isUserManagedBy: isUserManagedByMock,
@@ -99,6 +117,8 @@ afterAll(() => {
   mock.module('../../repositories/entriesRepo.ts', () => entriesRepoSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
+  mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
 });
 
@@ -123,7 +143,7 @@ const TRACKER_ALL_PERMS = [...TRACKER_PERMS, 'timesheets.tracker_all.view'];
 const SAMPLE_ENTRY = {
   id: 'te-1',
   userId: 'u1',
-  date: '2025-06-02', // Monday — not a weekend
+  date: '2025-06-02', // Monday - not a weekend
   clientId: 'c1',
   clientName: 'Client',
   projectId: 'p1',
@@ -156,6 +176,10 @@ const allMocks = [
   entriesFindContextMock,
   entriesFindOwnerMock,
   entriesDecodeCursorMock,
+  projectsFindClientIdMock,
+  isClientAssignedToUserMock,
+  isProjectAssignedToUserMock,
+  isTaskAssignedToUserMock,
 ];
 
 let testApp: FastifyInstance;
@@ -168,6 +192,10 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TRACKER_PERMS);
+  projectsFindClientIdMock.mockResolvedValue('c1');
+  isClientAssignedToUserMock.mockResolvedValue(true);
+  isProjectAssignedToUserMock.mockResolvedValue(true);
+  isTaskAssignedToUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(entriesRoutePlugin, '/api/entries');
 });
@@ -456,6 +484,55 @@ describe('POST /api/entries', () => {
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
     expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
   });
+
+  test('400 when project belongs to a different client', async () => {
+    projectsFindClientIdMock.mockResolvedValue('other-client');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Project does not belong to the selected client',
+    });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when project does not exist', async () => {
+    projectsFindClientIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project not found' });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when target user is not assigned to submitted project scope', async () => {
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Not authorized to create entries for this client, project, or task',
+    });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/entries/:id', () => {
@@ -578,6 +655,92 @@ describe('PUT /api/entries/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
   });
+
+  test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBeUndefined();
+  });
+
+  test('200 whitespace-only location is treated as untouched', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: '   ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBeUndefined();
+  });
+
+  test('200 valid location string is forwarded to repo', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: 'office' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBe('office');
+  });
+
+  test('400 unknown location value (rejected before repo call)', async () => {
+    // Previously a non-empty invalid value passed through to the repo and
+    // bubbled up as a 500 from the DB CHECK constraint. Now caught at the
+    // service layer.
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: 'foo' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('Invalid location');
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/entries/:id', () => {
@@ -647,7 +810,10 @@ describe('DELETE /api/entries (bulk)', () => {
   });
 
   test('200 admin scope deletes across all users', async () => {
-    getRolePermissionsMock.mockResolvedValue(TRACKER_ALL_PERMS);
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_ALL_PERMS,
+      'timesheets.tracker_all.delete',
+    ]);
     entriesBulkDeleteMock.mockResolvedValue(7);
 
     const res = await testApp.inject({
@@ -697,5 +863,47 @@ describe('DELETE /api/entries (bulk)', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
+  });
+
+  test('200 with only timesheets.tracker_all.delete widens scope across users', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.delete']);
+    entriesBulkDeleteMock.mockResolvedValue(5);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 5 entries' });
+    expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        task: 'Dev',
+        restrictToManagerScopeOf: undefined,
+      }),
+    );
+  });
+
+  test('200 with only timesheets.recurring.delete stays restricted to actor', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.recurring.delete']);
+    entriesBulkDeleteMock.mockResolvedValue(2);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 2 entries' });
+    expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        task: 'Dev',
+        restrictToManagerScopeOf: 'u1',
+      }),
+    );
   });
 });

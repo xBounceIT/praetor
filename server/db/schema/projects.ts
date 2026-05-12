@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, index, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
 
@@ -20,8 +20,30 @@ export const projects = pgTable(
     // import from sales. `projectsRepo` still keys off the constraint name when handling FK
     // violation errors.
     orderId: varchar('order_id', { length: 100 }),
+    billingType: varchar('billing_type', { length: 30 })
+      .$type<'retainer' | 'time_and_materials'>()
+      .notNull()
+      .default('time_and_materials'),
+    billingFrequency: varchar('billing_frequency', { length: 20 })
+      .$type<'monthly' | 'one_time'>()
+      .notNull()
+      .default('monthly'),
   },
-  (table) => [index('idx_projects_client_id').on(table.clientId)],
+  (table) => [
+    index('idx_projects_client_id').on(table.clientId),
+    check(
+      'projects_billing_type_check',
+      sql`${table.billingType} IN ('retainer', 'time_and_materials')`,
+    ),
+    check(
+      'projects_billing_frequency_check',
+      sql`${table.billingFrequency} IN ('monthly', 'one_time')`,
+    ),
+    check(
+      'projects_time_and_materials_monthly_check',
+      sql`${table.billingType} != 'time_and_materials' OR ${table.billingFrequency} = 'monthly'`,
+    ),
+  ],
 );
 
 export const userProjects = defineUserAssignmentTable({

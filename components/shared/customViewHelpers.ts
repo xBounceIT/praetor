@@ -139,7 +139,7 @@ export const computeViewApplication = (
 };
 
 // Drop above the target. After splice removes the source, a forward move's
-// target index has shifted down by one, so subtract — this matches the
+// target index has shifted down by one, so subtract - this matches the
 // border-t indicator's "drop above" semantics for both upward and downward
 // drags. Returns the same reference when the move is a no-op (same index, or
 // out-of-bounds), so callers can short-circuit re-renders.

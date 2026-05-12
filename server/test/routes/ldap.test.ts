@@ -32,6 +32,7 @@ const findExistingIdsMock = mock();
 const logAuditMock = mock(async () => undefined);
 const invalidateConfigMock = mock();
 const syncUsersMock = mock();
+const authenticateWithProfileMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -61,7 +62,11 @@ beforeAll(async () => {
     logAudit: logAuditMock,
   }));
   mock.module('../../services/ldap.ts', () => ({
-    default: { invalidateConfig: invalidateConfigMock, syncUsers: syncUsersMock },
+    default: {
+      authenticateWithProfile: authenticateWithProfileMock,
+      invalidateConfig: invalidateConfigMock,
+      syncUsers: syncUsersMock,
+    },
   }));
 
   routePlugin = (await import('../../routes/ldap.ts')).default as FastifyPluginAsync;
@@ -109,6 +114,7 @@ const allMocks = [
   logAuditMock,
   invalidateConfigMock,
   syncUsersMock,
+  authenticateWithProfileMock,
 ];
 
 let testApp: FastifyInstance;
@@ -148,6 +154,11 @@ beforeEach(async () => {
   });
   logAuditMock.mockImplementation(async () => undefined);
   invalidateConfigMock.mockImplementation(() => {});
+  authenticateWithProfileMock.mockResolvedValue({
+    authenticated: false,
+    groups: [],
+    roleIds: ['user'],
+  });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ldap');
 });
@@ -162,6 +173,14 @@ const putConfig = (payload: object): Promise<LightMyRequestResponse> =>
   testApp.inject({
     method: 'PUT',
     url: '/api/ldap/config',
+    headers: { ...authHeader(), 'content-type': 'application/json' },
+    payload,
+  });
+
+const testLdapAuth = (payload: object): Promise<LightMyRequestResponse> =>
+  testApp.inject({
+    method: 'POST',
+    url: '/api/ldap/test',
     headers: { ...authHeader(), 'content-type': 'application/json' },
     payload,
   });
@@ -190,7 +209,7 @@ describe('GET /api/ldap/config', () => {
   });
 });
 
-describe('PUT /api/ldap/config — tlsCaCertificate', () => {
+describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('omitting tlsCaCertificate does not pass the key to ldapRepo.update', async () => {
     const response = await putConfig({ enabled: false });
     expect(response.statusCode).toBe(200);
@@ -264,5 +283,57 @@ describe('PUT /api/ldap/config — tlsCaCertificate', () => {
     expect(logAuditMock).toHaveBeenCalledTimes(1);
     const calls = logAuditMock.mock.calls as unknown as { details?: unknown }[][];
     expect(JSON.stringify(calls[0][0].details)).not.toContain('BEGIN CERTIFICATE');
+  });
+});
+
+describe('POST /api/ldap/test', () => {
+  test('returns the server LDAP authentication profile for valid credentials', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      roleIds: ['admin'],
+    });
+
+    const response = await testLdapAuth({ username: ' alice ', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    expect(authenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
+    expect(JSON.parse(response.body)).toEqual({
+      success: true,
+      authenticated: true,
+      username: 'alice',
+      message: 'LDAP authentication succeeded',
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      roleIds: ['admin'],
+    });
+  });
+
+  test('returns an unsuccessful server response without groups or roles for failed auth', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      roleIds: ['admin'],
+    });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'wrong' });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      success: false,
+      authenticated: false,
+      username: 'alice',
+      groups: [],
+      roleIds: [],
+    });
+  });
+
+  test('rejects blank tester credentials before reaching LDAP', async () => {
+    const response = await testLdapAuth({ username: '   ', password: 'secret' });
+
+    expect(response.statusCode).toBe(400);
+    expect(authenticateWithProfileMock).not.toHaveBeenCalled();
+    expect(JSON.parse(response.body).error).toMatch(/username/i);
   });
 });

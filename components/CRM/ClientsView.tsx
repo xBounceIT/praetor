@@ -1,6 +1,11 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
   Client,
@@ -10,12 +15,21 @@ import type {
   ClientProfileOptionsByCategory,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
+import { hasScopedActionPermission } from '../../utils/permissions';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Tooltip from '../shared/Tooltip';
 
 export interface ClientsViewProps {
   clients: Client[];
@@ -169,9 +183,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   permissions,
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
-  const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
-  const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
-  const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
+  const canCreateClients = hasScopedActionPermission(permissions, 'crm.clients', 'create');
+  const canUpdateClients = hasScopedActionPermission(permissions, 'crm.clients', 'update');
+  const canDeleteClients = hasScopedActionPermission(permissions, 'crm.clients', 'delete');
 
   const { language } = i18n;
 
@@ -427,10 +441,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       newErrors.fiscalCode = t('common:validation.required');
     }
 
-    if (normalizedContacts.length === 0 || !primaryContact) {
-      newErrors.contacts = t('common:validation.required');
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -440,10 +450,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       name: trimmedName,
       type: formData.type,
       contacts: normalizedContacts,
-      contactName: primaryContact.fullName,
+      contactName: primaryContact?.fullName,
       clientCode: trimmedClientCode,
-      email: primaryContact.email?.trim() || undefined,
-      phone: primaryContact.phone?.trim() || '',
+      email: primaryContact?.email?.trim() || undefined,
+      phone: primaryContact?.phone?.trim() || undefined,
       addressCountry: formData.addressCountry?.trim() || '',
       addressState: formData.addressState?.trim() || '',
       addressCap: formData.addressCap?.trim() || '',
@@ -596,26 +606,26 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorKey: 'fullName',
         disableFiltering: true,
         cell: ({ row }) => (
-          <span className="font-semibold text-slate-700">{row.fullName || '-'}</span>
+          <span className="font-semibold text-zinc-700">{row.fullName || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.role'),
         accessorKey: 'role',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.role || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.role || '-'}</span>,
       },
       {
         header: t('crm:clients.email'),
         accessorKey: 'email',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.email || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.email || '-'}</span>,
       },
       {
         header: t('crm:clients.phone'),
         accessorKey: 'phone',
         disableFiltering: true,
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.phone || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.phone || '-'}</span>,
       },
       {
         header: t('common:labels.actions'),
@@ -625,33 +635,39 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         sticky: 'right',
         cell: ({ row }) => (
           <div className="flex justify-end items-center gap-1">
-            <Tooltip label={t('common:buttons.edit')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    editContact(row.contactIndex);
-                  }}
-                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-pen"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      editContact(row.contactIndex);
+                    }}
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-pen"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip label={t('common:buttons.delete')}>
-              {() => (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeContact(row.contactIndex);
-                  }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <i className="fa-solid fa-trash"></i>
-                </button>
-              )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeContact(row.contactIndex);
+                    }}
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
             </Tooltip>
           </div>
         ),
@@ -673,7 +689,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.name'),
         accessorKey: 'name',
         cell: ({ row }) => (
-          <span className="font-semibold whitespace-nowrap text-slate-800">{row.name}</span>
+          <span className="font-semibold whitespace-nowrap text-zinc-800">{row.name}</span>
         ),
       },
       {
@@ -681,7 +697,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorKey: 'clientCode',
         cell: ({ row }) =>
           row.clientCode ? (
-            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
+            <span className="text-[10px] font-black bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">
               {row.clientCode}
             </span>
           ) : null,
@@ -692,11 +708,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorFn: (row: Client) => row.createdAt ?? 0,
         cell: ({ row }: { row: Client }) => {
           if (!row.createdAt) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
+<<<<<<< HEAD
             <span className="text-xs text-slate-500 whitespace-nowrap">
               {formatInsertDate(row.createdAt, language)}
+=======
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+>>>>>>> origin/main
             </span>
           );
         },
@@ -727,69 +748,69 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.email || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.email || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.phone || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.phone || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
         accessorFn: (row: Client) => getPrimaryTaxId(row),
         cell: ({ row }: { row: Client }) => (
-          <span className="font-mono text-xs text-slate-400">{getPrimaryTaxId(row) || '-'}</span>
+          <span className="font-mono text-xs text-zinc-400">{getPrimaryTaxId(row) || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
         cell: ({ row }) => (
-          <span className="text-xs text-slate-600">{row.officeCountRange || '-'}</span>
+          <span className="text-xs text-zinc-600">{row.officeCountRange || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.sector'),
         accessorKey: 'sector',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.sector || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.sector || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.numberOfEmployees'),
         accessorKey: 'numberOfEmployees',
         cell: ({ row }) => (
-          <span className="text-xs text-slate-600">{row.numberOfEmployees || '-'}</span>
+          <span className="text-xs text-zinc-600">{row.numberOfEmployees || '-'}</span>
         ),
       },
       {
         header: t('crm:clients.tableHeaders.revenue'),
         accessorKey: 'revenue',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.revenue || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.revenue || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.contactName'),
         accessorKey: 'contactName',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.contactName || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.contactName || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.address'),
         accessorKey: 'address',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.address || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.address || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.description'),
         accessorKey: 'description',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.description || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.description || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.atecoCode'),
         accessorKey: 'atecoCode',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.atecoCode || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.atecoCode || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.website'),
         accessorKey: 'website',
-        cell: ({ row }) => <span className="text-xs text-slate-600">{row.website || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.website || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.totalSentQuotes'),
@@ -798,10 +819,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }: { row: Client }) => {
           const value = row.totalSentQuotes;
           if (value == null || value === 0) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
-            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+            <span className="text-xs font-semibold text-zinc-700 whitespace-nowrap">
               {eurFormatter.format(value)}
             </span>
           );
@@ -814,7 +835,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }: { row: Client }) => {
           const value = row.totalAcceptedOrders;
           if (value == null || value === 0) {
-            return <span className="text-xs text-slate-400">-</span>;
+            return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
             <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
@@ -845,54 +866,63 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
             {canUpdateClients && (
-              <Tooltip label={t('common:buttons.edit')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(row);
-                    }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-pen"></i>
-                  </button>
-                )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditModal(row);
+                      }}
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-pen"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
               </Tooltip>
             )}
-            <Tooltip
-              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
-            >
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canUpdateClients) return;
-                    onUpdateClient(row.id, { isDisabled: !row.isDisabled });
-                  }}
-                  disabled={!canUpdateClients}
-                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    row.isDisabled
-                      ? 'text-praetor hover:bg-slate-100'
-                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                >
-                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
-              )}
-            </Tooltip>
-            {canDeleteClients && (
-              <Tooltip label={t('common:buttons.delete')}>
-                {() => (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      confirmDelete(row);
+                      if (!canUpdateClients) return;
+                      onUpdateClient(row.id, { isDisabled: !row.isDisabled });
                     }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={!canUpdateClients}
+                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      row.isDisabled
+                        ? 'text-praetor hover:bg-zinc-100'
+                        : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
                   >
-                    <i className="fa-solid fa-trash-can"></i>
+                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
                   </button>
-                )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
+              </TooltipContent>
+            </Tooltip>
+            {canDeleteClients && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(row);
+                      }}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -932,62 +962,54 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         onClose={() => setIsManageProfileOptionModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                <i className="fa-solid fa-gear"></i>
-              </div>
+        <ModalContent size="2xl">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-gear" aria-hidden="true"></i>
+              </span>
               {t('crm:clients.manageValuesTitle', { field: manageCategoryLabels[manageCategory] })}
-            </h3>
-            <button
-              onClick={() => setIsManageProfileOptionModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
+            </ModalTitle>
+            <ModalCloseButton onClick={() => setIsManageProfileOptionModalOpen(false)} />
+          </ModalHeader>
 
-          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
+          <ModalBody className="max-h-[60vh] space-y-4">
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+              <Field>
+                <FieldLabel htmlFor="client-profile-option-value">
                   {t('crm:clients.value')}
-                </label>
-                <input
+                </FieldLabel>
+                <Input
+                  id="client-profile-option-value"
                   type="text"
                   value={newProfileOptionValue}
                   onChange={(e) => setNewProfileOptionValue(e.target.value)}
                   placeholder={t('crm:clients.valuePlaceholder')}
-                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && void handleSaveProfileOption()}
                 />
-              </div>
+              </Field>
 
               {profileOptionError && (
-                <p className="text-red-500 text-xs font-bold">{profileOptionError}</p>
+                <FieldError className="text-xs">{profileOptionError}</FieldError>
               )}
 
               <div className="flex justify-end gap-2">
                 {editingProfileOption && (
-                  <button
-                    onClick={handleCancelProfileOptionEdit}
-                    className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-                  >
+                  <Button type="button" variant="outline" onClick={handleCancelProfileOptionEdit}>
                     {t('common:buttons.cancel')}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  type="button"
                   onClick={() => void handleSaveProfileOption()}
                   disabled={isSavingProfileOption || !newProfileOptionValue.trim()}
-                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingProfileOption
                     ? t('common:buttons.saving')
                     : editingProfileOption
                       ? t('common:buttons.update')
                       : t('common:buttons.add')}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1000,10 +1022,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 title={t('crm:clients.manageValues')}
                 data={profileOptions[manageCategory]}
                 defaultRowsPerPage={5}
-                containerClassName="shadow-none border-slate-200 rounded-2xl"
+                containerClassName="shadow-none border-zinc-200 rounded-2xl"
                 tableContainerClassName="max-h-[35vh] overflow-y-auto"
                 emptyState={
-                  <div className="text-center py-6 text-slate-500">
+                  <div className="text-center py-6 text-zinc-500">
                     <p>{t('crm:clients.noValues')}</p>
                   </div>
                 }
@@ -1012,9 +1034,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     header: t('crm:clients.value'),
                     accessorKey: 'value',
                     disableFiltering: true,
-                    cell: ({ row }) => (
-                      <span className="font-bold text-slate-700">{row.value}</span>
-                    ),
+                    cell: ({ row }) => <span className="font-bold text-zinc-700">{row.value}</span>,
                   },
                   {
                     header: t('crm:clients.usedByClients'),
@@ -1022,7 +1042,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     accessorFn: (row) => row.usageCount,
                     disableFiltering: true,
                     cell: ({ row }) => (
-                      <span className="text-xs text-slate-400">{row.usageCount}</span>
+                      <span className="text-xs text-zinc-400">{row.usageCount}</span>
                     ),
                   },
                   {
@@ -1034,40 +1054,42 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       const isDeleteBlocked = option.usageCount > 0;
                       return (
                         <div className="flex items-center gap-1">
-                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
-                            {() => (
-                              <button
-                                onClick={() => handleEditProfileOption(option)}
-                                className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => handleEditProfileOption(option)}
+                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                                >
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip
-                            label={
-                              isDeleteBlocked
+                          <Tooltip disabled={!isDeleteBlocked}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <button
+                                  onClick={() => void handleDeleteProfileOption(option)}
+                                  disabled={isDeleteBlocked}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isDeleteBlocked
+                                      ? 'text-zinc-300 cursor-not-allowed'
+                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isDeleteBlocked
                                 ? t('crm:clients.deleteProfileOptionBlocked', {
                                     count: option.usageCount,
                                   })
-                                : ''
-                            }
-                            disabled={!isDeleteBlocked}
-                            tooltipClassName="z-[80]"
-                          >
-                            {() => (
-                              <button
-                                onClick={() => void handleDeleteProfileOption(option)}
-                                disabled={isDeleteBlocked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isDeleteBlocked
-                                    ? 'text-slate-300 cursor-not-allowed'
-                                    : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
-                            )}
+                                : ''}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       );
@@ -1076,559 +1098,557 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 ]}
               />
             )}
-          </div>
-        </div>
+          </ModalBody>
+        </ModalContent>
       </Modal>
 
       <Modal isOpen={isModalOpen} onClose={handleModalClose}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
-            </h3>
-            <button
-              onClick={handleModalClose}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="6xl" className="max-h-[90vh]">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
+              </ModalTitle>
+              <ModalCloseButton onClick={handleModalClose} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.identifyingData')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.clientCode')} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.clientCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, clientCode: e.target.value });
-                      if (errors.clientCode) setErrors((prev) => ({ ...prev, clientCode: '' }));
-                    }}
-                    placeholder={t('crm:clients.clientCodePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.clientCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.clientCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.name')} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
-                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                    }}
-                    placeholder={t('crm:clients.namePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.clientType')}
-                  </label>
-                  <CustomSelect
-                    options={typeOptions}
-                    value={formData.type || 'company'}
-                    onChange={(val) =>
-                      setFormData({ ...formData, type: (val as Client['type']) || 'company' })
-                    }
-                    searchable={false}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.contacts')}
-              </h4>
-
-              {errors.contacts && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold">
-                  {errors.contacts}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.website')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    placeholder={t('crm:clients.websitePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.country')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressCountry}
-                    onChange={(e) => setFormData({ ...formData, addressCountry: e.target.value })}
-                    placeholder={t('crm:clients.countryPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.state')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressState}
-                    onChange={(e) => setFormData({ ...formData, addressState: e.target.value })}
-                    placeholder={t('crm:clients.statePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.cap')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressCap}
-                    onChange={(e) => setFormData({ ...formData, addressCap: e.target.value })}
-                    placeholder={t('crm:clients.capPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.province')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressProvince}
-                    onChange={(e) => setFormData({ ...formData, addressProvince: e.target.value })}
-                    placeholder={t('crm:clients.provincePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.civicNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressCivicNumber}
-                    onChange={(e) =>
-                      setFormData({ ...formData, addressCivicNumber: e.target.value })
-                    }
-                    placeholder={t('crm:clients.civicNumberPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.address')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.addressLine}
-                    onChange={(e) => setFormData({ ...formData, addressLine: e.target.value })}
-                    placeholder={t('crm:clients.addressPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-2">
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={() => setContactsExpanded((prev) => !prev)}
-                    className="text-sm font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-2"
-                  >
-                    <i
-                      className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
-                    ></i>
-                    {t('crm:clients.contactsList')} ({contactTableRows.length})
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={addContact}
-                    className="px-3 py-2 text-xs font-bold bg-slate-100 text-praetor rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2"
-                  >
-                    <i className="fa-solid fa-plus"></i>
-                    {t('crm:clients.addContact')}
-                  </button>
-                </div>
-
-                {contactsExpanded && (
-                  <div className="space-y-4">
-                    {contactDraft && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
-                            {t('crm:clients.fullName')} <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={contactDraft.fullName}
-                            onChange={(e) => updateContactDraft('fullName', e.target.value)}
-                            placeholder={t('crm:clients.fullNamePlaceholder')}
-                            className={`w-full text-sm px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                              contactDraftError ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                            }`}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
-                            {t('crm:clients.role')}
-                          </label>
-                          <input
-                            type="text"
-                            value={contactDraft.role || ''}
-                            onChange={(e) => updateContactDraft('role', e.target.value)}
-                            placeholder={t('crm:clients.rolePlaceholder')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
-                            {t('crm:clients.email')}
-                          </label>
-                          <input
-                            type="email"
-                            value={contactDraft.email || ''}
-                            onChange={(e) => updateContactDraft('email', e.target.value)}
-                            placeholder={t('crm:clients.email')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-500 ml-1">
-                            {t('crm:clients.phone')}
-                          </label>
-                          <input
-                            type="text"
-                            value={contactDraft.phone || ''}
-                            onChange={(e) => updateContactDraft('phone', e.target.value)}
-                            placeholder={t('crm:clients.phone')}
-                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                          />
-                        </div>
-
-                        <div className="col-span-full flex items-center justify-between">
-                          <div>
-                            {contactDraftError && (
-                              <p className="text-red-500 text-[10px] font-bold ml-1">
-                                {contactDraftError}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={cancelContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              {t('common:buttons.cancel')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={saveContactDraft}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-praetor hover:bg-slate-700 rounded-lg transition-colors"
-                            >
-                              {editingContactIndex !== null
-                                ? t('common:buttons.update')
-                                : t('common:buttons.save')}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+            <ModalBody className="flex-1 space-y-8">
+              <div className="space-y-4">
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
+                  {t('crm:clients.identifyingData')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.clientCode')} <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.clientCode}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, clientCode: e.target.value }));
+                        if (errors.clientCode) setErrors((prev) => ({ ...prev, clientCode: '' }));
+                      }}
+                      placeholder={t('crm:clients.clientCodePlaceholder')}
+                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.clientCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
+                      }`}
+                    />
+                    {errors.clientCode && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
                     )}
-
-                    <StandardTable<ContactTableRow>
-                      title={t('crm:clients.contactsList')}
-                      data={contactTableRows}
-                      columns={contactColumns}
-                      defaultRowsPerPage={5}
-                      containerClassName="shadow-none border-slate-200 rounded-2xl"
-                      tableContainerClassName="max-h-[35vh] overflow-y-auto"
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.name')} <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, name: e.target.value }));
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                      }}
+                      placeholder={t('crm:clients.namePlaceholder')}
+                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
+                      }`}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.clientType')}
+                    </label>
+                    <SelectControl
+                      options={typeOptions}
+                      value={formData.type || 'company'}
+                      onChange={(val) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          type: (val as Client['type']) || 'company',
+                        }))
+                      }
+                      searchable={false}
                     />
                   </div>
-                )}
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.adminFiscal')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.fiscalCode')} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.fiscalCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fiscalCode: e.target.value });
-                      if (errors.fiscalCode) setErrors((prev) => ({ ...prev, fiscalCode: '' }));
-                    }}
-                    placeholder={t('crm:clients.fiscalCodePlaceholder')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.fiscalCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
+              <div className="space-y-4">
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
+                  {t('crm:clients.contacts')}
+                </h4>
+
+                {errors.contacts && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold">
+                    {errors.contacts}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.website')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.website}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, website: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.websitePlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.country')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressCountry}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressCountry: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.countryPlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.state')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressState}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressState: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.statePlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.cap')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressCap}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressCap: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.capPlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.province')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressProvince}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressProvince: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.provincePlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.civicNumber')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressCivicNumber}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressCivicNumber: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.civicNumberPlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                  <div className="col-span-full space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.address')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.addressLine}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, addressLine: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.addressPlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <div className="flex justify-between items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setContactsExpanded((prev) => !prev)}
+                      className="gap-2 text-xs font-semibold uppercase tracking-wide"
+                    >
+                      <i
+                        className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
+                      ></i>
+                      {t('crm:clients.contactsList')} ({contactTableRows.length})
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={addContact}
+                      className="gap-2"
+                    >
+                      <i className="fa-solid fa-plus"></i>
+                      {t('crm:clients.addContact')}
+                    </Button>
+                  </div>
+
+                  {contactsExpanded && (
+                    <div className="space-y-4">
+                      {contactDraft && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                              {t('crm:clients.fullName')} <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="text"
+                              value={contactDraft.fullName}
+                              onChange={(e) => updateContactDraft('fullName', e.target.value)}
+                              placeholder={t('crm:clients.fullNamePlaceholder')}
+                              className={`w-full text-sm px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                                contactDraftError ? 'border-red-500 bg-red-50' : 'border-zinc-200'
+                              }`}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                              {t('crm:clients.role')}
+                            </label>
+                            <Input
+                              type="text"
+                              value={contactDraft.role || ''}
+                              onChange={(e) => updateContactDraft('role', e.target.value)}
+                              placeholder={t('crm:clients.rolePlaceholder')}
+                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                              {t('crm:clients.email')}
+                            </label>
+                            <Input
+                              type="email"
+                              value={contactDraft.email || ''}
+                              onChange={(e) => updateContactDraft('email', e.target.value)}
+                              placeholder={t('crm:clients.email')}
+                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                              {t('crm:clients.phone')}
+                            </label>
+                            <Input
+                              type="text"
+                              value={contactDraft.phone || ''}
+                              onChange={(e) => updateContactDraft('phone', e.target.value)}
+                              placeholder={t('crm:clients.phone')}
+                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="col-span-full flex items-center justify-between">
+                            <div>
+                              {contactDraftError && (
+                                <p className="text-red-500 text-[10px] font-bold ml-1">
+                                  {contactDraftError}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={cancelContactDraft}
+                              >
+                                {t('common:buttons.cancel')}
+                              </Button>
+                              <Button type="button" size="sm" onClick={saveContactDraft}>
+                                {editingContactIndex !== null
+                                  ? t('common:buttons.update')
+                                  : t('common:buttons.save')}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <StandardTable<ContactTableRow>
+                        title={t('crm:clients.contactsList')}
+                        data={contactTableRows}
+                        columns={contactColumns}
+                        defaultRowsPerPage={5}
+                        containerClassName="shadow-none border-zinc-200 rounded-2xl"
+                        tableContainerClassName="max-h-[35vh] overflow-y-auto"
+                      />
+                    </div>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.atecoCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.atecoCode}
-                    onChange={(e) => setFormData({ ...formData, atecoCode: e.target.value })}
-                    placeholder={t('crm:clients.atecoCodePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
+                  {t('crm:clients.adminFiscal')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.fiscalCode')} <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.fiscalCode}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, fiscalCode: e.target.value }));
+                        if (errors.fiscalCode) setErrors((prev) => ({ ...prev, fiscalCode: '' }));
+                      }}
+                      placeholder={t('crm:clients.fiscalCodePlaceholder')}
+                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
+                      }`}
+                    />
+                    {errors.fiscalCode && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.atecoCode')}
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.atecoCode}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, atecoCode: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.atecoCodePlaceholder')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.companyProfile')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
-                      {t('crm:clients.sector')}
-                    </label>
-                    {canUpdateClients && (
-                      <button
-                        type="button"
-                        onClick={() => openManageProfileOptions('sector')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
-                      >
-                        <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
-                    )}
+              <div className="space-y-4">
+                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-praetor"></span>
+                  {t('crm:clients.companyProfile')}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-end justify-between ml-1 min-h-5">
+                      <label className="text-xs font-bold text-zinc-500">
+                        {t('crm:clients.sector')}
+                      </label>
+                      {canUpdateClients && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openManageProfileOptions('sector')}
+                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
+                        </Button>
+                      )}
+                    </div>
+                    <SelectControl
+                      options={sectorOptions}
+                      value={formData.sector || ''}
+                      onChange={(val) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          sector: (val as Client['sector']) || null,
+                        }))
+                      }
+                      placeholder={t('common:form.selectOption')}
+                      searchable={false}
+                    />
                   </div>
-                  <CustomSelect
-                    options={sectorOptions}
-                    value={formData.sector || ''}
-                    onChange={(val) =>
-                      setFormData({ ...formData, sector: (val as Client['sector']) || null })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                  />
-                </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
-                      {t('crm:clients.numberOfEmployees')}
-                    </label>
-                    {canUpdateClients && (
-                      <button
-                        type="button"
-                        onClick={() => openManageProfileOptions('numberOfEmployees')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
-                      >
-                        <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
-                    )}
+                  <div className="space-y-1.5">
+                    <div className="flex items-end justify-between ml-1 min-h-5">
+                      <label className="text-xs font-bold text-zinc-500">
+                        {t('crm:clients.numberOfEmployees')}
+                      </label>
+                      {canUpdateClients && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openManageProfileOptions('numberOfEmployees')}
+                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
+                        </Button>
+                      )}
+                    </div>
+                    <SelectControl
+                      options={numberOfEmployeesOptions}
+                      value={formData.numberOfEmployees || ''}
+                      onChange={(val) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          numberOfEmployees: (val as Client['numberOfEmployees']) || null,
+                        }))
+                      }
+                      placeholder={t('common:form.selectOption')}
+                      searchable={false}
+                    />
                   </div>
-                  <CustomSelect
-                    options={numberOfEmployeesOptions}
-                    value={formData.numberOfEmployees || ''}
-                    onChange={(val) =>
-                      setFormData({
-                        ...formData,
-                        numberOfEmployees: (val as Client['numberOfEmployees']) || null,
-                      })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                  />
-                </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
-                      {t('crm:clients.revenue')}
-                    </label>
-                    {canUpdateClients && (
-                      <button
-                        type="button"
-                        onClick={() => openManageProfileOptions('revenue')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
-                      >
-                        <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
-                    )}
+                  <div className="space-y-1.5">
+                    <div className="flex items-end justify-between ml-1 min-h-5">
+                      <label className="text-xs font-bold text-zinc-500">
+                        {t('crm:clients.revenue')}
+                      </label>
+                      {canUpdateClients && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openManageProfileOptions('revenue')}
+                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
+                        </Button>
+                      )}
+                    </div>
+                    <SelectControl
+                      options={revenueOptions}
+                      value={formData.revenue || ''}
+                      onChange={(val) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          revenue: (val as Client['revenue']) || null,
+                        }))
+                      }
+                      placeholder={t('common:form.selectOption')}
+                      searchable={false}
+                    />
                   </div>
-                  <CustomSelect
-                    options={revenueOptions}
-                    value={formData.revenue || ''}
-                    onChange={(val) =>
-                      setFormData({ ...formData, revenue: (val as Client['revenue']) || null })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                  />
-                </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <label className="text-xs font-bold text-slate-500">
-                      {t('crm:clients.officeCountRange')}
-                    </label>
-                    {canUpdateClients && (
-                      <button
-                        type="button"
-                        onClick={() => openManageProfileOptions('officeCountRange')}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
-                      >
-                        <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                      </button>
-                    )}
+                  <div className="space-y-1.5">
+                    <div className="flex items-end justify-between ml-1 min-h-5">
+                      <label className="text-xs font-bold text-zinc-500">
+                        {t('crm:clients.officeCountRange')}
+                      </label>
+                      {canUpdateClients && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openManageProfileOptions('officeCountRange')}
+                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
+                        </Button>
+                      )}
+                    </div>
+                    <SelectControl
+                      options={officeCountRangeOptions}
+                      value={formData.officeCountRange || ''}
+                      onChange={(val) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          officeCountRange: (val as Client['officeCountRange']) || null,
+                        }))
+                      }
+                      placeholder={t('common:form.selectOption')}
+                      searchable={false}
+                    />
                   </div>
-                  <CustomSelect
-                    options={officeCountRangeOptions}
-                    value={formData.officeCountRange || ''}
-                    onChange={(val) =>
-                      setFormData({
-                        ...formData,
-                        officeCountRange: (val as Client['officeCountRange']) || null,
-                      })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                  />
-                </div>
 
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.description')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder={t('crm:clients.description')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                  />
+                  <div className="col-span-full space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                      {t('crm:clients.description')}
+                    </label>
+                    <Textarea
+                      rows={3}
+                      value={formData.description}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                      }
+                      placeholder={t('crm:clients.description')}
+                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {errors.general && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
-                <i className="fa-solid fa-circle-exclamation text-lg"></i>
-                <p className="text-sm font-bold">{errors.general}</p>
-              </div>
-            )}
+              {errors.general && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
+                  <i className="fa-solid fa-circle-exclamation text-lg"></i>
+                  <p className="text-sm font-bold">{errors.general}</p>
+                </div>
+              )}
+            </ModalBody>
 
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={handleModalClose}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-              >
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={handleModalClose}>
                 {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-                  canSubmit
-                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                    : 'bg-slate-300 shadow-none cursor-not-allowed'
-                }`}
-              >
+              </Button>
+              <Button type="submit" disabled={!canSubmit}>
                 {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
-              </button>
-            </div>
+              </Button>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">{t('crm:clients.deleteClient')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: clientToDelete?.name })}
-                {t('crm:clients.deleteConfirm')}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={() => void handleDelete()}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          void handleDelete();
+        }}
+        title={t('crm:clients.deleteClient')}
+        description={`${t('common:messages.deleteConfirmNamed', {
+          name: clientToDelete?.name,
+        })}${t('crm:clients.deleteConfirm')}`}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('crm:clients.title')}</h2>
-            <p className="text-slate-500 text-sm">{t('crm:clients.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-zinc-800">{t('crm:clients.title')}</h2>
+            <p className="text-zinc-500 text-sm">{t('crm:clients.subtitle')}</p>
           </div>
           {canCreateClients && (
-            <button
-              onClick={openAddModal}
-              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
-            </button>
+            <HeaderAddButton onClick={openAddModal}>{t('crm:clients.addClient')}</HeaderAddButton>
           )}
         </div>
       </div>

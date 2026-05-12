@@ -1,5 +1,9 @@
 import type { DiscountType, SupplierUnitType } from '../types';
 
+// Match the NUMERIC(_, 2) precision used by the backend so frontend and backend agree on
+// rendered totals. Mirrors `roundCurrency` in `server/utils/invoice-math.ts`.
+export const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+
 export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
   if (value === '') return fallback;
   const parsed = parseFloat(value);
@@ -99,7 +103,17 @@ export const calculatePricingTotals = (
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
-  return { subtotal, discountAmount, total, totalCost, margin, marginPercentage };
+  // Round at the same precision the backend uses so the rendered totals match what gets
+  // persisted (NUMERIC(_, 2)). Without this, accumulating floats like 0.1 + 0.2 leak the
+  // 0.30000000000000004 representation into the UI while the backend stores 0.30.
+  return {
+    subtotal: roundCurrency(subtotal),
+    discountAmount: roundCurrency(discountAmount),
+    total: roundCurrency(total),
+    totalCost: roundCurrency(totalCost),
+    margin: roundCurrency(margin),
+    marginPercentage: roundCurrency(marginPercentage),
+  };
 };
 
 export const formatDiscountValue = (

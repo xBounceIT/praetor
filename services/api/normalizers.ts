@@ -1,4 +1,5 @@
 import type {
+  BillingFrequency,
   Client,
   ClientOffer,
   ClientOfferItem,
@@ -9,6 +10,7 @@ import type {
   Invoice,
   InvoiceItem,
   Product,
+  Project,
   ProjectTask,
   Quote,
   QuoteItem,
@@ -21,6 +23,7 @@ import type {
   SupplierSaleOrderItem,
   TimeEntry,
   User,
+  UserAuthMethod,
 } from '../../types';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
@@ -110,6 +113,13 @@ const normalizeEmployeeType = (value: unknown): EmployeeType => {
   return 'app_user';
 };
 
+const normalizeUserAuthMethod = (value: unknown): UserAuthMethod => {
+  if (value === 'ldap' || value === 'oidc' || value === 'saml' || value === 'local') {
+    return value;
+  }
+  return 'local';
+};
+
 const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) return [];
@@ -134,9 +144,50 @@ const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
   return normalizedRoles;
 };
 
-export const normalizeUser = (u: User): User => {
-  const normalizedCostPerHour = Number(u.costPerHour ?? 0);
+const assignIfPresent = <V>(
+  source: Record<string, unknown>,
+  target: Record<string, unknown>,
+  key: string,
+  derive: (raw: unknown) => V,
+): void => {
+  if (Object.hasOwn(source, key)) {
+    target[key] = derive(source[key]);
+  }
+};
 
+<<<<<<< HEAD
+const normalizeCostPerHour = (raw: unknown): number => {
+  const n = Number(raw ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const normalizeOptionalString = (raw: unknown): string | undefined =>
+  normalizeTrimmedString(raw) || undefined;
+
+export const normalizeUser = (u: User): User => {
+  // /auth/login and /auth/me only return id, name, username, role,
+  // avatarInitials, permissions, availableRoles. Fabricating defaults for the
+  // other optional fields (costPerHour, employeeType, etc.) hides API contract
+  // drift, so we only touch fields the payload actually carries.
+  const raw = u as unknown as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...u };
+
+  result.id = normalizeTrimmedString(u.id);
+  result.name = normalizeTrimmedString(u.name);
+  result.role = normalizeTrimmedString(u.role);
+  result.avatarInitials = normalizeTrimmedString(u.avatarInitials);
+  result.username = normalizeTrimmedString(u.username);
+  result.permissions = normalizeStringArray(u.permissions);
+  result.availableRoles = normalizeAvailableRoles(u.availableRoles);
+
+  assignIfPresent(raw, result, 'hasTopManagerRole', (v) => !!v);
+  assignIfPresent(raw, result, 'isAdminOnly', (v) => !!v);
+  assignIfPresent(raw, result, 'email', normalizeOptionalString);
+  assignIfPresent(raw, result, 'costPerHour', normalizeCostPerHour);
+  assignIfPresent(raw, result, 'employeeType', normalizeEmployeeType);
+
+  return result as unknown as User;
+=======
   return {
     ...u,
     id: normalizeTrimmedString(u.id),
@@ -151,13 +202,22 @@ export const normalizeUser = (u: User): User => {
     availableRoles: normalizeAvailableRoles(u.availableRoles),
     costPerHour: Number.isFinite(normalizedCostPerHour) ? normalizedCostPerHour : 0,
     employeeType: normalizeEmployeeType(u.employeeType),
+    authMethod: normalizeUserAuthMethod(u.authMethod),
+    authProviderId: normalizeTrimmedString(u.authProviderId) || null,
+    authProviderName: normalizeTrimmedString(u.authProviderName) || null,
   };
+>>>>>>> origin/main
 };
 
 export const normalizeProduct = (p: Product): Product => ({
   ...p,
   costo: Number(p.costo || 0),
   molPercentage: Number(p.molPercentage || 0),
+});
+
+export const normalizeProject = (p: Project): Project => ({
+  ...p,
+  ...normalizeProjectBilling(p.billingType, p.billingFrequency),
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
@@ -202,8 +262,34 @@ export const normalizeTask = (t: ProjectTask): ProjectTask => ({
   ...t,
   recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
   expectedEffort: t.expectedEffort !== undefined ? Number(t.expectedEffort) : undefined,
+  monthlyEffort: t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined,
   revenue: t.revenue !== undefined ? Number(t.revenue) : undefined,
+  ...normalizeTaskBilling(t.billingType, t.billingFrequency),
 });
+
+const normalizeProjectBilling = (
+  billingType: Project['billingType'] | undefined,
+  billingFrequency: BillingFrequency | undefined,
+): Required<Pick<Project, 'billingType' | 'billingFrequency'>> => {
+  const resolvedBillingType = billingType ?? 'time_and_materials';
+  return {
+    billingType: resolvedBillingType,
+    billingFrequency:
+      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+  };
+};
+
+const normalizeTaskBilling = (
+  billingType: ProjectTask['billingType'] | undefined,
+  billingFrequency: BillingFrequency | undefined,
+): Required<Pick<ProjectTask, 'billingType' | 'billingFrequency'>> => {
+  const resolvedBillingType = billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+  return {
+    billingType: resolvedBillingType,
+    billingFrequency:
+      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+  };
+};
 
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
   ...s,

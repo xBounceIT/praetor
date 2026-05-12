@@ -5,7 +5,7 @@ import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
-import { computeInvoiceTotals } from '../utils/invoice-math.ts';
+import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -144,10 +144,6 @@ type NormalizedInvoiceItemInput = {
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
 
-// Match the NUMERIC(_, 2) precision used for invoice_items columns so the totals computed
-// here align with what would be re-derived from the persisted rows.
-const round2 = (value: number) => Math.round(value * 100) / 100;
-
 const validateAndNormalizeItems = (
   items: unknown[],
   reply: FastifyReply,
@@ -202,7 +198,7 @@ const validateAndNormalizeItems = (
       return null;
     }
     // Without an upper bound a compromised client can send discount > 100, which makes
-    // (1 - discount/100) negative and produces negative line totals — corrupting SUM(total)
+    // (1 - discount/100) negative and produces negative line totals - corrupting SUM(total)
     // in the revenue reports.
     if (discountResult.value !== null && discountResult.value > 100) {
       badRequest(reply, `items[${i}].discount must be at most 100`);
@@ -213,9 +209,9 @@ const validateAndNormalizeItems = (
       productId: productIdResult.value || null,
       description: descriptionResult.value,
       unitOfMeasure: unitOfMeasureResult.value as 'unit' | 'hours',
-      quantity: round2(quantityResult.value),
-      unitPrice: round2(unitPriceResult.value),
-      discount: round2(discountResult.value || 0),
+      quantity: roundCurrency(quantityResult.value),
+      unitPrice: roundCurrency(unitPriceResult.value),
+      discount: roundCurrency(discountResult.value || 0),
     });
   }
 
@@ -522,7 +518,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         patch.amountPaid = amountPaidValue;
       } else if (patch.total !== undefined) {
-        // Items replaced (so total may be lower) but amountPaid not in this patch — verify the
+        // Items replaced (so total may be lower) but amountPaid not in this patch - verify the
         // persisted amountPaid still fits under the new total. Without this, paying-down to a
         // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
         const persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);

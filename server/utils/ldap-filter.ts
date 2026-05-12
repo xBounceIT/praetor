@@ -85,6 +85,40 @@ export const validateUserFilterTemplate = (
   return { ok: true, value: normalizedFilter };
 };
 
+export const validateGroupFilterTemplate = (
+  groupFilter: string,
+): { ok: true; value: string } | { ok: false; message: string } => {
+  const normalizedFilter = groupFilter.trim();
+
+  if (!normalizedFilter) {
+    return { ok: false, message: 'groupFilter is required' };
+  }
+
+  if (!normalizedFilter.includes(USER_FILTER_PLACEHOLDER)) {
+    return {
+      ok: false,
+      message: `groupFilter must include ${USER_FILTER_PLACEHOLDER} placeholder`,
+    };
+  }
+
+  const resolvedFilter = replaceUserFilterPlaceholder(
+    normalizedFilter,
+    escapeLdapFilterValue('cn=praetor-validation-group,ou=groups,dc=example,dc=com'),
+  );
+
+  try {
+    ldap.parseFilter(resolvedFilter);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Invalid LDAP filter';
+    return {
+      ok: false,
+      message: `groupFilter must be a valid LDAP filter template: ${errorMessage}`,
+    };
+  }
+
+  return { ok: true, value: normalizedFilter };
+};
+
 export const buildUserLookupFilter = (userFilter: string, username: string): ParsedLdapFilter =>
   parseUserFilterTemplate(
     userFilter,
@@ -94,3 +128,26 @@ export const buildUserLookupFilter = (userFilter: string, username: string): Par
 
 export const buildUserSyncFilter = (userFilter: string): ParsedLdapFilter =>
   parseUserFilterTemplate(userFilter, '*', 'userFilter cannot be used for LDAP sync');
+
+export const buildGroupLookupFilter = (groupFilter: string, value: string): ParsedLdapFilter =>
+  (() => {
+    const normalizedFilter = groupFilter.trim();
+    if (!normalizedFilter) {
+      throw new Error('groupFilter is required');
+    }
+    if (!normalizedFilter.includes(USER_FILTER_PLACEHOLDER)) {
+      throw new Error(`groupFilter must include ${USER_FILTER_PLACEHOLDER} placeholder`);
+    }
+
+    const resolvedFilter = replaceUserFilterPlaceholder(
+      normalizedFilter,
+      escapeLdapFilterValue(value),
+    );
+
+    try {
+      return ldap.parseFilter(resolvedFilter);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Invalid LDAP filter';
+      throw new Error(`groupFilter must be a valid LDAP filter template: ${errorMessage}`);
+    }
+  })();

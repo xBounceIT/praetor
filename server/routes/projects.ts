@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requirePermission,
+  requireScopedPermission,
+} from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
@@ -10,6 +15,14 @@ import {
 } from '../schemas/common.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import {
+  BILLING_FREQUENCIES,
+  BILLING_TYPES,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
+  STORED_BILLING_TYPES,
+} from '../utils/billing.ts';
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
@@ -17,6 +30,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
+  optionalEnum,
   requireNonEmptyString,
   validateHexColor,
 } from '../utils/validation.ts';
@@ -48,8 +62,10 @@ const projectSchema = {
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
     orderId: { type: ['string', 'null'] },
+    billingType: { type: 'string', enum: BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
-  required: ['id', 'name', 'clientId', 'color', 'isDisabled'],
+  required: ['id', 'name', 'clientId', 'color', 'isDisabled', 'billingType', 'billingFrequency'],
 } as const;
 
 const projectCreateBodySchema = {
@@ -60,6 +76,8 @@ const projectCreateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     orderId: { type: 'string' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
   required: ['name', 'clientId'],
 } as const;
@@ -72,8 +90,34 @@ const projectUpdateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     isDisabled: { type: 'boolean' },
+    billingType: { type: 'string', enum: STORED_BILLING_TYPES },
+    billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
 } as const;
+
+class PermissionError extends Error {}
+
+const canAccessClient = (
+  request: FastifyRequest,
+  clientId: string,
+  allScopePermission = 'crm.clients_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
+};
+
+const canAccessProject = (
+  request: FastifyRequest,
+  projectId: string,
+  allScopePermission = 'projects.manage_all.view',
+) => {
+  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
+  const userId = request.user?.id;
+  if (!userId) return Promise.resolve(false);
+  return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects
@@ -85,8 +129,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         authenticateToken,
         requireAnyPermission(
           'projects.manage.view',
+          'projects.manage_all.view',
           'projects.tasks.view',
+          'projects.tasks_all.view',
           'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
           'timesheets.recurring.view',
         ),
       ],
@@ -111,7 +158,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.create')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'create')],
       schema: {
         tags: ['projects'],
         summary: 'Create project',
@@ -130,13 +177,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description?: string;
         color?: string;
         orderId?: string;
+        billingType?: string;
+        billingFrequency?: string;
       };
+      const body = request.body as { billingType?: string; billingFrequency?: string };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+      if (
+        !hasPermission(request, 'projects.manage_all.create') &&
+        !(await canAccessClient(request, clientIdResult.value))
+      ) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const billingTypeResult = optionalEnum(body.billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingType = billingTypeResult.value ?? DEFAULT_BILLING_TYPE;
+      const billingFrequencyResult = optionalEnum(
+        body.billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
+      const billingFrequency = normalizeBillingFrequency(
+        billingType,
+        billingFrequencyResult.value ?? DEFAULT_BILLING_FREQUENCY,
+      );
 
       const id = generatePrefixedId('p');
       let projectColor = '#3b82f6';
@@ -155,6 +225,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description: description || null,
           isDisabled: false,
           orderId: orderId || null,
+          billingType,
+          billingFrequency,
         });
 
         await Promise.all([
@@ -187,7 +259,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'delete')],
       schema: {
         tags: ['projects'],
         summary: 'Delete project',
@@ -202,6 +274,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.delete'))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       let deletedProject: { projectName: string; clientId: string };
 
@@ -247,7 +322,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('projects.manage.update')],
+      onRequest: [authenticateToken, requireScopedPermission('projects.manage', 'update')],
       schema: {
         tags: ['projects'],
         summary: 'Update project',
@@ -267,16 +342,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description?: string;
         color?: string;
         isDisabled?: boolean;
+        billingType?: string;
+        billingFrequency?: string;
       };
-      const { name, clientId, description, color, isDisabled } = body;
+      const { name, clientId, description, color, isDisabled, billingType, billingFrequency } =
+        body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.update'))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       let normalizedColor = color;
       if (color !== undefined && color !== null && color !== '') {
         const colorResult = validateHexColor(color, 'color');
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
         normalizedColor = colorResult.value;
       }
+
+      const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
+      if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
+      const billingFrequencyResult = optionalEnum(
+        billingFrequency,
+        BILLING_FREQUENCIES,
+        'billingFrequency',
+      );
+      if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
 
       let updatedProject: {
         updated: projectsRepo.Project;
@@ -293,6 +383,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           const requestedClientId =
             typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
+          if (
+            requestedClientId !== previousClientId &&
+            !hasPermission(request, 'projects.manage_all.update') &&
+            !(await canAccessClient(request, requestedClientId))
+          ) {
+            throw new PermissionError();
+          }
           const clientChanged = requestedClientId !== previousClientId;
           const assignedUserIds = clientChanged
             ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
@@ -306,6 +403,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               color: normalizedColor || undefined,
               description: description || undefined,
               isDisabled,
+              billingType: billingTypeResult.value ?? undefined,
+              billingFrequency: billingFrequencyResult.value ?? undefined,
             },
             tx,
           );
@@ -339,6 +438,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { updated, clientChanged, action };
         });
       } catch (err) {
+        if (err instanceof PermissionError) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
         if (err instanceof NotFoundError) {
           return reply.code(404).send({ error: err.message });
         }
@@ -381,6 +483,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
       return projectsRepo.findAssignedUserIds(idResult.value);
     },
   );
@@ -406,6 +511,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!(await canAccessProject(request, idResult.value))) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
 
       const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);

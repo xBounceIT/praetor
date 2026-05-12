@@ -17,9 +17,9 @@
         reverse_proxy backend:3001
     }
     
-    # SPA routing - try files, fallback to index.html
+    # Static/docs routing first, then SPA fallback.
     handle {
-        try_files {path} /index.html
+        try_files {path} {path}/index.html /index.html
         file_server
     }
     

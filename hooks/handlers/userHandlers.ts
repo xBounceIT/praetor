@@ -1,6 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { Role, User, WorkUnit } from '../../types';
+import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
 import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 
 export type UserHandlersDeps = {
@@ -66,15 +66,32 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     }
   };
 
+  const updateUserAuthMethod = async (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ) => {
+    try {
+      const updated = await api.users.updateAuthMethod(id, authMethod, authProviderId);
+      setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+    } catch (err) {
+      console.error('Failed to update user authentication method:', err);
+      alert('Failed to update user authentication method: ' + (err as Error).message);
+      throw err;
+    }
+  };
+
   const deleteUser = async (id: string) => {
     try {
-      if (viewingUserId === id) {
-        setViewingUserId(currentUser?.id || '');
-      }
       await api.users.delete(id);
+      // Functional updater: decide against the latest viewingUserId, not the
+      // value captured at invocation. If the user navigated to a different
+      // profile while the delete was in flight, that newer selection wins.
+      setViewingUserId((prev) => (prev === id ? currentUser?.id || '' : prev));
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
+      alert('Failed to delete user: ' + (err as Error).message);
     }
   };
 
@@ -203,6 +220,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     addUser,
     updateUser,
     updateUserRoles,
+    updateUserAuthMethod,
     deleteUser,
     addInternalEmployee,
     addExternalEmployee,
