@@ -23,7 +23,7 @@ import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../ut
 type AiProvider = 'gemini' | 'openrouter';
 type UiLanguage = 'en' | 'it';
 
-type GeneralAiConfig = {
+export type GeneralAiConfig = {
   enableAiReporting: boolean;
   aiProvider: AiProvider;
   geminiApiKey: string;
@@ -52,8 +52,8 @@ const incrementDatasetCounter = () => {
 // that re-attaches the logger to the tx).
 //
 // `schema` is required for the return type to satisfy `DbExecutor`
-// (`PgDatabase<…, typeof schema, …>`) — without it the inferred type is
-// `PgDatabase<…, Record<string, never>, …>` which isn't assignable. The query builder is
+// (`PgDatabase<..., typeof schema, ...>`) - without it the inferred type is
+// `PgDatabase<..., Record<string, never>, ...>` which isn't assignable. The query builder is
 // not used through this exec today (reports use raw `sql` template literals via `executeRows`),
 // so the schema isn't load-bearing at runtime.
 const datasetDb: DbExecutor = drizzle(pool, {
@@ -61,7 +61,7 @@ const datasetDb: DbExecutor = drizzle(pool, {
   logger: { logQuery: incrementDatasetCounter },
 });
 
-const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
+export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const settings = await generalSettingsRepo.get();
   return {
     enableAiReporting: settings?.enableAiReporting ?? false,
@@ -544,7 +544,7 @@ const startOfDayUtc = (d: Date) =>
 
 const toDateString = (d: Date) => d.toISOString().slice(0, 10);
 
-const getReportingRange = () => {
+export const getReportingRange = () => {
   const now = new Date();
   const to = startOfDayUtc(now);
   const from = new Date(to);
@@ -644,9 +644,9 @@ const DATASET_SECTIONS = [
   'catalog',
 ] as const;
 
-type DatasetSection = (typeof DATASET_SECTIONS)[number];
+export type DatasetSection = (typeof DATASET_SECTIONS)[number];
 
-type DatasetBuildMetrics = {
+export type DatasetBuildMetrics = {
   queryCount: number;
   charCount: number;
   truncationApplied: boolean;
@@ -655,7 +655,7 @@ type DatasetBuildMetrics = {
   droppedSections: string[];
 };
 
-type DatasetBuildResult = {
+export type DatasetBuildResult = {
   dataset: Record<string, unknown>;
   metrics: DatasetBuildMetrics;
 };
@@ -709,7 +709,7 @@ const shouldIncludeDatasetSection = (
   section: DatasetSection,
 ) => !requestedSections || requestedSections.size === 0 || requestedSections.has(section);
 
-const determineRequestedSections = (
+export const determineRequestedSections = (
   message: string,
   convo: Array<{ role: 'user' | 'assistant'; content: string }>,
 ): Set<DatasetSection> | null => {
@@ -778,7 +778,7 @@ const logDatasetBuildTelemetry = (
   );
 };
 
-const buildBusinessDataset = async (
+export const buildBusinessDataset = async (
   request: FastifyRequest,
   cfg: GeneralAiConfig,
   fromDate: string,

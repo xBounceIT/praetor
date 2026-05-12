@@ -19,7 +19,7 @@ export type EmailConfig = {
 };
 
 // Patch shape for `update`. The password field is renamed to make the ciphertext-only
-// invariant explicit at the type level — `update` writes its value verbatim to
+// invariant explicit at the type level - `update` writes its value verbatim to
 // `email_config.smtp_password`, so callers must encrypt first (see `EmailService.saveConfig`).
 export type EmailConfigPatch = Partial<Omit<EmailConfig, 'smtpPassword'>> & {
   smtpPasswordCiphertext?: string;

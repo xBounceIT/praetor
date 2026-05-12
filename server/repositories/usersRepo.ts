@@ -1,10 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import type { UserAuthMethod } from '../db/schema/users.ts';
 import { users } from '../db/schema/users.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type AuthMethod = UserAuthMethod;
 
 export type AuthUser = {
   id: string;
@@ -15,7 +17,53 @@ export type AuthUser = {
   isDisabled: boolean;
 };
 
-export type LoginUser = AuthUser & { passwordHash: string | null };
+export type LoginUser = AuthUser & {
+  passwordHash: string | null;
+  employeeType: EmployeeType;
+};
+export type LoginUserWithAuth = LoginUser & {
+  authMethod: AuthMethod;
+  authProviderId: string | null;
+};
+
+const LOGIN_USER_PROJECTION = {
+  id: users.id,
+  name: users.name,
+  username: users.username,
+  role: users.role,
+  passwordHash: users.passwordHash,
+  avatarInitials: users.avatarInitials,
+  isDisabled: users.isDisabled,
+  employeeType: users.employeeType,
+  authMethod: users.authMethod,
+  authProviderId: users.authProviderId,
+} as const;
+
+type LoginUserRow = {
+  id: string;
+  name: string;
+  username: string;
+  role: string;
+  passwordHash: string | null;
+  avatarInitials: string | null;
+  isDisabled: boolean | null;
+  employeeType: string | null;
+  authMethod: AuthMethod | null;
+  authProviderId: string | null;
+};
+
+const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
+  id: row.id,
+  name: row.name,
+  username: row.username,
+  role: row.role,
+  passwordHash: row.passwordHash,
+  avatarInitials: row.avatarInitials ?? '',
+  isDisabled: row.isDisabled ?? false,
+  employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
+  authMethod: row.authMethod ?? 'local',
+  authProviderId: row.authProviderId ?? null,
+});
 
 export const findAuthUserById = async (
   userId: string,
@@ -46,29 +94,33 @@ export const findAuthUserById = async (
 export const findLoginUserByUsername = async (
   username: string,
   exec: DbExecutor = db,
-): Promise<LoginUser | null> => {
+): Promise<LoginUserWithAuth | null> => {
   const rows = await exec
-    .select({
-      id: users.id,
-      name: users.name,
-      username: users.username,
-      role: users.role,
-      passwordHash: users.passwordHash,
-      avatarInitials: users.avatarInitials,
-      isDisabled: users.isDisabled,
-    })
+    .select(LOGIN_USER_PROJECTION)
     .from(users)
     .where(eq(users.username, username));
-  if (!rows[0]) return null;
-  return {
-    id: rows[0].id,
-    name: rows[0].name,
-    username: rows[0].username,
-    role: rows[0].role,
-    passwordHash: rows[0].passwordHash,
-    avatarInitials: rows[0].avatarInitials,
-    isDisabled: rows[0].isDisabled ?? false,
-  };
+  return rows[0] ? mapLoginUserRow(rows[0]) : null;
+};
+
+export const findLoginUserByNormalizedUsername = async (
+  username: string,
+  exec: DbExecutor = db,
+): Promise<LoginUserWithAuth | null> => {
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return null;
+  const rows = await exec
+    .select(LOGIN_USER_PROJECTION)
+    .from(users)
+    .where(sql`LOWER(${users.username}) = ${normalized}`);
+  return rows[0] ? mapLoginUserRow(rows[0]) : null;
+};
+
+export const findLoginUserById = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<LoginUserWithAuth | null> => {
+  const rows = await exec.select(LOGIN_USER_PROJECTION).from(users).where(eq(users.id, userId));
+  return rows[0] ? mapLoginUserRow(rows[0]) : null;
 };
 
 export const getPasswordHash = async (
@@ -109,6 +161,7 @@ export const updateNameByUsername = async (
 // For users that authenticate externally (e.g. LDAP) and must never log in locally. Satisfies
 // the `password_hash NOT NULL` column with a malformed bcrypt that no plaintext can match.
 export const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
+export const EXTERNAL_PLACEHOLDER_PASSWORD_HASH = LDAP_PLACEHOLDER_PASSWORD_HASH;
 
 export type NewUser = {
   id: string;
@@ -117,6 +170,8 @@ export type NewUser = {
   passwordHash: string;
   role: string;
   avatarInitials: string;
+  authMethod?: AuthMethod;
+  authProviderId?: string | null;
 };
 
 export const createUser = async (user: NewUser, exec: DbExecutor = db): Promise<void> => {
@@ -127,6 +182,8 @@ export const createUser = async (user: NewUser, exec: DbExecutor = db): Promise<
     passwordHash: user.passwordHash,
     role: user.role,
     avatarInitials: user.avatarInitials,
+    authMethod: user.authMethod ?? 'local',
+    authProviderId: user.authProviderId ?? null,
   });
 };
 
@@ -146,6 +203,9 @@ export type UserListRow = {
   employeeType: EmployeeType;
   hasTopManagerRole: boolean;
   isAdminOnly: boolean;
+  authMethod: AuthMethod;
+  authProviderId: string | null;
+  authProviderName: string | null;
 };
 
 export type UserCore = {
@@ -154,6 +214,8 @@ export type UserCore = {
   username: string;
   role: string;
   employeeType: EmployeeType;
+  authMethod: AuthMethod;
+  authProviderId: string | null;
 };
 
 export type UpdatedUserRow = {
@@ -196,6 +258,8 @@ export type NewFullUser = {
   costPerHour: number;
   isDisabled: boolean;
   employeeType: EmployeeType;
+  authMethod?: AuthMethod;
+  authProviderId?: string | null;
 };
 
 type UserListRowDb = {
@@ -210,6 +274,9 @@ type UserListRowDb = {
   employeeType: string | null;
   hasTopManagerRole: boolean | null;
   isAdminOnly: boolean | null;
+  authMethod: string | null;
+  authProviderId: string | null;
+  authProviderName: string | null;
 };
 
 const mapUserListRow = (row: UserListRowDb): UserListRow => ({
@@ -224,6 +291,9 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
   hasTopManagerRole: !!row.hasTopManagerRole,
   isAdminOnly: !!row.isAdminOnly,
+  authMethod: (row.authMethod as AuthMethod | null) ?? 'local',
+  authProviderId: row.authProviderId ?? null,
+  authProviderName: row.authProviderName ?? null,
 });
 
 type UpdatedUserRowDb = {
@@ -276,9 +346,13 @@ export const listAllForAdmin = async (exec: DbExecutor = db): Promise<UserListRo
             u.cost_per_hour AS "costPerHour",
             u.is_disabled AS "isDisabled",
             u.employee_type AS "employeeType",
+            u.auth_method AS "authMethod",
+            u.auth_provider_id AS "authProviderId",
+            sp.name AS "authProviderName",
             ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
        ORDER BY u.name`,
   );
   return rows.map(mapUserListRow);
@@ -307,9 +381,13 @@ export const listScopedForManager = async (
                      u.cost_per_hour AS "costPerHour",
                      u.is_disabled AS "isDisabled",
                      u.employee_type AS "employeeType",
+                     u.auth_method AS "authMethod",
+                     u.auth_provider_id AS "authProviderId",
+                     sp.name AS "authProviderName",
                      ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
        LEFT JOIN user_work_units uw ON u.id = uw.user_id
        LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
        WHERE (${whereClause})
@@ -334,9 +412,13 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<UserL
             u.cost_per_hour AS "costPerHour",
             u.is_disabled AS "isDisabled",
             u.employee_type AS "employeeType",
+            u.auth_method AS "authMethod",
+            u.auth_provider_id AS "authProviderId",
+            sp.name AS "authProviderName",
             ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
       WHERE u.id = ${id}`,
   );
   return rows[0] ? mapUserListRow(rows[0]) : null;
@@ -350,6 +432,8 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
       username: users.username,
       role: users.role,
       employeeType: users.employeeType,
+      authMethod: users.authMethod,
+      authProviderId: users.authProviderId,
     })
     .from(users)
     .where(eq(users.id, id));
@@ -360,6 +444,8 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
     username: rows[0].username,
     role: rows[0].role,
     employeeType: (rows[0].employeeType as EmployeeType | null) ?? 'app_user',
+    authMethod: rows[0].authMethod ?? 'local',
+    authProviderId: rows[0].authProviderId ?? null,
   };
 };
 
@@ -386,7 +472,19 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     costPerHour: String(user.costPerHour),
     isDisabled: user.isDisabled,
     employeeType: user.employeeType,
+    authMethod: user.authMethod ?? 'local',
+    authProviderId: user.authProviderId ?? null,
   });
+};
+
+export const updateAuthMethod = async (
+  id: string,
+  authMethod: AuthMethod,
+  authProviderId: string | null,
+  exec: DbExecutor = db,
+): Promise<UserListRow | null> => {
+  await exec.update(users).set({ authMethod, authProviderId }).where(eq(users.id, id));
+  return findById(id, exec);
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

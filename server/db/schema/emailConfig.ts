@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { boolean, check, integer, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
 
-// Single-row config table — `id` is pinned to 1 by both the column default and a CHECK.
+// Single-row config table - `id` is pinned to 1 by both the column default and a CHECK.
 //
 // `smtp_encryption` has no CHECK in the legacy schema (older versions accepted any string,
 // see commit a1f1fcac). The repo normalizes the value at the boundary so consumers get a

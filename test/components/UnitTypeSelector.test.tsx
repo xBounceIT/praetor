@@ -7,7 +7,7 @@ installI18nMock();
 const UnitTypeSelector = (await import('../../components/shared/UnitTypeSelector')).default;
 
 describe('<UnitTypeSelector />', () => {
-  test('renders the selected unit label text on the trigger button', () => {
+  test('renders the selected unit label text on the select trigger', () => {
     render(
       <UnitTypeSelector
         value="hours"
@@ -17,7 +17,7 @@ describe('<UnitTypeSelector />', () => {
         i18nPrefix="sales:supplierQuotes"
       />,
     );
-    expect(screen.getByRole('button').textContent).toContain('sales:supplierQuotes.hours');
+    expect(screen.getByRole('combobox').textContent).toContain('sales:supplierQuotes.hours');
   });
 
   test('renders a static label (no dropdown) when isSupply is true', () => {
@@ -30,7 +30,7 @@ describe('<UnitTypeSelector />', () => {
         i18nPrefix="sales:supplierQuotes"
       />,
     );
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByText('sales:supplierQuotes.unit')).toBeInTheDocument();
   });
 
@@ -58,7 +58,7 @@ describe('<UnitTypeSelector />', () => {
         i18nPrefix="sales:supplierQuotes"
       />,
     );
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('combobox'));
     fireEvent.click(screen.getByText('sales:supplierQuotes.hour'));
     expect(onChange).toHaveBeenCalledWith('hours');
   });

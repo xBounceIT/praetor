@@ -51,6 +51,11 @@ bun run start        # Run compiled server
 ### Internationalization
 - i18next; translation files under `locales/`
 
+### Documentation Maintenance
+- When changing application functionality, update the relevant user documentation under `docs-site/src/content/docs/` in both Italian root pages and English mirror pages.
+- If the change affects API behavior, generated frontend docs, or routing, also update the relevant OpenAPI/TypeDoc sources or documentation routing so `/docs/`, `/docs/api`, and `/docs/frontend` remain accurate.
+- Do not consider a feature or behavior change complete until documentation has been reviewed and either updated or explicitly deemed unchanged.
+
 ## Key Patterns
 
 ### Route Organization
@@ -71,11 +76,17 @@ SQL belongs in `/server/repositories/<domain>Repo.ts`, not inline in route handl
 - Utilities: camelCase
 - Route files: kebab-case
 
+### Frontend UI
+- Always use shadcn/ui components and primitives for frontend UI work. Prefer existing components under `components/ui/*` and shadcn composition/props over bespoke controls or custom widget implementations.
+- If a needed shadcn/ui component is missing, add it with `bunx --bun shadcn@latest add <component>` and adapt behavior through the component API instead of rebuilding the same behavior manually.
+- Keep shadcn theme tokens (`bg-background`, `text-foreground`, `border-border`, `text-muted-foreground`, etc.) in new UI so the user's selected theme is respected.
+
 ## Important Notes
 
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
 - **CDN-pinned deps**: see the importmap in `index.html`
 - **Tests**: `bun run test` runs both backend (`server/test/`) and frontend (`test/`) suites via the Bun test runner; frontend tests use `@testing-library/react`. **New features and bug fixes must ship with unit tests** that exercise the new behavior — backend tests under `server/test/` mirroring the source layout, frontend under `test/` (e.g. `test/components/Foo.test.tsx`). For bug fixes, the test should fail on the old code and pass on the fix. Manual testing supplements automated tests; it does not replace them.
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
-- **Remote Testing**: App runs on remote Docker containers — do not run commands locally for testing
-- **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+- **Remote Testing**: The app itself runs on remote Docker containers. Do not run Docker commands locally, but Bun test commands such as `bun test` and `bun run test` may be run locally.
+- **Commit and PR titles**: Always format commit messages and pull request titles as `scope(category): description`.
+- **Docs**: Always use Context7 MCP for shadcn/ui and any library/API documentation, code generation, setup, configuration, or best-practice checks without me having to explicitly ask.

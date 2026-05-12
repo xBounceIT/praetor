@@ -131,7 +131,7 @@ describe('maxSequenceForYear', () => {
 describe('create', () => {
   test('does NOT swallow unique-violation errors (propagates with cause preserved)', async () => {
     // Drizzle wraps thrown driver errors in DrizzleQueryError("Failed query: ...") with the
-    // original error available via `.cause`. The repo doesn't catch — verify propagation by
+    // original error available via `.cause`. The repo doesn't catch - verify propagation by
     // unwrapping the cause and inspecting the original code/constraint.
     exec.enqueue(() => {
       const err = new Error('duplicate key') as Error & { code?: string; constraint?: string };

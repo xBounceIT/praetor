@@ -51,7 +51,7 @@ export const ASSIGNMENT_SPECS = {
   tasks: { table: 'user_tasks', fkColumn: 'task_id', sourceTable: 'tasks' },
 } as const satisfies Record<'clients' | 'projects' | 'tasks', AssignmentSpec>;
 
-// Qualified `"<table>"."assignment_source"` reference for the raw-SQL helpers — `mergedSource`
+// Qualified `"<table>"."assignment_source"` reference for the raw-SQL helpers - `mergedSource`
 // expects this shape so it works the same as for the typed-builder path.
 const tableAssignmentSourceCol = (spec: AssignmentSpec): SQL =>
   sql`${sql.identifier(spec.table)}.assignment_source`;
@@ -89,6 +89,77 @@ const assignAllToUserAsTopManager = (
 
 export const userHasTopManagerRole = (userId: string, exec: DbExecutor = db): Promise<boolean> =>
   rolesRepo.userHasRole(userId, TOP_MANAGER_ROLE_ID, exec);
+
+const isAssignedToUser = async (
+  spec: AssignmentSpec,
+  userId: string,
+  targetId: string,
+  exec: DbExecutor,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+      SELECT 1
+      FROM ${sql.identifier(spec.table)}
+      WHERE user_id = ${userId} AND ${sql.identifier(spec.fkColumn)} = ${targetId}
+    ) AS "exists"`,
+  );
+  return rows[0]?.exists === true;
+};
+
+const filterAssignedIds = async (
+  spec: AssignmentSpec,
+  userId: string,
+  targetIds: string[],
+  exec: DbExecutor,
+): Promise<Set<string>> => {
+  if (targetIds.length === 0) return new Set();
+  const uniqueIds = Array.from(new Set(targetIds));
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`SELECT ${sql.identifier(spec.fkColumn)} AS id
+        FROM ${sql.identifier(spec.table)}
+        WHERE user_id = ${userId}
+          AND ${sql.identifier(spec.fkColumn)} = ANY(${sql.param(uniqueIds)}::text[])`,
+  );
+  return new Set(rows.map((row) => row.id));
+};
+
+export const isClientAssignedToUser = (
+  userId: string,
+  clientId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => isAssignedToUser(ASSIGNMENT_SPECS.clients, userId, clientId, exec);
+
+export const isProjectAssignedToUser = (
+  userId: string,
+  projectId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => isAssignedToUser(ASSIGNMENT_SPECS.projects, userId, projectId, exec);
+
+export const isTaskAssignedToUser = (
+  userId: string,
+  taskId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => isAssignedToUser(ASSIGNMENT_SPECS.tasks, userId, taskId, exec);
+
+export const filterAssignedClientIds = (
+  userId: string,
+  clientIds: string[],
+  exec: DbExecutor = db,
+): Promise<Set<string>> => filterAssignedIds(ASSIGNMENT_SPECS.clients, userId, clientIds, exec);
+
+export const filterAssignedProjectIds = (
+  userId: string,
+  projectIds: string[],
+  exec: DbExecutor = db,
+): Promise<Set<string>> => filterAssignedIds(ASSIGNMENT_SPECS.projects, userId, projectIds, exec);
+
+export const filterAssignedTaskIds = (
+  userId: string,
+  taskIds: string[],
+  exec: DbExecutor = db,
+): Promise<Set<string>> => filterAssignedIds(ASSIGNMENT_SPECS.tasks, userId, taskIds, exec);
 
 export const assignClientToUser = async (
   userId: string,
@@ -215,7 +286,7 @@ export const syncTopManagerAssignmentsForUser = async (
         ),
     ]);
     // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
-    // modified — sequenced after the `await Promise.all(...)` so it sees the final state,
+    // modified - sequenced after the `await Promise.all(...)` so it sees the final state,
     // never an interleaved view.
     await applyProjectCascadeToClients(userId, exec);
     return;

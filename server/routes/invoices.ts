@@ -198,7 +198,7 @@ const validateAndNormalizeItems = (
       return null;
     }
     // Without an upper bound a compromised client can send discount > 100, which makes
-    // (1 - discount/100) negative and produces negative line totals — corrupting SUM(total)
+    // (1 - discount/100) negative and produces negative line totals - corrupting SUM(total)
     // in the revenue reports.
     if (discountResult.value !== null && discountResult.value > 100) {
       badRequest(reply, `items[${i}].discount must be at most 100`);
@@ -518,7 +518,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         patch.amountPaid = amountPaidValue;
       } else if (patch.total !== undefined) {
-        // Items replaced (so total may be lower) but amountPaid not in this patch — verify the
+        // Items replaced (so total may be lower) but amountPaid not in this patch - verify the
         // persisted amountPaid still fits under the new total. Without this, paying-down to a
         // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
         const persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);

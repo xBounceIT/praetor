@@ -61,9 +61,12 @@ Use the same pattern for indexes (`CREATE INDEX IF NOT EXISTS`) and tables that 
 ## Applying migrations
 
 The backend applies pending migrations automatically during startup, after it
-has verified PostgreSQL readiness and applied the historical `schema.sql`
-bootstrap. Migration failures are fatal: the backend exits instead of starting
-against a partially upgraded schema.
+has verified PostgreSQL readiness. The historical `schema.sql` bootstrap is
+one-time compatibility support for databases that predate Drizzle tracking:
+startup runs it only when `drizzle.__drizzle_migrations` does not exist yet.
+Once Drizzle's migration ledger exists, startup skips `schema.sql` entirely and
+only applies pending Drizzle migrations. Migration failures are fatal: the
+backend exits instead of starting against a partially upgraded schema.
 
 For a non-Compose local DB, apply migrations manually:
 
@@ -78,12 +81,17 @@ Idempotent: re-running is a no-op if everything's applied. The runner is `db/mig
 
 Bootstrap order for a fresh local DB:
 
-1. Apply `schema.sql` (`psql -f db/schema.sql` or let the backend startup bootstrap do it).
+1. Apply `schema.sql` (`psql -f db/schema.sql` or let the backend startup bootstrap do it before Drizzle's migration ledger exists).
 2. Apply Drizzle migrations. If using Docker Compose, the backend runs them automatically
    before it starts serving requests. Otherwise, from `server/`, run `bun run db:migrate`.
    The migrations are written with `IF NOT EXISTS` guards so they're no-ops on a DB that
    already matches; their rows still land in `__drizzle_migrations` so subsequent migrations
    apply normally.
+
+After the first successful Drizzle migration run, do not re-run `schema.sql` as
+part of upgrades. It contains frozen historical cleanup statements that are safe
+only for the pre-Drizzle bootstrap path; Drizzle migration files are the upgrade
+path from that point forward.
 
 For a Drizzle-only fresh DB (skipping `schema.sql`): every existing migration uses `CREATE TABLE IF NOT EXISTS` and friends, so applying them in order produces a fully-formed schema. This path isn't the production bootstrap, but it's how `db:check` and CI verify the migrations.
 

@@ -318,3 +318,76 @@ describe('replaceItems', () => {
     expect(result).toEqual([]);
   });
 });
+
+describe('findStatusAndClientName', () => {
+  test('returns status and clientName when found', async () => {
+    exec.enqueue({ rows: [['draft', 'Acme']] });
+    expect(await clientQuotesRepo.findStatusAndClientName('cq-1', testDb)).toEqual({
+      status: 'draft',
+      clientName: 'Acme',
+    });
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientQuotesRepo.findStatusAndClientName('cq-x', testDb)).toBeNull();
+  });
+});
+
+describe('findAnyLinkedSale', () => {
+  test('returns sale id when found', async () => {
+    exec.enqueue({ rows: [['s-1']] });
+    expect(await clientQuotesRepo.findAnyLinkedSale('cq-1', testDb)).toBe('s-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sales"');
+    expect(exec.calls[0].params).toContain('cq-1');
+  });
+
+  test('returns null when no linked sale', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientQuotesRepo.findAnyLinkedSale('cq-x', testDb)).toBeNull();
+  });
+});
+
+describe('findItemsForQuote', () => {
+  test('selects items filtered by quoteId and maps them', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await clientQuotesRepo.findItemsForQuote('cq-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "quote_items"');
+    expect(exec.calls[0].params).toContain('cq-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('qi-1');
+  });
+});
+
+describe('findFullForSnapshot', () => {
+  test('returns quote and items when quote exists', async () => {
+    // Promise.all dispatches `findItemsForQuote(id)` first (its async body runs to its first
+    // await before the sibling thenable is consumed), so the items query is what dequeues the
+    // first response.
+    exec.enqueue({ rows: [itemRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
+    const result = await clientQuotesRepo.findFullForSnapshot('cq-1', testDb);
+    expect(result).not.toBeNull();
+    expect(result?.quote.id).toBe('cq-1');
+    expect(result?.items).toHaveLength(1);
+    expect(result?.items[0].id).toBe('qi-1');
+  });
+
+  test('returns null when quote not found', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await clientQuotesRepo.findFullForSnapshot('cq-x', testDb)).toBeNull();
+  });
+});
+
+describe('deleteById', () => {
+  test('returns true when row deleted', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    expect(await clientQuotesRepo.deleteById('cq-1', testDb)).toBe(true);
+  });
+
+  test('returns false when no row matched', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    expect(await clientQuotesRepo.deleteById('cq-x', testDb)).toBe(false);
+  });
+});

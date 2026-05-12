@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Input } from '@/components/ui/input';
 
 const numberInputPattern = /^[0-9]*([.,][0-9]*)?$/;
 
@@ -86,7 +87,7 @@ const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberI
     };
 
     return (
-      <input
+      <Input
         {...rest}
         ref={ref}
         type="text"
