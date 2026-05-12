@@ -22,6 +22,7 @@ const findLoginUserByUsernameMock = mock();
 const updateNameByUsernameMock = mock();
 const createUserMock = mock();
 const applyExternalRolesForUserMock = mock();
+const filterExistingRoleIdsMock = mock();
 
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
 type SearchResponse = {
@@ -134,6 +135,7 @@ beforeAll(() => {
   mock.module('../../services/external-auth.ts', () => ({
     ...externalAuthSnapshot,
     applyExternalRolesForUser: applyExternalRolesForUserMock,
+    filterExistingRoleIds: filterExistingRoleIdsMock,
   }));
   mock.module('../../utils/initials.ts', () => ({
     ...initialsSnapshot,
@@ -211,6 +213,10 @@ beforeEach(() => {
   updateNameByUsernameMock.mockReset();
   createUserMock.mockReset();
   applyExternalRolesForUserMock.mockReset();
+  filterExistingRoleIdsMock.mockReset();
+  filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
+    ids.length > 0 ? ids : ['user'],
+  );
   createClientMock.mockClear();
 
   ldapRepoGetMock.mockResolvedValue(ENABLED_LDAP_CONFIG);
@@ -437,6 +443,16 @@ describe('findUserDn (direct, with config preloaded)', () => {
     nextFixture = { searchResponses: [response] };
     return createClientMock({ url: ENABLED_LDAP_CONFIG.serverUrl, tlsOptions: {} });
   };
+
+  test('requests canonical user attributes (uid, sAMAccountName, cn, displayName)', async () => {
+    const client = buildClient({
+      entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+      status: 0,
+    });
+    await ldapService.findUserDn(client as never, 'alice');
+    const search = lastClientStats?.searchCalls[0];
+    expect(search?.options.attributes).toEqual(['uid', 'sAMAccountName', 'cn', 'displayName']);
+  });
 
   test('resolves to the last searchEntry.objectName when multiple entries fire (foundDn reassignment)', async () => {
     const client = buildClient({
@@ -760,5 +776,247 @@ describe('lookupUserGroups', () => {
     // empty group list.
     expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+});
+
+describe('authenticateAndProvision', () => {
+  test('returns { authenticated: false } when LDAP rejects credentials', async () => {
+    // service-account bind fails → authenticateWithProfile returns false
+    nextFixture = { bindResponses: [new Error('bad creds')] };
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('creates a new app_user using the canonical uid (not the typed alias)', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: { uid: 'alice', cn: 'Alice Real' },
+            },
+          ],
+          status: 0,
+        },
+        // group search returns nothing
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('ALICE@example.com', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: 'u_test_id',
+      created: true,
+      canonicalUsername: 'alice',
+    });
+    expect(createUserMock).toHaveBeenCalledWith({
+      id: 'u_test_id',
+      name: 'Alice Real',
+      username: 'alice',
+      passwordHash: realUsersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+      role: 'user',
+      avatarInitials: 'AL',
+      authMethod: 'ldap',
+      authProviderId: null,
+    });
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith('u_test_id', [], []);
+  });
+
+  test('falls back to sAMAccountName when uid is missing (AD)', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'cn=carol,dc=test,dc=com',
+              object: { sAMAccountName: 'carol', cn: 'Carol' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('CAROL', 'pw');
+    expect(result.canonicalUsername).toBe('carol');
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'carol', name: 'Carol' }),
+    );
+  });
+
+  test('reuses an existing LDAP-bound user under the canonical username (no creation)', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+
+    const result = await ldapService.authenticateAndProvision('alice@example.com', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+  });
+
+  test('refuses to bind LDAP login to an existing non-LDAP local user', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      authMethod: 'local' as const,
+    });
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('races on unique constraint: re-fetches by canonical username after createUser throws 23505', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    // First lookup: nothing (we'll try to create); second lookup (after race): the raced row
+    findLoginUserByUsernameMock.mockResolvedValueOnce(null).mockResolvedValueOnce(LDAP_LOGIN_USER);
+    const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createUserMock.mockRejectedValueOnce(uniqueErr);
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+  });
+
+  test('uses displayName when cn is absent', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=dave,dc=test,dc=com',
+              object: { uid: 'dave', displayName: 'Dave Display' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    await ldapService.authenticateAndProvision('dave', 'pw');
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Dave Display', username: 'dave' }),
+    );
+  });
+
+  test('searches groups using the canonical uid in addition to the typed alias', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 }, // group search by userDn
+        { entries: [], status: 0 }, // group search by canonical
+        { entries: [], status: 0 }, // group search by typed alias
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    await ldapService.authenticateAndProvision('ALICE@example.com', 'pw');
+
+    const groupFilterTexts = (lastClientStats?.searchCalls ?? [])
+      .filter((c) => c.base === 'ou=groups,dc=test,dc=com')
+      .map((c) => String(c.options.filter));
+    // Must include a search keyed on the canonical uid so configs like memberUid={0}
+    // resolve groups even when the user typed an email/UPN alias.
+    expect(groupFilterTexts.some((f) => f.includes('uid=alice,dc=test,dc=com'))).toBe(true);
+    expect(groupFilterTexts.some((f) => f.includes('member=alice') && !f.includes('@'))).toBe(true);
+  });
+
+  test('filters role IDs against existing roles before createUser to avoid FK violation', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      roleMappings: [
+        { ldapGroup: 'deleted-role-group', role: 'role-deleted-12345' },
+        { ldapGroup: 'managers', role: 'manager' },
+      ],
+    });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=eve,dc=test,dc=com', object: { uid: 'eve', cn: 'Eve' } }],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: 'cn=deleted-role-group,dc=test,dc=com',
+              object: { cn: 'deleted-role-group' },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    // Simulate the deleted role being filtered out; only 'role-deleted-12345' would map.
+    filterExistingRoleIdsMock.mockResolvedValueOnce(['user']);
+
+    await ldapService.authenticateAndProvision('eve', 'pw');
+
+    // filterExistingRoleIds must be called with the unfiltered mapped IDs before createUser fires
+    expect(filterExistingRoleIdsMock).toHaveBeenCalledWith(['role-deleted-12345']);
+    expect(createUserMock).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }));
   });
 });

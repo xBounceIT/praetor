@@ -82,7 +82,7 @@ export const mapExternalGroupsToRoleIds = (
   return roleIds.length > 0 ? roleIds : [DEFAULT_ROLE_ID];
 };
 
-const filterExistingRoleIds = async (roleIds: string[]): Promise<string[]> => {
+export const filterExistingRoleIds = async (roleIds: string[]): Promise<string[]> => {
   const existing = await rolesRepo.findExistingIds(roleIds);
   const filtered = roleIds.filter((roleId) => existing.has(roleId));
   return filtered.length > 0 ? filtered : [DEFAULT_ROLE_ID];

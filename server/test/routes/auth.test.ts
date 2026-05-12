@@ -37,6 +37,7 @@ const markPersonalAccessTokenUsedMock = mock();
 
 // Auth route deps
 const findLoginUserByUsernameMock = mock();
+const findLoginUserByIdMock = mock();
 const listAvailableRolesForUserMock = mock();
 const logAuditMock = mock(async () => undefined);
 
@@ -44,6 +45,7 @@ const logAuditMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
 const ldapAuthenticateMock = mock();
 const ldapAuthenticateWithProfileMock = mock();
+const ldapAuthenticateAndProvisionMock = mock();
 const applyExternalRoleIdsForUserMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
@@ -54,6 +56,7 @@ beforeAll(async () => {
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
     findLoginUserByUsername: findLoginUserByUsernameMock,
+    findLoginUserById: findLoginUserByIdMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -85,6 +88,7 @@ beforeAll(async () => {
     default: {
       authenticate: ldapAuthenticateMock,
       authenticateWithProfile: ldapAuthenticateWithProfileMock,
+      authenticateAndProvision: ldapAuthenticateAndProvisionMock,
     },
   }));
 
@@ -134,11 +138,13 @@ const allMocks = [
   findPersonalAccessTokenByHashMock,
   markPersonalAccessTokenUsedMock,
   findLoginUserByUsernameMock,
+  findLoginUserByIdMock,
   listAvailableRolesForUserMock,
   logAuditMock,
   bcryptCompareMock,
   ldapAuthenticateMock,
   ldapAuthenticateWithProfileMock,
+  ldapAuthenticateAndProvisionMock,
   applyExternalRoleIdsForUserMock,
 ];
 
@@ -170,6 +176,8 @@ beforeEach(async () => {
     groups: [],
     roleIds: ['user'],
   });
+  ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
+  findLoginUserByIdMock.mockResolvedValue(null);
   applyExternalRoleIdsForUserMock.mockImplementation(async (_userId: string, roleIds: string[]) =>
     roleIds.length > 0 ? roleIds : ['user'],
   );
@@ -324,8 +332,9 @@ describe('POST /api/auth/login', () => {
     ]);
   });
 
-  test('401 user not found', async () => {
+  test('401 user not found (LDAP auto-provision also fails)', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -335,7 +344,109 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+    expect(ldapAuthenticateAndProvisionMock).toHaveBeenCalledWith('ghost', 'whatever');
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('200: unknown user auto-provisioned via LDAP on first login', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({
+      authenticated: true,
+      userId: 'u-new',
+      created: true,
+      canonicalUsername: 'alice',
+    });
+    findLoginUserByIdMock.mockResolvedValue({
+      id: 'u-new',
+      name: 'Alice Provisioned',
+      username: 'alice',
+      role: 'user',
+      avatarInitials: 'AP',
+      passwordHash: '$2a$10$invalidpasswordhashforldapuser00000000000000',
+      isDisabled: false,
+      employeeType: 'app_user' as const,
+      authMethod: 'ldap' as const,
+      authProviderId: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'ALICE@example.com', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.user.id).toBe('u-new');
+    expect(body.user.username).toBe('alice');
+    // Auto-provisioned login should NOT bcrypt-compare against the placeholder hash
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+    // It should NOT re-run authenticateWithProfile (already authenticated by the helper)
+    expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
+    // It should NOT re-apply role mapping (the provision helper already did it)
+    expect(applyExternalRoleIdsForUserMock).not.toHaveBeenCalled();
+    // Audit emits both user.created and user.login
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).toEqual(expect.arrayContaining(['user.created', 'user.login']));
+  });
+
+  test('200: typed alias resolves to existing canonical LDAP user (no creation)', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({
+      authenticated: true,
+      userId: 'u-existing',
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    findLoginUserByIdMock.mockResolvedValue({
+      ...LOGIN_USER,
+      id: 'u-existing',
+      authMethod: 'ldap' as const,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice@example.com', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.user.id).toBe('u-existing');
+    expect(body.user.username).toBe('alice');
+    // user.created is NOT emitted for existing users
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).not.toContain('user.created');
+    expect(actions).toContain('user.login');
+  });
+
+  test('401: auto-provisioned user disabled is rejected', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({
+      authenticated: true,
+      userId: 'u-new',
+      created: true,
+      canonicalUsername: 'alice',
+    });
+    findLoginUserByIdMock.mockResolvedValue({
+      ...LOGIN_USER,
+      id: 'u-new',
+      authMethod: 'ldap' as const,
+      isDisabled: true,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
   });
 
   test('401 disabled user', async () => {
