@@ -686,10 +686,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 </span>
                 {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
               </ModalTitle>
-              <ModalCloseButton
-                onClick={requestCloseModal}
-                disabled={isSubmitting || isDeleting}
-              />
+              <ModalCloseButton onClick={requestCloseModal} disabled={isSubmitting || isDeleting} />
             </ModalHeader>
 
             <ModalBody className="space-y-6">

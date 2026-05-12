@@ -42,13 +42,15 @@ const PERMISSIONS = [
   'hr.work_units.view',
 ];
 
-const renderWorkUnitsView = (overrides: {
-  onAdd?: ReturnType<typeof mock>;
-  onUpdate?: ReturnType<typeof mock>;
-  onDelete?: ReturnType<typeof mock>;
-  refresh?: ReturnType<typeof mock>;
-  workUnits?: WorkUnit[];
-} = {}) => {
+const renderWorkUnitsView = (
+  overrides: {
+    onAdd?: ReturnType<typeof mock>;
+    onUpdate?: ReturnType<typeof mock>;
+    onDelete?: ReturnType<typeof mock>;
+    refresh?: ReturnType<typeof mock>;
+    workUnits?: WorkUnit[];
+  } = {},
+) => {
   const onAdd = overrides.onAdd ?? mock(() => Promise.resolve());
   const onUpdate = overrides.onUpdate ?? mock(() => Promise.resolve());
   const onDelete = overrides.onDelete ?? mock(() => Promise.resolve());

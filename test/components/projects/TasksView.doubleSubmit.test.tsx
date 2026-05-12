@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import type { Client, Project, ProjectTask, Role, User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -14,6 +15,38 @@ mock.module('../../../services/api/tasks', () => ({
     getUsers: () => Promise.resolve([]),
     updateUsers: () => Promise.resolve(),
   },
+}));
+
+// OfferVersionsPanel.test.tsx registers a global `mock.module` for DeleteConfirmModal
+// in Bun's runner; that mock persists across files and would otherwise stub out the
+// confirm button this suite asserts against. Re-mock here so the suite is hermetic. We
+// portal into document.body so the confirm buttons aren't hidden by the edit Dialog's
+// modal aria-hidden boundary (the real component does this via Radix Dialog).
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: ({
+    isOpen,
+    onConfirm,
+    onClose,
+    isDeleting,
+  }: {
+    isOpen: boolean;
+    onConfirm: () => void;
+    onClose: () => void;
+    isDeleting?: boolean;
+  }) =>
+    isOpen
+      ? createPortal(
+          <div role="dialog" aria-modal="true">
+            <button type="button" onClick={onClose} disabled={isDeleting}>
+              buttons.noGoBack
+            </button>
+            <button type="button" onClick={onConfirm} disabled={isDeleting}>
+              {isDeleting ? 'buttons.saving' : 'buttons.yesDelete'}
+            </button>
+          </div>,
+          document.body,
+        )
+      : null,
 }));
 
 const TasksView = (await import('../../../components/projects/TasksView')).default;
@@ -53,12 +86,14 @@ const PERMISSIONS = [
 const USERS: User[] = [];
 const ROLES: Role[] = [];
 
-const renderTasksView = (overrides: {
-  onAddTask?: ReturnType<typeof mock>;
-  onUpdateTask?: ReturnType<typeof mock>;
-  onDeleteTask?: ReturnType<typeof mock>;
-  tasks?: ProjectTask[];
-} = {}) => {
+const renderTasksView = (
+  overrides: {
+    onAddTask?: ReturnType<typeof mock>;
+    onUpdateTask?: ReturnType<typeof mock>;
+    onDeleteTask?: ReturnType<typeof mock>;
+    tasks?: ProjectTask[];
+  } = {},
+) => {
   const onAddTask = overrides.onAddTask ?? mock(() => Promise.resolve());
   const onUpdateTask = overrides.onUpdateTask ?? mock(() => Promise.resolve());
   const onDeleteTask = overrides.onDeleteTask ?? mock(() => Promise.resolve());

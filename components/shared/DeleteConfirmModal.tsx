@@ -43,12 +43,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             <Button type="button" variant="outline" onClick={onClose} disabled={isDeleting}>
               {t('buttons.noGoBack')}
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={onConfirm}
-              disabled={isDeleting}
-            >
+            <Button type="button" variant="destructive" onClick={onConfirm} disabled={isDeleting}>
               {isDeleting ? t('buttons.saving') : t('buttons.yesDelete')}
             </Button>
           </ModalFooter>

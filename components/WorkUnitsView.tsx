@@ -543,10 +543,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       </Modal>
 
       {/* Assignment Modal */}
-      <Modal
-        isOpen={isAssignmentModalOpen && !!targetUnit}
-        onClose={requestCloseAssignmentModal}
-      >
+      <Modal isOpen={isAssignmentModalOpen && !!targetUnit} onClose={requestCloseAssignmentModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
             <div>
@@ -636,19 +633,14 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               disabled={isLoadingAssignments || isSavingAssignments}
               className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50"
             >
-              {isSavingAssignments
-                ? t('common:buttons.saving')
-                : t('hr:workUnits.saveAssignments')}
+              {isSavingAssignments ? t('common:buttons.saving') : t('hr:workUnits.saveAssignments')}
             </button>
           </div>
         </div>
       </Modal>
 
       {/* Delete Confirm Modal */}
-      <Modal
-        isOpen={isDeleteConfirmOpen && !!targetUnit}
-        onClose={requestCloseDeleteConfirm}
-      >
+      <Modal isOpen={isDeleteConfirmOpen && !!targetUnit} onClose={requestCloseDeleteConfirm}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
             <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
