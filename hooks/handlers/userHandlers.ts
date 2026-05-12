@@ -69,9 +69,10 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
   const deleteUser = async (id: string) => {
     try {
       await api.users.delete(id);
-      if (viewingUserId === id) {
-        setViewingUserId(currentUser?.id || '');
-      }
+      // Functional updater: decide against the latest viewingUserId, not the
+      // value captured at invocation. If the user navigated to a different
+      // profile while the delete was in flight, that newer selection wins.
+      setViewingUserId((prev) => (prev === id ? currentUser?.id || '' : prev));
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
