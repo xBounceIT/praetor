@@ -558,6 +558,7 @@ class LDAPService {
 
       let syncedCount = 0;
       let createdCount = 0;
+      const roleMappings = this.getRoleMappings();
 
       for (const entry of entries) {
         let username = entry.uid;
@@ -583,9 +584,6 @@ class LDAPService {
         }
 
         const existing = await usersRepo.findLoginUserByUsername(username);
-        const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
-        const roleMappings = this.getRoleMappings();
-        const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
 
         if (existing) {
           if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
@@ -595,10 +593,13 @@ class LDAPService {
             );
             continue;
           }
+          const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
           await usersRepo.updateNameByUsername(username, name);
           await applyExternalRolesForUser(existing.id, groups, roleMappings);
           syncedCount++;
-        } else {
+        } else if (config.autoProvisionAll) {
+          const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
+          const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
           const id = generatePrefixedId('u');
           await usersRepo.createUser({
             id,

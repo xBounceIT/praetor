@@ -49,7 +49,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     updateNameByUsernameMock.mockReset();
     createUserMock.mockReset();
 
-    ldapRepoGetMock.mockResolvedValue(buildTestConfig());
+    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: true }));
     findLoginUserByUsernameMock.mockResolvedValue(null);
     ldapService.invalidateConfig();
   });
@@ -97,7 +97,10 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     // After buildUserSyncFilter substitutes {0} with *, this becomes
     // (&(uid=*)(givenName=Alice)) which matches only alice in the fixture.
     ldapRepoGetMock.mockResolvedValue(
-      buildTestConfig({ userFilter: '(&(uid={0})(givenName=Alice))' }),
+      buildTestConfig({
+        userFilter: '(&(uid={0})(givenName=Alice))',
+        autoProvisionAll: true,
+      }),
     );
     ldapService.invalidateConfig();
 
@@ -106,6 +109,21 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     expect(result).toEqual({ synced: 0, created: 1 });
     expect(createUserMock).toHaveBeenCalledTimes(1);
     expect((createUserMock.mock.calls[0][0] as { username: string }).username).toBe('alice');
+  });
+
+  test('autoProvisionAll=false: existing users are updated but new entries are NOT created', async () => {
+    ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: false }));
+    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+      username === 'alice' ? { id: 'u1', username, name: 'Old Name' } : null,
+    );
+    ldapService.invalidateConfig();
+
+    const result = await ldapService.syncUsers();
+
+    expect(result).toEqual({ synced: 1, created: 0 });
+    expect(updateNameByUsernameMock).toHaveBeenCalledTimes(1);
+    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice Example');
+    expect(createUserMock).not.toHaveBeenCalled();
   });
 
   test('LDAP disabled in config: short-circuits with skipped:true', async () => {

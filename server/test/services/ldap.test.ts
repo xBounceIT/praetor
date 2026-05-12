@@ -163,17 +163,15 @@ afterAll(() => {
   mock.module('../../utils/order-ids.ts', () => orderIdsSnapshot);
 });
 
-const ENABLED_LDAP_CONFIG = {
+const ENABLED_LDAP_CONFIG: realLdapRepo.LdapConfig = {
+  ...realLdapRepo.DEFAULT_CONFIG,
   enabled: true,
   serverUrl: 'ldap://ldap.test:389',
   baseDn: 'dc=test,dc=com',
   bindDn: 'cn=admin,dc=test,dc=com',
   bindPassword: 'admin-pw',
-  userFilter: '(uid={0})',
   groupBaseDn: 'ou=groups,dc=test,dc=com',
-  groupFilter: '(member={0})',
-  roleMappings: [],
-  tlsCaCertificate: '',
+  autoProvisionAll: true,
 };
 
 const LDAP_LOGIN_USER = {
@@ -621,6 +619,29 @@ describe('syncUsers', () => {
       ],
     };
     findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+    const result = await ldapService.syncUsers();
+    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ synced: 1, created: 0 });
+  });
+
+  test('autoProvisionAll=false: existing users update, new entries are NOT created', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, autoProvisionAll: false });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice New' } },
+            { objectName: 'uid=newcomer,dc=x', object: { uid: 'newcomer', cn: 'New Comer' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+      username === 'alice' ? LDAP_LOGIN_USER : null,
+    );
     const result = await ldapService.syncUsers();
     expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
     expect(createUserMock).not.toHaveBeenCalled();

@@ -71,6 +71,7 @@ const ldapConfigSchema = {
     groupFilter: { type: 'string' },
     roleMappings: { type: 'array', items: roleMappingSchema },
     tlsCaCertificate: { type: 'string' },
+    autoProvisionAll: { type: 'boolean' },
   },
   required: [
     'enabled',
@@ -83,6 +84,7 @@ const ldapConfigSchema = {
     'groupFilter',
     'roleMappings',
     'tlsCaCertificate',
+    'autoProvisionAll',
   ],
 } as const;
 
@@ -99,6 +101,7 @@ const ldapConfigUpdateBodySchema = {
     groupFilter: { type: 'string' },
     roleMappings: { type: 'array', items: roleMappingSchema },
     tlsCaCertificate: { type: ['string', 'null'], maxLength: TLS_CA_MAX_LENGTH },
+    autoProvisionAll: { type: 'boolean' },
   },
 } as const;
 
@@ -179,6 +182,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupFilter?: string;
         roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
         tlsCaCertificate?: string | null;
+        autoProvisionAll?: boolean;
       };
       const {
         enabled,
@@ -190,6 +194,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupBaseDn,
         groupFilter,
         roleMappings,
+        autoProvisionAll,
       } = body;
       const enabledValue = parseBoolean(enabled);
       const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
@@ -278,6 +283,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupBaseDn,
         groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
+        autoProvisionAll:
+          autoProvisionAll === undefined ? undefined : parseBoolean(autoProvisionAll),
         ...tlsCaResult.patch,
       });
 

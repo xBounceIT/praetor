@@ -1,0 +1,1 @@
+ALTER TABLE "ldap_config" ADD COLUMN "auto_provision_all" boolean DEFAULT false;

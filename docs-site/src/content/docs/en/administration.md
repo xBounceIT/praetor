@@ -25,6 +25,13 @@ LDAP synchronization updates only application users that are already set to LDAP
 
 When LDAP is enabled, application users that exist in the directory but not yet in Praetor are auto-provisioned on their first successful login. The new account is created with the canonical LDAP username (`uid` or `sAMAccountName`) — not the value typed at the login form — so that subsequent LDAP synchronizations key the same row even when the user signs in with an alias such as their email address. The provisioned user is bound to LDAP authentication and receives the roles mapped from their LDAP groups.
 
+The **User Provisioning Mode** toggle in the LDAP settings controls what the periodic sync does for users that do not yet exist locally:
+
+- **Provision on Login** (default) — periodic sync only refreshes display names and role mappings for existing application users. New users are only created the first time they sign in.
+- **Auto provision all matching users** — periodic sync also creates a local account for every LDAP entry that matches the configured user filter. Use this when you need every directory user pre-listed in Praetor before they ever log in.
+
+In both modes, on-login provisioning remains active, so a first-time login always works.
+
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
 ## General and email settings

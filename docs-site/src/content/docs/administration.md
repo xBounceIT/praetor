@@ -25,6 +25,13 @@ La sincronizzazione LDAP aggiorna solo utenti applicativi già impostati su LDAP
 
 Quando LDAP è abilitato, gli utenti applicativi presenti nella directory ma non ancora in Praetor vengono creati automaticamente al primo accesso riuscito. Il nuovo account viene salvato con lo username canonico LDAP (`uid` o `sAMAccountName`) — non con il valore digitato nella schermata di login — così che le successive sincronizzazioni LDAP aggiornino sempre la stessa riga anche quando l'utente accede con un alias, ad esempio la propria email. L'utente provisionato viene vincolato all'autenticazione LDAP e riceve i ruoli derivati dai gruppi LDAP a cui appartiene.
 
+Il toggle **Modalità di Provisioning Utenti** nelle impostazioni LDAP controlla cosa fa la sincronizzazione periodica per gli utenti non ancora presenti localmente:
+
+- **Provisioning al Login** (predefinito) — la sincronizzazione periodica aggiorna solo nomi visualizzati e mapping dei ruoli degli utenti applicativi esistenti. I nuovi utenti vengono creati solo al primo accesso.
+- **Provisioning automatico di tutti gli utenti corrispondenti** — la sincronizzazione periodica crea anche un account locale per ogni voce LDAP che corrisponde al filtro configurato. Utile quando vuoi che tutti gli utenti della directory siano già presenti in Praetor prima del loro primo accesso.
+
+In entrambe le modalità, il provisioning al login resta attivo, quindi un primo accesso funziona sempre.
+
 Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, ruolo assegnato e log di autenticazione.
 
 ## Impostazioni generali ed email

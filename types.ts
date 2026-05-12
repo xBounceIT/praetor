@@ -261,6 +261,7 @@ export interface LdapConfig {
   groupFilter: string;
   roleMappings: LdapRoleMapping[];
   tlsCaCertificate: string;
+  autoProvisionAll: boolean;
 }
 
 export interface LdapTestResponse {
