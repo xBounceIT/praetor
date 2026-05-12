@@ -1,19 +1,11 @@
-import { describe, expect, mock, test } from 'bun:test';
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { describe, expect, test } from 'bun:test';
+import { screen } from '@testing-library/react';
 import { act } from 'react';
 import type { Client, Project, ProjectTask, TimeEntry, User } from '../../types';
+import { installI18nMock } from '../helpers/i18n';
+import { render } from '../helpers/render';
 
-// Use stable `t` and `i18n` references. WeeklyView memoizes `weekDays` with `t` in its
-// dep array, which combined with the in-render `setState` pattern (rows ← initialRows)
-// would infinite-loop if `t` is re-created on every useTranslation call.
-const t = (key: string) => key;
-const i18n = { language: 'en', changeLanguage: () => {} };
-mock.module('react-i18next', () => ({
-  useTranslation: () => ({ t, i18n }),
-  Trans: ({ children }: { children: ReactNode }) => children,
-  initReactI18next: { type: '3rdParty', init: () => {} },
-}));
+installI18nMock();
 
 const WeeklyView = (await import('../../components/timesheet/WeeklyView')).default;
 
