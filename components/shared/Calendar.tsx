@@ -284,7 +284,7 @@ const Calendar: React.FC<CalendarProps> = ({
             <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 shadow-xl rounded-xl p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
               {monthNames.map((mName, idx) => (
                 <button
-                  key={mName}
+                  key={MONTH_KEYS[idx]}
                   type="button"
                   onClick={() => {
                     setViewDate(new Date(year, idx, 1));
@@ -369,7 +369,7 @@ const Calendar: React.FC<CalendarProps> = ({
           const isHolidayHeader = isSundayHeader || (treatSaturdayAsHoliday && isSaturdayHeader);
           return (
             <div
-              key={day}
+              key={dayHeaderKeys[idx]}
               className={`text-center font-bold uppercase tracking-widest ${
                 isCompact ? 'py-0.5 text-[9px]' : 'py-1 text-[10px]'
               } ${isHolidayHeader ? 'text-red-400' : 'text-slate-400'}`}
