@@ -1,5 +1,56 @@
-export type UserRole = string;
-export type Permission = string;
+// Built-in system role identifiers. Custom roles may exist in the DB (the `roles` table
+// stores arbitrary varchar(50) ids), so `UserRole` is a union of known literals plus a
+// `string & {}` escape hatch. This preserves autocomplete and catches typos like `'amdin'`
+// for the built-in roles while still accepting custom role ids at runtime boundaries.
+export type KnownUserRole = 'admin' | 'manager' | 'user' | 'top_manager';
+export type UserRole = KnownUserRole | (string & {});
+
+// Built-in permission identifiers follow the `<resource>.<action>` convention defined in
+// `utils/permissions.ts`. Custom permissions can technically be stored in the DB, so this
+// type mirrors the `UserRole` pattern: a literal union of the canonical set plus a
+// `string & {}` escape hatch.
+export type KnownPermissionResource =
+  | 'timesheets.tracker'
+  | 'timesheets.recurring'
+  | 'timesheets.tracker_all'
+  | 'crm.clients'
+  | 'crm.clients_all'
+  | 'crm.suppliers'
+  | 'crm.suppliers_all'
+  | 'sales.client_quotes'
+  | 'sales.client_offers'
+  | 'sales.supplier_quotes'
+  | 'catalog.internal_listing'
+  | 'accounting.clients_orders'
+  | 'accounting.clients_invoices'
+  | 'accounting.supplier_orders'
+  | 'accounting.supplier_invoices'
+  | 'projects.manage'
+  | 'projects.manage_all'
+  | 'projects.tasks'
+  | 'projects.tasks_all'
+  | 'projects.assignments'
+  | 'hr.internal'
+  | 'hr.external'
+  | 'hr.costs'
+  | 'hr.employee_assignments'
+  | 'hr.work_units'
+  | 'hr.work_units_all'
+  | 'reports.ai_reporting'
+  | 'administration.authentication'
+  | 'administration.general'
+  | 'administration.user_management'
+  | 'administration.user_management_all'
+  | 'administration.email'
+  | 'administration.roles'
+  | 'administration.logs'
+  | 'settings'
+  | 'docs.api'
+  | 'docs.frontend'
+  | 'notifications';
+export type KnownPermissionAction = 'view' | 'create' | 'update' | 'delete';
+export type KnownPermission = `${KnownPermissionResource}.${KnownPermissionAction}`;
+export type Permission = KnownPermission | (string & {});
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type DiscountType = 'percentage' | 'currency';
