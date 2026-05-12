@@ -8,6 +8,13 @@ export type EntryHandlersDeps = {
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
+// Invariant: callers MUST recreate these handlers whenever `currentUser` or
+// `viewingUserId` change (see the `useMemo` deps in App.tsx). Each handler
+// reads `currentUser` / `viewingUserId` synchronously BEFORE the first await
+// (and `setEntries` after the await — that's safe because the setter
+// reference is stable). There are no deferred callbacks (setTimeout /
+// setInterval / detached promise chains), so as long as the factory is
+// rebuilt when the user identity changes, the values are always fresh.
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
