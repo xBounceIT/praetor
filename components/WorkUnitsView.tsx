@@ -2,7 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { workUnitsApi } from '../services/api';
+import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
 import { hasScopedActionPermission } from '../utils/permissions';
 import Checkbox from './shared/Checkbox';
@@ -55,6 +55,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+
   const openCreateModal = () => {
     setName('');
     setSelectedManagerIds([]);
@@ -75,6 +79,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -87,12 +92,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       return;
     }
 
-    await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
-    setIsCreateModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      await onAddWorkUnit({ name, managerIds: selectedManagerIds, description });
+      setIsCreateModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrors({});
 
     const newErrors: Record<string, string> = {};
@@ -103,10 +114,14 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       return;
     }
 
-    if (editingUnit && name) {
+    if (!editingUnit || !name) return;
+    setIsSubmitting(true);
+    try {
       await onUpdateWorkUnit(editingUnit.id, { name, managerIds: selectedManagerIds, description });
       setIsEditModalOpen(false);
       setEditingUnit(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -116,10 +131,15 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   };
 
   const handleDelete = async () => {
-    if (targetUnit) {
+    if (!targetUnit) return;
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
       await onDeleteWorkUnit(targetUnit.id);
       setIsDeleteConfirmOpen(false);
       setTargetUnit(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -139,6 +159,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const saveAssignments = async () => {
     if (!targetUnit) return;
+    if (isSavingAssignments) return;
+    setIsSavingAssignments(true);
     try {
       await workUnitsApi.updateUsers(targetUnit.id, assignedUserIds);
       await refreshWorkUnits(); // Update counts
@@ -147,7 +169,29 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     } catch (err) {
       console.error('Failed to save assignments', err);
       alert(t('hr:workUnits.failedToSaveAssignments'));
+    } finally {
+      setIsSavingAssignments(false);
     }
+  };
+
+  const requestCloseCreateModal = () => {
+    if (isSubmitting) return;
+    setIsCreateModalOpen(false);
+  };
+
+  const requestCloseEditModal = () => {
+    if (isSubmitting) return;
+    setIsEditModalOpen(false);
+  };
+
+  const requestCloseAssignmentModal = () => {
+    if (isSavingAssignments) return;
+    setIsAssignmentModalOpen(false);
+  };
+
+  const requestCloseDeleteConfirm = () => {
+    if (isDeleting) return;
+    setIsDeleteConfirmOpen(false);
   };
 
   const toggleUserAssignment = (userId: string) => {
@@ -333,13 +377,15 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       </div>
 
       {/* Create Modal */}
-      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)}>
+      <Modal isOpen={isCreateModalOpen} onClose={requestCloseCreateModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workUnits.newWorkUnit')}</h3>
             <button
-              onClick={() => setIsCreateModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
+              type="button"
+              onClick={requestCloseCreateModal}
+              disabled={isSubmitting}
+              className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -394,17 +440,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
-                onClick={() => setIsCreateModalOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                onClick={requestCloseCreateModal}
+                disabled={isSubmitting}
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                disabled={selectedManagerIds.length === 0}
+                disabled={selectedManagerIds.length === 0 || isSubmitting}
                 className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {t('hr:workUnits.createUnit')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.createUnit')}
               </button>
             </div>
           </form>
@@ -412,15 +459,17 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       </Modal>
 
       {/* Edit Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)}>
+      <Modal isOpen={isEditModalOpen} onClose={requestCloseEditModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-zinc-800">
               {t('hr:workUnits.editWorkUnit')}
             </h3>
             <button
-              onClick={() => setIsEditModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
+              type="button"
+              onClick={requestCloseEditModal}
+              disabled={isSubmitting}
+              className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -475,16 +524,18 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                onClick={requestCloseEditModal}
+                disabled={isSubmitting}
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {t('hr:workUnits.saveChanges')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.saveChanges')}
               </button>
             </div>
           </form>
@@ -494,7 +545,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       {/* Assignment Modal */}
       <Modal
         isOpen={isAssignmentModalOpen && !!targetUnit}
-        onClose={() => setIsAssignmentModalOpen(false)}
+        onClose={requestCloseAssignmentModal}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
@@ -507,8 +558,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </p>
             </div>
             <button
-              onClick={() => setIsAssignmentModalOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600"
+              type="button"
+              onClick={requestCloseAssignmentModal}
+              disabled={isSavingAssignments}
+              className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -570,17 +623,22 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
           <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
             <button
-              onClick={() => setIsAssignmentModalOpen(false)}
-              className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
+              type="button"
+              onClick={requestCloseAssignmentModal}
+              disabled={isSavingAssignments}
+              className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
+              type="button"
               onClick={saveAssignments}
-              disabled={isLoadingAssignments}
+              disabled={isLoadingAssignments || isSavingAssignments}
               className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50"
             >
-              {t('hr:workUnits.saveAssignments')}
+              {isSavingAssignments
+                ? t('common:buttons.saving')
+                : t('hr:workUnits.saveAssignments')}
             </button>
           </div>
         </div>
@@ -589,7 +647,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       {/* Delete Confirm Modal */}
       <Modal
         isOpen={isDeleteConfirmOpen && !!targetUnit}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={requestCloseDeleteConfirm}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
@@ -606,16 +664,20 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                type="button"
+                onClick={requestCloseDeleteConfirm}
+                disabled={isDeleting}
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
               >
-                {t('hr:workUnits.yesDelete')}
+                {isDeleting ? t('common:buttons.saving') : t('hr:workUnits.yesDelete')}
               </button>
             </div>
           </div>

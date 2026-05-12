@@ -116,9 +116,11 @@ export function ModalDescription({
 export function ModalCloseButton({
   onClick,
   className,
+  disabled,
 }: {
   onClick: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Button
@@ -127,6 +129,7 @@ export function ModalCloseButton({
       size="icon-sm"
       className={cn('shrink-0 text-muted-foreground', className)}
       onClick={onClick}
+      disabled={disabled}
     >
       <XIcon className="size-4" />
       <span className="sr-only">Close</span>

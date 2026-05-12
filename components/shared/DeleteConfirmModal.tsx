@@ -10,6 +10,7 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   title: React.ReactNode;
   description?: React.ReactNode;
+  isDeleting?: boolean;
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -18,6 +19,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onConfirm,
   title,
   description,
+  isDeleting = false,
 }) => {
   const { t } = useTranslation('common');
   return (
@@ -38,11 +40,16 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             </ModalBody>
           )}
           <ModalFooter className="grid grid-cols-2 sm:flex">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isDeleting}>
               {t('buttons.noGoBack')}
             </Button>
-            <Button type="button" variant="destructive" onClick={onConfirm}>
-              {t('buttons.yesDelete')}
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onConfirm}
+              disabled={isDeleting}
+            >
+              {isDeleting ? t('buttons.saving') : t('buttons.yesDelete')}
             </Button>
           </ModalFooter>
         </ModalContent>
