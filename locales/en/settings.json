@@ -41,6 +41,7 @@
   },
   "password": {
     "title": "Password Settings",
+    "description": "Update the password for your Praetor account.",
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmNewPassword": "Confirm New Password",
@@ -53,6 +54,7 @@
   },
   "mcp": {
     "title": "MCP Tokens",
+    "description": "Create tokens that let AI agents access Praetor over the MCP protocol.",
     "urlLabel": "MCP Server URL",
     "urlDescription": "Use this Streamable HTTP endpoint when adding Praetor to an external MCP client.",
     "copyUrl": "Copy URL",
