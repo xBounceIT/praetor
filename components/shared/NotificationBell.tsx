@@ -1,8 +1,8 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Notification } from '../../types';
-import Tooltip from './Tooltip';
 
 export interface NotificationBellProps {
   notifications: Notification[];
@@ -11,6 +11,9 @@ export interface NotificationBellProps {
   onMarkAllAsRead: () => void;
   onDelete: (id: string) => void;
 }
+
+const getNotificationIconClass = (type: string) =>
+  type === 'admin_password_warning' ? 'fa-triangle-exclamation' : 'fa-folder-tree';
 
 const NotificationBell: React.FC<NotificationBellProps> = ({
   notifications,
@@ -99,22 +102,22 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={handleToggleDropdown}
-        className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors focus:outline-none"
+        className="relative rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none"
         aria-label={t('notifications.title', 'Notifications')}
       >
         <i className="fa-solid fa-bell text-lg"></i>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+          <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-background shadow-sm">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right overflow-hidden">
+        <div className="absolute right-0 z-50 mt-3 w-80 origin-top-right overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in zoom-in-95 duration-200">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h3 className="font-semibold text-slate-800 text-sm">
+          <div className="flex items-center justify-between border-b border-border bg-popover px-4 py-3">
+            <h3 className="text-sm font-semibold text-popover-foreground">
               {t('notifications.title', 'Notifications')}
             </h3>
             {unreadCount > 0 && (
@@ -122,7 +125,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                 onClick={() => {
                   onMarkAllAsRead();
                 }}
-                className="text-xs text-praetor hover:text-praetor/80 font-medium transition-colors"
+                className="text-xs font-medium text-primary transition-colors hover:text-primary/80"
               >
                 {t('notifications.markAllAsRead', 'Mark all as read')}
               </button>
@@ -132,7 +135,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
           {/* Notifications List */}
           <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-slate-400 text-sm">
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                 <i className="fa-solid fa-bell-slash text-2xl mb-2 opacity-50"></i>
                 <p>{t('notifications.noNotifications', 'No notifications')}</p>
               </div>
@@ -140,46 +143,57 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`px-4 py-3 border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors ${
-                    notification.isRead ? 'bg-white' : 'bg-blue-50/50'
-                  } hover:bg-slate-50 group`}
+                  className={`group cursor-pointer border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-accent hover:text-accent-foreground ${
+                    notification.isRead
+                      ? 'bg-popover text-popover-foreground'
+                      : 'bg-accent text-accent-foreground'
+                  }`}
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                      className={`flex-shrink-0 size-8 rounded-full flex items-center justify-center ${
                         notification.isRead
-                          ? 'bg-slate-100 text-slate-400'
-                          : 'bg-praetor/10 text-praetor'
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-primary text-primary-foreground'
                       }`}
                     >
-                      <i className="fa-solid fa-folder-tree text-sm"></i>
+                      <i
+                        className={`fa-solid ${getNotificationIconClass(notification.type)} text-sm`}
+                      ></i>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p
                           className={`text-sm flex-1 ${
-                            notification.isRead ? 'text-slate-600' : 'text-slate-800 font-medium'
+                            notification.isRead
+                              ? 'text-muted-foreground'
+                              : 'text-accent-foreground font-medium'
                           }`}
                         >
                           {getLocalizedTitle(notification)}
                         </p>
                         {!notification.isRead && (
-                          <span className="w-2 h-2 bg-praetor rounded-full flex-shrink-0"></span>
+                          <span className="size-2 rounded-full bg-primary flex-shrink-0"></span>
                         )}
-                        <Tooltip label={t('notifications.delete', 'Delete notification')}>
-                          {() => (
-                            <button
-                              onClick={(e) => handleDelete(e, notification.id)}
-                              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                              aria-label={t('notifications.delete', 'Delete notification')}
-                            >
-                              <i className="fa-solid fa-xmark text-xs"></i>
-                            </button>
-                          )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <button
+                                onClick={(e) => handleDelete(e, notification.id)}
+                                className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                                aria-label={t('notifications.delete', 'Delete notification')}
+                              >
+                                <i className="fa-solid fa-xmark text-xs"></i>
+                              </button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('notifications.delete', 'Delete notification')}
+                          </TooltipContent>
                         </Tooltip>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {formatTimeAgo(notification.createdAt)}
                         {notification.data?.clientName && (
                           <span> · {notification.data.clientName}</span>
@@ -195,7 +209,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                               expandedId === notification.id ? 'max-h-40' : 'max-h-0'
                             }`}
                           >
-                            <ul className="text-xs text-slate-500 space-y-1 pl-3 border-l-2 border-slate-200">
+                            <ul className="space-y-1 border-l-2 border-border pl-3 text-xs text-muted-foreground">
                               {notification.data.projectNames.map((name, idx) => (
                                 <li key={idx} className="truncate">
                                   {name}
@@ -209,7 +223,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         notification.data?.projectNames &&
                         notification.data.projectNames.length > 0 && (
                           <button
-                            className="text-xs text-praetor hover:text-praetor/80 mt-1 flex items-center gap-1"
+                            className="mt-1 flex items-center gap-1 text-xs text-primary hover:text-primary/80"
                             onClick={(e) => {
                               e.stopPropagation();
                               setExpandedId(

@@ -18,6 +18,8 @@ package-lock.json
 .bun-install/
 server/.tmp/
 .tmp/
+docs-site/.astro/
+docs-site/dist/
 
 # Editor directories and files
 .vscode/*
@@ -33,6 +35,9 @@ server/.tmp/
 # Environment files
 .env
 server/.env
+
+# Generated LDAP integration test certs
+server/test/integration/.certs/
 
 # Todo file
 todo.md

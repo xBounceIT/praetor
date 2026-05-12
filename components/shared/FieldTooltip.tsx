@@ -1,5 +1,5 @@
 import type React from 'react';
-import Tooltip from './Tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface FieldTooltipProps {
   description: string;
@@ -9,7 +9,7 @@ export interface FieldTooltipProps {
 }
 
 const renderTooltipIcon = () => (
-  <i className="fa-solid fa-circle-question text-slate-300 hover:text-slate-500 text-[10px] cursor-help transition-colors" />
+  <i className="fa-solid fa-circle-question text-zinc-300 hover:text-zinc-500 text-[10px] cursor-help transition-colors" />
 );
 
 const FieldTooltip: React.FC<FieldTooltipProps> = ({
@@ -19,20 +19,18 @@ const FieldTooltip: React.FC<FieldTooltipProps> = ({
   className = '',
 }) => {
   return (
-    <Tooltip
-      label={
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={`inline-flex ${className}`}>{renderTooltipIcon()}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
         <div className="space-y-1">
           <div>{description}</div>
           <div className="opacity-70">
             {statusLabel} {status}
           </div>
         </div>
-      }
-      position="top"
-      tooltipClassName="whitespace-normal max-w-72"
-      wrapperClassName={className}
-    >
-      {renderTooltipIcon}
+      </TooltipContent>
     </Tooltip>
   );
 };

@@ -1,0 +1,45 @@
+dn: dc=praetor,dc=test
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: Praetor Test
+dc: praetor
+
+dn: ou=people,dc=praetor,dc=test
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=praetor,dc=test
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=alice,ou=people,dc=praetor,dc=test
+objectClass: inetOrgPerson
+cn: Alice Example
+sn: Example
+givenName: Alice
+uid: alice
+mail: alice@praetor.test
+displayName: Alice Example
+userPassword: alicepass
+
+dn: uid=bob,ou=people,dc=praetor,dc=test
+objectClass: inetOrgPerson
+cn: Bob Example
+sn: Example
+givenName: Bob
+uid: bob
+mail: bob@praetor.test
+displayName: Bob Example
+userPassword: bobpass
+
+dn: cn=praetor-admins,ou=groups,dc=praetor,dc=test
+objectClass: groupOfNames
+cn: praetor-admins
+member: uid=alice,ou=people,dc=praetor,dc=test
+
+dn: cn=praetor-users,ou=groups,dc=praetor,dc=test
+objectClass: groupOfNames
+cn: praetor-users
+member: uid=alice,ou=people,dc=praetor,dc=test
+member: uid=bob,ou=people,dc=praetor,dc=test

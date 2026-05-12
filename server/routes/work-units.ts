@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { authenticateToken, requireScopedPermission } from '../middleware/auth.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
@@ -79,7 +79,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.view')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'view')],
       schema: {
         tags: ['work-units'],
         summary: 'List work units',
@@ -102,7 +102,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.create')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'create')],
       schema: {
         tags: ['work-units'],
         summary: 'Create work unit',
@@ -159,7 +159,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.update')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit',
@@ -251,7 +251,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.delete')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'delete')],
       schema: {
         tags: ['work-units'],
         summary: 'Delete work unit',
@@ -289,7 +289,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.view')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'view')],
       schema: {
         tags: ['work-units'],
         summary: 'Get users in work unit',
@@ -321,7 +321,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('hr.work_units.update')],
+      onRequest: [authenticateToken, requireScopedPermission('hr.work_units', 'update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit users',

@@ -6,7 +6,7 @@ import { notifications } from '../db/schema/notifications.ts';
 // agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
 // would parameterize the comparison and miss NULL. The partial index
 // `idx_notifications_user_unread` (predicate `is_read = false`) is not matched by this
-// predicate — the NULL-handling consistency is the tradeoff we want.
+// predicate - the NULL-handling consistency is the tradeoff we want.
 const isUnread = sql`${notifications.isRead} IS NOT TRUE`;
 
 export type Notification = {
@@ -19,6 +19,14 @@ export type Notification = {
   isRead: boolean;
   createdAt: number;
 };
+
+export const ADMIN_PASSWORD_WARNING_NOTIFICATION_ID = 'admin-default-password-warning';
+export const ADMIN_PASSWORD_WARNING_TYPE = 'admin_password_warning';
+
+const ADMIN_PASSWORD_WARNING_TITLE = 'Change the default admin password';
+const ADMIN_PASSWORD_WARNING_MESSAGE =
+  'The admin account is still using the default password. Change it from Settings as soon as possible.';
+const adminPasswordWarningData = { reason: 'default_admin_password' };
 
 const mapRow = (row: typeof notifications.$inferSelect): Notification => ({
   id: row.id,
@@ -86,4 +94,38 @@ export const deleteForUser = async (
     .delete(notifications)
     .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
   return (result.rowCount ?? 0) > 0;
+};
+
+export const upsertAdminPasswordWarning = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const warning = {
+    userId,
+    type: ADMIN_PASSWORD_WARNING_TYPE,
+    title: ADMIN_PASSWORD_WARNING_TITLE,
+    message: ADMIN_PASSWORD_WARNING_MESSAGE,
+    data: adminPasswordWarningData,
+    isRead: false,
+  };
+
+  await exec
+    .insert(notifications)
+    .values({
+      id: ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+      ...warning,
+    })
+    .onConflictDoUpdate({
+      target: notifications.id,
+      set: {
+        ...warning,
+        createdAt: sql`CURRENT_TIMESTAMP`,
+      },
+    });
+};
+
+export const deleteAdminPasswordWarning = async (exec: DbExecutor = db): Promise<void> => {
+  await exec
+    .delete(notifications)
+    .where(eq(notifications.id, ADMIN_PASSWORD_WARNING_NOTIFICATION_ID));
 };

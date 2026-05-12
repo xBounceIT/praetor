@@ -87,18 +87,18 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
       closeOnBackdrop={false}
       closeOnEsc={false}
       zIndex={100}
-      backdropClass="bg-slate-900/60 backdrop-blur-md"
+      backdropClass="bg-zinc-900/60 backdrop-blur-md"
     >
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-200">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 border border-zinc-200">
         <div className="p-8 text-center">
-          <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="size-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <i className="fa-solid fa-hourglass-half text-amber-500 text-3xl animate-pulse"></i>
           </div>
 
-          <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">
+          <h3 className="text-2xl font-semibold text-zinc-800 mb-2 tracking-tight">
             {t('sessionTimeout.title')}
           </h3>
-          <p className="text-slate-500 leading-relaxed mb-8">{t('sessionTimeout.message')}</p>
+          <p className="text-zinc-500 leading-relaxed mb-8">{t('sessionTimeout.message')}</p>
 
           <div className="flex flex-col gap-3">
             <button
@@ -116,15 +116,15 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
 
             <button
               onClick={onLogout}
-              className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:bg-slate-100 transition-colors"
+              className="w-full py-4 bg-zinc-50 text-zinc-500 rounded-2xl font-bold hover:bg-zinc-100 transition-colors"
             >
               {t('sessionTimeout.logout')}
             </button>
           </div>
         </div>
 
-        <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex justify-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+        <div className="bg-zinc-50 px-8 py-4 border-t border-zinc-100 flex justify-center">
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <i className="fa-solid fa-shield-halved"></i>
             {t('sessionTimeout.secure')}
           </p>

@@ -28,7 +28,12 @@ export type StatusType =
   | 'customer_premise'
   | 'remote'
   | 'transfer'
-  | 'recurrence';
+  | 'recurrence'
+  | 'role_admin'
+  | 'role_top_manager'
+  | 'role_manager'
+  | 'role_custom'
+  | 'role_user';
 
 export interface StatusBadgeProps {
   type: StatusType;
@@ -43,11 +48,11 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-check',
     },
     disabled: {
-      container: 'bg-slate-50 text-slate-400 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-400 border-zinc-100',
       icon: 'fa-ban',
     },
     inherited: {
-      container: 'bg-slate-50 text-slate-500 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-500 border-zinc-100',
       icon: 'fa-triangle-exclamation',
     },
     expired: {
@@ -87,7 +92,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-clock',
     },
     cancelled: {
-      container: 'bg-slate-50 text-slate-500 border-slate-100',
+      container: 'bg-zinc-50 text-zinc-500 border-zinc-100',
       icon: 'fa-ban',
     },
     supply: {
@@ -147,8 +152,28 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-car',
     },
     recurrence: {
-      container: 'bg-slate-50 text-praetor border-slate-200',
+      container: 'bg-zinc-50 text-praetor border-zinc-200',
       icon: 'fa-repeat',
+    },
+    role_admin: {
+      container: 'bg-zinc-800 text-white border-zinc-700',
+      icon: 'fa-shield-halved',
+    },
+    role_top_manager: {
+      container: 'bg-amber-50 text-amber-700 border-amber-200',
+      icon: 'fa-crown',
+    },
+    role_manager: {
+      container: 'bg-blue-50 text-blue-700 border-blue-200',
+      icon: 'fa-briefcase',
+    },
+    role_custom: {
+      container: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: 'fa-user',
+    },
+    role_user: {
+      container: 'bg-zinc-100 text-zinc-600 border-zinc-200',
+      icon: 'fa-user',
     },
   };
 
@@ -156,6 +181,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
 
   return (
     <span
+      data-status-badge
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
     >
       <i className={`fa-solid ${currentStyle.icon}`}></i>

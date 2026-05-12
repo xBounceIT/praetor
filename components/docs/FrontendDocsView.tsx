@@ -5,7 +5,7 @@ const FrontendDocsView: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+    <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
       <a className="text-praetor font-semibold" href="/docs/frontend/index.html">
         Open frontend documentation
       </a>

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { escapeCsvCell } from '../../utils/csv';
 
-describe('escapeCsvCell — formula injection protection', () => {
+describe('escapeCsvCell - formula injection protection', () => {
   test.each([
     '=',
     '+',
@@ -32,7 +32,7 @@ describe('escapeCsvCell — formula injection protection', () => {
   });
 });
 
-describe('escapeCsvCell — quoting & escaping', () => {
+describe('escapeCsvCell - quoting & escaping', () => {
   test('passes a plain string through unchanged', () => {
     expect(escapeCsvCell('hello world')).toBe('hello world');
   });

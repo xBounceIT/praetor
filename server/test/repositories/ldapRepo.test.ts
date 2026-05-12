@@ -184,7 +184,7 @@ describe('tlsCaCertificate clear semantics', () => {
   test('update with empty string emits literal NULL (clear), not a bound parameter', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await ldapRepo.update({ tlsCaCertificate: '' }, testDb);
-    // No bound param holds an empty string — the clear path uses sql`NULL` directly,
+    // No bound param holds an empty string - the clear path uses sql`NULL` directly,
     // which Drizzle emits as the SQL token rather than a placeholder.
     expect(exec.calls[0].params).not.toContain('');
     expect(exec.calls[0].sql.toUpperCase()).toContain('NULL');

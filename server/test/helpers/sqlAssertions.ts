@@ -13,7 +13,7 @@
  * expect(onClause).not.toBeNull();
  * expect(onClause).toContain('"t"."id" = "te"."task_id"');
  * ```
- * `expect()` accepts `null`, so subsequent matchers work without explicit `!` narrowing —
+ * `expect()` accepts `null`, so subsequent matchers work without explicit `!` narrowing -
  * the `not.toBeNull()` assertion guarantees the call never reaches them when the regex misses.
  *
  * **Limitation**: the lookahead `(?=\s+(?:JOIN|WHERE|GROUP)\b)` doesn't track nesting. If a
