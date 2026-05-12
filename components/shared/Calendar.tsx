@@ -191,7 +191,7 @@ const Calendar: React.FC<CalendarProps> = ({
               className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border
               ${
                 isSelected
-                  ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
+                  ? 'bg-secondary text-secondary-foreground border-secondary shadow-md scale-105 z-10'
                   : isInRange
                     ? 'bg-muted text-foreground border-muted'
                     : isWeekendOrHoliday
@@ -219,7 +219,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
               {hasActivity && selectionMode === 'single' && (
                 <span
-                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-white' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
+                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-secondary-foreground' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
                 ></span>
               )}
               {holidayName && selectionMode === 'single' && (
@@ -298,7 +298,7 @@ const Calendar: React.FC<CalendarProps> = ({
                   }}
                   className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
                     idx === month
-                      ? 'bg-praetor text-white'
+                      ? 'bg-secondary text-secondary-foreground'
                       : idx === currentMonth
                         ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
                         : 'text-foreground hover:bg-muted'
@@ -323,7 +323,7 @@ const Calendar: React.FC<CalendarProps> = ({
                   }}
                   className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
                     y === year
-                      ? 'bg-praetor text-white'
+                      ? 'bg-secondary text-secondary-foreground'
                       : y === currentYear
                         ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
                         : 'text-foreground hover:bg-muted'
