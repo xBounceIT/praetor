@@ -1,4 +1,5 @@
 import type React from 'react';
+import { siOpenid } from 'simple-icons';
 
 export type StatusType =
   | 'active'
@@ -33,7 +34,11 @@ export type StatusType =
   | 'role_top_manager'
   | 'role_manager'
   | 'role_custom'
-  | 'role_user';
+  | 'role_user'
+  | 'auth_local'
+  | 'auth_ldap'
+  | 'auth_oidc'
+  | 'auth_saml';
 
 export interface StatusBadgeProps {
   type: StatusType;
@@ -42,7 +47,7 @@ export interface StatusBadgeProps {
 }
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }) => {
-  const styles = {
+  const styles: Record<StatusType, { container: string; icon: string; svgPath?: string }> = {
     active: {
       container: 'bg-emerald-50 text-emerald-600 border-emerald-100',
       icon: 'fa-check',
@@ -175,6 +180,23 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       container: 'bg-zinc-100 text-zinc-600 border-zinc-200',
       icon: 'fa-user',
     },
+    auth_local: {
+      container: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+      icon: 'fa-database',
+    },
+    auth_ldap: {
+      container: 'bg-blue-50 text-blue-700 border-blue-200',
+      icon: 'fa-sitemap',
+    },
+    auth_oidc: {
+      container: 'bg-purple-50 text-purple-700 border-purple-200',
+      icon: 'fa-id-card',
+      svgPath: siOpenid.path,
+    },
+    auth_saml: {
+      container: 'bg-teal-50 text-teal-700 border-teal-200',
+      icon: 'fa-building-shield',
+    },
   };
 
   const currentStyle = styles[type];
@@ -184,7 +206,19 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       data-status-badge
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
     >
-      <i className={`fa-solid ${currentStyle.icon}`}></i>
+      {currentStyle.svgPath ? (
+        <svg
+          aria-hidden="true"
+          role="img"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="size-[1em]"
+        >
+          <path d={currentStyle.svgPath} />
+        </svg>
+      ) : (
+        <i className={`fa-solid ${currentStyle.icon}`}></i>
+      )}
       {label}
     </span>
   );

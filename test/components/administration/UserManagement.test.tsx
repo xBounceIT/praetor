@@ -120,6 +120,68 @@ describe('<UserManagement />', () => {
     expect(screen.getAllByText('common:common.active')).toHaveLength(2);
   });
 
+  test('renders a distinct auth-method badge per protocol', () => {
+    renderUserManagement({
+      users: [
+        {
+          id: 'u-local',
+          name: 'Local User',
+          role: 'user',
+          avatarInitials: 'LU',
+          username: 'local.user',
+          employeeType: 'app_user',
+          authMethod: 'local',
+        },
+        {
+          id: 'u-ldap',
+          name: 'Ldap User',
+          role: 'user',
+          avatarInitials: 'LD',
+          username: 'ldap.user',
+          employeeType: 'app_user',
+          authMethod: 'ldap',
+        },
+        {
+          id: 'u-oidc',
+          name: 'Oidc User',
+          role: 'user',
+          avatarInitials: 'OI',
+          username: 'oidc.user',
+          employeeType: 'app_user',
+          authMethod: 'oidc',
+          authProviderName: 'Keycloak',
+        },
+        {
+          id: 'u-saml',
+          name: 'Saml User',
+          role: 'user',
+          avatarInitials: 'SA',
+          username: 'saml.user',
+          employeeType: 'app_user',
+          authMethod: 'saml',
+          authProviderName: 'Okta',
+        },
+      ],
+    });
+
+    const authBadgeFor = (rowText: string) => {
+      const row = getRowFor(rowText);
+      const badges = row.querySelectorAll('[data-status-badge]');
+      const authBadge = badges[badges.length - 2];
+      if (!authBadge) throw new Error(`No auth badge found for ${rowText}`);
+      return authBadge as HTMLElement;
+    };
+
+    expect(authBadgeFor('Local User').querySelector('i')?.className ?? '').toContain('fa-database');
+    expect(authBadgeFor('Ldap User').querySelector('i')?.className ?? '').toContain('fa-sitemap');
+    expect(authBadgeFor('Saml User').querySelector('i')?.className ?? '').toContain(
+      'fa-building-shield',
+    );
+    const oidcBadge = authBadgeFor('Oidc User');
+    expect(oidcBadge.querySelector('svg')).not.toBeNull();
+    expect(oidcBadge.querySelector('i')).toBeNull();
+  });
+
   test('filters users with the external search input', () => {
     renderUserManagement();
 
