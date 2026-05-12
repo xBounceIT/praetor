@@ -80,7 +80,13 @@ describe('createSupplierOrderFromQuote', () => {
     globalThis.alert = originalAlert;
   });
 
-  test('rejects items with missing productId before calling the API', async () => {
+  test('passes items with missing productId through as empty string (server coerces to null)', async () => {
+    // SupplierQuotesView legitimately creates free-text quote lines without
+    // a linked product; the backend canonicalizes missing/empty productId
+    // to NULL in the DB. The handler must not block this workflow.
+    apiMocks.supplierOrdersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'so-new', ...(data as object), items: [] }),
+    );
     const handlers = makeHandlers();
     const quote = baseQuote({
       items: [
@@ -91,25 +97,13 @@ describe('createSupplierOrderFromQuote', () => {
 
     await handlers.createSupplierOrderFromQuote(quote);
 
-    expect(apiMocks.supplierOrdersCreate).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    const message = (alertSpy.mock.calls[0] as [string])[0];
-    expect(message).toContain('Item 2');
-    expect(message).toContain('product');
-  });
-
-  test('rejects items with empty-string productId before calling the API', async () => {
-    const handlers = makeHandlers();
-    const quote = baseQuote({
-      items: [baseItem({ id: 'sqi-1', productId: '' })],
-    });
-
-    await handlers.createSupplierOrderFromQuote(quote);
-
-    expect(apiMocks.supplierOrdersCreate).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    const message = (alertSpy.mock.calls[0] as [string])[0];
-    expect(message).toContain('Item 1');
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(apiMocks.supplierOrdersCreate).toHaveBeenCalledTimes(1);
+    const payload = (apiMocks.supplierOrdersCreate.mock.calls[0] as [Record<string, unknown>])[0];
+    const items = payload.items as Array<{ productId: string }>;
+    expect(items).toHaveLength(2);
+    expect(items[0].productId).toBe('prod-1');
+    expect(items[1].productId).toBe('');
   });
 
   test('creates the order with all productIds when every item has one', async () => {
