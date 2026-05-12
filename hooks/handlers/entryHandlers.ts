@@ -8,6 +8,13 @@ export type EntryHandlersDeps = {
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
+// Invariant: callers MUST recreate these handlers whenever `currentUser` or
+// `viewingUserId` change (see the `useMemo` deps in App.tsx). Each handler
+// closes over the values destructured below, so a stale factory would write
+// entries under the wrong user. There are no deferred callbacks here
+// (setTimeout/setInterval), so the closure is only read during the synchronous
+// portion of each handler — the captured deps are fresh for the lifetime of
+// the factory instance.
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
