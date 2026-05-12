@@ -156,6 +156,7 @@ describe('DEFAULT_CONFIG', () => {
       groupFilter: '(member={0})',
       roleMappings: [],
       tlsCaCertificate: '',
+      autoProvisionAll: false,
     });
   });
 });

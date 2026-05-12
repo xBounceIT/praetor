@@ -91,18 +91,7 @@ const HAPPY_USER = {
   isDisabled: false,
 };
 
-const BASE_CONFIG: realLdapRepo.LdapConfig = {
-  enabled: false,
-  serverUrl: 'ldap://ldap.example.com:389',
-  baseDn: 'dc=example,dc=com',
-  bindDn: '',
-  bindPassword: '',
-  userFilter: '(uid={0})',
-  groupBaseDn: 'ou=groups,dc=example,dc=com',
-  groupFilter: '(member={0})',
-  roleMappings: [],
-  tlsCaCertificate: '',
-};
+const BASE_CONFIG: realLdapRepo.LdapConfig = realLdapRepo.DEFAULT_CONFIG;
 
 const allMocks = [
   findAuthUserByIdMock,
@@ -206,6 +195,52 @@ describe('GET /api/ldap/config', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).tlsCaCertificate).toBe('');
+  });
+
+  test('returns autoProvisionAll=false by default', async () => {
+    ldapGetMock.mockResolvedValue(null);
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/ldap/config',
+      headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).autoProvisionAll).toBe(false);
+  });
+
+  test('returns stored autoProvisionAll=true when set', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, autoProvisionAll: true });
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/ldap/config',
+      headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).autoProvisionAll).toBe(true);
+  });
+});
+
+describe('PUT /api/ldap/config - autoProvisionAll', () => {
+  test('omitting autoProvisionAll does not pass the key to ldapRepo.update', async () => {
+    const response = await putConfig({ enabled: false });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.autoProvisionAll).toBeUndefined();
+  });
+
+  test('passing autoProvisionAll=true forwards it to ldapRepo.update', async () => {
+    const response = await putConfig({ enabled: false, autoProvisionAll: true });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.autoProvisionAll).toBe(true);
+  });
+
+  test('passing autoProvisionAll=false forwards it to ldapRepo.update', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, autoProvisionAll: true });
+    const response = await putConfig({ enabled: false, autoProvisionAll: false });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.autoProvisionAll).toBe(false);
   });
 });
 

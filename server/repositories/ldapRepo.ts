@@ -15,6 +15,7 @@ export type LdapConfig = {
   groupFilter: string;
   roleMappings: LdapRoleMapping[];
   tlsCaCertificate: string;
+  autoProvisionAll: boolean;
 };
 
 export type LdapConfigPatch = Partial<LdapConfig>;
@@ -30,6 +31,7 @@ export const DEFAULT_CONFIG: LdapConfig = {
   groupFilter: '(member={0})',
   roleMappings: [],
   tlsCaCertificate: '',
+  autoProvisionAll: false,
 };
 
 const LDAP_PROJECTION = {
@@ -43,6 +45,7 @@ const LDAP_PROJECTION = {
   groupFilter: ldapConfig.groupFilter,
   roleMappings: ldapConfig.roleMappings,
   tlsCaCertificate: ldapConfig.tlsCaCertificate,
+  autoProvisionAll: ldapConfig.autoProvisionAll,
 } as const;
 
 type LdapRow = {
@@ -56,6 +59,7 @@ type LdapRow = {
   groupFilter: string | null;
   roleMappings: LdapRoleMapping[] | null;
   tlsCaCertificate: string | null;
+  autoProvisionAll: boolean | null;
 };
 
 // Schema columns are nullable but always populated at runtime via DB defaults on the seeded
@@ -76,6 +80,7 @@ const mapRow = (row: LdapRow): LdapConfig => ({
   groupFilter: row.groupFilter ?? DEFAULT_CONFIG.groupFilter,
   roleMappings: row.roleMappings ?? [],
   tlsCaCertificate: row.tlsCaCertificate ?? '',
+  autoProvisionAll: row.autoProvisionAll ?? DEFAULT_CONFIG.autoProvisionAll,
 });
 
 export const get = async (exec: DbExecutor = db): Promise<LdapConfig | null> => {
@@ -115,6 +120,7 @@ export const update = async (
       groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
       roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
       tlsCaCertificate: tlsCaParam,
+      autoProvisionAll: sql`COALESCE(${patch.autoProvisionAll ?? null}, ${ldapConfig.autoProvisionAll})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(ldapConfig.id, 1))

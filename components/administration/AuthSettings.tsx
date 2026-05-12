@@ -13,6 +13,7 @@ import type {
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
+import { Switch } from '../ui/switch';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
@@ -37,6 +38,7 @@ const DEFAULT_LDAP_CONFIG: LdapConfig = {
   groupFilter: '(member={0})',
   roleMappings: [],
   tlsCaCertificate: '',
+  autoProvisionAll: false,
 };
 
 const buildDefaultProvider = (protocol: SsoProtocol): Partial<SsoProvider> => ({
@@ -737,6 +739,40 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   monospace
                   onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
                 />
+              </div>
+
+              <div className="border-t border-zinc-100 p-6 space-y-3">
+                <div
+                  id="ldap-provisioning-heading"
+                  className="text-xs font-bold text-muted-foreground uppercase tracking-wider"
+                >
+                  {t('admin.ldap.provisioning.heading', 'User Provisioning Mode')}
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span
+                    className={`text-sm font-medium ${!ldapForm.autoProvisionAll ? 'text-foreground' : 'text-muted-foreground'}`}
+                  >
+                    {t('admin.ldap.provisioning.onLogin', 'Provision on Login')}
+                  </span>
+                  <Switch
+                    checked={ldapForm.autoProvisionAll}
+                    onCheckedChange={(autoProvisionAll) =>
+                      setLdapForm((prev) => ({ ...prev, autoProvisionAll }))
+                    }
+                    aria-labelledby="ldap-provisioning-heading"
+                  />
+                  <span
+                    className={`text-sm font-medium ${ldapForm.autoProvisionAll ? 'text-foreground' : 'text-muted-foreground'}`}
+                  >
+                    {t('admin.ldap.provisioning.autoAll', 'Auto provision all matching users')}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'admin.ldap.provisioning.help',
+                    'On Login: users are created when they first sign in; periodic sync only refreshes names and roles of existing users. Auto: periodic sync also creates every matching LDAP user.',
+                  )}
+                </p>
               </div>
 
               <div className="border-t border-zinc-100 p-6">
