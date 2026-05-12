@@ -178,7 +178,15 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
   return `${verbLabel.toLowerCase()} ${entityLabel}`;
 };
 
-const LogsView: React.FC = () => {
+interface LogsViewProps {
+  startOfWeek?: 'Monday' | 'Sunday';
+  treatSaturdayAsHoliday?: boolean;
+}
+
+const LogsView: React.FC<LogsViewProps> = ({
+  startOfWeek = 'Monday',
+  treatSaturdayAsHoliday = false,
+}) => {
   const { t, i18n } = useTranslation(['administration', 'common']);
   const [activeTab, setActiveTab] = useState<'audit'>('audit');
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
@@ -322,6 +330,8 @@ const LogsView: React.FC = () => {
         onChange={handleStartDateChange}
         onClear={handleStartDateClear}
         buttonClassName={tableToolbarButtonClassName}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
       <i className="fa-solid fa-arrow-right text-zinc-300 text-sm" />
       <DatePickerButton
@@ -330,6 +340,8 @@ const LogsView: React.FC = () => {
         onChange={handleEndDateChange}
         onClear={handleEndDateClear}
         buttonClassName={tableToolbarButtonClassName}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
       <SelectControl
         options={timeRangeOptions}

@@ -22,6 +22,8 @@ export interface DatePickerButtonProps {
   disabled?: boolean;
   className?: string;
   buttonClassName?: string;
+  startOfWeek?: 'Monday' | 'Sunday';
+  treatSaturdayAsHoliday?: boolean;
 }
 
 const DatePickerButton: React.FC<DatePickerButtonProps> = ({
@@ -32,6 +34,8 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   disabled = false,
   className = '',
   buttonClassName = '',
+  startOfWeek = 'Monday',
+  treatSaturdayAsHoliday = false,
 }) => {
   const { t } = useTranslation('common');
   const resolvedTheme = useResolvedShadcnTheme();
@@ -196,7 +200,8 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                 selectedDate={selectedDate ?? undefined}
                 onDateSelect={handleDateSelect}
                 allowWeekendSelection
-                startOfWeek="Monday"
+                startOfWeek={startOfWeek}
+                treatSaturdayAsHoliday={treatSaturdayAsHoliday}
                 size="compact"
               />
             </div>

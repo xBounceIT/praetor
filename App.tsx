@@ -2664,7 +2664,12 @@ const App: React.FC = () => {
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/logs']) &&
-              activeView === 'administration/logs' && <LogsView />}
+              activeView === 'administration/logs' && (
+                <LogsView
+                  startOfWeek={generalSettings.startOfWeek}
+                  treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+                />
+              )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&
               activeView === 'administration/email' && (
