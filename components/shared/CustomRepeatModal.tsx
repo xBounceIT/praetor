@@ -1,8 +1,17 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import Modal from '../shared/Modal';
-import CustomSelect from './CustomSelect';
+import {
+  ModalBody,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from './ModalLayout';
+import SelectControl from './SelectControl';
 
 export interface CustomRepeatModalProps {
   isOpen: boolean;
@@ -40,60 +49,55 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <i className="fa-solid fa-calendar-days text-praetor"></i>
-            {t('recurring.customRepeatTitle')}
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">{t('recurring.customRepeatSubtitle')}</p>
-        </div>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+      {() => (
+        <ModalContent size="sm" onClick={(e) => e.stopPropagation()}>
+          <ModalHeader>
+            <div>
+              <ModalTitle>
+                <i className="fa-solid fa-calendar-days text-praetor"></i>
+                {t('recurring.customRepeatTitle')}
+              </ModalTitle>
+              <ModalDescription>{t('recurring.customRepeatSubtitle')}</ModalDescription>
+            </div>
+          </ModalHeader>
 
-        <div className="p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-              {t('recurring.every')}
-            </span>
-            <div className="flex-1">
-              <CustomSelect
-                options={occurrenceOptions}
-                value={type}
-                onChange={(val) => setType(val as typeof type)}
+          <ModalBody className="space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                {t('recurring.every')}
+              </span>
+              <div className="flex-1">
+                <SelectControl
+                  options={occurrenceOptions}
+                  value={type}
+                  onChange={(val) => setType(val as typeof type)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <SelectControl
+                label={t('recurring.dayOfWeek')}
+                options={days}
+                value={dayOfWeek.toString()}
+                onChange={(val) => setDayOfWeek(parseInt(val as string, 10))}
                 className="w-full"
               />
             </div>
-          </div>
+          </ModalBody>
 
-          <div className="space-y-2">
-            <CustomSelect
-              label={t('recurring.dayOfWeek')}
-              options={days}
-              value={dayOfWeek.toString()}
-              onChange={(val) => setDayOfWeek(parseInt(val as string, 10))}
-              className="w-full"
-            />
-          </div>
-        </div>
-
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-xl transition-colors"
-          >
-            {t('recurring.cancel')}
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-          >
-            {t('recurring.setPattern')}
-          </button>
-        </div>
-      </div>
+          <ModalFooter className="grid grid-cols-2 sm:flex">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('recurring.cancel')}
+            </Button>
+            <Button type="button" onClick={handleSave}>
+              {t('recurring.setPattern')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      )}
     </Modal>
   );
 };

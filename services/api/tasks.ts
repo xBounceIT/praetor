@@ -15,6 +15,9 @@ export const tasksApi = {
     expectedEffort?: number,
     revenue?: number,
     notes?: string,
+    monthlyEffort?: number,
+    billingType?: ProjectTask['billingType'],
+    billingFrequency?: ProjectTask['billingFrequency'],
   ): Promise<ProjectTask> =>
     fetchApi<ProjectTask>('/tasks', {
       method: 'POST',
@@ -27,6 +30,9 @@ export const tasksApi = {
         expectedEffort,
         revenue,
         notes,
+        monthlyEffort,
+        billingType,
+        billingFrequency,
       }),
     }).then(normalizeTask),
 

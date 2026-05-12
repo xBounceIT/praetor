@@ -43,7 +43,7 @@ type TimeEntryRow = {
   is_placeholder: boolean | null;
   location: string | null;
   created_at: string | Date | null;
-  // Microsecond-precision text rep of created_at — pg returns TIMESTAMP as a JS Date (ms-only),
+  // Microsecond-precision text rep of created_at - pg returns TIMESTAMP as a JS Date (ms-only),
   // which would lose precision in the cursor and skip rows at page boundaries. Using ::text keeps
   // the full Postgres precision for cursor round-trips.
   created_at_text: string | null;
@@ -101,14 +101,14 @@ const mapBuilderRow = (row: typeof timeEntries.$inferSelect): TimeEntry => {
 };
 
 // `createdAt` is an opaque µs-precision Postgres TIMESTAMP text (e.g. "2026-04-30 12:00:00.123456")
-// rather than ms — the JS Date round-trip would truncate to ms and skip rows whose actual
+// rather than ms - the JS Date round-trip would truncate to ms and skip rows whose actual
 // timestamp falls between the truncated ms and the µs value when paginating.
 export type EntriesCursor = { createdAt: string; id: string };
 
 export type ListEntriesOptions = {
   /** Default 200, hard-capped at 500. */
   limit?: number;
-  /** Exclusive — return rows strictly older than this position. */
+  /** Exclusive - return rows strictly older than this position. */
   cursor?: EntriesCursor;
 };
 

@@ -55,7 +55,19 @@
     "projectTasks": "Project Tasks",
     "addTaskRow": "Add Task",
     "taskName": "Task Name",
-    "expectedEffort": "Effort (h)",
+    "expectedEffort": "Total effort (h)",
+    "monthlyEffort": "Monthly effort (h)",
+    "billingType": "Billing",
+    "billingFrequency": "Frequency",
+    "billingTypes": {
+      "retainer": "Retainer",
+      "timeAndMaterials": "Time and materials",
+      "mixed": "Mixed"
+    },
+    "billingFrequencies": {
+      "monthly": "Monthly",
+      "oneTime": "One-time"
+    },
     "taskRevenue": "Revenue",
     "taskNotes": "Notes",
     "noTasksAdded": "No tasks added yet.",

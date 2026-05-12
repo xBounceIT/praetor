@@ -1,0 +1,162 @@
+{
+  "realm": "praetor-sso",
+  "enabled": true,
+  "displayName": "Praetor SSO Test",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "groups": [
+    {
+      "name": "praetor-admins"
+    },
+    {
+      "name": "praetor-users"
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "firstName": "Alice",
+      "lastName": "Example",
+      "email": "alice@praetor.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alicepass",
+          "temporary": false
+        }
+      ],
+      "groups": ["/praetor-admins", "/praetor-users"],
+      "attributes": {
+        "name": ["Alice Example"]
+      }
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "firstName": "Bob",
+      "lastName": "Example",
+      "email": "bob@praetor.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bobpass",
+          "temporary": false
+        }
+      ],
+      "groups": ["/praetor-users"],
+      "attributes": {
+        "name": ["Bob Example"]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "praetor-oidc",
+      "name": "Praetor OIDC",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3001/api/auth/sso/oidc/keycloak-oidc/callback"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "praetor-saml",
+      "name": "Praetor SAML",
+      "enabled": true,
+      "protocol": "saml",
+      "redirectUris": ["http://localhost:3001/api/auth/sso/saml/keycloak-saml/callback"],
+      "frontchannelLogout": false,
+      "attributes": {
+        "saml.assertion.signature": "true",
+        "saml.authnstatement": "true",
+        "saml.client.signature": "false",
+        "saml.encrypt": "false",
+        "saml.force.post.binding": "true",
+        "saml.multivalued.roles": "false",
+        "saml.server.signature": "true",
+        "saml.server.signature.keyinfo.ext": "false",
+        "saml_assertion_consumer_url_post": "http://localhost:3001/api/auth/sso/saml/keycloak-saml/callback",
+        "saml_name_id_format": "username",
+        "saml_signature_canonicalization_method": "http://www.w3.org/2001/10/xml-exc-c14n#"
+      },
+      "protocolMappers": [
+        {
+          "name": "username",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "attribute.name": "username",
+            "friendly.name": "username",
+            "attribute.nameformat": "Basic"
+          }
+        },
+        {
+          "name": "email",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "attribute.name": "email",
+            "friendly.name": "email",
+            "attribute.nameformat": "Basic"
+          }
+        },
+        {
+          "name": "name",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "name",
+            "attribute.name": "name",
+            "friendly.name": "name",
+            "attribute.nameformat": "Basic"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "saml",
+          "protocolMapper": "saml-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "single": "false",
+            "attribute.name": "groups",
+            "friendly.name": "groups",
+            "attribute.nameformat": "Basic"
+          }
+        }
+      ]
+    }
+  ]
+}

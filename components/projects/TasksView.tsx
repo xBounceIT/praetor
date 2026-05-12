@@ -1,22 +1,53 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api';
-import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import type {
+  BillingFrequency,
+  Client,
+  Project,
+  ProjectTask,
+  Role,
+  StoredBillingType,
+  User,
+} from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect from '../shared/CustomSelect';
+import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
+import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
-import Tooltip from '../shared/Tooltip';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
+
+const billingTypeOptions = [
+  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
+  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
+];
+
+const billingFrequencyOptions = [
+  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
+  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
+];
 
 export interface TasksViewProps {
   tasks: ProjectTask[];
@@ -31,6 +62,10 @@ export interface TasksViewProps {
     projectId: string,
     recurringConfig?: RecurringConfig,
     description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
   ) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
@@ -51,12 +86,18 @@ const TasksView: React.FC<TasksViewProps> = ({
   onViewOrder,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
-  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
-  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
-  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
+  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
+  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
+  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
+  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
+  const [monthlyEffort, setMonthlyEffort] = useState('');
+  const [expectedEffort, setExpectedEffort] = useState('');
+  const [revenue, setRevenue] = useState('');
+  const [notes, setNotes] = useState('');
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,6 +110,24 @@ const TasksView: React.FC<TasksViewProps> = ({
   const fetchHoursGenRef = useRef(0);
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const translatedBillingTypeOptions = useMemo(
+    () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    [t],
+  );
+  const translatedBillingFrequencyOptions = useMemo(
+    () => billingFrequencyOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    [t],
+  );
+  const formatBillingType = useCallback(
+    (value: ProjectTask['billingType']) =>
+      translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingTypeOptions],
+  );
+  const formatBillingFrequency = useCallback(
+    (value: BillingFrequency | undefined) =>
+      translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingFrequencyOptions],
+  );
 
   useEffect(() => {
     if (projectIds.length === 0) {
@@ -99,19 +158,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     };
   }, [projectIds]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_tasks_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_tasks_rowsPerPage', value.toString());
-    setCurrentPage(1);
-  };
-
   const checkInheritedDisabled = useCallback(
     (task: ProjectTask) => {
       const project = projects.find((p) => p.id === task.projectId);
@@ -127,6 +173,12 @@ const TasksView: React.FC<TasksViewProps> = ({
     setName('');
     setProjectId('');
     setDescription('');
+    setBillingType('time_and_materials');
+    setBillingFrequency('monthly');
+    setMonthlyEffort('');
+    setExpectedEffort('');
+    setRevenue('');
+    setNotes('');
     setTempIsDisabled(false);
     setIsModalOpen(true);
   }, [canCreateTasks]);
@@ -138,6 +190,16 @@ const TasksView: React.FC<TasksViewProps> = ({
       setName(task.name);
       setProjectId(task.projectId);
       setDescription(task.description || '');
+      setBillingType(task.billingType ?? 'time_and_materials');
+      setBillingFrequency(
+        task.billingType === 'time_and_materials'
+          ? 'monthly'
+          : (task.billingFrequency ?? 'monthly'),
+      );
+      setMonthlyEffort(task.monthlyEffort !== undefined ? String(task.monthlyEffort) : '');
+      setExpectedEffort(task.expectedEffort !== undefined ? String(task.expectedEffort) : '');
+      setRevenue(task.revenue !== undefined ? String(task.revenue) : '');
+      setNotes(task.notes ?? '');
       setTempIsDisabled(task.isDisabled || false);
       setIsModalOpen(true);
     },
@@ -157,11 +219,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     [canUpdateTasks],
   );
 
-  // Pagination Logic
-  const totalPages = Math.ceil(tasks.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedTasks = tasks.slice(startIndex, startIndex + rowsPerPage);
-
   // Column definitions for StandardTable
   const columns: Column<ProjectTask>[] = useMemo(
     () => [
@@ -170,7 +227,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => {
           const project = projects.find((p) => p.id === task.projectId);
           const client = clients.find((c) => c.id === project?.clientId);
-          return client?.name || '—';
+          return client?.name || '-';
         },
         cell: ({ row }) => {
           const project = projects.find((p) => p.id === row.projectId);
@@ -178,12 +235,12 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isClientDisabled = client?.isDisabled || false;
           return client ? (
             <span
-              className={`text-sm font-bold ${isClientDisabled ? 'text-amber-500' : 'text-slate-700'}`}
+              className={`text-sm font-bold ${isClientDisabled ? 'text-amber-500' : 'text-zinc-700'}`}
             >
               {client.name} {isClientDisabled && t('projects.disabledLabel')}
             </span>
           ) : (
-            <span className="text-xs text-slate-400 italic">—</span>
+            <span className="text-xs text-zinc-400 italic">-</span>
           );
         },
       },
@@ -192,8 +249,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         id: 'createdAt',
         accessorFn: (task) => task.createdAt ?? 0,
         cell: ({ row }) => (
-          <span className="text-xs text-slate-500 whitespace-nowrap">
-            {row.createdAt ? formatInsertDate(row.createdAt) : '—'}
+          <span className="text-xs text-zinc-500 whitespace-nowrap">
+            {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
           </span>
         ),
       },
@@ -209,14 +266,14 @@ const TasksView: React.FC<TasksViewProps> = ({
           return (
             <div className="flex items-center gap-2">
               <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
+                className="size-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
                 className={`text-sm font-bold ${
                   isProjectDisabled
-                    ? 'text-slate-600 line-through decoration-slate-300'
-                    : 'text-slate-800'
+                    ? 'text-zinc-600 line-through decoration-zinc-300'
+                    : 'text-zinc-800'
                 }`}
               >
                 {project?.name || t('projects.unknown')}
@@ -232,7 +289,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isDisabled = row.isDisabled || checkInheritedDisabled(row);
           return (
             <span
-              className={`text-sm font-bold ${isDisabled ? 'text-slate-600 line-through decoration-slate-300' : 'text-slate-800'}`}
+              className={`text-sm font-bold ${isDisabled ? 'text-zinc-600 line-through decoration-zinc-300' : 'text-zinc-800'}`}
             >
               {value}
             </span>
@@ -246,13 +303,43 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isDisabled = row.isDisabled || checkInheritedDisabled(row);
           return (
             <p
-              className={`text-xs truncate max-w-50 ${isDisabled ? 'text-slate-400 italic' : 'text-slate-500'}`}
+              className={`text-xs truncate max-w-50 ${isDisabled ? 'text-zinc-400 italic' : 'text-zinc-500'}`}
             >
               {value || (
-                <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
+                <span className="italic text-zinc-400">{t('projects.noDescriptionProvided')}</span>
               )}
             </p>
           );
+        },
+      },
+      {
+        header: t('projects:projects.billingType'),
+        id: 'billingType',
+        accessorFn: (task) => formatBillingType(task.billingType),
+        cell: ({ row }) => (
+          <span className="text-xs font-bold text-zinc-600">
+            {formatBillingType(row.billingType)}
+          </span>
+        ),
+      },
+      {
+        header: t('projects:projects.billingFrequency'),
+        id: 'billingFrequency',
+        accessorFn: (task) => formatBillingFrequency(task.billingFrequency),
+        cell: ({ row }) => (
+          <span className="text-xs text-zinc-500">
+            {formatBillingFrequency(row.billingFrequency)}
+          </span>
+        ),
+      },
+      {
+        header: t('projects:projects.monthlyEffort'),
+        id: 'monthlyEffort',
+        accessorFn: (task) => task.monthlyEffort ?? 0,
+        cell: ({ row }) => {
+          const effort = row.monthlyEffort;
+          if (!effort) return <span className="text-xs text-zinc-400">-</span>;
+          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
         },
       },
       {
@@ -261,8 +348,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => task.expectedEffort ?? 0,
         cell: ({ row }) => {
           const effort = row.expectedEffort;
-          if (!effort) return <span className="text-xs text-slate-400">—</span>;
-          return <span className="text-xs font-bold text-slate-600 tabular-nums">{effort}h</span>;
+          if (!effort) return <span className="text-xs text-zinc-400">-</span>;
+          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
         },
       },
       {
@@ -271,9 +358,9 @@ const TasksView: React.FC<TasksViewProps> = ({
         accessorFn: (task) => task.revenue ?? 0,
         cell: ({ row }) => {
           const rev = row.revenue;
-          if (!rev) return <span className="text-xs text-slate-400">—</span>;
+          if (!rev) return <span className="text-xs text-zinc-400">-</span>;
           return (
-            <span className="text-xs font-bold text-slate-600 tabular-nums">
+            <span className="text-xs font-bold text-zinc-600 tabular-nums">
               {currency}
               {rev.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -291,28 +378,28 @@ const TasksView: React.FC<TasksViewProps> = ({
         cell: ({ row }) => {
           if (hoursLoadState === 'loading' || taskHours === null) {
             return (
-              <span className="text-slate-400 text-xs">
+              <span className="text-zinc-400 text-xs">
                 <i className="fa-solid fa-spinner fa-spin"></i>
               </span>
             );
           }
-          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+          if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">-</span>;
           const projectHours = taskHours[row.projectId] ?? {};
           const logged = projectHours[row.name] ?? 0;
           const expected = row.expectedEffort ?? 0;
-          if (!expected) return <span className="text-slate-400 text-xs">—</span>;
+          if (!expected) return <span className="text-zinc-400 text-xs">-</span>;
           const pct = Math.round((logged / expected) * 100);
           const overBudget = logged > expected;
           return (
             <div className="flex items-center gap-2">
-              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                   style={{ width: `${Math.min(pct, 100)}%` }}
                 />
               </div>
               <span
-                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+                className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
               >
                 {pct}%
               </span>
@@ -367,71 +454,83 @@ const TasksView: React.FC<TasksViewProps> = ({
             <div className="flex items-center justify-end gap-2">
               {canUpdateTasks && (
                 <>
-                  <Tooltip label={t('tasks.manageMembers')}>
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openAssignments(row.id);
-                        }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                      >
-                        <i className="fa-solid fa-users"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  <Tooltip label={t('tasks.editTask')}>
-                    {() => (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(row);
-                        }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                      >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  {!isInheritedDisabled && (
-                    <Tooltip
-                      label={isTaskDisabled ? t('tasks.enableTask') : t('tasks.disableTask')}
-                    >
-                      {() => (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
+                            openAssignments(row.id);
                           }}
-                          className={`p-2 rounded-lg transition-all ${
-                            isTaskDisabled
-                              ? 'text-praetor hover:bg-slate-100'
-                              : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                          }`}
+                          className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                         >
-                          <i
-                            className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}
-                          ></i>
+                          <i className="fa-solid fa-users"></i>
                         </button>
-                      )}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('tasks.manageMembers')}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(row);
+                          }}
+                          className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('tasks.editTask')}</TooltipContent>
+                  </Tooltip>
+                  {!isInheritedDisabled && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
+                            }}
+                            className={`p-2 rounded-lg transition-all ${
+                              isTaskDisabled
+                                ? 'text-praetor hover:bg-zinc-100'
+                                : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                            }`}
+                          >
+                            <i
+                              className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}
+                            ></i>
+                          </button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {isTaskDisabled ? t('tasks.enableTask') : t('tasks.disableTask')}
+                      </TooltipContent>
                     </Tooltip>
                   )}
                 </>
               )}
               {canDeleteTasks && (
-                <Tooltip label={t('common:buttons.delete')}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingTask(row);
-                        confirmDelete();
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTask(row);
+                          confirmDelete();
+                        }}
+                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
                 </Tooltip>
               )}
             </div>
@@ -453,6 +552,8 @@ const TasksView: React.FC<TasksViewProps> = ({
       currency,
       taskHours,
       hoursLoadState,
+      formatBillingType,
+      formatBillingFrequency,
     ],
   );
 
@@ -461,10 +562,24 @@ const TasksView: React.FC<TasksViewProps> = ({
     if (editingTask && !canUpdateTasks) return;
     if (!editingTask && !canCreateTasks) return;
     if (name && projectId) {
+      const details = {
+        billingType,
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+        monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
+        expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
+        revenue: revenue ? parseFloat(revenue) : undefined,
+        notes: notes.trim() || undefined,
+      };
       if (editingTask) {
-        onUpdateTask(editingTask.id, { name, projectId, description, isDisabled: tempIsDisabled });
+        onUpdateTask(editingTask.id, {
+          name,
+          projectId,
+          description,
+          isDisabled: tempIsDisabled,
+          ...details,
+        });
       } else {
-        onAddTask(name, projectId, undefined, description);
+        onAddTask(name, projectId, undefined, description, details);
       }
       closeModal();
     }
@@ -477,6 +592,12 @@ const TasksView: React.FC<TasksViewProps> = ({
     setName('');
     setProjectId('');
     setDescription('');
+    setBillingType('time_and_materials');
+    setBillingFrequency('monthly');
+    setMonthlyEffort('');
+    setExpectedEffort('');
+    setRevenue('');
+    setNotes('');
   };
 
   const cancelDelete = () => {
@@ -513,7 +634,7 @@ const TasksView: React.FC<TasksViewProps> = ({
             i18nKey="tasks.deleteConfirmDesc"
             ns="projects"
             values={{ name: editingTask?.name }}
-            components={{ span: <span className="font-bold text-slate-800" /> }}
+            components={{ span: <span className="font-bold text-zinc-800" /> }}
           />
         }
       />
@@ -533,190 +654,281 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}></i>
-              </div>
-              {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
-            </h3>
-            <button
-              onClick={closeModal}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+        <ModalContent size="2xl">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i
+                    className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}
+                    aria-hidden="true"
+                  ></i>
+                </span>
+                {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
+              </ModalTitle>
+              <ModalCloseButton onClick={closeModal} />
+            </ModalHeader>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {(() => {
-              const project = projects.find((p) => p.id === projectId);
-              return editingTask && project?.orderId ? (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                      <i className="fa-solid fa-link"></i>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">
-                        {t('projects:projects.linkedOrder')}
+            <ModalBody className="space-y-6">
+              {(() => {
+                const project = projects.find((p) => p.id === projectId);
+                const orderId = project?.orderId;
+                return editingTask && orderId ? (
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                        <i className="fa-solid fa-link" aria-hidden="true"></i>
                       </div>
-                      <div className="text-xs text-praetor">{formatOrderId(project.orderId!)}</div>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">
+                          {t('projects:projects.linkedOrder')}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatOrderId(orderId)}
+                        </div>
+                      </div>
                     </div>
+                    {onViewOrder && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => onViewOrder(orderId)}
+                        className="px-0"
+                      >
+                        {t('projects:projects.viewOrder')}
+                      </Button>
+                    )}
                   </div>
-                  {onViewOrder && (
-                    <button
-                      type="button"
-                      onClick={() => onViewOrder(project.orderId!)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
-                    >
-                      {t('projects:projects.viewOrder')}
-                    </button>
-                  )}
-                </div>
-              ) : null;
-            })()}
+                ) : null;
+              })()}
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.project')}</label>
-              <CustomSelect
-                options={projectSelectOptions}
-                value={projectId}
-                onChange={(val) => setProjectId(val as string)}
-                placeholder={t('common:labels.selectOption')}
-                searchable={true}
-                buttonClassName="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
-              />
-            </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectControl
+                    id="task-project"
+                    options={projectSelectOptions}
+                    value={projectId}
+                    onChange={(val) => {
+                      const nextProjectId = val as string;
+                      setProjectId(nextProjectId);
+                      if (!editingTask) {
+                        const project = projects.find((item) => item.id === nextProjectId);
+                        const nextBillingType =
+                          project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+                        setBillingType(nextBillingType);
+                        setBillingFrequency(
+                          nextBillingType === 'time_and_materials'
+                            ? 'monthly'
+                            : (project?.billingFrequency ?? 'monthly'),
+                        );
+                      }
+                    }}
+                    label={t('tasks.project')}
+                    placeholder={t('common:labels.selectOption')}
+                    searchable={true}
+                    buttonClassName="h-9"
+                  />
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.name')}</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('tasks.taskNamePlaceholder')}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('tasks.description')}
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('tasks.taskDescriptionPlaceholder')}
-                rows={3}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
-              />
-            </div>
-
-            {/* Status toggles - logic wrapped for conditional rendering */}
-            {(() => {
-              const project = projects.find((p) => p.id === projectId);
-              const client = clients.find((c) => c.id === project?.clientId);
-              const isProjectDisabled = project?.isDisabled || false;
-              const isClientDisabled = client?.isDisabled || false;
-              const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-              const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
-
-              return (
-                <div className="space-y-2 pt-2">
-                  <div
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
-                      isCurrentlyDisabled
-                        ? 'bg-red-50 border-red-100'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-black ${
-                        isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
-                      }`}
-                    >
-                      {t('tasks.isDisabled')}
-                    </p>
-                    <Toggle
-                      checked={isCurrentlyDisabled}
-                      onChange={() => {
-                        if (!isInheritedDisabled) {
-                          setTempIsDisabled(!tempIsDisabled);
-                        }
-                      }}
-                      color="red"
-                      disabled={isInheritedDisabled}
+                  <Field>
+                    <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                    <Input
+                      id="task-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('tasks.taskNamePlaceholder')}
                     />
-                  </div>
-                  {isInheritedDisabled && (
-                    <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1.5 px-1 ml-1">
-                      <i className="fa-solid fa-triangle-exclamation"></i>
-                      {isClientDisabled
-                        ? t('projects.inheritedFromDisabledClient', { clientName: client?.name })
-                        : t('tasks.inheritedFromDisabledProject', {
-                            projectName: project?.name,
-                          })}
-                    </p>
-                  )}
+                  </Field>
                 </div>
-              );
-            })()}
 
-            <div className="pt-6 flex items-center justify-between gap-4 border-t border-slate-100 mt-2">
-              {editingTask && canDeleteTasks && (
-                <button
+                <Field>
+                  <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
+                  <Textarea
+                    id="task-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={t('tasks.taskDescriptionPlaceholder')}
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <SelectControl
+                    id="task-billing-type"
+                    options={translatedBillingTypeOptions}
+                    value={billingType}
+                    onChange={(val) => {
+                      const nextBillingType = val as StoredBillingType;
+                      setBillingType(nextBillingType);
+                      if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
+                    }}
+                    label={t('projects:projects.billingType')}
+                    searchable={false}
+                    buttonClassName="h-9"
+                  />
+                  <SelectControl
+                    id="task-billing-frequency"
+                    options={
+                      billingType === 'retainer'
+                        ? translatedBillingFrequencyOptions
+                        : translatedBillingFrequencyOptions.filter(
+                            (option) => option.id === 'monthly',
+                          )
+                    }
+                    value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                    onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                    label={t('projects:projects.billingFrequency')}
+                    disabled={billingType === 'time_and_materials'}
+                    searchable={false}
+                    buttonClassName="h-9"
+                  />
+                  <Field>
+                    <FieldLabel htmlFor="task-monthly-effort">
+                      {t('projects:projects.monthlyEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-monthly-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={monthlyEffort}
+                      onChange={(e) => setMonthlyEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-expected-effort">
+                      {t('projects:projects.expectedEffort')}
+                    </FieldLabel>
+                    <Input
+                      id="task-expected-effort"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={expectedEffort}
+                      onChange={(e) => setExpectedEffort(e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="task-revenue">
+                      {`${t('projects:projects.taskRevenue')} (${currency})`}
+                    </FieldLabel>
+                    <Input
+                      id="task-revenue"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={revenue}
+                      onChange={(e) => setRevenue(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>
+                  <Textarea
+                    id="task-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t('common:form.placeholderNotes')}
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
+
+                {(() => {
+                  const project = projects.find((p) => p.id === projectId);
+                  const client = clients.find((c) => c.id === project?.clientId);
+                  const isProjectDisabled = project?.isDisabled || false;
+                  const isClientDisabled = client?.isDisabled || false;
+                  const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+                  const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
+
+                  return (
+                    <Field>
+                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                        <div>
+                          <p
+                            className={`text-sm font-medium ${
+                              isInheritedDisabled ? 'text-muted-foreground' : 'text-foreground'
+                            }`}
+                          >
+                            {t('tasks.isDisabled')}
+                          </p>
+                          {isInheritedDisabled && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                              <i
+                                className="fa-solid fa-triangle-exclamation"
+                                aria-hidden="true"
+                              ></i>
+                              {isClientDisabled
+                                ? t('projects.inheritedFromDisabledClient', {
+                                    clientName: client?.name,
+                                  })
+                                : t('tasks.inheritedFromDisabledProject', {
+                                    projectName: project?.name,
+                                  })}
+                            </p>
+                          )}
+                        </div>
+                        <Toggle
+                          checked={isCurrentlyDisabled}
+                          onChange={() => {
+                            if (!isInheritedDisabled) {
+                              setTempIsDisabled(!tempIsDisabled);
+                            }
+                          }}
+                          disabled={isInheritedDisabled}
+                        />
+                      </div>
+                    </Field>
+                  );
+                })()}
+              </div>
+            </ModalBody>
+
+            <ModalFooter className="sm:justify-between">
+              {editingTask && canDeleteTasks ? (
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={confirmDelete}
-                  className="px-5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-bold transition-all border border-transparent hover:border-red-100"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
-                  <i className="fa-solid fa-trash-can mr-2"></i>
+                  <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
                   {t('common:buttons.delete')}
-                </button>
+                </Button>
+              ) : (
+                <span />
               )}
 
-              <div className="flex gap-3 ml-auto">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className={`px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${
-                    canSubmit
-                      ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                      : 'bg-slate-300 shadow-none cursor-not-allowed'
-                  }`}
-                >
+                </Button>
+                <Button type="submit" disabled={!canSubmit}>
                   {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
-                </button>
+                </Button>
               </div>
-            </div>
+            </ModalFooter>
           </form>
-        </div>
+        </ModalContent>
       </Modal>
 
       {/* Header */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('tasks.title')}</h2>
-            <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-zinc-800">{t('tasks.title')}</h2>
+            <p className="text-zinc-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
             {canCreateTasks && (
-              <button
-                onClick={openAddModal}
-                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-              >
-                <i className="fa-solid fa-plus"></i> {t('tasks.addTask')}
-              </button>
+              <HeaderAddButton onClick={openAddModal}>{t('tasks.addTask')}</HeaderAddButton>
             )}
           </div>
         </div>
@@ -724,9 +936,9 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       <StandardTable<ProjectTask>
         title={t('tasks.tasksDirectory')}
-        data={paginatedTasks}
+        data={tasks}
         columns={columns}
-        defaultRowsPerPage={rowsPerPage}
+        defaultRowsPerPage={5}
         onRowClick={canUpdateTasks ? openEditModal : undefined}
         rowClassName={(row) => {
           const project = projects.find((p) => p.id === row.projectId);
@@ -735,66 +947,6 @@ const TasksView: React.FC<TasksViewProps> = ({
             ? 'opacity-70 grayscale hover:grayscale-0'
             : '';
         }}
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('common:labels.rowsPerPage')}
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('common:pagination.showing', {
-                  start: paginatedTasks.length > 0 ? startIndex + 1 : 0,
-                  end: Math.min(startIndex + rowsPerPage, tasks.length),
-                  total: tasks.length,
-                })}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          </>
-        }
       />
     </div>
   );

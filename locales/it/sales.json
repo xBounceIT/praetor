@@ -12,6 +12,7 @@
     "items": "Voci per questa offerta",
     "supplierInformation": "Dettagli fornitore e documento",
     "supplierItems": "Voci di questo preventivo",
+    "attachments": "File ricevuti dal fornitore",
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
@@ -88,6 +89,7 @@
     "productsServices": "Prodotti / Servizi",
     "addProduct": "Aggiungi Prodotto",
     "globalDiscount": "Sconto Globale",
+    "summary": "Riepilogo",
     "expirationDateLabel": "Data Scadenza",
     "notesLabel": "Note",
     "immediatePayment": "Immediato",
@@ -182,6 +184,7 @@
     "offerCodeRequired": "Il codice offerta è obbligatorio",
     "paymentTerms": "Termini di pagamento",
     "globalDiscount": "Sconto Globale",
+    "summary": "Riepilogo",
     "expirationDate": "Data scadenza",
     "items": "Articoli",
     "itemsRequired": "Almeno un articolo è obbligatorio",
@@ -259,6 +262,7 @@
     "noItemsAdded": "Nessun articolo aggiunto",
     "discount": "Sconto %",
     "status": "Stato",
+    "summary": "Riepilogo",
     "total": "Totale",
     "subtotal": "Subtotale",
     "discountAmount": "Sconto",
@@ -298,6 +302,26 @@
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
       "loadFailed": "Caricamento della cronologia non riuscito."
+    },
+    "attachments": {
+      "title": "Allegati",
+      "uploadButton": "Carica file",
+      "dropHere": "Trascina un file qui o clicca per caricarlo",
+      "allowedTypes": "Consentiti: xlsx, pdf, docx · max 10 MB",
+      "empty": "Nessun allegato.",
+      "uploading": "Caricamento...",
+      "downloadAction": "Scarica",
+      "deleteAction": "Elimina",
+      "deleteConfirm": "Rimuovere questo allegato?",
+      "saveQuoteFirst": "Salva prima il preventivo per poter aggiungere allegati.",
+      "loadFailed": "Caricamento degli allegati non riuscito.",
+      "errors": {
+        "tooLarge": "Il file supera il limite di 10 MB",
+        "invalidType": "Tipo di file non consentito. Usa xlsx, pdf o docx.",
+        "uploadFailed": "Caricamento non riuscito",
+        "downloadFailed": "Download non riuscito",
+        "deleteFailed": "Eliminazione non riuscita"
+      }
     }
   }
 }

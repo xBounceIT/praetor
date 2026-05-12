@@ -7,9 +7,11 @@ import {
   requirePermission,
   requireRole,
 } from '../../middleware/auth.ts';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
+import { hashPersonalAccessToken } from '../../utils/personal-access-token.ts';
 import {
   decodeForAssertion,
   signExpiredToken,
@@ -23,10 +25,13 @@ import {
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
 const permissionsSnapshot = { ...realPermissions };
+const personalAccessTokensRepoSnapshot = { ...realPersonalAccessTokensRepo };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+const findPersonalAccessTokenByHashMock = mock();
+const markPersonalAccessTokenUsedMock = mock();
 
 beforeAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => ({
@@ -41,6 +46,11 @@ beforeAll(() => {
     ...permissionsSnapshot,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnapshot,
+    findByTokenHash: findPersonalAccessTokenByHashMock,
+    markUsed: markPersonalAccessTokenUsedMock,
+  }));
 });
 
 afterAll(() => {
@@ -48,6 +58,10 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnapshot);
   mock.module('../../utils/permissions.ts', () => permissionsSnapshot);
+  mock.module(
+    '../../repositories/personalAccessTokensRepo.ts',
+    () => personalAccessTokensRepoSnapshot,
+  );
 });
 
 const HAPPY_USER = {
@@ -96,7 +110,11 @@ const buildFakeReply = (): FakeReply => {
 
 type FakeRequest = {
   headers: Record<string, string | undefined>;
-  auth?: { userId: string; sessionStart: number };
+  auth?: {
+    userId: string;
+    sessionStart?: number;
+    source?: 'session' | 'personalAccessToken';
+  };
   user?: {
     id: string;
     name: string;
@@ -115,10 +133,21 @@ beforeEach(() => {
   findAuthUserByIdMock.mockReset();
   userHasRoleMock.mockReset();
   getRolePermissionsMock.mockReset();
+  findPersonalAccessTokenByHashMock.mockReset();
+  markPersonalAccessTokenUsedMock.mockReset();
 
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
+  findPersonalAccessTokenByHashMock.mockResolvedValue({
+    userId: 'u1',
+    tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+    tokenPrefix: 'praetor_pat_valid',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastUsedAt: null,
+  });
+  markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
 });
 
 describe('authenticateToken', () => {
@@ -197,7 +226,7 @@ describe('authenticateToken', () => {
       avatarInitials: 'AL',
       permissions: HAPPY_PERMISSIONS,
     });
-    expect(request.auth).toEqual({ userId: 'u1', sessionStart });
+    expect(request.auth).toEqual({ userId: 'u1', sessionStart, source: 'session' });
 
     const rotated = reply.headers['x-auth-token'];
     expect(typeof rotated).toBe('string');
@@ -281,6 +310,84 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
     expect(reply.sentCount).toBe(1);
+  });
+
+  test('PAT happy path: populates request.user, marks last-used, and does not rotate token', async () => {
+    const token = 'praetor_pat_valid-token';
+    const request = buildFakeRequest(token);
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(0);
+    expect(reply.headers['x-auth-token']).toBeUndefined();
+    expect(request.auth).toEqual({ userId: 'u1', source: 'personalAccessToken' });
+    expect(request.user).toEqual({
+      id: 'u1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'manager',
+      avatarInitials: 'AL',
+      permissions: HAPPY_PERMISSIONS,
+    });
+    const expectedHash = hashPersonalAccessToken(token);
+    expect(findPersonalAccessTokenByHashMock).toHaveBeenCalledWith(expectedHash);
+    expect(markPersonalAccessTokenUsedMock).toHaveBeenCalledWith(expectedHash);
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager');
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+  });
+
+  test('PAT remains authenticated when last-used tracking fails', async () => {
+    markPersonalAccessTokenUsedMock.mockRejectedValue(new Error('write failed'));
+    const token = 'praetor_pat_valid-token';
+    const request = buildFakeRequest(token);
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(0);
+    expect(reply.body).toBeUndefined();
+    expect(request.auth).toEqual({ userId: 'u1', source: 'personalAccessToken' });
+    expect(request.user?.id).toBe('u1');
+    expect(reply.headers['x-auth-token']).toBeUndefined();
+    expect(markPersonalAccessTokenUsedMock).toHaveBeenCalledWith(hashPersonalAccessToken(token));
+  });
+
+  test('PAT rejects stale or invalid token hashes', async () => {
+    findPersonalAccessTokenByHashMock.mockResolvedValue(null);
+    const request = buildFakeRequest('praetor_pat_stale-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  test('PAT rejects disabled users', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, isDisabled: true });
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  test('PAT rejects users whose primary role is no longer assigned', async () => {
+    userHasRoleMock.mockResolvedValue(false);
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 });
 

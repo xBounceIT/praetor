@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken } from '../middleware/auth.ts';
+import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
+import * as notificationsRepo from '../repositories/notificationsRepo.ts';
+import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -9,6 +12,12 @@ import {
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
+import {
+  generatePersonalAccessToken,
+  getPersonalAccessTokenDisplayPrefix,
+  hashPersonalAccessToken,
+} from '../utils/personal-access-token.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -17,6 +26,9 @@ import {
   optionalNonEmptyString,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const ADMIN_USERNAME = 'admin';
+const DEFAULT_ADMIN_PASSWORD = 'password';
 
 const settingsSchema = {
   type: 'object',
@@ -45,6 +57,72 @@ const passwordUpdateBodySchema = {
   },
   required: ['currentPassword', 'newPassword'],
 } as const;
+
+const mcpTokenSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    tokenPrefix: { type: 'string' },
+    createdAt: { type: 'number' },
+    lastUsedAt: { type: ['number', 'null'] },
+  },
+  required: ['id', 'name', 'tokenPrefix', 'createdAt', 'lastUsedAt'],
+} as const;
+
+const mcpTokenCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+  },
+  required: ['name'],
+} as const;
+
+const mcpTokenCreateResponseSchema = {
+  type: 'object',
+  properties: {
+    token: mcpTokenSchema,
+    rawToken: { type: 'string' },
+  },
+  required: ['token', 'rawToken'],
+} as const;
+
+const MAX_ACTIVE_MCP_TOKENS_PER_USER = 20;
+
+const personalAccessTokenSchema = {
+  type: 'object',
+  properties: {
+    tokenPrefix: { type: 'string' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    lastUsedAt: { type: 'string', format: 'date-time', nullable: true },
+    token: { type: 'string' },
+  },
+  required: ['tokenPrefix', 'createdAt', 'updatedAt', 'lastUsedAt'],
+} as const;
+
+const toIsoString = (value: Date | string) =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+const mapPersonalAccessTokenResponse = (
+  record: personalAccessTokensRepo.PersonalAccessTokenRecord,
+  token?: string,
+) => ({
+  tokenPrefix: record.tokenPrefix,
+  createdAt: toIsoString(record.createdAt),
+  updatedAt: toIsoString(record.updatedAt),
+  lastUsedAt: record.lastUsedAt ? toIsoString(record.lastUsedAt) : null,
+  ...(token ? { token } : {}),
+});
+
+const buildTokenParts = () => {
+  const token = generatePersonalAccessToken();
+  return {
+    token,
+    tokenHash: hashPersonalAccessToken(token),
+    tokenPrefix: getPersonalAccessTokenDisplayPrefix(token),
+  };
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get current user's settings
@@ -111,6 +189,97 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // GET /mcp-tokens - List current user's active MCP tokens
+  fastify.get(
+    '/mcp-tokens',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'List current user MCP tokens',
+        response: {
+          200: { type: 'array', items: mcpTokenSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      return mcpTokensRepo.listForUser(request.user.id);
+    },
+  );
+
+  // POST /mcp-tokens - Create current user's MCP token
+  fastify.post(
+    '/mcp-tokens',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Create current user MCP token',
+        body: mcpTokenCreateBodySchema,
+        response: {
+          201: mcpTokenCreateResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const { name } = request.body as { name?: unknown };
+      const nameResult = requireNonEmptyString(name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+      if (nameResult.value.length > 120) return badRequest(reply, 'name is too long');
+
+      const activeTokens = await mcpTokensRepo.listForUser(request.user.id);
+      if (activeTokens.length >= MAX_ACTIVE_MCP_TOKENS_PER_USER) {
+        return reply.code(409).send({ error: 'Maximum active MCP token limit reached' });
+      }
+
+      const rawToken = mcpTokensRepo.generateRawToken();
+      const token = await mcpTokensRepo.createForUser({
+        id: generatePrefixedId('mcp-token'),
+        userId: request.user.id,
+        name: nameResult.value,
+        rawToken,
+      });
+
+      return reply.code(201).send({ token, rawToken });
+    },
+  );
+
+  // DELETE /mcp-tokens/:id - Revoke current user's MCP token
+  fastify.delete(
+    '/mcp-tokens/:id',
+    {
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Revoke current user MCP token',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        response: {
+          200: messageResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const { id } = request.params as { id?: unknown };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const revoked = await mcpTokensRepo.revokeForUser(idResult.value, request.user.id);
+      if (!revoked) return reply.code(404).send({ error: 'MCP token not found' });
+
+      return { message: 'MCP token revoked' };
+    },
+  );
+
   // PUT /password - Update user password
   fastify.put(
     '/password',
@@ -156,8 +325,74 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const newHash = await bcrypt.hash(newPasswordResult.value, 12);
 
       await usersRepo.updatePasswordHash(request.user.id, newHash);
+      if (request.user.username === ADMIN_USERNAME) {
+        if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
+          await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
+        } else {
+          await notificationsRepo.deleteAdminPasswordWarning();
+        }
+      }
 
       return { message: 'Password updated successfully' };
+    },
+  );
+
+  // GET /personal-access-token - Get current user's PAT metadata, creating one if missing
+  fastify.get(
+    '/personal-access-token',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Get current user personal access token metadata',
+        response: {
+          200: personalAccessTokenSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const existing = await personalAccessTokensRepo.findByUserId(request.user.id);
+      if (existing) return mapPersonalAccessTokenResponse(existing);
+
+      const nextToken = buildTokenParts();
+      const { record, created } = await personalAccessTokensRepo.createForUserIfMissing(
+        request.user.id,
+        nextToken.tokenHash,
+        nextToken.tokenPrefix,
+      );
+
+      return mapPersonalAccessTokenResponse(record, created ? nextToken.token : undefined);
+    },
+  );
+
+  // POST /personal-access-token/renew - Rotate current user's PAT
+  fastify.post(
+    '/personal-access-token/renew',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Renew current user personal access token',
+        response: {
+          200: personalAccessTokenSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const nextToken = buildTokenParts();
+      const record = await personalAccessTokensRepo.renewForUser(
+        request.user.id,
+        nextToken.tokenHash,
+        nextToken.tokenPrefix,
+      );
+
+      return mapPersonalAccessTokenResponse(record, nextToken.token);
     },
   );
 }

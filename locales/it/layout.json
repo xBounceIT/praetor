@@ -36,6 +36,7 @@
     "manage": "Gestisci",
     "invoices": "Fatture",
     "financialReports": "Report Finanziari",
+    "settings": "Impostazioni",
     "authentication": "Autenticazione",
     "general": "Impostazioni Generali",
     "email": "Impostazioni Email",
@@ -47,6 +48,7 @@
     "externalEmployees": "Dipendenti Esterni",
     "roles": "Ruoli",
     "aiReporting": "AI Reporting",
+    "docs": "Documentazione",
     "logs": "Log"
   },
   "menu": {
@@ -57,6 +59,9 @@
     "help": "Aiuto",
     "documentation": "Documentazione"
   },
+  "docsHub": {
+    "title": "Documentazione"
+  },
   "header": {
     "welcome": "Benvenuto, {{name}}",
     "viewProfile": "Visualizza Profilo",
@@ -66,7 +71,8 @@
   "sidebar": {
     "toggle": "Attiva/Disattiva Barra Laterale",
     "expand": "Espandi",
-    "collapse": "Comprimi"
+    "collapse": "Comprimi",
+    "aiReportingDisabled": "AI Reporting è disabilitato dall'amministrazione."
   },
   "workspace": "Area di Lavoro",
   "module": "Modulo",

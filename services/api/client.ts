@@ -13,6 +13,8 @@ export const setAuthToken = (token: string | null) => {
 
 export const getAuthToken = () => authToken;
 
+export const getApiBase = () => API_BASE;
+
 export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
   const headers: HeadersInit = {
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
