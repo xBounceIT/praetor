@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { act } from 'react';
 import type { Client, Project, ProjectTask, TimeEntry, User } from '../../types';
 
 // Use stable `t` and `i18n` references. WeeklyView memoizes `weekDays` with `t` in its
@@ -69,5 +70,18 @@ describe('<WeeklyView /> startOfWeek prop', () => {
     expect(order[0]).toBe('mon');
     expect(order[6]).toBe('sun');
     expect(order).toEqual(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
+  test('re-aligns the week when startOfWeek changes after mount', () => {
+    // generalSettings loads async, so startOfWeek can flip from Monday → Sunday
+    // after the user is already viewing the week. The column order must follow.
+    const { rerender } = render(<WeeklyView {...baseProps} startOfWeek="Monday" />);
+    expect(getRenderedDayKeys()).toEqual(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+
+    act(() => {
+      rerender(<WeeklyView {...baseProps} startOfWeek="Sunday" />);
+    });
+
+    expect(getRenderedDayKeys()).toEqual(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']);
   });
 });

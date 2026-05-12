@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -64,6 +64,15 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     getWeekStart(new Date(), startOfWeek),
   );
 
+  // Re-align the current week when the startOfWeek setting changes — generalSettings
+  // loads async, so the prop can flip after mount and the displayed week must follow.
+  useEffect(() => {
+    setCurrentWeekStart((prev) => {
+      const realigned = getWeekStart(prev, startOfWeek);
+      return realigned.getTime() === prev.getTime() ? prev : realigned;
+    });
+  }, [startOfWeek]);
+
   const weekDays = useMemo(() => {
     return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
       const d = new Date(currentWeekStart);
@@ -79,7 +88,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
       return {
         dateStr,
-        dayName: t(`weekly.days.${dayKey}`),
+        dayKey,
         dayNum: d.getDate(),
         isToday: dateStr === toLocalISOString(new Date()),
         isForbidden,
@@ -87,7 +96,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         holidayName,
       };
     });
-  }, [currentWeekStart, treatSaturdayAsHoliday, allowWeekendSelection, t]);
+    // `t` is intentionally excluded: weekDays now carries `dayKey` and the caller
+    // translates at render time, so the heavy date math is not invalidated by
+    // unstable `t` references (which would otherwise re-trigger the in-render
+    // setState that syncs `rows ← initialRows`, causing infinite loops in tests).
+  }, [currentWeekStart, treatSaturdayAsHoliday, allowWeekendSelection]);
 
   type RowData = {
     clientId: string;
@@ -465,7 +478,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     <div
                       className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-slate-400'}`}
                     >
-                      {day.dayName}
+                      {t(`weekly.days.${day.dayKey}`)}
                       {day.holidayName && (
                         <Tooltip label={day.holidayName}>
                           {() => (
