@@ -1,29 +1,17 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import buildApp from './app.ts';
-import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
+import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
-import { runDrizzleMigrations } from './db/migrationsRunner.ts';
+import { prepareDatabaseForStartup } from './db/startup.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
+import {
+  INSECURE_DEFAULT_ENCRYPTION_KEYS,
+  INSECURE_DEFAULT_JWT_SECRETS,
+  validateRequiredNonDefaultEnv,
+} from './utils/runtimeConfig.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
-const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
-const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
 const logger = createChildLogger({ module: 'startup' });
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const schemaPath = join(__dirname, 'db', 'schema.sql');
-const REQUIRED_BOOTSTRAP_TABLES = [
-  'roles',
-  'users',
-  'user_roles',
-  'settings',
-  'user_clients',
-  'user_projects',
-  'user_tasks',
-] as const;
 
 const fastify = await buildApp();
 
@@ -34,54 +22,14 @@ const parseBooleanEnv = (value: string | undefined): boolean => {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
-const warnInsecureRuntimeDefaults = () => {
-  const warnings: string[] = [];
+const assertSecureRuntimeConfig = () => {
+  const errors = [
+    validateRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS),
+    validateRequiredNonDefaultEnv('ENCRYPTION_KEY', INSECURE_DEFAULT_ENCRYPTION_KEYS),
+  ].filter((error): error is string => error !== null);
 
-  if ((process.env.JWT_SECRET || '').trim() === DEFAULT_JWT_SECRET) {
-    warnings.push('JWT_SECRET is using the default placeholder value.');
-  }
-
-  if ((process.env.ENCRYPTION_KEY || '').trim() === DEFAULT_ENCRYPTION_KEY) {
-    warnings.push('ENCRYPTION_KEY is using the default placeholder value.');
-  }
-
-  if ((process.env.ADMIN_DEFAULT_PASSWORD || '').trim() === DEFAULT_ADMIN_PASSWORD) {
-    warnings.push('ADMIN_DEFAULT_PASSWORD is using the default placeholder value.');
-  }
-
-  for (const warning of warnings) {
-    logger.warn({ warning }, 'Security warning');
-  }
-};
-
-const bootstrapDatabase = async () => {
-  if (!existsSync(schemaPath)) {
-    throw new Error(`Schema file not found at ${schemaPath}`);
-  }
-
-  const schemaSql = readFileSync(schemaPath, 'utf8');
-  await query(schemaSql);
-
-  const tableCheck = await query(
-    `
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-        AND table_name = ANY($1::text[])
-      ORDER BY table_name
-    `,
-    [REQUIRED_BOOTSTRAP_TABLES],
-  );
-
-  const foundTables = tableCheck.rows.map((row) => String(row.table_name));
-  const missingTables = REQUIRED_BOOTSTRAP_TABLES.filter(
-    (tableName) => !foundTables.includes(tableName),
-  );
-
-  logger.info({ foundTables }, 'Database schema verified');
-
-  if (missingTables.length > 0) {
-    throw new Error(`Database bootstrap incomplete. Missing tables: ${missingTables.join(', ')}`);
+  if (errors.length > 0) {
+    throw new Error(errors.join(' '));
   }
 };
 
@@ -101,7 +49,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 // Start server
 try {
-  warnInsecureRuntimeDefaults();
+  assertSecureRuntimeConfig();
 
   // One-time probe to confirm DB connectivity without logging on every pooled connection.
   // Retry briefly to handle container startup ordering.
@@ -122,8 +70,15 @@ try {
   }
   if (dbReady) logger.info('PostgreSQL ready');
 
-  await bootstrapDatabase();
-  await runDrizzleMigrations();
+  const readiness = await prepareDatabaseForStartup();
+  logger.info(
+    {
+      appliedMigrations: readiness.appliedMigrations,
+      expectedMigrations: readiness.expectedMigrations,
+      probedTableCount: readiness.probedTables.length,
+    },
+    'Database schema verified',
+  );
 
   // Ensure required bootstrap user data always exists.
   await ensureBootstrapAdmin();

@@ -21,7 +21,7 @@ export type DbExecutor = PgDatabase<
 //   });
 //
 // The `tx as unknown as DbExecutor` cast bridges Drizzle's `PgTransaction` and `PgDatabase`
-// types — both implement the same query-builder surface (`select`, `insert`, `update`,
+// types - both implement the same query-builder surface (`select`, `insert`, `update`,
 // `delete`, `execute`, `transaction` for nesting) that `DbExecutor` exposes, but the two
 // classes don't share a nominal supertype that includes both, so TS rejects the direct cast.
 // The `unknown` step is a structural-equivalence assertion, not a load-bearing contract.

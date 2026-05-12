@@ -13,7 +13,7 @@ import { clients } from './clients.ts';
 import { products } from './products.ts';
 import { sales } from './sales.ts';
 
-// The `id` column is VARCHAR(100) — wider than typical entity IDs because it follows the
+// The `id` column is VARCHAR(100) - wider than typical entity IDs because it follows the
 // `INV-{year}-{seq}` pattern.
 export const invoices = pgTable(
   'invoices',

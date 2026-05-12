@@ -32,7 +32,7 @@ export interface AuditLogParams {
   entityType?: string;
   entityId?: string;
   details?: AuditLogDetails;
-  /** Override user ID — required for the login handler where request.user is not yet populated. */
+  /** Override user ID - required for the login handler where request.user is not yet populated. */
   userId?: string;
 }
 

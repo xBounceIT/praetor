@@ -1,6 +1,6 @@
 /**
  * Migration: Make product_id nullable on supplier_quote_items
- * The supplier quotes rework removed the product picker — users type product names freely.
+ * The supplier quotes rework removed the product picker - users type product names freely.
  * This allows items to exist without a linked product.
  */
 

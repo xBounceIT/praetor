@@ -24,7 +24,7 @@ describe('getEaster', () => {
   });
 });
 
-describe('isItalianHoliday — fixed dates', () => {
+describe('isItalianHoliday - fixed dates', () => {
   test.each([
     ['2026-01-01', 'Capodanno'],
     ['2026-01-06', 'Epifania'],
@@ -42,7 +42,7 @@ describe('isItalianHoliday — fixed dates', () => {
   });
 });
 
-describe('isItalianHoliday — moveable feasts', () => {
+describe('isItalianHoliday - moveable feasts', () => {
   test('returns "Pasqua" on Easter Sunday', () => {
     expect(isItalianHoliday(new Date(2026, 3, 5))).toBe('Pasqua');
   });
@@ -61,7 +61,7 @@ describe('isItalianHoliday — moveable feasts', () => {
   });
 });
 
-describe('isItalianHoliday — non-holidays', () => {
+describe('isItalianHoliday - non-holidays', () => {
   test('returns null for an ordinary weekday', () => {
     expect(isItalianHoliday(new Date(2026, 5, 15))).toBeNull();
   });
