@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getShadcnThemeClassName, useResolvedShadcnTheme } from '@/components/ui/use-shadcn-theme';
 import { cn } from '@/lib/utils';
 import { getLocalDateString } from '../../utils/date';
 import Calendar from './Calendar';
@@ -33,6 +34,8 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   buttonClassName = '',
 }) => {
   const { t } = useTranslation('common');
+  const resolvedTheme = useResolvedShadcnTheme();
+  const themeClassName = getShadcnThemeClassName(resolvedTheme);
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -180,8 +183,13 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
         ReactDOM.createPortal(
           <div
             ref={dropdownRef}
+            data-shadcn-theme-scope
+            data-shadcn-theme={resolvedTheme}
             style={dropdownStyles}
-            className="w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5"
+            className={cn(
+              'w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5',
+              themeClassName,
+            )}
           >
             <div>
               <Calendar
@@ -200,7 +208,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums"
+                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums dark:[color-scheme:dark]"
                 />
                 <Button
                   type="button"
@@ -209,6 +217,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   onClick={handleApply}
                   aria-label={t('buttons.apply')}
                   title={t('buttons.apply')}
+                  className="rounded-full"
                 >
                   <Check aria-hidden="true" />
                 </Button>
