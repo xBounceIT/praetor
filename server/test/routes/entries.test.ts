@@ -655,6 +655,69 @@ describe('PUT /api/entries/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
   });
+
+  test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBeUndefined();
+  });
+
+  test('200 whitespace-only location is treated as untouched', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: '   ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBeUndefined();
+  });
+
+  test('200 valid location string is forwarded to repo', async () => {
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: 'office' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.location).toBe('office');
+  });
 });
 
 describe('DELETE /api/entries/:id', () => {

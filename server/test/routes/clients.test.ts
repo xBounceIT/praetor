@@ -268,7 +268,7 @@ describe('GET /api/clients', () => {
     expect(body[0].clientCode).toBe('ACME-01');
   });
 
-  test('200 viewer with only timesheets perm → minimal fields only', async () => {
+  test('200 viewer with only timesheets perm → minimal fields only, schema-clean', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
     listClientsMock.mockResolvedValue([SAMPLE_CLIENT]);
 
@@ -280,7 +280,28 @@ describe('GET /api/clients', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
+    // Summary arm: only id, name, description. The Fastify response schema (oneOf) must
+    // serialize this shape cleanly, including stripping fields not declared in the summary.
     expect(body[0]).toEqual({ id: 'c-1', name: 'ACME', description: null });
+    expect(Object.keys(body[0]).sort()).toEqual(['description', 'id', 'name']);
+  });
+
+  test('200 viewer with crm.clients.view → full client arm passes response schema', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.clients.view']);
+    listClientsMock.mockResolvedValue([SAMPLE_CLIENT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/clients',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // Full arm: must include the declared fields. createdAt is required for the full client.
+    expect(body[0].id).toBe('c-1');
+    expect(body[0].createdAt).toBeDefined();
+    expect(body[0].contacts).toBeDefined();
   });
 
   test('401 missing token', async () => {
@@ -325,6 +346,60 @@ describe('POST /api/clients', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.created', entityType: 'client' }),
     );
+  });
+
+  test('201 generated id keeps c- prefix and is a UUID (no Date.now collision risk)', async () => {
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (entry: { id: string }) => ({
+      ...SAMPLE_CLIENT,
+      id: entry.id,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    const id = createClientMock.mock.calls[0][0].id as string;
+    expect(id).toMatch(/^c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  test('201 back-to-back creates produce unique ids', async () => {
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (entry: { id: string }) => ({
+      ...SAMPLE_CLIENT,
+      id: entry.id,
+    }));
+
+    const results = await Promise.all([
+      testApp.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: authHeader(),
+        payload: validBody,
+      }),
+      testApp.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: authHeader(),
+        payload: validBody,
+      }),
+      testApp.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: authHeader(),
+        payload: validBody,
+      }),
+    ]);
+
+    for (const r of results) expect(r.statusCode).toBe(201);
+    const ids = createClientMock.mock.calls.map((c) => (c[0] as { id: string }).id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   test('201 accepts crm.clients_all.create without base create', async () => {

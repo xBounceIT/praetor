@@ -146,6 +146,21 @@ const clientSchema = {
   required: ['id', 'name'],
 } as const;
 
+const clientSummarySchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: ['string', 'null'] },
+  },
+  required: ['id', 'name'],
+  additionalProperties: false,
+} as const;
+
+const clientListItemSchema = {
+  oneOf: [clientSchema, clientSummarySchema],
+} as const;
+
 const clientCreateBodySchema = {
   type: 'object',
   properties: {
@@ -335,7 +350,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['clients'],
         summary: 'List clients',
         response: {
-          200: { type: 'array', items: clientSchema },
+          200: { type: 'array', items: clientListItemSchema },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -497,7 +512,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Client ID already exists');
       }
 
-      const id = 'c-' + Date.now();
+      const id = generatePrefixedId('c');
       const contactsValue = contactsResult.value;
       const primaryFromContacts = buildPrimaryFieldsFromContacts(contactsValue);
 

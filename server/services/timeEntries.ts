@@ -212,7 +212,8 @@ export const updateTimeEntry = async (
     notes: validatedNotes,
     isPlaceholder:
       input.isPlaceholder === undefined ? undefined : parseBoolean(input.isPlaceholder),
-    location: typeof input.location === 'string' ? input.location : undefined,
+    location:
+      typeof input.location === 'string' && input.location.trim() ? input.location : undefined,
     taskId: backfilledTaskId,
   });
 
