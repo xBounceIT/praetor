@@ -320,18 +320,23 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={columns} />);
 
     const headerRow = screen.getAllByRole('row')[0];
-    const headers = within(headerRow).getAllByRole('columnheader');
+    const headerCells = headerRow.querySelectorAll('th');
     const aliceRow = screen.getAllByRole('row')[1];
     const cells = aliceRow.querySelectorAll('td');
 
-    expect(headers).toHaveLength(2);
-    expect(cells).toHaveLength(2);
-    expect(headers[1].className).toContain('sticky');
-    expect(headers[1].className).toContain('right-0');
+    // Two data columns + a trailing-spacer cell that absorbs leftover container space.
+    expect(headerCells).toHaveLength(3);
+    expect(cells).toHaveLength(3);
+    expect(headerCells[1].className).toContain('sticky');
+    expect(headerCells[1].className).toContain('right-0');
     expect(cells[1].className).toContain('sticky');
     expect(cells[1].className).toContain('right-0');
-    expect(screen.getByRole('table').style.width).not.toBe('100%');
+    // No action-anchor spacer is inserted when only one data column is present.
     expect(screen.getByRole('table').querySelector('[data-action-spacer]')).toBeNull();
+    // A trailing spacer column stretches the table without overriding any column width.
+    expect(screen.getByRole('table').querySelector('[data-trailing-spacer]')).not.toBeNull();
+    expect(screen.getByRole('table').style.width).toBe('100%');
+    expect(Number.parseInt(headerCells[0].style.width, 10)).toBeGreaterThan(0);
     expect(
       screen.getByText('Name').closest('th')?.querySelector('[data-column-resize-line="name"]')
         ?.className,
@@ -465,7 +470,6 @@ describe('<StandardTable />', () => {
     expect(Number.parseInt(ageHeader.style.width, 10)).toBe(initialAgeWidth);
     const table = nameHeader.closest('table') as HTMLTableElement;
     expect(table.className).toContain('table-fixed');
-    expect(table.style.minWidth).toBe('');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
   });
@@ -736,13 +740,11 @@ describe('<StandardTable />', () => {
 
     render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 1)} columns={cols} />);
 
-    expect(screen.getByText('Alice').closest('td')?.className).toContain(
-      'standard-table-value-cell',
-    );
-    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-sm');
-    expect(screen.getByText('Alice').closest('td')?.className).toContain(
-      'leading-[var(--text-sm--line-height)]',
-    );
+    const aliceCell = screen.getByText('Alice').closest('td') as HTMLTableCellElement;
+    expect(aliceCell.className).toContain('standard-table-value-cell');
+    // Font-size is driven by the row-level fontSizeClass (default 'sm'), not hardcoded on the cell.
+    expect(aliceCell.className).not.toContain('text-sm');
+    expect(aliceCell.closest('tr')?.className).toContain('text-sm');
     expect(screen.getByText('Active')).toHaveAttribute('data-status-badge');
   });
 

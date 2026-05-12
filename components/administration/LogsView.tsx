@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,8 @@ import type { AuditLogEntry } from '../../types';
 import DatePickerButton from '../shared/DatePickerButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
+import { Button } from '../ui/button';
 
 const humanizeToken = (value: string) =>
   value
@@ -15,8 +18,6 @@ const humanizeToken = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
-
-const tableToolbarButtonClassName = '!h-7 !px-2 !gap-1.5 !rounded-lg !text-[10px] !font-bold';
 
 type TimeRange =
   | 'today'
@@ -178,7 +179,15 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
   return `${verbLabel.toLowerCase()} ${entityLabel}`;
 };
 
-const LogsView: React.FC = () => {
+interface LogsViewProps {
+  startOfWeek?: 'Monday' | 'Sunday';
+  treatSaturdayAsHoliday?: boolean;
+}
+
+const LogsView: React.FC<LogsViewProps> = ({
+  startOfWeek = 'Monday',
+  treatSaturdayAsHoliday = false,
+}) => {
   const { t, i18n } = useTranslation(['administration', 'common']);
   const [activeTab, setActiveTab] = useState<'audit'>('audit');
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
@@ -285,14 +294,15 @@ const LogsView: React.FC = () => {
   const columns = useMemo<Column<AuditLogEntry>[]>(
     () => [
       {
-        header: t('logs.columns.username'),
-        accessorKey: 'username',
+        header: t('logs.columns.timestamp'),
+        id: 'createdAt',
+        accessorFn: (row) => new Date(row.createdAt).getTime(),
+        cell: ({ row }) => dateTimeFormatter.format(new Date(row.createdAt)),
+        filterFormat: (value) => dateTimeFormatter.format(new Date(Number(value))),
       },
       {
-        header: t('logs.columns.operation'),
-        id: 'operation',
-        accessorFn: (row) => formatOperationPrimary(row, t),
-        className: 'min-w-[18rem]',
+        header: t('logs.columns.username'),
+        accessorKey: 'username',
       },
       {
         header: t('logs.columns.ip'),
@@ -300,11 +310,10 @@ const LogsView: React.FC = () => {
         className: 'font-mono text-xs',
       },
       {
-        header: t('logs.columns.timestamp'),
-        id: 'createdAt',
-        accessorFn: (row) => new Date(row.createdAt).getTime(),
-        cell: ({ row }) => dateTimeFormatter.format(new Date(row.createdAt)),
-        filterFormat: (value) => dateTimeFormatter.format(new Date(Number(value))),
+        header: t('logs.columns.operation'),
+        id: 'operation',
+        accessorFn: (row) => formatOperationPrimary(row, t),
+        className: 'min-w-[18rem]',
       },
     ],
     [dateTimeFormatter, t],
@@ -321,34 +330,42 @@ const LogsView: React.FC = () => {
         value={startDate}
         onChange={handleStartDateChange}
         onClear={handleStartDateClear}
-        buttonClassName={tableToolbarButtonClassName}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
-      <i className="fa-solid fa-arrow-right text-zinc-300 text-sm" />
+      <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
       <DatePickerButton
         label={t('logs.filters.endDate')}
         value={endDate}
         onChange={handleEndDateChange}
         onClear={handleEndDateClear}
-        buttonClassName={tableToolbarButtonClassName}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
       <SelectControl
         options={timeRangeOptions}
         value={dropdownValue}
         onChange={handleTimeRangeChange}
         displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName={`${tableToolbarButtonClassName} !bg-white`}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
       />
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={handleRefreshLogs}
         disabled={loading || isRefreshing}
-        className={`${tableToolbarButtonClassName} inline-flex items-center border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+        className={TABLE_CONTROL_BUTTON_CLASSNAME}
       >
-        <i
-          className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'} text-[10px]`}
-        />
+        {isRefreshing ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <RefreshCw className="size-3.5" aria-hidden="true" />
+        )}
         {t('common:buttons.refresh')}
-      </button>
+      </Button>
     </div>
   );
 

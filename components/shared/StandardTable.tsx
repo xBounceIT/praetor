@@ -128,7 +128,6 @@ const HEADER_SORT_ICON_GAP = 4;
 const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
-const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -695,6 +694,13 @@ const StandardTable = <T extends object>({
     if (!usesFixedTableLayout) return undefined;
     return table.getTotalSize();
   }, [table, usesFixedTableLayout]);
+
+  // When there's no anchored trailing action column, append an auto-width spacer cell after the
+  // last data column so the table stretches to fill its container instead of leaving dead space,
+  // while every real column keeps its concrete width (and its resize handle keeps working).
+  const hasTrailingSpacer =
+    shouldRenderTable && !shouldAnchorTrailingActionColumn && visibleColumns.length > 0;
+  const tableStretches = shouldAnchorTrailingActionColumn || hasTrailingSpacer;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -1643,8 +1649,8 @@ const StandardTable = <T extends object>({
             style={
               fixedTableWidth
                 ? {
-                    width: shouldAnchorTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
-                    minWidth: shouldAnchorTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
+                    width: tableStretches ? '100%' : `${fixedTableWidth}px`,
+                    minWidth: tableStretches ? `${fixedTableWidth}px` : undefined,
                   }
                 : undefined
             }
@@ -1662,6 +1668,7 @@ const StandardTable = <T extends object>({
                   </Fragment>
                 );
               })}
+              {hasTrailingSpacer && <col data-trailing-spacer style={{ width: 'auto' }} />}
             </colgroup>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -1795,6 +1802,13 @@ const StandardTable = <T extends object>({
                       </Fragment>
                     );
                   })}
+                  {hasTrailingSpacer && (
+                    <TableHead
+                      aria-hidden="true"
+                      style={{ width: 'auto', minWidth: 0 }}
+                      className="h-10 border-border p-0"
+                    />
+                  )}
                 </TableRow>
               ))}
             </TableHeader>
@@ -1889,7 +1903,7 @@ const StandardTable = <T extends object>({
                                 col.onCellDoubleClick?.(row);
                               }}
                               style={{ width: colWidth, minWidth: minColumnWidth }}
-                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
                                 actionMenuItems ? (
@@ -1936,6 +1950,13 @@ const StandardTable = <T extends object>({
                           </Fragment>
                         );
                       })}
+                      {hasTrailingSpacer && (
+                        <TableCell
+                          aria-hidden="true"
+                          style={{ width: 'auto', minWidth: 0 }}
+                          className="border-border p-0"
+                        />
+                      )}
                     </TableRow>
                   );
 
@@ -1964,7 +1985,9 @@ const StandardTable = <T extends object>({
                 <TableRow className="border-border">
                   <TableCell
                     colSpan={Math.max(
-                      visibleColumns.length + (shouldAnchorTrailingActionColumn ? 1 : 0),
+                      visibleColumns.length +
+                        (shouldAnchorTrailingActionColumn ? 1 : 0) +
+                        (hasTrailingSpacer ? 1 : 0),
                       1,
                     )}
                     className="p-12 text-center text-sm font-medium text-muted-foreground"
