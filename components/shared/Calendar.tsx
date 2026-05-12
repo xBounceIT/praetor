@@ -199,7 +199,7 @@ const Calendar: React.FC<CalendarProps> = ({
                       : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
                         : isToday
-                          ? 'bg-muted text-praetor border-border'
+                          ? 'bg-muted text-secondary border-border'
                           : 'hover:bg-muted border-transparent text-foreground'
               }`}
             >
@@ -300,7 +300,7 @@ const Calendar: React.FC<CalendarProps> = ({
                     idx === month
                       ? 'bg-secondary text-secondary-foreground'
                       : idx === currentMonth
-                        ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
+                        ? 'bg-muted text-secondary ring-1 ring-inset ring-border'
                         : 'text-foreground hover:bg-muted'
                   }`}
                 >
@@ -325,7 +325,7 @@ const Calendar: React.FC<CalendarProps> = ({
                     y === year
                       ? 'bg-secondary text-secondary-foreground'
                       : y === currentYear
-                        ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
+                        ? 'bg-muted text-secondary ring-1 ring-inset ring-border'
                         : 'text-foreground hover:bg-muted'
                   }`}
                 >
@@ -348,7 +348,7 @@ const Calendar: React.FC<CalendarProps> = ({
           <button
             type="button"
             onClick={handleTodayClick}
-            className={`font-bold uppercase tracking-wider text-praetor hover:bg-muted rounded-lg transition-colors ${
+            className={`font-bold uppercase tracking-wider text-secondary hover:bg-muted rounded-lg transition-colors ${
               isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
             }`}
           >

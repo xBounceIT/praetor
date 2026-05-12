@@ -217,7 +217,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   onClick={handleApply}
                   aria-label={t('buttons.apply')}
                   title={t('buttons.apply')}
-                  className="rounded-full"
+                  className="rounded-full text-foreground"
                 >
                   <ArrowUp aria-hidden="true" />
                 </Button>
