@@ -320,21 +320,23 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={columns} />);
 
     const headerRow = screen.getAllByRole('row')[0];
-    const headers = within(headerRow).getAllByRole('columnheader');
+    const headerCells = headerRow.querySelectorAll('th');
     const aliceRow = screen.getAllByRole('row')[1];
     const cells = aliceRow.querySelectorAll('td');
 
-    expect(headers).toHaveLength(2);
-    expect(cells).toHaveLength(2);
-    expect(headers[1].className).toContain('sticky');
-    expect(headers[1].className).toContain('right-0');
+    // Two data columns + a trailing-spacer cell that absorbs leftover container space.
+    expect(headerCells).toHaveLength(3);
+    expect(cells).toHaveLength(3);
+    expect(headerCells[1].className).toContain('sticky');
+    expect(headerCells[1].className).toContain('right-0');
     expect(cells[1].className).toContain('sticky');
     expect(cells[1].className).toContain('right-0');
     // No action-anchor spacer is inserted when only one data column is present.
     expect(screen.getByRole('table').querySelector('[data-action-spacer]')).toBeNull();
-    // The single data column auto-flexes so the table fills the container instead of leaving dead space.
+    // A trailing spacer column stretches the table without overriding any column width.
+    expect(screen.getByRole('table').querySelector('[data-trailing-spacer]')).not.toBeNull();
     expect(screen.getByRole('table').style.width).toBe('100%');
-    expect(headers[0].style.width).toBe('');
+    expect(Number.parseInt(headerCells[0].style.width, 10)).toBeGreaterThan(0);
     expect(
       screen.getByText('Name').closest('th')?.querySelector('[data-column-resize-line="name"]')
         ?.className,
@@ -436,14 +438,7 @@ describe('<StandardTable />', () => {
   });
 
   test('dragging a resize handle increases only the target column', async () => {
-    // Use a 3rd trailing column so Name and Age stay fixed-width — the rightmost column auto-flexes
-    // to absorb remaining container space, so its style.width is intentionally empty. Use the
-    // unique `id` column so existing getByText assertions in this test stay unambiguous.
-    const dragColumns = [
-      ...sampleColumns,
-      { header: 'Identifier', accessorKey: 'id' as const, id: 'identifier' },
-    ];
-    render(<StandardTable<Row> title="Drag Widths" data={sampleRows} columns={dragColumns} />);
+    render(<StandardTable<Row> title="Drag Widths" data={sampleRows} columns={sampleColumns} />);
 
     const nameHeader = screen.getByText('Name').closest('th') as HTMLTableCellElement;
     const ageHeader = screen.getByText('Age').closest('th') as HTMLTableCellElement;
@@ -547,13 +542,7 @@ describe('<StandardTable />', () => {
 
   test('stored widths below minimum are clamped once and do not widen on remount', async () => {
     localStorage.setItem('praetor_table_colwidths_remount_width', JSON.stringify({ role: 32 }));
-    // Two columns so the leading 'role' column keeps an explicit width (the trailing 'extra'
-    // column is the auto-flex one). With a single column the only data column flexes and the
-    // stored width is exposed via minWidth instead of width.
-    const columns = [
-      { header: 'Ruolo', accessorKey: 'name' as const, id: 'role' },
-      { header: 'Extra', accessorKey: 'name' as const, id: 'extra' },
-    ];
+    const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];
     const { unmount } = render(
       <StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />,
     );

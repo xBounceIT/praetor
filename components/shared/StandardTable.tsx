@@ -695,19 +695,12 @@ const StandardTable = <T extends object>({
     return table.getTotalSize();
   }, [table, usesFixedTableLayout]);
 
-  // Index of the last visible leaf column that should absorb remaining horizontal space
-  // (-1 if no column qualifies — anchored action columns already stretch via their spacer).
-  const flexibleLeafIndex = useMemo(() => {
-    if (!shouldRenderTable || shouldAnchorTrailingActionColumn) return -1;
-    for (let i = visibleColumns.length - 1; i >= 0; i--) {
-      const candidate = visibleColumns[i];
-      if (isRowActionColumn(candidate)) continue;
-      if (candidate.sticky === 'right') continue;
-      return i;
-    }
-    return -1;
-  }, [shouldRenderTable, shouldAnchorTrailingActionColumn, visibleColumns, isRowActionColumn]);
-  const tableStretches = shouldAnchorTrailingActionColumn || flexibleLeafIndex !== -1;
+  // When there's no anchored trailing action column, append an auto-width spacer cell after the
+  // last data column so the table stretches to fill its container instead of leaving dead space,
+  // while every real column keeps its concrete width (and its resize handle keeps working).
+  const hasTrailingSpacer =
+    shouldRenderTable && !shouldAnchorTrailingActionColumn && visibleColumns.length > 0;
+  const tableStretches = shouldAnchorTrailingActionColumn || hasTrailingSpacer;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -1663,19 +1656,19 @@ const StandardTable = <T extends object>({
             }
           >
             <colgroup>
-              {table.getVisibleLeafColumns().map((column, leafIdx) => {
+              {table.getVisibleLeafColumns().map((column) => {
                 const col = colsById.get(column.id);
                 const colWidth = column.getSize();
                 const needsActionSpacer =
                   shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
-                const isFlexibleCol = leafIdx === flexibleLeafIndex;
                 return (
                   <Fragment key={column.id}>
                     {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
-                    <col style={isFlexibleCol ? { width: 'auto' } : { width: colWidth }} />
+                    <col style={{ width: colWidth }} />
                   </Fragment>
                 );
               })}
+              {hasTrailingSpacer && <col data-trailing-spacer style={{ width: 'auto' }} />}
             </colgroup>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -1717,11 +1710,7 @@ const StandardTable = <T extends object>({
                           />
                         )}
                         <TableHead
-                          style={
-                            colIdx === flexibleLeafIndex
-                              ? { minWidth: minColumnWidth }
-                              : { width: colWidth, minWidth: minColumnWidth }
-                          }
+                          style={{ width: colWidth, minWidth: minColumnWidth }}
                           aria-label={isActionColumn ? col.header : undefined}
                           className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                         >
@@ -1813,6 +1802,13 @@ const StandardTable = <T extends object>({
                       </Fragment>
                     );
                   })}
+                  {hasTrailingSpacer && (
+                    <TableHead
+                      aria-hidden="true"
+                      style={{ width: 'auto', minWidth: 0 }}
+                      className="h-10 border-border p-0"
+                    />
+                  )}
                 </TableRow>
               ))}
             </TableHeader>
@@ -1906,11 +1902,7 @@ const StandardTable = <T extends object>({
                                 e.stopPropagation();
                                 col.onCellDoubleClick?.(row);
                               }}
-                              style={
-                                colIdx === flexibleLeafIndex
-                                  ? { minWidth: minColumnWidth }
-                                  : { width: colWidth, minWidth: minColumnWidth }
-                              }
+                              style={{ width: colWidth, minWidth: minColumnWidth }}
                               className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
@@ -1958,6 +1950,13 @@ const StandardTable = <T extends object>({
                           </Fragment>
                         );
                       })}
+                      {hasTrailingSpacer && (
+                        <TableCell
+                          aria-hidden="true"
+                          style={{ width: 'auto', minWidth: 0 }}
+                          className="border-border p-0"
+                        />
+                      )}
                     </TableRow>
                   );
 
@@ -1986,7 +1985,9 @@ const StandardTable = <T extends object>({
                 <TableRow className="border-border">
                   <TableCell
                     colSpan={Math.max(
-                      visibleColumns.length + (shouldAnchorTrailingActionColumn ? 1 : 0),
+                      visibleColumns.length +
+                        (shouldAnchorTrailingActionColumn ? 1 : 0) +
+                        (hasTrailingSpacer ? 1 : 0),
                       1,
                     )}
                     className="p-12 text-center text-sm font-medium text-muted-foreground"
