@@ -191,7 +191,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
             data-shadcn-theme={resolvedTheme}
             style={dropdownStyles}
             className={cn(
-              'w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-2.5 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-md',
+              'w-72 origin-top-left animate-in fade-in zoom-in-95 duration-100 space-y-4 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-md',
               themeClassName,
             )}
           >
