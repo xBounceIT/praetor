@@ -50,7 +50,7 @@ const loadAuthenticatedUserContext = async (
   }
 
   if (user.isDisabled) {
-    reply.code(401).send({ error: 'Invalid or expired token' });
+    reply.code(403).send({ error: 'Account disabled', errorCode: 'account_disabled' });
     return null;
   }
 
