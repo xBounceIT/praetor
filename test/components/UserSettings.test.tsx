@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PersonalAccessToken, Settings } from '../../services/api';
 import { installI18nMock } from '../helpers/i18n';
 
@@ -163,6 +163,41 @@ describe('<UserSettings /> Security tab', () => {
     expect(screen.getByDisplayValue('praetor_pat_new-secret')).toBeInTheDocument();
   });
 
+  test('copy PAT button flips its label to the copied state, then reverts', async () => {
+    const originalClipboard = navigator.clipboard;
+    const writeText = mock((_text: string) => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    try {
+      renderSettings();
+      fireEvent.click(screen.getByText('security.title'));
+      await screen.findByDisplayValue('praetor_pat_abc12345-secret');
+
+      const copyButton = screen.getByRole('button', {
+        name: /security.personalAccessToken.copy/,
+      });
+      await act(async () => {
+        fireEvent.click(copyButton);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(writeText).toHaveBeenCalledWith('praetor_pat_abc12345-secret');
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /security.personalAccessToken.copied/ }),
+        ).toBeInTheDocument(),
+      );
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: originalClipboard,
+      });
+    }
+  });
+
   test('finishes token load when the user leaves and returns to Security before it resolves', async () => {
     let resolveToken!: (value: typeof tokenMetadata & { token: string }) => void;
     const onGetPersonalAccessToken = mock(
@@ -254,7 +289,11 @@ describe('<UserSettings /> MCP tokens', () => {
     try {
       renderSettings();
       fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
-      fireEvent.click(await screen.findByRole('button', { name: /mcp.copyUrl/ }));
+      const copyButton = await screen.findByRole('button', { name: /mcp.copyUrl/ });
+      await act(async () => {
+        fireEvent.click(copyButton);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
 
       expect(execCommand).toHaveBeenCalledWith('copy');
     } finally {

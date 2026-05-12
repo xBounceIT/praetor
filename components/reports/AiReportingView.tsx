@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
-import { writeTextToClipboard } from '../../utils/clipboard';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
@@ -197,8 +197,6 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
-  const [copiedMessageId, setCopiedMessageId] = useState('');
-  const [copiedTableId, setCopiedTableId] = useState('');
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingDraft, setEditingDraft] = useState('');
   const [selectedAttemptIndexByGroup, setSelectedAttemptIndexByGroup] = useState<
@@ -1041,35 +1039,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     controller.abort();
   };
 
-  const handleCopy = useCallback(async (messageId: string, text: string) => {
-    const didCopy = await writeTextToClipboard(text);
-    if (!didCopy) return;
-    setCopiedMessageId(messageId);
-    setTimeout(
-      () =>
-        setCopiedMessageId((currentMessageId) =>
-          currentMessageId === messageId ? '' : currentMessageId,
-        ),
-      1500,
-    );
-  }, []);
-
-  const handleCopyTable = useCallback(async (tableId: string) => {
+  const resolveTableMarkdown = useCallback((tableId: string): string | null => {
     const tableElement = tableRefs.current[tableId];
-    if (!tableElement) return;
-
-    const markdown = tableElementToMarkdown(tableElement);
-    if (!markdown) return;
-
-    const didCopy = await writeTextToClipboard(markdown);
-    if (!didCopy) return;
-
-    setCopiedTableId(tableId);
-    setTimeout(
-      () =>
-        setCopiedTableId((currentTableId) => (currentTableId === tableId ? '' : currentTableId)),
-      1500,
-    );
+    if (!tableElement) return null;
+    return tableElementToMarkdown(tableElement) || null;
   }, []);
 
   useEffect(() => {
@@ -1447,30 +1420,19 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="inline-flex">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          void handleCopy(userMessage.id, userMessage.content)
-                                        }
-                                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
-                                      >
-                                        <i
-                                          className={
-                                            copiedMessageId === userMessage.id
-                                              ? 'fa-solid fa-check text-green-500'
-                                              : 'fa-regular fa-copy'
-                                          }
-                                        />
-                                      </button>
-                                    </span>
+                                    <CopyButton
+                                      iconOnly
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      value={userMessage.content}
+                                      aria-label={t('common:buttons.copy', {
+                                        defaultValue: 'Copy',
+                                      })}
+                                      className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    />
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    {copiedMessageId === userMessage.id
-                                      ? t('notifications:success.copied', {
-                                          defaultValue: 'Copied to clipboard',
-                                        })
-                                      : t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                    {t('common:buttons.copy', { defaultValue: 'Copy' })}
                                   </TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
@@ -1631,26 +1593,19 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 table: ({ children }: MarkdownRendererProps<'table'>) => {
                                   tableRenderIndex += 1;
                                   const tableId = `${assistantMessage.id}-table-${tableRenderIndex}`;
-                                  const copied = copiedTableId === tableId;
                                   return (
                                     <div className="my-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
                                       <div className="flex items-center justify-end border-b border-zinc-200 px-2 py-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => void handleCopyTable(tableId)}
-                                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+                                        <CopyButton
+                                          iconOnly
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          value={() => resolveTableMarkdown(tableId)}
                                           aria-label={t('aiReporting.copyTable', {
                                             defaultValue: 'Copy table',
                                           })}
-                                        >
-                                          <i
-                                            className={
-                                              copied
-                                                ? 'fa-solid fa-check text-green-500'
-                                                : 'fa-regular fa-copy'
-                                            }
-                                          />
-                                        </button>
+                                          className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        />
                                       </div>
                                       <div className="max-w-full overflow-x-auto">
                                         <table
@@ -1723,36 +1678,19 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                             <div className="mt-2 flex justify-start items-center gap-1.5">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="inline-flex">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleCopy(
-                                          assistantMessage.id,
-                                          assistantMessage.content,
-                                        )
-                                      }
-                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
-                                      aria-label={t('common:buttons.copy', {
-                                        defaultValue: 'Copy',
-                                      })}
-                                    >
-                                      <i
-                                        className={
-                                          copiedMessageId === assistantMessage.id
-                                            ? 'fa-solid fa-check text-green-500'
-                                            : 'fa-regular fa-copy'
-                                        }
-                                      />
-                                    </button>
-                                  </span>
+                                  <CopyButton
+                                    iconOnly
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    value={assistantMessage.content}
+                                    aria-label={t('common:buttons.copy', {
+                                      defaultValue: 'Copy',
+                                    })}
+                                    className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                                  />
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {copiedMessageId === assistantMessage.id
-                                    ? t('notifications:success.copied', {
-                                        defaultValue: 'Copied to clipboard',
-                                      })
-                                    : t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                  {t('common:buttons.copy', { defaultValue: 'Copy' })}
                                 </TooltipContent>
                               </Tooltip>
                               <Tooltip>
