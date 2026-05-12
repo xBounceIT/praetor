@@ -296,15 +296,15 @@ const LogsView: React.FC = () => {
         accessorKey: 'username',
       },
       {
+        header: t('logs.columns.ip'),
+        accessorKey: 'ipAddress',
+        className: 'font-mono text-xs',
+      },
+      {
         header: t('logs.columns.operation'),
         id: 'operation',
         accessorFn: (row) => formatOperationPrimary(row, t),
         className: 'min-w-[18rem]',
-      },
-      {
-        header: t('logs.columns.ip'),
-        accessorKey: 'ipAddress',
-        className: 'font-mono text-xs',
       },
     ],
     [dateTimeFormatter, t],
