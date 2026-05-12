@@ -1,7 +1,11 @@
+import { CalendarDays, Check } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { getLocalDateString } from '../../utils/date';
 import Calendar from './Calendar';
 
@@ -153,27 +157,23 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      <button
+      <Button
         ref={buttonRef}
         type="button"
+        variant="outline"
         disabled={disabled}
         onClick={handleOpen}
-        className={`h-10 px-4 inline-flex items-center gap-2 rounded-xl border text-sm font-semibold transition-colors ${buttonClassName}
-  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-zinc-50'}
-  ${isOpen ? 'border-praetor ring-1 ring-praetor bg-white' : 'border-zinc-200 bg-white text-zinc-600'}`}
-      >
-        {value ? (
-          <>
-            <i className="fa-solid fa-calendar-days text-zinc-400" />
-            <span className="text-zinc-800">{formatDisplayValue()}</span>
-          </>
-        ) : (
-          <>
-            <i className="fa-solid fa-calendar-days text-zinc-400" />
-            <span className="text-zinc-500">{label}</span>
-          </>
+        className={cn(
+          'h-10 gap-2 rounded-xl px-4 text-sm font-semibold',
+          isOpen && 'border-praetor ring-1 ring-praetor',
+          buttonClassName,
         )}
-      </button>
+      >
+        <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
+          {value ? formatDisplayValue() : label}
+        </span>
+      </Button>
 
       {isOpen &&
         !disabled &&
@@ -195,22 +195,23 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
 
             <div>
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="time"
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-9 flex-1 rounded-full border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 tabular-nums shadow-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="icon"
                   onClick={handleApply}
                   aria-label={t('buttons.apply')}
                   title={t('buttons.apply')}
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-praetor text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2"
                 >
-                  <i className="fa-solid fa-check" />
-                </button>
+                  <Check aria-hidden="true" />
+                </Button>
               </div>
             </div>
           </div>,

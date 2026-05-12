@@ -330,8 +330,11 @@ describe('<StandardTable />', () => {
     expect(headers[1].className).toContain('right-0');
     expect(cells[1].className).toContain('sticky');
     expect(cells[1].className).toContain('right-0');
-    expect(screen.getByRole('table').style.width).not.toBe('100%');
+    // No action-anchor spacer is inserted when only one data column is present.
     expect(screen.getByRole('table').querySelector('[data-action-spacer]')).toBeNull();
+    // The single data column auto-flexes so the table fills the container instead of leaving dead space.
+    expect(screen.getByRole('table').style.width).toBe('100%');
+    expect(headers[0].style.width).toBe('');
     expect(
       screen.getByText('Name').closest('th')?.querySelector('[data-column-resize-line="name"]')
         ?.className,
@@ -433,7 +436,14 @@ describe('<StandardTable />', () => {
   });
 
   test('dragging a resize handle increases only the target column', async () => {
-    render(<StandardTable<Row> title="Drag Widths" data={sampleRows} columns={sampleColumns} />);
+    // Use a 3rd trailing column so Name and Age stay fixed-width — the rightmost column auto-flexes
+    // to absorb remaining container space, so its style.width is intentionally empty. Use the
+    // unique `id` column so existing getByText assertions in this test stay unambiguous.
+    const dragColumns = [
+      ...sampleColumns,
+      { header: 'Identifier', accessorKey: 'id' as const, id: 'identifier' },
+    ];
+    render(<StandardTable<Row> title="Drag Widths" data={sampleRows} columns={dragColumns} />);
 
     const nameHeader = screen.getByText('Name').closest('th') as HTMLTableCellElement;
     const ageHeader = screen.getByText('Age').closest('th') as HTMLTableCellElement;
@@ -465,7 +475,6 @@ describe('<StandardTable />', () => {
     expect(Number.parseInt(ageHeader.style.width, 10)).toBe(initialAgeWidth);
     const table = nameHeader.closest('table') as HTMLTableElement;
     expect(table.className).toContain('table-fixed');
-    expect(table.style.minWidth).toBe('');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('overflow-hidden');
     expect(screen.getByText('Alice').closest('td')?.className).toContain('text-ellipsis');
   });
@@ -538,7 +547,13 @@ describe('<StandardTable />', () => {
 
   test('stored widths below minimum are clamped once and do not widen on remount', async () => {
     localStorage.setItem('praetor_table_colwidths_remount_width', JSON.stringify({ role: 32 }));
-    const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];
+    // Two columns so the leading 'role' column keeps an explicit width (the trailing 'extra'
+    // column is the auto-flex one). With a single column the only data column flexes and the
+    // stored width is exposed via minWidth instead of width.
+    const columns = [
+      { header: 'Ruolo', accessorKey: 'name' as const, id: 'role' },
+      { header: 'Extra', accessorKey: 'name' as const, id: 'extra' },
+    ];
     const { unmount } = render(
       <StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />,
     );
@@ -736,13 +751,11 @@ describe('<StandardTable />', () => {
 
     render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 1)} columns={cols} />);
 
-    expect(screen.getByText('Alice').closest('td')?.className).toContain(
-      'standard-table-value-cell',
-    );
-    expect(screen.getByText('Alice').closest('td')?.className).toContain('text-sm');
-    expect(screen.getByText('Alice').closest('td')?.className).toContain(
-      'leading-[var(--text-sm--line-height)]',
-    );
+    const aliceCell = screen.getByText('Alice').closest('td') as HTMLTableCellElement;
+    expect(aliceCell.className).toContain('standard-table-value-cell');
+    // Font-size is driven by the row-level fontSizeClass (default 'sm'), not hardcoded on the cell.
+    expect(aliceCell.className).not.toContain('text-sm');
+    expect(aliceCell.closest('tr')?.className).toContain('text-sm');
     expect(screen.getByText('Active')).toHaveAttribute('data-status-badge');
   });
 

@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -187,19 +188,19 @@ const Calendar: React.FC<CalendarProps> = ({
               onClick={() => {
                 if (!isForbidden) handleDateClick(dateStr);
               }}
-              className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border 
+              className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border
               ${
                 isSelected
                   ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
                   : isInRange
-                    ? 'bg-stone-200 text-zinc-800 border-stone-200' // Changed to a more neutral/stone color
+                    ? 'bg-muted text-foreground border-muted'
                     : isWeekendOrHoliday
-                      ? 'bg-red-50 text-red-500 border-red-100'
+                      ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20'
                       : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
                         : isToday
-                          ? 'bg-zinc-100 text-praetor border-zinc-200'
-                          : 'hover:bg-zinc-50 border-transparent text-zinc-700'
+                          ? 'bg-muted text-praetor border-border'
+                          : 'hover:bg-muted border-transparent text-foreground'
               }`}
             >
               <span
@@ -207,9 +208,9 @@ const Calendar: React.FC<CalendarProps> = ({
                   isSelected || isInRange
                     ? ''
                     : isWeekendOrHoliday
-                      ? 'text-red-600'
+                      ? 'text-red-600 dark:text-red-400'
                       : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                        ? 'text-emerald-700'
+                        ? 'text-emerald-700 dark:text-emerald-400'
                         : ''
                 }`}
               >
@@ -243,7 +244,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className={`bg-white rounded-lg border border-zinc-200 shadow-sm w-full relative ${
+      className={`bg-card rounded-lg border border-border shadow-sm w-full relative ${
         isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
       }`}
       ref={containerRef}
@@ -256,14 +257,15 @@ const Calendar: React.FC<CalendarProps> = ({
               setIsMonthPickerOpen(!isMonthPickerOpen);
               setIsYearPickerOpen(false);
             }}
-            className={`font-bold text-zinc-800 hover:bg-zinc-50 rounded-md transition-colors flex items-center gap-1 ${
+            className={`font-bold text-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
               isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
             }`}
           >
             {monthNames[month]}
-            <i
-              className={`fa-solid fa-chevron-down text-[8px] text-zinc-400 transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}
-            ></i>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-2.5 text-muted-foreground transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}
+            />
           </button>
 
           <button
@@ -272,19 +274,20 @@ const Calendar: React.FC<CalendarProps> = ({
               setIsYearPickerOpen(!isYearPickerOpen);
               setIsMonthPickerOpen(false);
             }}
-            className={`text-zinc-400 font-medium hover:bg-zinc-50 rounded-md transition-colors flex items-center gap-1 ${
+            className={`text-muted-foreground font-medium hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
               isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
             }`}
           >
             {year}
-            <i
-              className={`fa-solid fa-chevron-down text-[8px] text-zinc-300 transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}
-            ></i>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-2.5 text-muted-foreground transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}
+            />
           </button>
 
           {/* Month Picker Overlay */}
           {isMonthPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+            <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
               {monthNames.map((mName, idx) => (
                 <button
                   key={MONTH_KEYS[idx]}
@@ -297,8 +300,8 @@ const Calendar: React.FC<CalendarProps> = ({
                     idx === month
                       ? 'bg-praetor text-white'
                       : idx === currentMonth
-                        ? 'bg-zinc-100 text-praetor ring-1 ring-inset ring-zinc-200'
-                        : 'text-zinc-600 hover:bg-zinc-50'
+                        ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
+                        : 'text-foreground hover:bg-muted'
                   }`}
                 >
                   {mName.slice(0, 3)}
@@ -309,7 +312,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
           {/* Year Picker Overlay */}
           {isYearPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+            <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
               {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
                 <button
                   key={y}
@@ -322,8 +325,8 @@ const Calendar: React.FC<CalendarProps> = ({
                     y === year
                       ? 'bg-praetor text-white'
                       : y === currentYear
-                        ? 'bg-zinc-100 text-praetor ring-1 ring-inset ring-zinc-200'
-                        : 'text-zinc-600 hover:bg-zinc-50'
+                        ? 'bg-muted text-praetor ring-1 ring-inset ring-border'
+                        : 'text-foreground hover:bg-muted'
                   }`}
                 >
                   {y}
@@ -336,16 +339,16 @@ const Calendar: React.FC<CalendarProps> = ({
           <button
             type="button"
             onClick={prevMonth}
-            className={`hover:bg-zinc-100 rounded-lg text-zinc-400 transition-colors ${
+            className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
               isCompact ? 'p-1' : 'p-1.5'
             }`}
           >
-            <i className="fa-solid fa-chevron-left text-xs"></i>
+            <ChevronLeft aria-hidden="true" className="size-3" />
           </button>
           <button
             type="button"
             onClick={handleTodayClick}
-            className={`font-bold uppercase tracking-wider text-praetor hover:bg-zinc-100 rounded-lg transition-colors ${
+            className={`font-bold uppercase tracking-wider text-praetor hover:bg-muted rounded-lg transition-colors ${
               isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
             }`}
           >
@@ -354,11 +357,11 @@ const Calendar: React.FC<CalendarProps> = ({
           <button
             type="button"
             onClick={nextMonth}
-            className={`hover:bg-zinc-100 rounded-lg text-zinc-400 transition-colors ${
+            className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
               isCompact ? 'p-1' : 'p-1.5'
             }`}
           >
-            <i className="fa-solid fa-chevron-right text-xs"></i>
+            <ChevronRight aria-hidden="true" className="size-3" />
           </button>
         </div>
       </div>
@@ -375,7 +378,7 @@ const Calendar: React.FC<CalendarProps> = ({
               key={dayHeaderKeys[idx]}
               className={`text-center font-bold uppercase tracking-widest ${
                 isCompact ? 'py-0.5 text-[9px]' : 'py-1 text-[10px]'
-              } ${isHolidayHeader ? 'text-red-400' : 'text-zinc-400'}`}
+              } ${isHolidayHeader ? 'text-red-400' : 'text-muted-foreground'}`}
             >
               {day}
             </div>
@@ -387,20 +390,20 @@ const Calendar: React.FC<CalendarProps> = ({
 
       {selectionMode === 'single' && (
         <div
-          className={`border-t border-zinc-100 flex items-center gap-2 ${
+          className={`border-t border-border flex items-center gap-2 ${
             isCompact ? 'mt-auto pt-2' : 'mt-4 pt-3'
           }`}
         >
           <div className="size-2 rounded-full bg-red-500"></div>
           <span
-            className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-zinc-400 uppercase`}
+            className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-muted-foreground uppercase`}
           >
             {t('calendar.holidayWeekend')}
           </span>
           <div className="flex items-center gap-2 ml-auto">
             <div className="size-2 rounded-full bg-emerald-400"></div>
             <span
-              className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-zinc-400 uppercase`}
+              className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-muted-foreground uppercase`}
             >
               {t('calendar.goalReached')}
             </span>

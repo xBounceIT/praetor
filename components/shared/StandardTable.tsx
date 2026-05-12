@@ -128,7 +128,6 @@ const HEADER_SORT_ICON_GAP = 4;
 const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
-const TEXT_SM_LINE_HEIGHT_CLASSNAME = 'leading-[var(--text-sm--line-height)]';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -695,6 +694,20 @@ const StandardTable = <T extends object>({
     if (!usesFixedTableLayout) return undefined;
     return table.getTotalSize();
   }, [table, usesFixedTableLayout]);
+
+  // Index of the last visible leaf column that should absorb remaining horizontal space
+  // (-1 if no column qualifies — anchored action columns already stretch via their spacer).
+  const flexibleLeafIndex = useMemo(() => {
+    if (!shouldRenderTable || shouldAnchorTrailingActionColumn) return -1;
+    for (let i = visibleColumns.length - 1; i >= 0; i--) {
+      const candidate = visibleColumns[i];
+      if (isRowActionColumn(candidate)) continue;
+      if (candidate.sticky === 'right') continue;
+      return i;
+    }
+    return -1;
+  }, [shouldRenderTable, shouldAnchorTrailingActionColumn, visibleColumns, isRowActionColumn]);
+  const tableStretches = shouldAnchorTrailingActionColumn || flexibleLeafIndex !== -1;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -1643,22 +1656,23 @@ const StandardTable = <T extends object>({
             style={
               fixedTableWidth
                 ? {
-                    width: shouldAnchorTrailingActionColumn ? '100%' : `${fixedTableWidth}px`,
-                    minWidth: shouldAnchorTrailingActionColumn ? `${fixedTableWidth}px` : undefined,
+                    width: tableStretches ? '100%' : `${fixedTableWidth}px`,
+                    minWidth: tableStretches ? `${fixedTableWidth}px` : undefined,
                   }
                 : undefined
             }
           >
             <colgroup>
-              {table.getVisibleLeafColumns().map((column) => {
+              {table.getVisibleLeafColumns().map((column, leafIdx) => {
                 const col = colsById.get(column.id);
                 const colWidth = column.getSize();
                 const needsActionSpacer =
                   shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
+                const isFlexibleCol = leafIdx === flexibleLeafIndex;
                 return (
                   <Fragment key={column.id}>
                     {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
-                    <col style={{ width: colWidth }} />
+                    <col style={isFlexibleCol ? { width: 'auto' } : { width: colWidth }} />
                   </Fragment>
                 );
               })}
@@ -1703,7 +1717,11 @@ const StandardTable = <T extends object>({
                           />
                         )}
                         <TableHead
-                          style={{ width: colWidth, minWidth: minColumnWidth }}
+                          style={
+                            colIdx === flexibleLeafIndex
+                              ? { minWidth: minColumnWidth }
+                              : { width: colWidth, minWidth: minColumnWidth }
+                          }
                           aria-label={isActionColumn ? col.header : undefined}
                           className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                         >
@@ -1888,8 +1906,12 @@ const StandardTable = <T extends object>({
                                 e.stopPropagation();
                                 col.onCellDoubleClick?.(row);
                               }}
-                              style={{ width: colWidth, minWidth: minColumnWidth }}
-                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? `standard-table-value-cell text-sm ${TEXT_SM_LINE_HEIGHT_CLASSNAME} max-w-0 overflow-hidden text-ellipsis font-normal` : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                              style={
+                                colIdx === flexibleLeafIndex
+                                  ? { minWidth: minColumnWidth }
+                                  : { width: colWidth, minWidth: minColumnWidth }
+                              }
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
                                 actionMenuItems ? (

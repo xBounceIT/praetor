@@ -285,6 +285,13 @@ const LogsView: React.FC = () => {
   const columns = useMemo<Column<AuditLogEntry>[]>(
     () => [
       {
+        header: t('logs.columns.timestamp'),
+        id: 'createdAt',
+        accessorFn: (row) => new Date(row.createdAt).getTime(),
+        cell: ({ row }) => dateTimeFormatter.format(new Date(row.createdAt)),
+        filterFormat: (value) => dateTimeFormatter.format(new Date(Number(value))),
+      },
+      {
         header: t('logs.columns.username'),
         accessorKey: 'username',
       },
@@ -298,13 +305,6 @@ const LogsView: React.FC = () => {
         header: t('logs.columns.ip'),
         accessorKey: 'ipAddress',
         className: 'font-mono text-xs',
-      },
-      {
-        header: t('logs.columns.timestamp'),
-        id: 'createdAt',
-        accessorFn: (row) => new Date(row.createdAt).getTime(),
-        cell: ({ row }) => dateTimeFormatter.format(new Date(row.createdAt)),
-        filterFormat: (value) => dateTimeFormatter.format(new Date(Number(value))),
       },
     ],
     [dateTimeFormatter, t],
@@ -336,7 +336,7 @@ const LogsView: React.FC = () => {
         value={dropdownValue}
         onChange={handleTimeRangeChange}
         displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName={`${tableToolbarButtonClassName} !bg-white`}
+        buttonClassName={tableToolbarButtonClassName}
       />
       <button
         type="button"
