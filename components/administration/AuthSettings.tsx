@@ -356,7 +356,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       variant="ghost"
       size="sm"
       onClick={() => setActiveTab(tab)}
-      className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+      className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent dark:hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
     >
       <i className={`fa-solid ${icon}`}></i>
       {label}
