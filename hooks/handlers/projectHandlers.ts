@@ -75,6 +75,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to add project:', err);
+      alert('Failed to add project: ' + (err as Error).message);
     }
   };
 
