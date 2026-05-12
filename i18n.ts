@@ -92,9 +92,10 @@ i18n
     ],
     resources,
     detection: {
-      order: ['querystring', 'navigator'],
-      caches: [],
+      order: ['querystring', 'localStorage', 'navigator'],
+      caches: ['localStorage'],
       lookupQuerystring: 'lng',
+      lookupLocalStorage: 'i18nextLng',
     },
     interpolation: {
       escapeValue: false,
