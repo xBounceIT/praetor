@@ -76,6 +76,46 @@ const renderSettings = (
     />,
   );
 
+describe('<UserSettings /> profile form', () => {
+  test('preserves in-progress edits when the parent re-renders with a new settings reference', () => {
+    const { rerender } = render(
+      <UserSettings
+        settings={settings}
+        onUpdate={onUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+    const fullNameInput = screen.getByDisplayValue('Alice') as HTMLInputElement;
+    fireEvent.change(fullNameInput, { target: { value: 'Alice (editing)' } });
+    expect(fullNameInput.value).toBe('Alice (editing)');
+
+    // Parent re-renders with a NEW object reference but identical values - the
+    // user's in-progress edit must not be wiped.
+    rerender(
+      <UserSettings
+        settings={{ ...settings }}
+        onUpdate={onUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+    expect((screen.getByDisplayValue('Alice (editing)') as HTMLInputElement).value).toBe(
+      'Alice (editing)',
+    );
+  });
+});
+
 describe('<UserSettings /> Security tab', () => {
   beforeEach(() => {
     for (const m of [
