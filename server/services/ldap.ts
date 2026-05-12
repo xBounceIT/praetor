@@ -228,7 +228,12 @@ class LDAPService {
         return null;
       }
 
-      const groups = await this.findUserGroups(ldapClient, userDn, username);
+      // Use throwOnError so a transient group-search failure surfaces here as null
+      // (keep existing role) instead of falling through to applyExternalRolesForUser with
+      // an empty group list, which would demote the user to the default 'user' role.
+      const groups = await this.findUserGroups(ldapClient, userDn, username, {
+        throwOnError: true,
+      });
       return { groups, roleMappings: this.getRoleMappings() };
     } catch (err) {
       logger.warn({ err: serializeError(err), username }, 'LDAP user lookup failed');
@@ -280,7 +285,12 @@ class LDAPService {
     });
   }
 
-  async findUserGroups(client: LdapClient, userDn: string, username: string): Promise<string[]> {
+  async findUserGroups(
+    client: LdapClient,
+    userDn: string,
+    username: string,
+    options: { throwOnError?: boolean } = {},
+  ): Promise<string[]> {
     const config = this.config;
     if (!config?.groupBaseDn || !config.groupFilter) {
       return [];
@@ -303,6 +313,7 @@ class LDAPService {
           attributes: ['cn', 'dn', 'distinguishedName'],
         };
       } catch (err) {
+        if (options.throwOnError) throw err;
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group filter is invalid; skipping group role mapping',
@@ -333,6 +344,7 @@ class LDAPService {
           });
         });
       } catch (err) {
+        if (options.throwOnError) throw err;
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group lookup failed; skipping group role mapping',

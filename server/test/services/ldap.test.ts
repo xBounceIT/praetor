@@ -743,7 +743,7 @@ describe('lookupUserGroups', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns null when group lookup throws unexpectedly; unbind still called', async () => {
+  test('returns null when group lookup throws; unbind still called', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [
@@ -755,9 +755,10 @@ describe('lookupUserGroups', () => {
       ],
     };
     const result = await ldapService.lookupUserGroups('alice');
-    // findUserGroups catches search errors and returns []; the helper still returns groups.
-    expect(result).not.toBeNull();
-    expect(result?.groups).toEqual([]);
+    // Transient group-search failure must surface as null so the caller keeps the
+    // existing role, instead of demoting the user to the default 'user' role on an
+    // empty group list.
+    expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 });
