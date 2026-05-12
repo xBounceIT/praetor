@@ -160,6 +160,62 @@ describe('makeTaskHandlers.makeRecurring', () => {
     expect(newTask?.recurrencePattern).toBe('weekly');
   });
 
+  test('does not clobber a concurrent task add that lands during the api update await', async () => {
+    // Regression: building the next list from a closed-over snapshot of
+    // projectTasks would overwrite any task added/edited while the
+    // api.tasks.update await was in flight. Functional updater fixes this.
+    let resolveUpdate: (value: TaskLike) => void = () => {};
+    apiMocks.tasksUpdate.mockImplementation(
+      () =>
+        new Promise<TaskLike>((resolve) => {
+          resolveUpdate = resolve;
+        }),
+    );
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', name: 'orig', projectId: 'p1', isRecurring: false },
+    ]);
+    const setTasks = tasks.setter as unknown as (
+      updater: TaskLike[] | ((prev: TaskLike[]) => TaskLike[]),
+    ) => void;
+    const generateSpy = mock((_tasks?: unknown) => Promise.resolve());
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: generateSpy as never,
+    });
+
+    const makeRecurringPromise = handlers.makeRecurring('t1', 'weekly', '2026-05-01');
+
+    // Simulate another flow (e.g. user adds a new task) while the api call
+    // is in flight. Using the functional updater is the only safe way for the
+    // handler to merge updates with this concurrent change.
+    setTasks((prev) => [
+      ...prev,
+      { id: 't2', name: 'added-concurrently', projectId: 'p1', isRecurring: false },
+    ]);
+
+    resolveUpdate({
+      id: 't1',
+      name: 'orig',
+      projectId: 'p1',
+      isRecurring: true,
+      recurrencePattern: 'weekly',
+    });
+    await makeRecurringPromise;
+
+    // The concurrent task must still be present; the recurring update is applied.
+    const finalTasks = tasks.get();
+    expect(finalTasks.length).toBe(2);
+    expect(finalTasks.find((t) => t.id === 't1')?.isRecurring).toBe(true);
+    expect(finalTasks.find((t) => t.id === 't2')?.name).toBe('added-concurrently');
+
+    // generateRecurringEntries should still receive the full list (both tasks).
+    const passedTasks = generateSpy.mock.calls[0]?.[0] as TaskLike[] | undefined;
+    expect(passedTasks?.length).toBe(2);
+    expect(passedTasks?.find((t) => t.id === 't2')).toBeDefined();
+  });
+
   test('editing already-recurring task: clears placeholder entries before update', async () => {
     apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, name: 'task-A', projectId: 'p1', ...(updates as object) }),

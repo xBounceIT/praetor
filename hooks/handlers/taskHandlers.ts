@@ -54,10 +54,15 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
         recurrenceEnd: endDate,
         recurrenceDuration: duration,
       });
-      // Build the next tasks list explicitly so generateRecurringEntries sees the
-      // freshly-updated task instead of a stale closure snapshot from before this update.
-      const nextTasks = projectTasks.map((t) => (t.id === taskId ? updated : t));
-      setProjectTasks(nextTasks);
+      // Use a functional updater so a concurrent task edit/add during the
+      // awaited api.tasks.update above is not clobbered by a stale snapshot.
+      // Side-channel the resulting list out so generateRecurringEntries sees
+      // the freshly-updated task without relying on closed-over state.
+      let nextTasks: ProjectTask[] = [];
+      setProjectTasks((prev) => {
+        nextTasks = prev.map((t) => (t.id === taskId ? updated : t));
+        return nextTasks;
+      });
       await generateRecurringEntries(nextTasks);
     } catch (err) {
       console.error('Failed to make task recurring:', err);
