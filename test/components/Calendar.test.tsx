@@ -8,9 +8,17 @@ installI18nMock();
 const Calendar = (await import('../../components/shared/Calendar')).default;
 
 describe('<Calendar />', () => {
-  test('renders Italian day headers in Monday-first order', () => {
+  test('renders day-of-week header keys in Monday-first order', () => {
     render(<Calendar startOfWeek="Monday" />);
-    const headers = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+    const headers = [
+      'calendar.daysShort.mon',
+      'calendar.daysShort.tue',
+      'calendar.daysShort.wed',
+      'calendar.daysShort.thu',
+      'calendar.daysShort.fri',
+      'calendar.daysShort.sat',
+      'calendar.daysShort.sun',
+    ];
     headers.forEach((h) => {
       expect(screen.getByText(h)).toBeInTheDocument();
     });
@@ -18,9 +26,9 @@ describe('<Calendar />', () => {
 
   test('Sunday-first order swaps headers', () => {
     render(<Calendar startOfWeek="Sunday" />);
-    const headers = screen.getAllByText(/^(Lun|Mar|Mer|Gio|Ven|Sab|Dom)$/);
-    expect(headers[0].textContent).toBe('Dom');
-    expect(headers[6].textContent).toBe('Sab');
+    const headers = screen.getAllByText(/^calendar\.daysShort\.(mon|tue|wed|thu|fri|sat|sun)$/);
+    expect(headers[0].textContent).toBe('calendar.daysShort.sun');
+    expect(headers[6].textContent).toBe('calendar.daysShort.sat');
   });
 
   test('clicking a non-weekend day calls onDateSelect', () => {
@@ -113,10 +121,10 @@ describe('<Calendar />', () => {
     expect(secondEnd).toMatch(/^\d{4}-\d{2}-05$/);
   });
 
-  test('Today button selects today in single mode', () => {
+  test('Today button uses translation key and selects today in single mode', () => {
     const onDateSelect = mock((_d: string) => {});
     render(<Calendar onDateSelect={onDateSelect} startOfWeek="Monday" allowWeekendSelection />);
-    fireEvent.click(screen.getByText('Oggi'));
+    fireEvent.click(screen.getByText('calendar.today'));
     expect(onDateSelect).toHaveBeenCalled();
     const arg = onDateSelect.mock.calls[0][0] as string;
     expect(arg).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -124,12 +132,16 @@ describe('<Calendar />', () => {
 
   test('month picker opens on click and selects a month', () => {
     render(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
-    // Click the month-name button in the header (March in Italian = "Marzo")
-    fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated names - click "Mag" for May
-    fireEvent.click(screen.getByText('Mag'));
-    // Header should now show full name "Maggio"
-    expect(screen.getByText('Maggio')).toBeInTheDocument();
+    // Identity-translator mock returns the translation key verbatim in the header.
+    fireEvent.click(screen.getByText('calendar.months.march'));
+    // Picker buttons each render `mName.slice(0, 3)` — under identity mock that's
+    // the first 3 chars of every key ("cal"), so all 12 picker buttons say "cal".
+    const pickerButtons = screen.getAllByText('cal');
+    expect(pickerButtons).toHaveLength(12);
+    // Click May (index 4 in the picker).
+    fireEvent.click(pickerButtons[4] as HTMLElement);
+    // Header should now show the May key.
+    expect(screen.getByText('calendar.months.may')).toBeInTheDocument();
   });
 
   test('mousedown outside container closes the open picker', () => {
@@ -139,13 +151,13 @@ describe('<Calendar />', () => {
         <Calendar selectedDate="2024-03-15" startOfWeek="Monday" />
       </div>,
     );
-    fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated month names - "Apr" appears only when picker is open
-    expect(screen.getByText('Apr')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('calendar.months.march'));
+    // Picker open → 12 "cal" buttons are in the DOM.
+    expect(screen.getAllByText('cal')).toHaveLength(12);
 
     fireEvent.mouseDown(screen.getByTestId('outside'));
-    // Picker now closed: "Apr" should no longer be in DOM
-    expect(screen.queryByText('Apr')).not.toBeInTheDocument();
+    // Picker now closed → no "cal" buttons remain.
+    expect(screen.queryByText('cal')).not.toBeInTheDocument();
   });
 
   test('Italian holiday Jan 1 marks day as forbidden in single mode', () => {
