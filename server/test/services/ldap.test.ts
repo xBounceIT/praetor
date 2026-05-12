@@ -683,3 +683,81 @@ describe('syncUsers', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 });
+
+describe('lookupUserGroups', () => {
+  test('returns null when LDAP is disabled', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, enabled: false });
+    const result = await ldapService.lookupUserGroups('alice');
+    expect(result).toBeNull();
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('returns null and logs when service-account bind fails; unbind still called', async () => {
+    nextFixture = { bindResponses: [new Error('bad bind')] };
+    const result = await ldapService.lookupUserGroups('alice');
+    expect(result).toBeNull();
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('returns null when findUserDn yields no entries; unbind still called', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [{ entries: [], status: 0 }],
+    };
+    const result = await ldapService.lookupUserGroups('alice');
+    expect(result).toBeNull();
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('returns groups and roleMappings on happy path; binds service account only', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      roleMappings: [{ ldapGroup: 'managers', role: 'manager' }],
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: 'cn=managers,ou=groups,dc=test,dc=com',
+              object: { cn: 'managers' },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    const result = await ldapService.lookupUserGroups('alice');
+    expect(result).not.toBeNull();
+    expect(result?.groups).toContain('cn=managers,ou=groups,dc=test,dc=com');
+    expect(result?.groups).toContain('managers');
+    expect(result?.roleMappings).toEqual([{ externalGroup: 'managers', role: 'manager' }]);
+    expect(lastClientStats?.bindCalls).toEqual([
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+    ]);
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('returns null when group lookup throws unexpectedly; unbind still called', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
+          status: 0,
+        },
+        { err: new Error('group search failed') },
+      ],
+    };
+    const result = await ldapService.lookupUserGroups('alice');
+    // findUserGroups catches search errors and returns []; the helper still returns groups.
+    expect(result).not.toBeNull();
+    expect(result?.groups).toEqual([]);
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+});

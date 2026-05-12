@@ -201,6 +201,49 @@ class LDAPService {
     return result.authenticated;
   }
 
+  async lookupUserGroups(
+    username: string,
+  ): Promise<{ groups: string[]; roleMappings: ExternalRoleMapping[] } | null> {
+    let client: LdapClient | null = null;
+    try {
+      client = await this.getClient();
+      if (!client) {
+        return null;
+      }
+      const ldapClient = client;
+      const config = this.config;
+      if (!config) {
+        return null;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      const userDn = await this.findUserDn(ldapClient, username);
+      if (!userDn) {
+        return null;
+      }
+
+      const groups = await this.findUserGroups(ldapClient, userDn, username);
+      return { groups, roleMappings: this.getRoleMappings() };
+    } catch (err) {
+      logger.warn({ err: serializeError(err), username }, 'LDAP user lookup failed');
+      return null;
+    } finally {
+      if (client) {
+        client.unbind((err) => {
+          if (err) {
+            logger.warn({ err: serializeError(err) }, 'Error unbinding LDAP client');
+          }
+        });
+      }
+    }
+  }
+
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
     const config = this.config;
     if (!config) {

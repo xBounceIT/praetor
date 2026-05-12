@@ -19,6 +19,8 @@ Praetor supports local authentication and company integrations such as LDAP or S
 
 In the user list, open the row actions menu and choose **Change authentication method** to restrict an application user to local credentials, LDAP, OIDC, or SAML. For OIDC and SAML, also select the specific provider: the user will be able to sign in only through that provider. Internal and external employees are not application accounts and cannot be bound to LDAP/SSO.
 
+When you bind a user to LDAP, Praetor looks them up in the directory and immediately applies the roles configured in the LDAP group role mapping, overriding the local role. If the directory is unreachable or the user is not in it yet, the existing role is kept and the next login or sync will re-apply the mapping.
+
 LDAP synchronization updates only application users that are already set to LDAP. A local user with the same username remains local until an administrator explicitly changes their authentication method.
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.

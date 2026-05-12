@@ -16,6 +16,7 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
+import { applyExternalRolesForUser } from '../services/external-auth.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -847,6 +848,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!updated) return reply.code(404).send({ error: 'User not found' });
 
+      let mappedRoleIds: string[] | null = null;
+      if (methodResult.value === 'ldap') {
+        const ldapService = (await import('../services/ldap.ts')).default;
+        const lookup = await ldapService.lookupUserGroups(updated.username);
+        if (lookup) {
+          mappedRoleIds = await applyExternalRolesForUser(
+            updated.id,
+            lookup.groups,
+            lookup.roleMappings,
+          );
+          updated.role = mappedRoleIds[0];
+        } else {
+          fastify.log.warn(
+            { userId: updated.id, username: updated.username },
+            'LDAP role mapping skipped: directory lookup unavailable or user not found',
+          );
+        }
+      }
+
       await logAudit({
         request,
         action: 'user.auth_method_changed',
@@ -857,6 +877,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: updated.username,
           fromValue: targetUser.authMethod,
           toValue: methodResult.value,
+          ...(mappedRoleIds ? { roleIds: mappedRoleIds } : {}),
         },
       });
 
