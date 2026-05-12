@@ -771,6 +771,21 @@ const App: React.FC = () => {
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
 
+  // Latest-value refs for the quote handler factory. The handlers read these
+  // BEFORE and AFTER awaited API calls; getters backed by refs let the memoized
+  // factory observe up-to-date state once promises resolve (a navigation can
+  // clear `clientQuoteFilterId` mid-await, for example).
+  const quotesRef = useRef(quotes);
+  const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
+  const clientOfferFilterIdRef = useRef(clientOfferFilterId);
+  // Sync in render rather than a passive effect: an in-flight promise can
+  // resume between commit and useEffect (microtask vs effect-task), reading
+  // a stale ref. React allows writing to refs during render as long as the
+  // value is deterministic in the state.
+  quotesRef.current = quotes;
+  clientQuoteFilterIdRef.current = clientQuoteFilterId;
+  clientOfferFilterIdRef.current = clientOfferFilterId;
+
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
@@ -861,9 +876,11 @@ const App: React.FC = () => {
   const quoteHandlers = useMemo(
     () =>
       makeQuoteHandlers({
-        quotes,
-        clientQuoteFilterId,
-        clientOfferFilterId,
+        // Getters back onto refs so reads after awaited API calls see the
+        // latest value instead of the snapshot captured at factory creation.
+        getQuotes: () => quotesRef.current,
+        getClientQuoteFilterId: () => clientQuoteFilterIdRef.current,
+        getClientOfferFilterId: () => clientOfferFilterIdRef.current,
         setQuotes,
         setClientOffers,
         setClientsOrders,
@@ -873,12 +890,7 @@ const App: React.FC = () => {
         setActiveView,
         refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
       }),
-    [
-      quotes,
-      clientQuoteFilterId,
-      clientOfferFilterId,
-      supplierQuoteHandlers.refreshSupplierQuoteFlow,
-    ],
+    [supplierQuoteHandlers.refreshSupplierQuoteFlow],
   );
 
   const clientHandlers = useMemo(

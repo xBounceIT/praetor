@@ -4,10 +4,27 @@ import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../type
 import { getLocalDateString } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
 
+/**
+ * Quote handlers read three pieces of shared state — `quotes`,
+ * `clientQuoteFilterId`, and `clientOfferFilterId` — both before and AFTER
+ * awaited network calls. Capturing those values from the deps closure would
+ * surface a stale-closure bug: the handler factory is created with the values
+ * at the time of the surrounding `useMemo` render, but an awaited API call can
+ * outlive that render. While the await is pending the user can navigate or
+ * toggle a filter, which mutates the underlying state. Reading the captured
+ * value after the await would then act on out-of-date data (for example, the
+ * `clientQuoteFilterId === id` branch could re-apply a filter the user just
+ * cleared).
+ *
+ * To keep the reads fresh while still allowing the factory to be memoized,
+ * callers pass getter functions instead of raw values. The getters close over
+ * the latest React state via refs in `App.tsx`, so calls inside the handlers
+ * always see the current value — even across awaits.
+ */
 export type QuoteHandlersDeps = {
-  quotes: Quote[];
-  clientQuoteFilterId: string | null;
-  clientOfferFilterId: string | null;
+  getQuotes: () => Quote[];
+  getClientQuoteFilterId: () => string | null;
+  getClientOfferFilterId: () => string | null;
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
   setClientOffers: React.Dispatch<React.SetStateAction<ClientOffer[]>>;
   setClientsOrders: React.Dispatch<React.SetStateAction<ClientsOrder[]>>;
@@ -20,9 +37,9 @@ export type QuoteHandlersDeps = {
 
 export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const {
-    quotes,
-    clientQuoteFilterId,
-    clientOfferFilterId,
+    getQuotes,
+    getClientQuoteFilterId,
+    getClientOfferFilterId,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -64,7 +81,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      const currentQuote = quotes.find((quote) => quote.id === id);
+      const currentQuote = getQuotes().find((quote) => quote.id === id);
       const isRestore = Boolean(
         updates.status === 'draft' &&
           updates.isExpired === false &&
@@ -76,7 +93,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         : updates;
 
       const updated = await api.quotes.update(id, updatesWithRestore);
-      if (clientQuoteFilterId === id) {
+      // Re-read the filter via the getter so we observe the latest value, not
+      // the one captured when this handler was created. Navigation effects in
+      // App.tsx can clear the filter while the API call is in flight.
+      if (getClientQuoteFilterId() === id) {
         setClientQuoteFilterId(updated.id);
       }
       await refreshClientQuoteFlow();
@@ -97,7 +117,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const updateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       const updated = await api.clientOffers.update(id, updates);
-      if (clientOfferFilterId === id) {
+      // Same reasoning as in updateQuote: read the filter freshly so a
+      // mid-flight navigation/clear is respected.
+      if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
       await refreshClientQuoteFlow();
