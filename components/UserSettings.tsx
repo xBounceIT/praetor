@@ -1,6 +1,10 @@
 import {
+  AlertCircle,
   Check,
   Contrast,
+  KeyRound,
+  Loader2,
+  Lock,
   type LucideIcon,
   Moon,
   RefreshCw,
@@ -14,6 +18,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
@@ -640,188 +653,180 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'security' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-lock text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('security.title')}</h3>
-          </div>
-          <form onSubmit={handlePasswordUpdate}>
-            <div className="p-6">
-              {passwordError && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                  <i className="fa-solid fa-circle-exclamation"></i>
-                  {passwordError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('password.currentPassword')}
-                  </label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-                <div className="hidden md:block"></div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('password.newPassword')}
-                  </label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('password.confirmNewPassword')}
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
-                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
-                  passwordSuccess
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                    : isSavingPassword || !currentPassword || !newPassword || !confirmPassword
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                }`}
-              >
-                {isSavingPassword ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                ) : passwordSuccess ? (
-                  <i className="fa-solid fa-check"></i>
-                ) : (
-                  <i className="fa-solid fa-key"></i>
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
+                  <Lock aria-hidden="true" className="size-4" />
+                </span>
+                {t('password.title')}
+              </CardTitle>
+            </CardHeader>
+            <form onSubmit={handlePasswordUpdate}>
+              <CardContent className="space-y-6">
+                {passwordError && (
+                  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
+                    <AlertCircle aria-hidden="true" className="size-4" />
+                    {passwordError}
+                  </div>
                 )}
-                {isSavingPassword
-                  ? t('password.updating')
-                  : passwordSuccess
-                    ? t('password.passwordUpdated')
-                    : t('password.updatePassword')}
-              </button>
-            </div>
-          </form>
-          <div className="border-t border-zinc-200 p-6">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Field>
+                    <FieldLabel htmlFor="security-current-password">
+                      {t('password.currentPassword')}
+                    </FieldLabel>
+                    <Input
+                      id="security-current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                    />
+                  </Field>
+                  <Field className="md:col-start-1">
+                    <FieldLabel htmlFor="security-new-password">
+                      {t('password.newPassword')}
+                    </FieldLabel>
+                    <Input
+                      id="security-new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="security-confirm-password">
+                      {t('password.confirmNewPassword')}
+                    </FieldLabel>
+                    <Input
+                      id="security-confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                    />
+                  </Field>
+                </div>
+              </CardContent>
+              <CardFooter className="justify-end border-t pt-6">
+                {(() => {
+                  const { Icon, iconClass, label } = isSavingPassword
+                    ? { Icon: Loader2, iconClass: 'animate-spin', label: t('password.updating') }
+                    : passwordSuccess
+                      ? { Icon: Check, iconClass: undefined, label: t('password.passwordUpdated') }
+                      : {
+                          Icon: KeyRound,
+                          iconClass: undefined,
+                          label: t('password.updatePassword'),
+                        };
+                  return (
+                    <Button
+                      type="submit"
+                      disabled={
+                        isSavingPassword || !currentPassword || !newPassword || !confirmPassword
+                      }
+                    >
+                      <Icon aria-hidden="true" className={iconClass} />
+                      {label}
+                    </Button>
+                  );
+                })()}
+              </CardFooter>
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
                   <Shield aria-hidden="true" className="size-4" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800">
-                    {t('security.personalAccessToken.title')}
-                  </h4>
-                  <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-                    {t('security.personalAccessToken.description')}
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleRenewPersonalAccessToken}
-                disabled={isLoadingToken || isRenewingToken}
-              >
-                <RefreshCw
-                  aria-hidden="true"
-                  className={`size-4 ${isRenewingToken ? 'animate-spin' : ''}`}
-                />
-                {isRenewingToken
-                  ? t('security.personalAccessToken.renewing')
-                  : t('security.personalAccessToken.renew')}
-              </Button>
-            </div>
-
-            {tokenError && (
-              <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                {tokenError}
-              </div>
-            )}
-
-            <div className="space-y-4 rounded-lg border border-border bg-background p-4">
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-400">
-                  {t('security.personalAccessToken.tokenLabel')}
-                </label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={
-                      isLoadingToken ? t('security.personalAccessToken.loading') : tokenDisplayValue
-                    }
-                    readOnly
-                    className="font-mono text-sm"
+                </span>
+                {t('security.personalAccessToken.title')}
+              </CardTitle>
+              <CardDescription className="pl-12">
+                {t('security.personalAccessToken.description')}
+              </CardDescription>
+              <CardAction>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRenewPersonalAccessToken}
+                  disabled={isLoadingToken || isRenewingToken}
+                >
+                  <RefreshCw
+                    aria-hidden="true"
+                    className={isRenewingToken ? 'animate-spin' : undefined}
                   />
-                  <CopyButton
-                    variant="secondary"
-                    value={personalAccessToken?.token ?? ''}
-                    disabled={!personalAccessToken?.token}
-                    label={t('security.personalAccessToken.copy')}
-                    copiedLabel={t('security.personalAccessToken.copied')}
-                    onCopyError={() => setTokenError(t('security.copyFailed'))}
-                  />
+                  {isRenewingToken
+                    ? t('security.personalAccessToken.renewing')
+                    : t('security.personalAccessToken.renew')}
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {tokenError && (
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                  {tokenError}
                 </div>
-                <p className="mt-2 text-xs text-zinc-500">
-                  {personalAccessToken?.token
-                    ? t('security.personalAccessToken.visibleOnce')
-                    : t('security.personalAccessToken.masked')}
-                </p>
-              </div>
-
-              {personalAccessToken && (
-                <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.createdAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.createdAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.updatedAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.updatedAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.lastUsedAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.lastUsedAt)}
-                    </dd>
-                  </div>
-                </dl>
               )}
-            </div>
-          </div>
-        </section>
+
+              <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
+                <Field>
+                  <FieldLabel htmlFor="security-pat-token">
+                    {t('security.personalAccessToken.tokenLabel')}
+                  </FieldLabel>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="security-pat-token"
+                      value={
+                        isLoadingToken
+                          ? t('security.personalAccessToken.loading')
+                          : tokenDisplayValue
+                      }
+                      readOnly
+                      className="font-mono text-sm"
+                    />
+                    <CopyButton
+                      variant="secondary"
+                      value={personalAccessToken?.token ?? ''}
+                      disabled={!personalAccessToken?.token}
+                      label={t('security.personalAccessToken.copy')}
+                      copiedLabel={t('security.personalAccessToken.copied')}
+                      onCopyError={() => setTokenError(t('security.copyFailed'))}
+                    />
+                  </div>
+                  <FieldDescription>
+                    {personalAccessToken?.token
+                      ? t('security.personalAccessToken.visibleOnce')
+                      : t('security.personalAccessToken.masked')}
+                  </FieldDescription>
+                </Field>
+
+                {personalAccessToken && (
+                  <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                    {(['createdAt', 'updatedAt', 'lastUsedAt'] as const).map((field) => (
+                      <div key={field}>
+                        <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {t(`security.personalAccessToken.${field}`)}
+                        </dt>
+                        <dd className="mt-1 text-foreground">
+                          {formatPersonalAccessTokenDate(personalAccessToken[field])}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === 'mcp' && (
