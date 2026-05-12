@@ -1,4 +1,5 @@
 import { mock } from 'bun:test';
+import { ApiErrorStub } from './apiErrorStub';
 
 /**
  * Installs a permissive mock for `services/api`.
@@ -53,6 +54,7 @@ export const installApiMock = () => {
 
   mock.module('../../services/api', () => ({
     default: apiObject,
+    ApiError: ApiErrorStub,
     getAuthToken: () => null,
     setAuthToken: () => {},
   }));

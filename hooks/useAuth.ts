@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import api, { getAuthToken, type Settings, setAuthToken } from '../services/api';
+import api, { ApiError, getAuthToken, type Settings, setAuthToken } from '../services/api';
 import type { User } from '../types';
 import { applyLanguagePreference } from '../utils/language';
 
@@ -9,9 +9,29 @@ const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
 };
 
+export const AUTH_CHECK_RETRY_DELAYS_MS = [500, 1000, 2000];
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const isAuthRejection = (err: unknown): boolean =>
+  err instanceof ApiError && (err.status === 401 || err.status === 403);
+
+// Anything that looks like flaky infrastructure rather than a definite client
+// or auth failure - retry these instead of logging the user out.
+const isTransientError = (err: unknown): boolean => {
+  if (err instanceof ApiError) {
+    return err.isNetworkError || err.status === 0 || err.status >= 500;
+  }
+  return true;
+};
+
 export type UseAuthOptions = {
   onLogin?: (user: User) => void;
   onLogout?: (reason: 'inactivity' | null) => void;
+  retryDelaysMs?: number[];
 };
 
 export function useAuth(opts: UseAuthOptions = {}) {
@@ -19,9 +39,11 @@ export function useAuth(opts: UseAuthOptions = {}) {
   const [isLoading, setIsLoading] = useState(true);
   const [logoutReason, setLogoutReason] = useState<'inactivity' | null>(null);
   const [userSettings, setUserSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [serverUnreachable, setServerUnreachable] = useState(false);
 
   const onLoginRef = useRef(opts.onLogin);
   const onLogoutRef = useRef(opts.onLogout);
+  const retryDelaysRef = useRef(opts.retryDelaysMs ?? AUTH_CHECK_RETRY_DELAYS_MS);
   useEffect(() => {
     onLoginRef.current = opts.onLogin;
     onLogoutRef.current = opts.onLogout;
@@ -37,21 +59,48 @@ export function useAuth(opts: UseAuthOptions = {}) {
     }
   }, []);
 
+  const dismissServerUnreachable = useCallback(() => {
+    setServerUnreachable(false);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    const delays = retryDelaysRef.current;
     const checkAuth = async () => {
       const token = getAuthToken();
-      if (token) {
+      if (!token) {
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
+
+      // Retry transient failures so a flaky boot doesn't log the user out;
+      // 401/403 clears the token because it's no longer trustworthy.
+      let attempt = 0;
+      while (!cancelled) {
         try {
           const user = await api.auth.me();
           if (cancelled) return;
           setCurrentUser(user);
+          setServerUnreachable(false);
           await loadUserSettings();
-        } catch {
+          break;
+        } catch (err) {
           if (cancelled) return;
-          setAuthToken(null);
+          if (isAuthRejection(err)) {
+            setAuthToken(null);
+            setServerUnreachable(false);
+            break;
+          }
+          if (!isTransientError(err) || attempt >= delays.length) {
+            console.error('Initial auth check failed:', err);
+            setServerUnreachable(true);
+            break;
+          }
+          await sleep(delays[attempt]);
+          attempt += 1;
         }
       }
+
       if (!cancelled) setIsLoading(false);
     };
     checkAuth();
@@ -105,5 +154,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
     login,
     logout,
     switchRole,
+    serverUnreachable,
+    dismissServerUnreachable,
   };
 }

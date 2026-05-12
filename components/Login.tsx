@@ -9,9 +9,17 @@ export interface LoginProps {
   onLogin: (user: User, token?: string) => void;
   logoutReason?: 'inactivity' | null;
   onClearLogoutReason?: () => void;
+  serverUnreachable?: boolean;
+  onDismissServerUnreachable?: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReason }) => {
+const Login: React.FC<LoginProps> = ({
+  onLogin,
+  logoutReason,
+  onClearLogoutReason,
+  serverUnreachable,
+  onDismissServerUnreachable,
+}) => {
   const { t } = useTranslation(['auth', 'common', 'notifications']);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -124,6 +132,30 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
           </div>
         )}
 
+<<<<<<< HEAD
+        {serverUnreachable && (
+          <div
+            role="alert"
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
+          >
+            <i className="fa-solid fa-triangle-exclamation text-red-500 mt-0.5"></i>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-800">
+                {t('auth:session.serverUnreachableTitle')}
+              </p>
+              <p className="text-xs text-red-600">{t('auth:session.serverUnreachableMessage')}</p>
+            </div>
+            {onDismissServerUnreachable && (
+              <button
+                type="button"
+                aria-label={t('common:buttons.close')}
+                onClick={onDismissServerUnreachable}
+                className="text-red-400 hover:text-red-600 transition-colors"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+=======
         {ssoProviders.length > 0 && (
           <div className="space-y-3 mb-5">
             {ssoProviders.map((provider) => (
@@ -145,6 +177,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
               <span>{t('auth:login.orPassword', 'or use password')}</span>
               <div className="h-px flex-1 bg-zinc-100"></div>
             </div>
+>>>>>>> origin/main
           </div>
         )}
 

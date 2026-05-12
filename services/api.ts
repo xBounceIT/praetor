@@ -5,7 +5,11 @@
 
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
+<<<<<<< HEAD
+export { ApiError, getAuthToken, setAuthToken } from './api/client';
+=======
 export { getApiBase, getAuthToken, setAuthToken } from './api/client';
+>>>>>>> origin/main
 export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';

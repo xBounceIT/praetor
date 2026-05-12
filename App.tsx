@@ -829,6 +829,8 @@ const App: React.FC = () => {
     login,
     logout,
     switchRole,
+    serverUnreachable,
+    dismissServerUnreachable,
   } = useAuth({
     onLogin: (user) => {
       clearAuthScopedAppState();
@@ -2207,6 +2209,8 @@ const App: React.FC = () => {
         onLogin={handleLogin}
         logoutReason={logoutReason}
         onClearLogoutReason={clearLogoutReason}
+        serverUnreachable={serverUnreachable}
+        onDismissServerUnreachable={dismissServerUnreachable}
       />
     );
 

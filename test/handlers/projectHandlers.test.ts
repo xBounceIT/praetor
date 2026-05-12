@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   projectsCreate: mock(
@@ -25,6 +26,7 @@ mock.module('../../services/api', () => ({
       create: (...args: unknown[]) => apiMocks.tasksCreate(...args),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));

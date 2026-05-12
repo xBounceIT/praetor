@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   authMe: mock((): Promise<unknown> => Promise.resolve({ id: 'u1' })),
@@ -31,6 +32,7 @@ mock.module('../../services/api', () => ({
       get: () => apiMocks.settingsGet(),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => getAuthTokenMock(),
   setAuthToken: (token: string | null) => setAuthTokenMock(token),
 }));
@@ -97,15 +99,116 @@ describe('useAuth', () => {
     expect(localStorage.getItem('i18nextLng')).toBe('it');
   });
 
-  test('initial mount: api.auth.me rejection clears token', async () => {
+  test('initial mount: 401 from api.auth.me clears token (token is no longer trustworthy)', async () => {
     tokenStore.token = 'bad-token';
-    apiMocks.authMe.mockImplementation(() => Promise.reject(new Error('bad token')));
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('unauthorized', 401)));
 
     const { result } = renderHook(() => useAuth());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.currentUser).toBeNull();
     expect(setAuthTokenMock).toHaveBeenCalledWith(null);
+    expect(result.current.serverUnreachable).toBe(false);
+  });
+
+  test('initial mount: 403 from api.auth.me also clears token', async () => {
+    tokenStore.token = 'bad-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('forbidden', 403)));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.currentUser).toBeNull();
+    expect(setAuthTokenMock).toHaveBeenCalledWith(null);
+  });
+
+  test('initial mount: transient network error retries then recovers (no logout)', async () => {
+    tokenStore.token = 'good-token';
+    let calls = 0;
+    apiMocks.authMe.mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.reject(new ApiErrorStub('network down', 0, true));
+      }
+      return Promise.resolve({ id: 'u-recovered', name: 'me' });
+    });
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0, 0, 0] }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(result.current.currentUser?.id).toBe('u-recovered');
+    expect(setAuthTokenMock).not.toHaveBeenCalled();
+    expect(result.current.serverUnreachable).toBe(false);
+  });
+
+  test('initial mount: 5xx triggers retries then keeps token + raises banner', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('boom', 503)));
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0, 0, 0] }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // 1 initial + 3 retries = 4 attempts.
+    expect(apiMocks.authMe.mock.calls.length).toBe(4);
+    expect(setAuthTokenMock).not.toHaveBeenCalled();
+    expect(tokenStore.token).toBe('good-token');
+    expect(result.current.serverUnreachable).toBe(true);
+    expect(result.current.currentUser).toBeNull();
+  });
+
+  test('initial mount: transient error exhausts retries → keeps token, sets serverUnreachable', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('offline', 0, true)));
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0, 0] }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(apiMocks.authMe.mock.calls.length).toBe(3); // 1 + 2 retries
+    expect(setAuthTokenMock).not.toHaveBeenCalled();
+    expect(result.current.serverUnreachable).toBe(true);
+  });
+
+  test('dismissServerUnreachable clears the banner state', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('offline', 0, true)));
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0] }));
+    await waitFor(() => expect(result.current.serverUnreachable).toBe(true));
+
+    act(() => {
+      result.current.dismissServerUnreachable();
+    });
+
+    expect(result.current.serverUnreachable).toBe(false);
+  });
+
+  test('non-ApiError rejection is treated as transient and does NOT log the user out', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new Error('odd shape')));
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0] }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(setAuthTokenMock).not.toHaveBeenCalled();
+    expect(tokenStore.token).toBe('good-token');
+    expect(result.current.serverUnreachable).toBe(true);
+  });
+
+  test('non-transient 4xx (e.g. 400) does NOT clear the token but raises banner', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('bad request', 400)));
+
+    const { result } = renderHook(() => useAuth({ retryDelaysMs: [0, 0, 0] }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // 400 is not retried (only network/5xx) and is not 401/403, so:
+    // - no token clearance
+    // - no retry storm
+    // - banner is raised so something visible surfaces
+    expect(apiMocks.authMe.mock.calls.length).toBe(1);
+    expect(setAuthTokenMock).not.toHaveBeenCalled();
+    expect(result.current.serverUnreachable).toBe(true);
   });
 
   test('language=auto removes localStorage entry and detects browser language', async () => {
