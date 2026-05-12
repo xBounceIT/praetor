@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { siOpenid } from 'simple-icons';
 import { ldapApi } from '../../services/api';
 import { getApiBase } from '../../services/api/client';
 import type {
@@ -13,6 +14,7 @@ import type {
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
+import { Button } from '../ui/button';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
@@ -63,10 +65,18 @@ const buildDefaultProvider = (protocol: SsoProtocol): Partial<SsoProvider> => ({
   roleMappings: [],
 });
 
-const providerIcons: Record<SsoProtocol, string> = {
-  oidc: 'fa-key',
-  saml: 'fa-building-shield',
-};
+const OpenIdIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg aria-hidden="true" className={className} role="img" viewBox="0 0 24 24" fill="currentColor">
+    <path d={siOpenid.path} />
+  </svg>
+);
+
+const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
+  protocol === 'oidc' ? (
+    <OpenIdIcon className={className} />
+  ) : (
+    <i className={`fa-solid fa-building-shield ${className ?? ''}`.trim()}></i>
+  );
 
 const buildSamlAcsUrl = (slug: string): string =>
   `${getApiBase()}/auth/sso/saml/${encodeURIComponent(slug)}/callback`;
@@ -349,18 +359,20 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
-  const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: string, label: string) => (
-    <button
+  const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: React.ReactNode, label: string) => (
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={() => setActiveTab(tab)}
-      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === tab ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
+      className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent dark:hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
     >
-      <i className={`fa-solid ${icon} mr-2`}></i>
+      {icon}
       {label}
       {activeTab === tab && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
       )}
-    </button>
+    </Button>
   );
 
   const renderRoleSelect = (value: string, onChange: (value: string) => void) => (
@@ -374,7 +386,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const renderProviderList = (protocol: SsoProtocol) => (
     <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
       <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
-        <i className={`fa-solid ${providerIcons[protocol]} text-praetor`}></i>
+        {renderProviderIcon(protocol, 'size-4 text-praetor')}
         <h3 className="font-semibold text-zinc-800">
           {protocol === 'oidc'
             ? t('admin.sso.oidcProviders', 'OpenID Connect Providers')
@@ -403,22 +415,26 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 <p className="text-xs text-zinc-400 font-mono">{provider.slug}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => updateProviderDraft(protocol, provider)}
-                  className="text-zinc-400 hover:text-praetor p-2"
+                  className="text-muted-foreground hover:text-primary"
                   title={t('admin.sso.editProvider', 'Edit provider')}
                 >
                   <i className="fa-solid fa-pen"></i>
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => onDeleteSsoProvider(provider.id)}
-                  className="text-zinc-400 hover:text-red-500 p-2"
+                  className="text-muted-foreground hover:text-destructive"
                   title={t('admin.sso.deleteProvider', 'Delete provider')}
                 >
                   <i className="fa-solid fa-trash-can"></i>
-                </button>
+                </Button>
               </div>
             </div>
           ))
@@ -623,24 +639,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         </div>
 
         <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200 flex justify-between">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => updateProviderDraft(protocol, buildDefaultProvider(protocol))}
-            className="text-sm font-bold text-zinc-400 hover:text-zinc-600"
+            className="font-bold text-muted-foreground hover:text-foreground"
           >
             {t('admin.sso.clearForm', 'Clear')}
-          </button>
-          <button
-            type="submit"
-            disabled={savingProvider === protocol}
-            className="bg-praetor text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" size="lg" disabled={savingProvider === protocol}>
             {savingProvider === protocol ? (
               <i className="fa-solid fa-circle-notch fa-spin"></i>
             ) : (
               t('admin.sso.saveProvider', 'Save Provider')
             )}
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -661,9 +675,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </div>
 
       <div className="flex border-b border-zinc-200 gap-8">
-        {renderTabButton('ldap', 'fa-folder-tree', t('admin.tabs.ldap', 'LDAP / Active Directory'))}
-        {renderTabButton('oidc', 'fa-key', t('admin.tabs.oidc', 'OpenID Connect'))}
-        {renderTabButton('saml', 'fa-building-shield', t('admin.tabs.saml', 'SAML'))}
+        {renderTabButton(
+          'ldap',
+          <i className="fa-solid fa-folder-tree"></i>,
+          t('admin.tabs.ldap', 'LDAP / Active Directory'),
+        )}
+        {renderTabButton(
+          'oidc',
+          <OpenIdIcon className="size-4" />,
+          t('admin.tabs.oidc', 'OpenID Connect'),
+        )}
+        {renderTabButton(
+          'saml',
+          <i className="fa-solid fa-building-shield"></i>,
+          t('admin.tabs.saml', 'SAML'),
+        )}
       </div>
 
       {activeTab === 'ldap' && (
@@ -816,27 +842,31 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   <p className="text-red-500 text-[10px] font-bold">{errors.tlsCaCertificate}</p>
                 )}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => tlsCaFileInputRef.current?.click()}
-                    className="text-xs bg-zinc-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-zinc-200 transition-colors"
+                    className="text-xs font-bold"
                   >
-                    <i className="fa-solid fa-file-arrow-up mr-1.5"></i>
+                    <i className="fa-solid fa-file-arrow-up"></i>
                     {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                  </button>
+                  </Button>
                   {ldapForm.tlsCaCertificate.trim() !== '' && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
                         if (errors.tlsCaCertificate)
                           setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
                       }}
-                      className="text-xs text-zinc-500 hover:text-red-500 px-2 py-1.5 rounded-lg font-bold transition-colors"
+                      className="text-xs font-bold text-muted-foreground hover:text-destructive"
                     >
-                      <i className="fa-solid fa-trash-can mr-1.5"></i>
+                      <i className="fa-solid fa-trash-can"></i>
                       {t('admin.ldap.tls.clear', 'Clear')}
-                    </button>
+                    </Button>
                   )}
                   <span className="text-[10px] text-zinc-400 italic">
                     {t(
@@ -856,12 +886,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             </section>
 
             <div className="flex justify-end">
-              <button
-                type="submit"
-                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all"
-              >
+              <Button type="submit" size="lg">
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
-              </button>
+              </Button>
             </div>
           </form>
 
@@ -910,17 +937,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 {testErrors.enabled && (
                   <p className="text-amber-600 text-[10px] font-bold">{testErrors.enabled}</p>
                 )}
-                <button
+                <Button
                   type="submit"
+                  size="lg"
+                  className="w-full"
                   disabled={isTestingLdap || !ldapForm.enabled}
-                  className="w-full bg-praetor text-white py-2.5 rounded-xl font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50"
                 >
                   {isTestingLdap ? (
                     <i className="fa-solid fa-circle-notch fa-spin"></i>
                   ) : (
                     t('admin.ldap.testAuthentication')
                   )}
-                </button>
+                </Button>
               </form>
 
               <div className="bg-zinc-900 rounded-xl p-4 font-mono text-xs overflow-y-auto min-h-64 border border-zinc-800 shadow-inner">
@@ -1091,13 +1119,16 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
   <div>
     <div className="flex justify-between items-center mb-4">
       <h4 className="text-sm font-semibold text-zinc-800">{heading}</h4>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={onAdd}
-        className="text-xs bg-zinc-100 text-praetor px-3 py-1.5 rounded-lg font-bold hover:bg-zinc-200 transition-colors"
+        className="text-xs font-bold"
       >
-        <i className="fa-solid fa-plus mr-1"></i> {addLabel}
-      </button>
+        <i className="fa-solid fa-plus"></i>
+        {addLabel}
+      </Button>
     </div>
     <div className="space-y-3">
       {mappings.length === 0 ? (
@@ -1125,13 +1156,15 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
                 onChange(index, 'role', role),
               )}
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={() => onRemove(index)}
-              className="text-zinc-400 hover:text-red-500 p-2"
+              className="text-muted-foreground hover:text-destructive"
             >
               <i className="fa-solid fa-trash-can"></i>
-            </button>
+            </Button>
           </div>
         ))
       )}
