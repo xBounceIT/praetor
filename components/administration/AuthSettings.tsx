@@ -794,10 +794,15 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t(
-                    'admin.ldap.provisioning.help',
-                    'On Login: users are created when they first sign in; periodic sync only refreshes names and roles of existing users. Auto: periodic sync also creates every matching LDAP user.',
-                  )}
+                  {ldapForm.autoProvisionAll
+                    ? t(
+                        'admin.ldap.provisioning.helpAutoAll',
+                        'Periodic sync creates a local account for every LDAP entry that matches the user filter, and keeps existing users in sync.',
+                      )
+                    : t(
+                        'admin.ldap.provisioning.helpOnLogin',
+                        'Users are created the first time they sign in. Periodic sync only refreshes display names and role mappings of existing users.',
+                      )}
                 </p>
               </div>
 
