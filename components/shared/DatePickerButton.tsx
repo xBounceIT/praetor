@@ -1,4 +1,4 @@
-import { CalendarDays, Check } from 'lucide-react';
+import { ArrowUp, CalendarDays } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
@@ -208,7 +208,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   aria-label={t('labels.time')}
                   value={formatTimeValue(hours, minutes)}
                   onChange={handleTimeChange}
-                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums dark:[color-scheme:dark]"
+                  className="h-9 flex-1 rounded-full px-4 text-sm font-semibold tabular-nums text-foreground dark:[color-scheme:dark]"
                 />
                 <Button
                   type="button"
@@ -219,7 +219,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                   title={t('buttons.apply')}
                   className="rounded-full"
                 >
-                  <Check aria-hidden="true" />
+                  <ArrowUp aria-hidden="true" />
                 </Button>
               </div>
             </div>
