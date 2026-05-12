@@ -5,7 +5,7 @@ import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
-import { computeInvoiceTotals } from '../utils/invoice-math.ts';
+import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -144,10 +144,6 @@ type NormalizedInvoiceItemInput = {
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
 
-// Match the NUMERIC(_, 2) precision used for invoice_items columns so the totals computed
-// here align with what would be re-derived from the persisted rows.
-const round2 = (value: number) => Math.round(value * 100) / 100;
-
 const validateAndNormalizeItems = (
   items: unknown[],
   reply: FastifyReply,
@@ -213,9 +209,9 @@ const validateAndNormalizeItems = (
       productId: productIdResult.value || null,
       description: descriptionResult.value,
       unitOfMeasure: unitOfMeasureResult.value as 'unit' | 'hours',
-      quantity: round2(quantityResult.value),
-      unitPrice: round2(unitPriceResult.value),
-      discount: round2(discountResult.value || 0),
+      quantity: roundCurrency(quantityResult.value),
+      unitPrice: roundCurrency(unitPriceResult.value),
+      discount: roundCurrency(discountResult.value || 0),
     });
   }
 
