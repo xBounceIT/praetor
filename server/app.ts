@@ -92,7 +92,7 @@ export const buildApp = async () => {
       info: {
         title: 'Praetor API',
         description: 'Praetor API documentation',
-        version: '0.6.0',
+        version: '0.6.1',
       },
       components: {
         securitySchemes: {
