@@ -9,6 +9,8 @@ import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realExternalAuth from '../../services/external-auth.ts';
+import realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -26,6 +28,8 @@ const rolesRepoSnap = { ...realRolesRepo };
 const settingsRepoSnap = { ...realSettingsRepo };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
+const externalAuthSnap = { ...realExternalAuth };
+const ldapServiceSnap = realLdapService;
 const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
@@ -80,6 +84,10 @@ const applyProjectCascadeToClientsMock = mock();
 const filterAssignedClientIdsMock = mock();
 const filterAssignedProjectIdsMock = mock();
 const filterAssignedTaskIdsMock = mock();
+
+// LDAP / external-auth
+const ldapLookupUserGroupsMock = mock();
+const applyExternalRolesForUserMock = mock();
 
 // audit / drizzle
 const logAuditMock = mock(async () => undefined);
@@ -162,6 +170,15 @@ beforeAll(async () => {
     ...drizzleSnap,
     withDbTransaction: withDbTransactionMock,
   }));
+  mock.module('../../services/external-auth.ts', () => ({
+    ...externalAuthSnap,
+    applyExternalRolesForUser: applyExternalRolesForUserMock,
+  }));
+  mock.module('../../services/ldap.ts', () => ({
+    default: {
+      lookupUserGroups: ldapLookupUserGroupsMock,
+    },
+  }));
 
   routePlugin = (await import('../../routes/users.ts')).default as FastifyPluginAsync;
 });
@@ -179,6 +196,8 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../services/external-auth.ts', () => externalAuthSnap);
+  mock.module('../../services/ldap.ts', () => ({ default: ldapServiceSnap }));
 });
 
 const ADMIN_USER = {
@@ -298,6 +317,8 @@ const allMocks = [
   filterAssignedClientIdsMock,
   filterAssignedProjectIdsMock,
   filterAssignedTaskIdsMock,
+  ldapLookupUserGroupsMock,
+  applyExternalRolesForUserMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -321,6 +342,10 @@ beforeEach(async () => {
   listProjectsForUserMock.mockResolvedValue([]);
   listProjectsByIdsMock.mockResolvedValue([]);
   listTasksForUserMock.mockResolvedValue([]);
+
+  // Default: LDAP unreachable / disabled — route falls back to existing role.
+  ldapLookupUserGroupsMock.mockResolvedValue(null);
+  applyExternalRolesForUserMock.mockResolvedValue(['user']);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -925,9 +950,18 @@ describe('PUT /api/users/:id', () => {
 // =========================================================================
 
 describe('PUT /api/users/:id/auth-method', () => {
-  test('200 changes app user to LDAP', async () => {
+  test('200 changes app user to LDAP and applies role mapping from directory groups', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
-    updateAuthMethodMock.mockResolvedValue({ ...SAMPLE_USER_ROW, authMethod: 'ldap' });
+    updateAuthMethodMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'ldap',
+      role: 'user',
+    });
+    ldapLookupUserGroupsMock.mockResolvedValue({
+      groups: ['cn=managers,ou=groups,dc=test,dc=com'],
+      roleMappings: [{ externalGroup: 'managers', role: 'manager' }],
+    });
+    applyExternalRolesForUserMock.mockResolvedValue(['manager']);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -938,7 +972,84 @@ describe('PUT /api/users/:id/auth-method', () => {
 
     expect(res.statusCode).toBe(200);
     expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'ldap', null);
-    expect(JSON.parse(res.body).authMethod).toBe('ldap');
+    expect(ldapLookupUserGroupsMock).toHaveBeenCalledWith('target');
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      ['cn=managers,ou=groups,dc=test,dc=com'],
+      [{ externalGroup: 'managers', role: 'manager' }],
+    );
+    const body = JSON.parse(res.body);
+    expect(body.authMethod).toBe('ldap');
+    expect(body.role).toBe('manager');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.auth_method_changed',
+        details: expect.objectContaining({ roleIds: ['manager'] }),
+      }),
+    );
+  });
+
+  test('200 changes app user to LDAP with no matching mapping → role becomes "user"', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'manager' });
+    updateAuthMethodMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'ldap',
+      role: 'manager',
+    });
+    ldapLookupUserGroupsMock.mockResolvedValue({
+      groups: ['cn=unrelated,ou=groups,dc=test,dc=com'],
+      roleMappings: [{ externalGroup: 'managers', role: 'manager' }],
+    });
+    applyExternalRolesForUserMock.mockResolvedValue(['user']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(applyExternalRolesForUserMock).toHaveBeenCalled();
+    expect(JSON.parse(res.body).role).toBe('user');
+  });
+
+  test('200 changes app user to LDAP when LDAP is disabled → role unchanged, no failure', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateAuthMethodMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'ldap',
+      role: 'manager',
+    });
+    ldapLookupUserGroupsMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ldapLookupUserGroupsMock).toHaveBeenCalledWith('target');
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body).role).toBe('manager');
+  });
+
+  test('200 changes to local does not trigger any LDAP lookup', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, authMethod: 'ldap' });
+    updateAuthMethodMock.mockResolvedValue({ ...SAMPLE_USER_ROW, authMethod: 'local' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'local' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ldapLookupUserGroupsMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('200 changes app user to OIDC with enabled matching provider', async () => {
