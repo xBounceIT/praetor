@@ -112,7 +112,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 space-y-6 p-3">
+        <PopoverContent align="start" className="w-72 space-y-2.5 p-3">
           <Calendar
             selectedDate={selectedDate ?? undefined}
             onDateSelect={handleDateSelect}

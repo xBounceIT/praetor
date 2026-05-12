@@ -397,7 +397,7 @@ const Calendar: React.FC<CalendarProps> = ({
       {selectionMode === 'single' && (
         <div
           className={`border-t border-border flex items-center gap-2 ${
-            isCompact ? 'mt-auto pt-2' : 'mt-4 pt-3'
+            isCompact ? 'mt-3 pt-2' : 'mt-4 pt-3'
           }`}
         >
           <div className="size-2 rounded-full bg-red-500"></div>
