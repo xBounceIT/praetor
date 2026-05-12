@@ -655,9 +655,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       {activeTab === 'security' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="flex flex-row items-center gap-3 border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <Lock aria-hidden="true" className="size-4 text-praetor" />
-              <CardTitle className="text-base">{t('password.title')}</CardTitle>
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <Lock aria-hidden="true" className="size-4 text-praetor" />
+                {t('password.title')}
+              </CardTitle>
+              <CardDescription>{t('password.description')}</CardDescription>
             </CardHeader>
             <form onSubmit={handlePasswordUpdate}>
               <CardContent className="space-y-6 p-6">
@@ -819,9 +822,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
       {activeTab === 'mcp' && (
         <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-6 py-4">
-            <McpIcon className="size-4 text-praetor" />
-            <h3 className="font-semibold text-foreground">{t('mcp.title')}</h3>
+          <div className="border-b border-border bg-muted/40 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <McpIcon className="size-4 text-praetor" />
+              <h3 className="font-semibold text-foreground">{t('mcp.title')}</h3>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{t('mcp.description')}</p>
           </div>
           <div className="p-6 space-y-6">
             {mcpError && (
