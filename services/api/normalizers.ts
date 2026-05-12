@@ -155,7 +155,6 @@ const assignIfPresent = <V>(
   }
 };
 
-<<<<<<< HEAD
 const normalizeCostPerHour = (raw: unknown): number => {
   const n = Number(raw ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -187,26 +186,6 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'employeeType', normalizeEmployeeType);
 
   return result as unknown as User;
-=======
-  return {
-    ...u,
-    id: normalizeTrimmedString(u.id),
-    name: normalizeTrimmedString(u.name),
-    role: normalizeTrimmedString(u.role),
-    avatarInitials: normalizeTrimmedString(u.avatarInitials),
-    username: normalizeTrimmedString(u.username),
-    hasTopManagerRole: !!u.hasTopManagerRole,
-    isAdminOnly: !!u.isAdminOnly,
-    email: normalizeTrimmedString(u.email) || undefined,
-    permissions: normalizeStringArray(u.permissions),
-    availableRoles: normalizeAvailableRoles(u.availableRoles),
-    costPerHour: Number.isFinite(normalizedCostPerHour) ? normalizedCostPerHour : 0,
-    employeeType: normalizeEmployeeType(u.employeeType),
-    authMethod: normalizeUserAuthMethod(u.authMethod),
-    authProviderId: normalizeTrimmedString(u.authProviderId) || null,
-    authProviderName: normalizeTrimmedString(u.authProviderName) || null,
-  };
->>>>>>> origin/main
 };
 
 export const normalizeProduct = (p: Product): Product => ({

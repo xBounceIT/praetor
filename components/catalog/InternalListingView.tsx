@@ -1518,13 +1518,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             id: 'createdAt',
             accessorFn: (row) => row.createdAt ?? 0,
             cell: ({ value }) => (
-<<<<<<< HEAD
-              <span className="text-xs text-slate-500 whitespace-nowrap">
-                {formatInsertDate(value as number | null, i18n.language)}
-=======
               <span className="text-xs text-zinc-500 whitespace-nowrap">
-                {formatInsertDate(value as number | null)}
->>>>>>> origin/main
+                {formatInsertDate(value as number | null, i18n.language)}
               </span>
             ),
             filterFormat: (value) => formatInsertDate(value as number | null, i18n.language),

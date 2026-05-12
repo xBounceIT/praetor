@@ -85,17 +85,10 @@ const TasksView: React.FC<TasksViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-<<<<<<< HEAD
   const { t, i18n } = useTranslation(['projects', 'common']);
-  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
-  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
-  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
-=======
-  const { t } = useTranslation(['projects', 'common']);
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
->>>>>>> origin/main
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
@@ -256,13 +249,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         id: 'createdAt',
         accessorFn: (task) => task.createdAt ?? 0,
         cell: ({ row }) => (
-<<<<<<< HEAD
-          <span className="text-xs text-slate-500 whitespace-nowrap">
-            {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
-=======
           <span className="text-xs text-zinc-500 whitespace-nowrap">
-            {row.createdAt ? formatInsertDate(row.createdAt) : '-'}
->>>>>>> origin/main
+            {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '-'}
           </span>
         ),
       },
@@ -564,12 +552,9 @@ const TasksView: React.FC<TasksViewProps> = ({
       currency,
       taskHours,
       hoursLoadState,
-<<<<<<< HEAD
-      i18n.language,
-=======
       formatBillingType,
       formatBillingFrequency,
->>>>>>> origin/main
+      i18n.language,
     ],
   );
 

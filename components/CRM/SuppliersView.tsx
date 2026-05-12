@@ -54,17 +54,10 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   onDeleteSupplier,
   permissions,
 }) => {
-<<<<<<< HEAD
   const { t, i18n } = useTranslation(['crm', 'common']);
-  const canCreateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'create'));
-  const canUpdateSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'update'));
-  const canDeleteSuppliers = hasPermission(permissions, buildPermission('crm.suppliers', 'delete'));
-=======
-  const { t } = useTranslation(['crm', 'common']);
   const canCreateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'create');
   const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
   const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
->>>>>>> origin/main
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -236,13 +229,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
             return <span className="text-xs text-zinc-400">-</span>;
           }
           return (
-<<<<<<< HEAD
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt, i18n.language)}
-=======
             <span className="text-xs text-zinc-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt)}
->>>>>>> origin/main
+              {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
         },
