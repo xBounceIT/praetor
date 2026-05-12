@@ -72,6 +72,31 @@ export function useModuleLoader() {
     });
   }, []);
 
+  // Drop modules from the loaded set so a subsequent visit re-fetches them.
+  // Used when cross-module data they cached has been cleared by navigation.
+  const invalidateModules = useCallback((moduleNames: readonly string[]) => {
+    if (moduleNames.length === 0) return;
+    setLoadedModules((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const name of moduleNames) {
+        if (next.delete(name)) changed = true;
+      }
+      return changed ? next : prev;
+    });
+    setModuleLoadErrors((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const name of moduleNames) {
+        if (name in next) {
+          delete next[name];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, []);
+
   const recordFailures = useCallback((moduleName: string, failures: string[]) => {
     setModuleLoadErrors((prev) => {
       const next = { ...prev };
@@ -102,6 +127,7 @@ export function useModuleLoader() {
     isModuleLoading,
     loadDatasets,
     markModuleLoaded,
+    invalidateModules,
     recordFailures,
     reset,
   };
