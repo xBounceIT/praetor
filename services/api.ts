@@ -65,6 +65,7 @@ import { workUnitsApi } from './api/workUnits';
 export { ApiError, getApiBase, getAuthToken, setAuthToken };
 
 export default {
+  ApiError,
   auth: authApi,
   ai: aiApi,
   reports: reportsApi,
