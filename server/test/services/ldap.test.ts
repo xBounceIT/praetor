@@ -22,6 +22,7 @@ const findLoginUserByUsernameMock = mock();
 const updateNameByUsernameMock = mock();
 const createUserMock = mock();
 const applyExternalRolesForUserMock = mock();
+const filterExistingRoleIdsMock = mock();
 
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
 type SearchResponse = {
@@ -134,6 +135,7 @@ beforeAll(() => {
   mock.module('../../services/external-auth.ts', () => ({
     ...externalAuthSnapshot,
     applyExternalRolesForUser: applyExternalRolesForUserMock,
+    filterExistingRoleIds: filterExistingRoleIdsMock,
   }));
   mock.module('../../utils/initials.ts', () => ({
     ...initialsSnapshot,
@@ -211,6 +213,10 @@ beforeEach(() => {
   updateNameByUsernameMock.mockReset();
   createUserMock.mockReset();
   applyExternalRolesForUserMock.mockReset();
+  filterExistingRoleIdsMock.mockReset();
+  filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
+    ids.length > 0 ? ids : ['user'],
+  );
   createClientMock.mockClear();
 
   ldapRepoGetMock.mockResolvedValue(ENABLED_LDAP_CONFIG);
@@ -947,5 +953,70 @@ describe('authenticateAndProvision', () => {
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Dave Display', username: 'dave' }),
     );
+  });
+
+  test('searches groups using the canonical uid in addition to the typed alias', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 }, // group search by userDn
+        { entries: [], status: 0 }, // group search by canonical
+        { entries: [], status: 0 }, // group search by typed alias
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    await ldapService.authenticateAndProvision('ALICE@example.com', 'pw');
+
+    const groupFilterTexts = (lastClientStats?.searchCalls ?? [])
+      .filter((c) => c.base === 'ou=groups,dc=test,dc=com')
+      .map((c) => String(c.options.filter));
+    // Must include a search keyed on the canonical uid so configs like memberUid={0}
+    // resolve groups even when the user typed an email/UPN alias.
+    expect(groupFilterTexts.some((f) => f.includes('uid=alice,dc=test,dc=com'))).toBe(true);
+    expect(groupFilterTexts.some((f) => f.includes('member=alice') && !f.includes('@'))).toBe(true);
+  });
+
+  test('filters role IDs against existing roles before createUser to avoid FK violation', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      roleMappings: [
+        { ldapGroup: 'deleted-role-group', role: 'role-deleted-12345' },
+        { ldapGroup: 'managers', role: 'manager' },
+      ],
+    });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=eve,dc=test,dc=com', object: { uid: 'eve', cn: 'Eve' } }],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: 'cn=deleted-role-group,dc=test,dc=com',
+              object: { cn: 'deleted-role-group' },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    // Simulate the deleted role being filtered out; only 'role-deleted-12345' would map.
+    filterExistingRoleIdsMock.mockResolvedValueOnce(['user']);
+
+    await ldapService.authenticateAndProvision('eve', 'pw');
+
+    // filterExistingRoleIds must be called with the unfiltered mapped IDs before createUser fires
+    expect(filterExistingRoleIdsMock).toHaveBeenCalledWith(['role-deleted-12345']);
+    expect(createUserMock).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }));
   });
 });

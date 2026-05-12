@@ -13,6 +13,7 @@ import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   applyExternalRolesForUser,
   type ExternalRoleMapping,
+  filterExistingRoleIds,
   mapExternalGroupsToRoleIds,
 } from './external-auth.ts';
 
@@ -204,7 +205,10 @@ class LDAPService {
       const userDn = userEntry.dn;
       const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
 
-      const groups = await this.findUserGroups(ldapClient, userDn, username);
+      // Search groups under both the canonical and typed identifiers so configs whose
+      // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
+      // (email/UPN) that userFilter accepted.
+      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username]);
 
       // Try to bind as the user
       // We need a new client for this to verify credentials safely without messing up the service connection state
@@ -277,7 +281,13 @@ class LDAPService {
 
     const name = result.displayName ?? canonicalUsername;
     const id = generatePrefixedId('u');
-    const primaryRole = mapExternalGroupsToRoleIds(result.groups, roleMappings)[0];
+    // Filter against existing role rows so a mapping referencing a deleted role doesn't
+    // violate the users.role FK; applyExternalRolesForUser below will replace the primary
+    // role and user_roles set anyway, but the initial insert still needs a valid row.
+    const filteredRoleIds = await filterExistingRoleIds(
+      mapExternalGroupsToRoleIds(result.groups, roleMappings),
+    );
+    const primaryRole = filteredRoleIds[0];
 
     try {
       await usersRepo.createUser({
@@ -415,7 +425,7 @@ class LDAPService {
   async findUserGroups(
     client: LdapClient,
     userDn: string,
-    username: string,
+    usernames: string | string[],
     options: { throwOnError?: boolean } = {},
   ): Promise<string[]> {
     const config = this.config;
@@ -423,8 +433,12 @@ class LDAPService {
       return [];
     }
 
-    const searchValues = [userDn, username].filter((value, idx, arr) => arr.indexOf(value) === idx);
+    const usernameList = (Array.isArray(usernames) ? usernames : [usernames]).filter(Boolean);
+    const searchValues = [userDn, ...usernameList].filter(
+      (value, idx, arr) => value && arr.indexOf(value) === idx,
+    );
     const groups = new Set<string>();
+    const username = usernameList[0] ?? userDn;
 
     for (const searchValue of searchValues) {
       let searchOptions: {
