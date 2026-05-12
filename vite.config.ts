@@ -18,40 +18,54 @@ const getBuildDate = () => {
 };
 
 const docsFrontendDir = path.resolve(__dirname, 'docs', 'frontend');
+const docsUserDir = path.resolve(__dirname, 'docs-site', 'dist');
 
-const docsFrontendDevPlugin: Plugin = {
-  name: 'docs-frontend-dev',
+const docsStaticDevPlugin: Plugin = {
+  name: 'docs-static-dev',
   apply: 'serve',
   configureServer(server) {
-    if (!existsSync(docsFrontendDir)) return;
     server.middlewares.use((req, _res, next) => {
       if (req.url === '/docs/frontend' || req.url === '/docs/frontend/') {
         req.url = '/docs/frontend/index.html';
+      } else if (req.url === '/docs' || req.url === '/docs/') {
+        req.url = '/docs/index.html';
       }
       next();
     });
-    server.middlewares.use(
-      '/docs/frontend',
-      sirv(docsFrontendDir, { dev: true, etag: true, extensions: ['html'] }),
-    );
+    if (existsSync(docsFrontendDir)) {
+      server.middlewares.use(
+        '/docs/frontend',
+        sirv(docsFrontendDir, { dev: true, etag: true, extensions: ['html'] }),
+      );
+    }
+    if (existsSync(docsUserDir)) {
+      server.middlewares.use(
+        '/docs',
+        sirv(docsUserDir, { dev: true, etag: true, extensions: ['html'] }),
+      );
+    }
   },
 };
 
-const docsFrontendBuildPlugin = (): Plugin => {
+const copyDirectoryIfPresent = (sourceDir: string, targetDir: string) => {
+  if (!existsSync(sourceDir)) return;
+  mkdirSync(targetDir, { recursive: true });
+  cpSync(sourceDir, targetDir, { recursive: true });
+};
+
+const docsStaticBuildPlugin = (): Plugin => {
   let rootDir = __dirname;
   let outDir = 'dist';
   return {
-    name: 'docs-frontend-build',
+    name: 'docs-static-build',
     apply: 'build',
     configResolved(resolved) {
       rootDir = resolved.root;
       outDir = resolved.build.outDir;
     },
     closeBundle() {
-      if (!existsSync(docsFrontendDir)) return;
-      const targetDir = path.resolve(rootDir, outDir, 'docs', 'frontend');
-      mkdirSync(targetDir, { recursive: true });
-      cpSync(docsFrontendDir, targetDir, { recursive: true });
+      copyDirectoryIfPresent(docsUserDir, path.resolve(rootDir, outDir, 'docs'));
+      copyDirectoryIfPresent(docsFrontendDir, path.resolve(rootDir, outDir, 'docs', 'frontend'));
     },
   };
 };
@@ -64,7 +78,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
     },
-    plugins: [tailwindcss(), react(), docsFrontendDevPlugin, docsFrontendBuildPlugin()],
+    plugins: [tailwindcss(), react(), docsStaticDevPlugin, docsStaticBuildPlugin()],
     define: {
       'process.env.APP_VERSION': JSON.stringify(pkg.version),
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),

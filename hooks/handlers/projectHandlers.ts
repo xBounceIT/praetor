@@ -2,7 +2,14 @@ import type React from 'react';
 import type { DraftTaskInput } from '../../components/projects/ProjectsView';
 import { COLORS } from '../../constants';
 import api from '../../services/api';
-import type { ClientsOrder, Project, ProjectTask, TimeEntry } from '../../types';
+import type {
+  BillingFrequency,
+  ClientsOrder,
+  Project,
+  ProjectTask,
+  StoredBillingType,
+  TimeEntry,
+} from '../../types';
 
 export type ProjectHandlersDeps = {
   projects: Project[];
@@ -20,6 +27,8 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     orderId: string,
     description?: string,
     draftTasks?: DraftTaskInput[],
+    billingType?: StoredBillingType,
+    billingFrequency?: BillingFrequency,
   ) => {
     try {
       const order = clientsOrders.find((o) => o.id === orderId);
@@ -33,7 +42,15 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
           ? availableColors[Math.floor(Math.random() * availableColors.length)]
           : COLORS[Math.floor(Math.random() * COLORS.length)];
 
-      const project = await api.projects.create({ name, clientId, description, color, orderId });
+      const project = await api.projects.create({
+        name,
+        clientId,
+        description,
+        color,
+        orderId,
+        billingType,
+        billingFrequency,
+      });
       setProjects((prev) => [...prev, project]);
 
       if (draftTasks && draftTasks.length > 0) {
@@ -48,6 +65,9 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
               t.expectedEffort,
               t.revenue,
               t.notes,
+              t.monthlyEffort,
+              t.billingType,
+              t.billingFrequency,
             ),
           ),
         );
@@ -63,6 +83,10 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     projectId: string,
     recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
     description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
   ) => {
     try {
       const task = await api.tasks.create(
@@ -71,6 +95,12 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         description,
         recurringConfig?.isRecurring,
         recurringConfig?.pattern,
+        details?.expectedEffort,
+        details?.revenue,
+        details?.notes,
+        details?.monthlyEffort,
+        details?.billingType,
+        details?.billingFrequency,
       );
       setProjectTasks((prev) => [...prev, task]);
     } catch (err) {

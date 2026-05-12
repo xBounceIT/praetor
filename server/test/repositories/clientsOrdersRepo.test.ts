@@ -304,3 +304,182 @@ describe('deleteById', () => {
     expect(await repo.deleteById('co-x', testDb)).toBe(false);
   });
 });
+
+describe('listAllItems', () => {
+  test('orders items by created_at ASC and maps fields', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await repo.listAllItems(testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sale_items"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('order by "sale_items"."created_at"');
+    expect(result[0].id).toBe('si-1');
+    expect(result[0].orderId).toBe('co-1');
+    expect(result[0].quantity).toBe(2);
+  });
+});
+
+describe('existsById', () => {
+  test('returns true when matching row exists', async () => {
+    exec.enqueue({ rows: [['co-1']] });
+    expect(await repo.existsById('co-1', testDb)).toBe(true);
+  });
+
+  test('returns false when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.existsById('co-x', testDb)).toBe(false);
+  });
+});
+
+describe('findIdConflict', () => {
+  test('binds both ids and excludes self', async () => {
+    exec.enqueue({ rows: [['co-2']] });
+    const result = await repo.findIdConflict('co-2', 'co-1', testDb);
+    expect(exec.calls[0].params).toEqual(['co-2', 'co-1']);
+    expect(result).toBe(true);
+  });
+
+  test('returns false when no conflict', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.findIdConflict('co-2', 'co-1', testDb)).toBe(false);
+  });
+});
+
+describe('findForUpdate', () => {
+  test('returns mapped existing order when found', async () => {
+    exec.enqueue({
+      rows: [['co-1', null, null, 'c-1', 'Acme', 'net30', '5', 'currency', 'draft', null]],
+    });
+    const result = await repo.findForUpdate('co-1', testDb);
+    expect(result).toEqual({
+      id: 'co-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c-1',
+      clientName: 'Acme',
+      paymentTerms: 'net30',
+      discount: 5,
+      discountType: 'currency',
+      status: 'draft',
+      notes: null,
+    });
+  });
+
+  test('coerces unknown discountType to percentage', async () => {
+    exec.enqueue({
+      rows: [['co-1', null, null, 'c-1', 'Acme', 'net30', '0', 'weird', 'draft', null]],
+    });
+    const result = await repo.findForUpdate('co-1', testDb);
+    expect(result?.discountType).toBe('percentage');
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.findForUpdate('co-x', testDb)).toBeNull();
+  });
+});
+
+describe('findStatusAndClientName', () => {
+  test('returns status and clientName when found', async () => {
+    exec.enqueue({ rows: [['draft', 'Acme']] });
+    expect(await repo.findStatusAndClientName('co-1', testDb)).toEqual({
+      status: 'draft',
+      clientName: 'Acme',
+    });
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.findStatusAndClientName('co-x', testDb)).toBeNull();
+  });
+});
+
+describe('findItemsForOrder', () => {
+  test('selects items filtered by orderId and maps them', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await repo.findItemsForOrder('co-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sale_items"');
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('si-1');
+  });
+});
+
+describe('findFullForSnapshot', () => {
+  test('returns order and items when order exists', async () => {
+    // Promise.all dispatches `findItemsForOrder(id)` first (its async body runs to its first
+    // await before the sibling thenable is consumed), so the items query dequeues first.
+    exec.enqueue({ rows: [itemRow()] });
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await repo.findFullForSnapshot('co-1', testDb);
+    expect(result).not.toBeNull();
+    expect(result?.order.id).toBe('co-1');
+    expect(result?.items).toHaveLength(1);
+  });
+
+  test('returns null when order not found', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await repo.findFullForSnapshot('co-x', testDb)).toBeNull();
+  });
+});
+
+describe('restoreSnapshotOrder', () => {
+  test('updates the order with snapshot fields and returns mapped order', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    const result = await repo.restoreSnapshotOrder(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 7,
+        discountType: 'percentage',
+        status: 'confirmed',
+        notes: 'restored',
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "sales"');
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('confirmed');
+    expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(result?.id).toBe('co-1');
+  });
+
+  test('falls back to "immediate" paymentTerms when snapshot.paymentTerms is null', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.restoreSnapshotOrder(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: null,
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].params).toContain('immediate');
+  });
+
+  test('returns null when no row updated', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await repo.restoreSnapshotOrder(
+      'co-x',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(result).toBeNull();
+  });
+});

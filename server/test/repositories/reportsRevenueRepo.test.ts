@@ -116,6 +116,20 @@ describe('getOrdersSection', () => {
     ]);
     expect(result.topClientsByNet).toEqual([{ label: 'Acme', value: 900, orderCount: 2 }]);
   });
+
+  test('byStatus and byMonth rows are mapped through toDbText/toDbNumber', async () => {
+    exec.enqueue({ rows: [{ count: '0', total_net: '0', avg_net: '0' }] });
+    exec.enqueue({ rows: [{ status: 'shipped', count: '2', total_net: '900' }] });
+    exec.enqueue({ rows: [{ label: '2026-01', count: '2', total_net: '900' }] });
+    exec.enqueueEmptyN(2);
+
+    const result = await repo.getOrdersSection(
+      { fromDate: FROM, toDate: TO, topLimit: 10 },
+      testDb,
+    );
+    expect(result.byStatus).toEqual([{ status: 'shipped', count: 2, totalNet: 900 }]);
+    expect(result.byMonth).toEqual([{ label: '2026-01', count: 2, totalNet: 900 }]);
+  });
 });
 
 describe('getInvoicesSection', () => {

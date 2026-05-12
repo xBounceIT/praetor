@@ -4,6 +4,7 @@ import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { applyExternalRoleIdsForUser } from '../services/external-auth.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -91,41 +92,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, passwordResult.message);
       }
 
-      const user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+      let user = await usersRepo.findLoginUserByUsername(usernameResult.value);
 
       if (!user) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      if (user.isDisabled) {
+      if (user.isDisabled || user.employeeType !== 'app_user') {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
+      const { authMethod } = user;
+
       // LDAP Authentication
       let ldapAuthSuccess = false;
-      try {
-        const ldapService = (await import('../services/ldap.ts')).default;
-        ldapAuthSuccess = await ldapService.authenticate(
-          usernameResult.value,
-          passwordResult.value,
-        );
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        fastify.log.warn(
-          { username: usernameResult.value, errorMessage },
-          'LDAP auth attempt failed; falling back to local password validation',
-        );
+      let ldapRoleIds: string[] = [];
+      if (authMethod === 'ldap') {
+        try {
+          const ldapService = (await import('../services/ldap.ts')).default;
+          const ldapAuthResult = await ldapService.authenticateWithProfile(
+            usernameResult.value,
+            passwordResult.value,
+          );
+          ldapAuthSuccess = ldapAuthResult.authenticated;
+          ldapRoleIds = ldapAuthResult.roleIds;
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          fastify.log.warn(
+            { username: usernameResult.value, errorMessage },
+            'LDAP auth attempt failed',
+          );
+        }
       }
 
       let validPassword = false;
       if (ldapAuthSuccess) {
         validPassword = true;
-      } else if (user.passwordHash) {
+      } else if (authMethod === 'local' && user.passwordHash) {
         validPassword = await bcrypt.compare(passwordResult.value, user.passwordHash);
       }
 
       if (!validPassword) {
         return reply.code(401).send({ error: 'Invalid username or password' });
+      }
+
+      if (ldapAuthSuccess) {
+        const roleIds = await applyExternalRoleIdsForUser(user.id, ldapRoleIds);
+        user = { ...user, role: roleIds[0] };
       }
 
       const token = generateToken(user.id, Date.now(), user.role);
@@ -230,6 +243,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { roleId } = request.body as { roleId: unknown };
       const roleIdResult = requireNonEmptyString(roleId, 'roleId');
       if (!roleIdResult.ok) return badRequest(reply, roleIdResult.message);
+
+      if (request.auth?.source === 'personalAccessToken') {
+        return reply.code(403).send({ error: 'Session authentication required' });
+      }
 
       const userId = request.user?.id;
       if (!userId) return reply.code(401).send({ error: 'Authentication required' });

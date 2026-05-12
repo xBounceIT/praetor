@@ -47,7 +47,14 @@ const acquireMigrationLock = async (client: PoolClient): Promise<void> => {
   }
 };
 
-export const runDrizzleMigrations = async (): Promise<void> => {
+export const runDrizzleMigrationsWithClient = async (client: PoolClient): Promise<void> => {
+  const db = drizzle(client);
+  await migrate(db, { migrationsFolder });
+};
+
+export const withMigrationLock = async <T>(
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> => {
   const pool = new pg.Pool(createDbPoolConfig({ max: 1 }));
   let client: PoolClient | undefined;
   let hasMigrationLock = false;
@@ -73,10 +80,7 @@ export const runDrizzleMigrations = async (): Promise<void> => {
     await acquireMigrationLock(client);
     hasMigrationLock = true;
 
-    const db = drizzle(client);
-    await migrate(db, { migrationsFolder });
-
-    logger.info('Drizzle migrations applied or already up to date');
+    return await callback(client);
   } finally {
     if (client) {
       if (hasMigrationLock) {
@@ -99,4 +103,11 @@ export const runDrizzleMigrations = async (): Promise<void> => {
       logger.warn({ err: serializeError(err) }, 'Failed to close migration database pool');
     }
   }
+};
+
+export const runDrizzleMigrations = async (): Promise<void> => {
+  await withMigrationLock(async (client) => {
+    await runDrizzleMigrationsWithClient(client);
+    logger.info('Drizzle migrations applied or already up to date');
+  });
 };

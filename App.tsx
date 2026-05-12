@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { FieldLabel } from '@/components/ui/field';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import SupplierInvoicesView from './components/accounting/SupplierInvoicesView';
@@ -14,6 +17,7 @@ import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
 import InternalListingView from './components/catalog/InternalListingView';
 import ApiDocsView from './components/docs/ApiDocsView';
+import DocsHubView from './components/docs/DocsHubView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
@@ -28,10 +32,9 @@ import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
 import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
-import CustomSelect from './components/shared/CustomSelect';
+import SelectControl from './components/shared/SelectControl';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
-import Tooltip from './components/shared/Tooltip';
 import DailyView from './components/timesheet/DailyView';
 import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
@@ -50,7 +53,7 @@ import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
-import api, { type Settings } from './services/api';
+import api, { type PersonalAccessToken, type Settings } from './services/api';
 import type {
   Client,
   ClientOffer,
@@ -65,6 +68,7 @@ import type {
   ProjectTask,
   Quote,
   Role,
+  SsoProvider,
   Supplier,
   SupplierInvoice,
   SupplierQuote,
@@ -80,15 +84,29 @@ import {
   formatDateOnlyForLocale,
   getLocalDateString,
 } from './utils/date';
+import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import { isItalianHoliday } from './utils/holidays';
 import {
+  clearStaleModuleScopedState,
+  getStaleModulesAfterNavigation,
+} from './utils/moduleScopedState';
+import {
   buildPermission,
+  equivalentPermissionsFor,
+  getDefaultViewForPermissions,
+  getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasViewAccess,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
+import {
+  filterTrackerCatalogs,
+  type TrackerAssignmentState,
+  type TrackerAssignments,
+} from './utils/trackerCatalogs';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -229,8 +247,13 @@ const TrackerView: React.FC<{
   const isViewingSelf = viewingUserId === currentUser.id;
 
   const userOptions = useMemo(
-    () => availableUsers.map((u) => ({ id: u.id, name: u.name })),
-    [availableUsers],
+    () =>
+      availableUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        badge: u.id === currentUser.id ? t('tracker.you') : undefined,
+      })),
+    [availableUsers, currentUser.id, t],
   );
 
   const activityColumns = useMemo<Column<TimeEntry>[]>(
@@ -245,13 +268,13 @@ const TrackerView: React.FC<{
         id: 'client',
         header: t('entry.client'),
         accessorKey: 'clientName',
-        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.clientName}</span>,
+        cell: ({ row }) => <span className="font-semibold text-zinc-800">{row.clientName}</span>,
       },
       {
         id: 'project',
         header: t('entry.project'),
         accessorKey: 'projectName',
-        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.projectName}</span>,
+        cell: ({ row }) => <span className="font-semibold text-zinc-800">{row.projectName}</span>,
       },
       {
         id: 'task',
@@ -259,10 +282,15 @@ const TrackerView: React.FC<{
         accessorKey: 'task',
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800">{row.task}</span>
+            <span className="font-semibold text-zinc-800">{row.task}</span>
             {row.isPlaceholder && (
-              <Tooltip label={t('entry.recurringTask')}>
-                {() => <i className="fa-solid fa-repeat text-[10px] text-indigo-400" />}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <i className="fa-solid fa-repeat text-[10px] text-praetor/70" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('entry.recurringTask')}</TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -281,7 +309,7 @@ const TrackerView: React.FC<{
               )}
             />
           ) : (
-            <span className="text-slate-300 text-xs">-</span>
+            <span className="text-zinc-300 text-xs">-</span>
           ),
       },
       {
@@ -291,9 +319,9 @@ const TrackerView: React.FC<{
         className: 'whitespace-normal',
         cell: ({ row }) =>
           row.notes ? (
-            <div className="text-slate-500 text-xs italic leading-relaxed">{row.notes}</div>
+            <div className="text-zinc-500 text-xs italic leading-relaxed">{row.notes}</div>
           ) : (
-            <span className="text-slate-300 text-xs">-</span>
+            <span className="text-zinc-300 text-xs">-</span>
           ),
       },
       {
@@ -302,7 +330,7 @@ const TrackerView: React.FC<{
         accessorKey: 'duration',
         align: 'right',
         cell: ({ row }) => (
-          <span className="font-black text-slate-900">
+          <span className="font-black text-zinc-900">
             {row.isPlaceholder && row.duration === 0 ? '--' : row.duration.toFixed(2)}
           </span>
         ),
@@ -319,7 +347,7 @@ const TrackerView: React.FC<{
               e.stopPropagation();
               handleDeleteClick(row);
             }}
-            className="text-slate-200 hover:text-red-500 transition-colors p-1"
+            className="text-zinc-200 hover:text-red-500 transition-colors p-1"
           >
             <i className="fa-solid fa-trash-can text-xs" />
           </button>
@@ -333,7 +361,7 @@ const TrackerView: React.FC<{
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {/* Top Middle Toggle */}
       <div className="flex justify-center">
-        <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-60">
+        <div className="relative grid grid-cols-2 bg-zinc-200/50 p-1 rounded-full w-full max-w-60">
           <div
             className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
               trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
@@ -341,13 +369,13 @@ const TrackerView: React.FC<{
           ></div>
           <button
             onClick={() => setTrackerMode('daily')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
           >
             {t('tracker.mode.daily')}
           </button>
           <button
             onClick={() => setTrackerMode('weekly')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
           >
             {t('tracker.mode.weekly')}
           </button>
@@ -363,6 +391,7 @@ const TrackerView: React.FC<{
           onDeleteEntry={onDeleteEntry}
           onUpdateEntry={onUpdateEntry}
           viewingUserId={viewingUserId}
+          currentUserId={currentUser.id}
           availableUsers={availableUsers}
           onViewUserChange={onViewUserChange}
           onAddBulkEntries={onAddBulkEntries}
@@ -376,26 +405,40 @@ const TrackerView: React.FC<{
           {/* Manager Selection Header */}
           {availableUsers.length > 1 && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
+                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-100 text-amber-600'}`}
                   >
                     {viewingUser?.avatarInitials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                       {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
                     </p>
-                    <p className="text-sm font-bold text-slate-800 truncate">{viewingUser?.name}</p>
+                    <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-                <div className="w-full sm:w-56 shrink-0">
-                  <CustomSelect
+                <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+                  <div className="flex min-h-6 items-center justify-between gap-2">
+                    <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+                    {!isViewingSelf && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => onViewUserChange(currentUser.id)}
+                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                        {t('tracker.backToMe')}
+                      </Button>
+                    )}
+                  </div>
+                  <SelectControl
                     options={userOptions}
                     value={viewingUserId}
                     onChange={(val) => onViewUserChange(val as string)}
-                    label={t('tracker.switchUserView')}
                     searchable={true}
                   />
                 </div>
@@ -446,7 +489,7 @@ const TrackerView: React.FC<{
               headerExtras={
                 selectedDate ? (
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">
                       {t('tracker.dayTotal')}
                     </p>
                     <p
@@ -460,11 +503,11 @@ const TrackerView: React.FC<{
               data={filteredEntries}
               columns={activityColumns}
               defaultRowsPerPage={10}
-              rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
+              rowClassName={(row) => (row.isPlaceholder ? 'bg-praetor/5 italic' : '')}
               emptyState={
                 <div className="px-6 py-20 text-center">
-                  <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
-                  <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+                  <i className="fa-solid fa-calendar-day text-4xl text-zinc-100 mb-4 block" />
+                  <p className="text-zinc-400 font-medium text-sm">{t('tracker.noEntries')}</p>
                 </div>
               }
             />
@@ -474,46 +517,46 @@ const TrackerView: React.FC<{
 
       {/* Recurring Delete Modal */}
       {pendingDeleteEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <div className="p-6 border-b border-zinc-100">
+              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
                 <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
                 {t('entry.stopRecurringTask')}
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-zinc-500 mt-1">
                 {t('entry.howHandleEntries')}{' '}
-                <strong className="text-slate-800">{pendingDeleteEntry.task}</strong>?
+                <strong className="text-zinc-800">{pendingDeleteEntry.task}</strong>?
               </p>
             </div>
 
             <div className="p-4 space-y-3">
               <button
                 onClick={() => handleRecurringDelete('stop')}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-indigo-700">
+                  <span className="font-bold text-zinc-800 group-hover:text-praetor">
                     {t('recurring.stopOnly')}
                   </span>
-                  <i className="fa-solid fa-pause text-slate-300 group-hover:text-indigo-500"></i>
+                  <i className="fa-solid fa-pause text-zinc-300 group-hover:text-praetor"></i>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-zinc-500 leading-relaxed">
                   {t('recurring.stopOnlyDesc')}
                 </p>
               </button>
 
               <button
                 onClick={() => handleRecurringDelete('delete_future')}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-red-700">
+                  <span className="font-bold text-zinc-800 group-hover:text-red-700">
                     {t('recurring.deleteFuture')}
                   </span>
-                  <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
+                  <i className="fa-solid fa-forward text-zinc-300 group-hover:text-red-500"></i>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-zinc-500 leading-relaxed">
                   {t('recurring.deleteFutureDesc')}
                 </p>
               </button>
@@ -532,10 +575,10 @@ const TrackerView: React.FC<{
               </button>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
+            <div className="p-4 bg-zinc-50 border-t border-zinc-100 text-right">
               <button
                 onClick={() => setPendingDeleteEntry(null)}
-                className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
               >
                 {t('entry.cancel')}
               </button>
@@ -597,13 +640,17 @@ const App: React.FC = () => {
   const {
     loadedModules,
     moduleLoadErrors,
+    isModuleLoading,
     loadDatasets,
     markModuleLoaded,
+    invalidateModules,
     recordFailures,
     reset: resetModuleLoader,
   } = useModuleLoader();
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
+  const [hasLoadedSsoProviders, setHasLoadedSsoProviders] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
   const [emailConfig, setEmailConfig] = useState<EmailConfig>({
     enabled: false,
@@ -626,11 +673,13 @@ const App: React.FC = () => {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
-  const [viewingUserAssignments, setViewingUserAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  } | null>(null);
+  const [viewingUserAssignmentState, setViewingUserAssignmentState] =
+    useState<TrackerAssignmentState>({
+      userId: '',
+      assignments: null,
+      catalogs: null,
+      isLoading: false,
+    });
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
@@ -662,6 +711,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ],
@@ -669,13 +719,8 @@ const App: React.FC = () => {
   );
 
   const [activeView, setActiveView] = useState<View | '404'>(() => {
-    const pathname = window.location.pathname;
-    if (pathname.startsWith('/docs/api')) {
-      return 'docs/api';
-    }
-    if (pathname.startsWith('/docs/frontend')) {
-      return 'docs/frontend';
-    }
+    const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
+    if (technicalDocsView) return technicalDocsView;
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
@@ -709,6 +754,7 @@ const App: React.FC = () => {
       // Reports module
       'reports/ai-reporting',
       'settings',
+      'docs',
       'docs/api',
       'docs/frontend',
     ];
@@ -729,8 +775,10 @@ const App: React.FC = () => {
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
+    setHasLoadedSsoProviders(false);
     setHasLoadedEmailConfig(false);
     setHasLoadedRoles(false);
+    setSsoProviders([]);
     setRoles([]);
     setUsers([]);
     setClients([]);
@@ -748,6 +796,12 @@ const App: React.FC = () => {
     setEntries([]);
     entriesStreamTokenRef.current++;
     setWorkUnits([]);
+    setViewingUserAssignmentState({
+      userId: '',
+      assignments: null,
+      catalogs: null,
+      isLoading: false,
+    });
   }, [resetModuleLoader]);
 
   const {
@@ -764,12 +818,9 @@ const App: React.FC = () => {
     onLogin: (user) => {
       clearAuthScopedAppState();
       setViewingUserId(user.id);
-      const defaultView = getDefaultViewForPermissions(user.permissions || []);
-      const activePermission =
-        activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
-      const canAccessActive = activePermission
-        ? hasPermission(user.permissions || [], activePermission)
-        : false;
+      const defaultView = getDefaultViewForPermissions(user.permissions || [], VALID_VIEWS);
+      const canAccessActive =
+        activeView !== '404' ? hasViewAccess(user.permissions || [], activeView as View) : false;
       if (activeView === '404' || !canAccessActive) {
         setActiveView(defaultView);
       }
@@ -928,15 +979,16 @@ const App: React.FC = () => {
   }, [supplierInvoices]);
 
   const isRouteAccessible = useMemo(() => {
-    if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
+    if (activeView === 'docs' || activeView === 'docs/api' || activeView === 'docs/frontend') {
+      return true;
+    }
     if (!currentUser) return false;
     if (activeView === '404') return false;
     if (activeView === 'reports/ai-reporting') {
       if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
     }
 
-    const permission = VIEW_PERMISSION_MAP[activeView as View];
-    return permission ? hasPermission(currentUser.permissions, permission) : false;
+    return hasViewAccess(currentUser.permissions, activeView as View);
   }, [activeView, currentUser, hasLoadedGeneralSettings, generalSettings.enableAiReporting]);
 
   // Redirect to 404 if route is not accessible
@@ -1029,8 +1081,44 @@ const App: React.FC = () => {
     if (!currentUser) return;
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
-    if (!module || module === 'settings') return;
+    if (!module) return;
     if (loadedModules.has(module)) return;
+
+    // Clear module-scoped arrays the incoming module isn't going to refresh,
+    // so leftover data from a previously-visited module doesn't leak into the
+    // new UI before the module's own datasets load. Runs for settings too —
+    // settings has no datasets but still represents a module-scope transition.
+    clearStaleModuleScopedState(module, {
+      clients: () => setClients([]),
+      suppliers: () => setSuppliers([]),
+      projects: () => setProjects([]),
+      projectTasks: () => setProjectTasks([]),
+      products: () => setProducts([]),
+      quotes: () => setQuotes([]),
+      clientOffers: () => setClientOffers([]),
+      clientsOrders: () => setClientsOrders([]),
+      invoices: () => setInvoices([]),
+      supplierQuotes: () => setSupplierQuotes([]),
+      supplierOrders: () => setSupplierOrders([]),
+      supplierInvoices: () => setSupplierInvoices([]),
+      entries: () => {
+        entriesStreamTokenRef.current++;
+        setEntries([]);
+      },
+      workUnits: () => setWorkUnits([]),
+      users: () => setUsers([]),
+    });
+
+    // Drop the previously-visited modules from the loaded set so that revisiting
+    // them refetches instead of showing the empty arrays we just cleared.
+    invalidateModules(getStaleModulesAfterNavigation(module));
+
+    if (module === 'settings') {
+      // Settings has no datasets to load; mark it loaded so we don't re-clear
+      // and re-invalidate on every render while the user is on this view.
+      markModuleLoaded(module);
+      return;
+    }
 
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
@@ -1055,6 +1143,17 @@ const App: React.FC = () => {
       const ldap = await api.ldap.getConfig();
       setLdapConfig(ldap);
       setHasLoadedLdapConfig(true);
+    };
+
+    const loadSsoProviders = async () => {
+      if (hasLoadedSsoProviders) return;
+      const providers = await api.sso.listProviders();
+      setSsoProviders(providers);
+      setHasLoadedSsoProviders(true);
+    };
+
+    const loadAuthenticationConfig = async () => {
+      await Promise.all([loadLdapConfig(), loadSsoProviders()]);
     };
 
     const loadEmailConfig = async () => {
@@ -1094,14 +1193,13 @@ const App: React.FC = () => {
       try {
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canViewHr = hasAnyPermission(permissions, [
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
-          buildPermission('hr.work_units', 'view'),
-          buildPermission('hr.work_units_all', 'view'),
+          ...equivalentPermissionsFor('hr.work_units', 'view'),
         ]);
         const canViewConfiguration = hasAnyPermission(permissions, [
           buildPermission('administration.user_management', 'view'),
@@ -1113,10 +1211,8 @@ const App: React.FC = () => {
           buildPermission('administration.email', 'view'),
         ]);
         const canViewCrm = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
+          ...equivalentPermissionsFor('crm.clients', 'view'),
+          ...equivalentPermissionsFor('crm.suppliers', 'view'),
         ]);
         const canViewSales = hasAnyPermission(permissions, [
           buildPermission('sales.client_quotes', 'view'),
@@ -1134,8 +1230,8 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canViewProjects = hasAnyPermission(permissions, [
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
         ]);
         const canViewSuppliersModule = hasPermission(
           permissions,
@@ -1143,12 +1239,11 @@ const App: React.FC = () => {
         );
 
         const canListClients = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('crm.clients', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
           buildPermission('sales.client_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.clients_orders', 'view'),
@@ -1158,15 +1253,15 @@ const App: React.FC = () => {
           buildPermission('administration.user_management', 'update'),
         ]);
         const canListProjects = hasAnyPermission(permissions, [
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListTasks = hasAnyPermission(permissions, [
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListUsers = hasAnyPermission(permissions, [
@@ -1175,10 +1270,10 @@ const App: React.FC = () => {
           buildPermission('administration.user_management', 'update'),
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
-          buildPermission('timesheets.tracker', 'view'),
-          buildPermission('projects.manage', 'view'),
-          buildPermission('projects.tasks', 'view'),
-          buildPermission('hr.work_units', 'view'),
+          ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.tasks', 'view'),
+          ...equivalentPermissionsFor('hr.work_units', 'view'),
         ]);
         const canListQuotes = hasPermission(
           permissions,
@@ -1196,8 +1291,7 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canListSuppliers = hasAnyPermission(permissions, [
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
+          ...equivalentPermissionsFor('crm.suppliers', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
@@ -1222,10 +1316,7 @@ const App: React.FC = () => {
           permissions,
           buildPermission('accounting.supplier_invoices', 'view'),
         );
-        const canListWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('hr.work_units', 'view'),
-          buildPermission('hr.work_units_all', 'view'),
-        ]);
+        const canListWorkUnits = hasViewAccess(permissions, 'hr/work-units');
         const canManageEmployeeAssignments = hasPermission(
           permissions,
           buildPermission('hr.employee_assignments', 'update'),
@@ -1248,14 +1339,8 @@ const App: React.FC = () => {
           permissions,
           buildPermission('administration.email', 'view'),
         );
-        const canViewCrmClients = hasAnyPermission(permissions, [
-          buildPermission('crm.clients', 'view'),
-          buildPermission('crm.clients_all', 'view'),
-        ]);
-        const canViewCrmSuppliers = hasAnyPermission(permissions, [
-          buildPermission('crm.suppliers', 'view'),
-          buildPermission('crm.suppliers_all', 'view'),
-        ]);
+        const canViewCrmClients = hasViewAccess(permissions, 'crm/clients');
+        const canViewCrmSuppliers = hasViewAccess(permissions, 'crm/suppliers');
         const canViewCatalogInternal = hasPermission(
           permissions,
           buildPermission('catalog.internal_listing', 'view'),
@@ -1358,7 +1443,12 @@ const App: React.FC = () => {
               await loadOptionalDataset(module, 'roles', loadRoles, failedDatasets);
             }
             if (canViewAuthentication) {
-              await loadOptionalDataset(module, 'authentication', loadLdapConfig, failedDatasets);
+              await loadOptionalDataset(
+                module,
+                'authentication',
+                loadAuthenticationConfig,
+                failedDatasets,
+              );
             }
             if (canViewEmail) {
               await loadOptionalDataset(module, 'email settings', loadEmailConfig, failedDatasets);
@@ -1534,17 +1624,34 @@ const App: React.FC = () => {
     currentUser,
     isRouteAccessible,
     loadedModules,
+    loadDatasets,
+    markModuleLoaded,
+    invalidateModules,
+    recordFailures,
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,
+    hasLoadedSsoProviders,
     hasLoadedEmailConfig,
     hasLoadedRoles,
   ]);
 
-  // Load entries and assignments when viewing user changes
+  // Load target user assignments when the timesheet user switcher changes.
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
 
+    let isCancelled = false;
+
     const loadAssignments = async () => {
+      if (viewingUserId === currentUser.id) {
+        setViewingUserAssignmentState({
+          userId: viewingUserId,
+          assignments: null,
+          catalogs: null,
+          isLoading: false,
+        });
+        return;
+      }
+
       try {
         const canViewAssignments = hasAnyPermission(currentUser.permissions, [
           buildPermission('administration.user_management', 'view'),
@@ -1555,19 +1662,55 @@ const App: React.FC = () => {
           buildPermission('timesheets.tracker_all', 'view'),
         ]);
 
-        // If permitted user is viewing another user, fetch that user's assignments to filter the dropdowns
-        if (canViewAssignments && viewingUserId !== currentUser.id) {
-          const assignments = await api.users.getAssignments(viewingUserId);
-          setViewingUserAssignments(assignments);
-        } else {
-          setViewingUserAssignments(null);
+        setViewingUserAssignmentState({
+          userId: viewingUserId,
+          assignments: null,
+          catalogs: null,
+          isLoading: true,
+        });
+
+        if (!canViewAssignments) {
+          if (!isCancelled) {
+            setViewingUserAssignmentState({
+              userId: viewingUserId,
+              assignments: null,
+              catalogs: null,
+              isLoading: false,
+            });
+          }
+          return;
+        }
+
+        const [assignments, catalogs] = await Promise.all([
+          api.users.getAssignments(viewingUserId),
+          api.users.getTrackerCatalogs(viewingUserId),
+        ]);
+        if (!isCancelled) {
+          setViewingUserAssignmentState({
+            userId: viewingUserId,
+            assignments: assignments as TrackerAssignments,
+            catalogs,
+            isLoading: false,
+          });
         }
       } catch (err) {
         console.error('Failed to load user assignments:', err);
+        if (!isCancelled) {
+          setViewingUserAssignmentState({
+            userId: viewingUserId,
+            assignments: null,
+            catalogs: null,
+            isLoading: false,
+          });
+        }
       }
     };
 
     loadAssignments();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser, viewingUserId]);
 
   // Update viewingUserId when currentUser changes
@@ -1761,34 +1904,18 @@ const App: React.FC = () => {
 
   // ... (rest of the logic remains validation which we don't need to change but need for context)
 
-  // Filtered lists for TrackerView
-  const filteredClients = useMemo(() => {
-    const activeClients = clients.filter((c) => !c.isDisabled);
-    if (!viewingUserAssignments) return activeClients;
-    return activeClients.filter((c) => viewingUserAssignments.clientIds.includes(c.id));
-  }, [clients, viewingUserAssignments]);
-
-  const filteredProjects = useMemo(() => {
-    const activeProjects = projects.filter((p) => {
-      if (p.isDisabled) return false;
-      const client = clients.find((c) => c.id === p.clientId);
-      return !client?.isDisabled;
-    });
-    if (!viewingUserAssignments) return activeProjects;
-    return activeProjects.filter((p) => viewingUserAssignments.projectIds.includes(p.id));
-  }, [projects, clients, viewingUserAssignments]);
-
-  const filteredTasks = useMemo(() => {
-    const activeTasks = projectTasks.filter((t) => {
-      if (t.isDisabled) return false;
-      const project = projects.find((p) => p.id === t.projectId);
-      if (!project || project.isDisabled) return false;
-      const client = clients.find((c) => c.id === project.clientId);
-      return !client?.isDisabled;
-    });
-    if (!viewingUserAssignments) return activeTasks;
-    return activeTasks.filter((t) => viewingUserAssignments.taskIds.includes(t.id));
-  }, [projectTasks, projects, clients, viewingUserAssignments]);
+  const trackerCatalogs = useMemo(
+    () =>
+      filterTrackerCatalogs({
+        clients,
+        projects,
+        projectTasks,
+        currentUserId: currentUser?.id ?? '',
+        viewingUserId,
+        assignmentState: viewingUserAssignmentState,
+      }),
+    [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserAssignmentState],
+  );
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1880,6 +2007,7 @@ const App: React.FC = () => {
 
   const handleUpdateUser = userHandlers.updateUser;
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
+  const handleUpdateUserAuthMethod = userHandlers.updateUserAuthMethod;
 
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
@@ -1902,10 +2030,7 @@ const App: React.FC = () => {
   const handleUpdateUserSettings = async (updates: Partial<Settings>) => {
     try {
       const updated = await api.settings.update(updates);
-      setUserSettings({
-        ...userSettings,
-        ...updated,
-      });
+      setUserSettings((prev) => ({ ...prev, ...updated }));
     } catch (err) {
       console.error('Failed to update user settings:', err);
       alert('Failed to update settings');
@@ -1922,12 +2047,24 @@ const App: React.FC = () => {
     }
   };
 
-  const getDefaultViewForPermissions = (permissions: string[]): View => {
-    const allowedView = VALID_VIEWS.find((view) => {
-      const permission = VIEW_PERMISSION_MAP[view];
-      return permission ? hasPermission(permissions, permission) : false;
-    });
-    return allowedView || 'timesheets/tracker';
+  const handleListMcpTokens = () => api.settings.listMcpTokens();
+
+  const handleCreateMcpToken = (name: string) => api.settings.createMcpToken(name);
+
+  const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
+
+  const handleGetPersonalAccessToken = useCallback(
+    async (): Promise<PersonalAccessToken> => api.settings.getPersonalAccessToken(),
+    [],
+  );
+
+  const handleRenewPersonalAccessToken = useCallback(
+    async (): Promise<PersonalAccessToken> => api.settings.renewPersonalAccessToken(),
+    [],
+  );
+
+  const handleNotFoundReturn = () => {
+    setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
   };
 
   const handleSaveLdapConfig = async (config: LdapConfig) => {
@@ -1936,6 +2073,34 @@ const App: React.FC = () => {
       setLdapConfig(updated);
     } catch (err) {
       console.error('Failed to save LDAP config:', err);
+    }
+  };
+
+  const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
+    try {
+      const updated = provider.id
+        ? await api.sso.updateProvider(provider.id, provider)
+        : await api.sso.createProvider(provider);
+      setSsoProviders((current) => {
+        const exists = current.some((item) => item.id === updated.id);
+        return exists
+          ? current.map((item) => (item.id === updated.id ? updated : item))
+          : [...current, updated];
+      });
+      return updated;
+    } catch (err) {
+      console.error('Failed to save SSO provider:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteSsoProvider = async (id: string) => {
+    try {
+      await api.sso.deleteProvider(id);
+      setSsoProviders((current) => current.filter((provider) => provider.id !== id));
+    } catch (err) {
+      console.error('Failed to delete SSO provider:', err);
+      throw err;
     }
   };
 
@@ -1978,6 +2143,11 @@ const App: React.FC = () => {
 
   const activeModule = activeView === '404' ? null : getModuleFromView(activeView);
   const activeModuleLoadFailures = activeModule ? (moduleLoadErrors[activeModule] ?? []) : [];
+  const isActiveModulePending = Boolean(
+    activeModule &&
+      activeModule !== 'settings' &&
+      (!loadedModules.has(activeModule) || isModuleLoading(activeModule)),
+  );
   const reportsSettingsFailed =
     activeView === 'reports/ai-reporting' &&
     !hasLoadedGeneralSettings &&
@@ -1985,10 +2155,10 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
         <div className="text-center">
           <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
-          <p className="text-slate-600 font-medium">Loading...</p>
+          <p className="text-zinc-600 font-medium">Loading…</p>
         </div>
       </div>
     );
@@ -2033,7 +2203,7 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
-        isAiReportingEnabled={!hasLoadedGeneralSettings || generalSettings.enableAiReporting}
+        isAiReportingEnabled={hasLoadedGeneralSettings && generalSettings.enableAiReporting}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -2041,7 +2211,14 @@ const App: React.FC = () => {
         onDeleteNotification={handleDeleteNotification}
       >
         {!isRouteAccessible ? (
-          <NotFound onReturn={() => setActiveView('timesheets/tracker')} />
+          <NotFound onReturn={handleNotFoundReturn} />
+        ) : isActiveModulePending ? (
+          <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+            <div className="text-center">
+              <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">Loading…</p>
+            </div>
+          </div>
         ) : (
           <>
             {activeModuleLoadFailures.length > 0 && (
@@ -2054,12 +2231,13 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
+            {activeView === 'docs' && <DocsHubView />}
             {activeView === 'timesheets/tracker' && (
               <TrackerView
                 entries={entries.filter((e) => e.userId === viewingUserId)}
-                clients={filteredClients}
-                projects={filteredProjects}
-                projectTasks={filteredTasks}
+                clients={trackerCatalogs.clients}
+                projects={trackerCatalogs.projects}
+                projectTasks={trackerCatalogs.projectTasks}
                 onAddEntry={handleAddEntry}
                 onDeleteEntry={handleDeleteEntry}
                 onUpdateEntry={handleUpdateEntry}
@@ -2078,7 +2256,7 @@ const App: React.FC = () => {
                 defaultLocation={generalSettings.defaultLocation}
               />
             )}
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/clients']) &&
+            {hasViewAccess(currentUser.permissions, 'crm/clients') &&
               activeView === 'crm/clients' && (
                 <ClientsView
                   clients={clients}
@@ -2290,7 +2468,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/suppliers']) &&
+            {hasViewAccess(currentUser.permissions, 'crm/suppliers') &&
               activeView === 'crm/suppliers' && (
                 <SuppliersView
                   suppliers={suppliers}
@@ -2333,67 +2511,66 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'projects/manage' && (
-              <ProjectsView
-                projects={projects}
-                clients={clients}
-                orders={clientsOrders}
-                currency={generalSettings.currency}
-                permissions={currentUser.permissions || []}
-                users={availableUsers}
-                roles={roles}
-                tasks={projectTasks}
-                onAddProject={addProject}
-                onUpdateProject={handleUpdateProject}
-                onDeleteProject={handleDeleteProject}
-                onAddTask={addProjectTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={async (id) => {
-                  try {
-                    await api.tasks.delete(id);
-                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                  } catch (err) {
-                    console.error('Failed to delete task:', err);
-                  }
-                }}
-                onViewOrder={(orderId) => {
-                  setClientsOrderFilterId(orderId);
-                  setActiveView('accounting/clients-orders');
-                }}
-              />
-            )}
+            {hasViewAccess(currentUser.permissions, 'projects/manage') &&
+              activeView === 'projects/manage' && (
+                <ProjectsView
+                  projects={projects}
+                  clients={clients}
+                  orders={clientsOrders}
+                  currency={generalSettings.currency}
+                  permissions={currentUser.permissions || []}
+                  users={availableUsers}
+                  roles={roles}
+                  tasks={projectTasks}
+                  onAddProject={addProject}
+                  onUpdateProject={handleUpdateProject}
+                  onDeleteProject={handleDeleteProject}
+                  onAddTask={addProjectTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={async (id) => {
+                    try {
+                      await api.tasks.delete(id);
+                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                    } catch (err) {
+                      console.error('Failed to delete task:', err);
+                    }
+                  }}
+                  onViewOrder={(orderId) => {
+                    setClientsOrderFilterId(orderId);
+                    setActiveView('accounting/clients-orders');
+                  }}
+                />
+              )}
 
-            {activeView === 'projects/tasks' && (
-              <TasksView
-                tasks={projectTasks}
-                projects={projects}
-                clients={clients}
-                permissions={currentUser.permissions || []}
-                users={availableUsers}
-                roles={roles}
-                currency={generalSettings.currency}
-                onAddTask={addProjectTask}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={async (id) => {
-                  try {
-                    await api.tasks.delete(id);
-                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                  } catch (err) {
-                    console.error('Failed to delete task:', err);
-                    alert('Failed to delete task');
-                  }
-                }}
-                onViewOrder={(orderId) => {
-                  setClientsOrderFilterId(orderId);
-                  setActiveView('accounting/clients-orders');
-                }}
-              />
-            )}
+            {hasViewAccess(currentUser.permissions, 'projects/tasks') &&
+              activeView === 'projects/tasks' && (
+                <TasksView
+                  tasks={projectTasks}
+                  projects={projects}
+                  clients={clients}
+                  permissions={currentUser.permissions || []}
+                  users={availableUsers}
+                  roles={roles}
+                  currency={generalSettings.currency}
+                  onAddTask={addProjectTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={async (id) => {
+                    try {
+                      await api.tasks.delete(id);
+                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                    } catch (err) {
+                      console.error('Failed to delete task:', err);
+                      alert('Failed to delete task');
+                    }
+                  }}
+                  onViewOrder={(orderId) => {
+                    setClientsOrderFilterId(orderId);
+                    setActiveView('accounting/clients-orders');
+                  }}
+                />
+              )}
 
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/user-management'],
-            ) &&
+            {hasViewAccess(currentUser.permissions, 'administration/user-management') &&
               activeView === 'administration/user-management' && (
                 <UserManagement
                   clients={clients}
@@ -2404,14 +2581,16 @@ const App: React.FC = () => {
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
                   onUpdateUserRoles={handleUpdateUserRoles}
+                  onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}
+                  ssoProviders={ssoProviders}
                   currency={getCurrencySymbol(generalSettings.currency)}
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/work-units']) &&
+            {hasViewAccess(currentUser.permissions, 'hr/work-units') &&
               activeView === 'hr/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}
@@ -2440,7 +2619,14 @@ const App: React.FC = () => {
               VIEW_PERMISSION_MAP['administration/authentication'],
             ) &&
               activeView === 'administration/authentication' && (
-                <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} roles={roles} />
+                <AuthSettings
+                  config={ldapConfig}
+                  onSave={handleSaveLdapConfig}
+                  roles={roles}
+                  ssoProviders={ssoProviders}
+                  onSaveSsoProvider={handleSaveSsoProvider}
+                  onDeleteSsoProvider={handleDeleteSsoProvider}
+                />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&
@@ -2481,6 +2667,11 @@ const App: React.FC = () => {
                 settings={userSettings}
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
+                onListMcpTokens={handleListMcpTokens}
+                onCreateMcpToken={handleCreateMcpToken}
+                onRevokeMcpToken={handleRevokeMcpToken}
+                onGetPersonalAccessToken={handleGetPersonalAccessToken}
+                onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
               />
             )}
             {activeView === 'reports/ai-reporting' &&
@@ -2489,7 +2680,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
-                      <p className="text-slate-700 font-medium">
+                      <p className="text-zinc-700 font-medium">
                         AI reporting settings failed to load.
                       </p>
                     </div>
@@ -2498,7 +2689,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                      <p className="text-slate-600 font-medium">Loading...</p>
+                      <p className="text-zinc-600 font-medium">Loading…</p>
                     </div>
                   </div>
                 )

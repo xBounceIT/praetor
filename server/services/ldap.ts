@@ -3,9 +3,18 @@ import ldap from 'ldapjs';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
-import { buildUserLookupFilter, buildUserSyncFilter } from '../utils/ldap-filter.ts';
+import {
+  buildGroupLookupFilter,
+  buildUserLookupFilter,
+  buildUserSyncFilter,
+} from '../utils/ldap-filter.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import {
+  applyExternalRolesForUser,
+  type ExternalRoleMapping,
+  mapExternalGroupsToRoleIds,
+} from './external-auth.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
 
@@ -39,9 +48,31 @@ interface LdapSearchResult {
 }
 
 interface LdapSearchEntry {
-  objectName: string;
-  object: Record<string, unknown>;
+  // ldapjs v3 emits a DN object here; legacy/mocked shapes use a string. Both have toString().
+  objectName: string | { toString(): string };
+  // Legacy ldapjs v2 (and existing test mocks) expose a pre-flattened attribute map.
+  object?: Record<string, unknown>;
+  // ldapjs v3 exposes parsed attributes as { type, values: string[] } pairs.
+  attributes?: Array<{ type: string; values: string[] }>;
 }
+
+const flattenSearchEntryAttributes = (entry: LdapSearchEntry): Record<string, unknown> => {
+  if (entry.object && typeof entry.object === 'object') {
+    return entry.object;
+  }
+  const flat: Record<string, unknown> = {};
+  for (const attr of entry.attributes ?? []) {
+    flat[attr.type] = attr.values;
+  }
+  return flat;
+};
+
+export type LdapAuthResult = {
+  authenticated: boolean;
+  userDn?: string;
+  groups: string[];
+  roleIds: string[];
+};
 
 class LDAPService {
   config: ldapRepo.LdapConfig | null;
@@ -99,17 +130,24 @@ class LDAPService {
     }) as LdapClient;
   }
 
-  async authenticate(username: string, password: string): Promise<boolean> {
+  private getRoleMappings(): ExternalRoleMapping[] {
+    return (this.config?.roleMappings ?? []).map((mapping) => ({
+      externalGroup: mapping.ldapGroup,
+      role: mapping.role,
+    }));
+  }
+
+  async authenticateWithProfile(username: string, password: string): Promise<LdapAuthResult> {
     let client: LdapClient | null = null;
     try {
       client = await this.getClient();
       if (!client) {
-        return false;
+        return { authenticated: false, groups: [], roleIds: ['user'] };
       }
       const ldapClient = client;
       const config = this.config;
       if (!config) {
-        return false;
+        return { authenticated: false, groups: [], roleIds: ['user'] };
       }
 
       // Bind with service account first to find the user's DN
@@ -123,8 +161,10 @@ class LDAPService {
       // Find user DN
       const userDn = await this.findUserDn(ldapClient, username);
       if (!userDn) {
-        return false;
+        return { authenticated: false, groups: [], roleIds: ['user'] };
       }
+
+      const groups = await this.findUserGroups(ldapClient, userDn, username);
 
       // Try to bind as the user
       // We need a new client for this to verify credentials safely without messing up the service connection state
@@ -136,10 +176,15 @@ class LDAPService {
         });
       });
 
-      return true;
+      return {
+        authenticated: true,
+        userDn,
+        groups,
+        roleIds: mapExternalGroupsToRoleIds(groups, this.getRoleMappings()),
+      };
     } catch (err) {
       logger.error({ err: serializeError(err), username }, 'LDAP auth error');
-      return false;
+      return { authenticated: false, groups: [], roleIds: ['user'] };
     } finally {
       if (client) {
         client.unbind((err) => {
@@ -149,6 +194,11 @@ class LDAPService {
         });
       }
     }
+  }
+
+  async authenticate(username: string, password: string): Promise<boolean> {
+    const result = await this.authenticateWithProfile(username, password);
+    return result.authenticated;
   }
 
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
@@ -168,7 +218,8 @@ class LDAPService {
         let foundDn: string | null = null;
 
         res.on('searchEntry', (entry: LdapSearchEntry) => {
-          foundDn = entry.objectName;
+          // v3 emits a DN object; bind serializes via writeString which throws on non-strings.
+          foundDn = entry.objectName?.toString() ?? null;
         });
 
         res.on('error', (err: Error) => {
@@ -184,6 +235,70 @@ class LDAPService {
         });
       });
     });
+  }
+
+  async findUserGroups(client: LdapClient, userDn: string, username: string): Promise<string[]> {
+    const config = this.config;
+    if (!config?.groupBaseDn || !config.groupFilter) {
+      return [];
+    }
+
+    const searchValues = [userDn, username].filter((value, idx, arr) => arr.indexOf(value) === idx);
+    const groups = new Set<string>();
+
+    for (const searchValue of searchValues) {
+      let searchOptions: {
+        scope: 'sub';
+        filter: ReturnType<typeof buildGroupLookupFilter>;
+        attributes: string[];
+      };
+
+      try {
+        searchOptions = {
+          scope: 'sub',
+          filter: buildGroupLookupFilter(config.groupFilter, searchValue),
+          attributes: ['cn', 'dn', 'distinguishedName'],
+        };
+      } catch (err) {
+        logger.warn(
+          { err: serializeError(err), username },
+          'LDAP group filter is invalid; skipping group role mapping',
+        );
+        return [];
+      }
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          client.search(config.groupBaseDn, searchOptions, (err, res) => {
+            if (err) return reject(err);
+
+            res.on('searchEntry', (entry: LdapSearchEntry) => {
+              const objectName = entry.objectName?.toString();
+              if (objectName) groups.add(objectName);
+              const attributes = flattenSearchEntryAttributes(entry);
+              const cn = attributes.cn;
+              if (typeof cn === 'string') groups.add(cn);
+              else if (Array.isArray(cn)) {
+                for (const value of cn) {
+                  if (typeof value === 'string') groups.add(value);
+                }
+              }
+            });
+
+            res.on('error', (err: Error) => reject(err));
+            res.on('end', () => resolve());
+          });
+        });
+      } catch (err) {
+        logger.warn(
+          { err: serializeError(err), username },
+          'LDAP group lookup failed; skipping group role mapping',
+        );
+        return [];
+      }
+    }
+
+    return [...groups];
   }
 
   // Sync users from LDAP to local DB
@@ -227,7 +342,10 @@ class LDAPService {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry: LdapSearchEntry) => {
-            entries.push(entry.object as unknown as LdapEntry);
+            entries.push({
+              ...flattenSearchEntryAttributes(entry),
+              objectName: entry.objectName?.toString() ?? '',
+            });
           });
 
           res.on('error', (err: Error) => {
@@ -269,19 +387,34 @@ class LDAPService {
         }
 
         const existing = await usersRepo.findLoginUserByUsername(username);
+        const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
+        const roleMappings = this.getRoleMappings();
+        const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
 
         if (existing) {
+          if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
+            logger.warn(
+              { username },
+              'Skipping LDAP sync for a matching Praetor user not bound to LDAP',
+            );
+            continue;
+          }
           await usersRepo.updateNameByUsername(username, name);
+          await applyExternalRolesForUser(existing.id, groups, roleMappings);
           syncedCount++;
         } else {
+          const id = generatePrefixedId('u');
           await usersRepo.createUser({
-            id: generatePrefixedId('u'),
+            id,
             name,
             username,
-            passwordHash: usersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
-            role: 'user',
+            passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+            role: roleIds[0],
             avatarInitials: computeAvatarInitials(name),
+            authMethod: 'ldap',
+            authProviderId: null,
           });
+          await applyExternalRolesForUser(id, groups, roleMappings);
           createdCount++;
         }
       }
