@@ -203,6 +203,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                 startOfWeek={startOfWeek}
                 treatSaturdayAsHoliday={treatSaturdayAsHoliday}
                 size="compact"
+                bare
               />
             </div>
 

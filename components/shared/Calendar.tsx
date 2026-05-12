@@ -44,6 +44,9 @@ export interface CalendarProps {
   // Allow weekend selection (e.g., for time tracker)
   allowWeekendSelection?: boolean;
   size?: 'default' | 'compact';
+  // Render without the outer card chrome (bg-card / border / shadow). Use when the Calendar
+  // is embedded inside another surface (e.g. a popover) that already provides the background.
+  bare?: boolean;
 }
 
 const Calendar: React.FC<CalendarProps> = ({
@@ -59,6 +62,7 @@ const Calendar: React.FC<CalendarProps> = ({
   onRangeSelect,
   allowWeekendSelection = false,
   size = 'default',
+  bare = false,
 }) => {
   const { t } = useTranslation('timesheets');
   const isCompact = size === 'compact';
@@ -245,9 +249,9 @@ const Calendar: React.FC<CalendarProps> = ({
   return (
     <div
       className={`w-full relative ${
-        isCompact
-          ? 'p-0 h-full flex flex-col'
-          : 'bg-card rounded-lg border border-border shadow-sm p-4'
+        bare
+          ? `p-0 ${isCompact ? 'h-full flex flex-col' : ''}`
+          : `bg-card rounded-lg border border-border shadow-sm ${isCompact ? 'p-3 h-full flex flex-col' : 'p-4'}`
       }`}
       ref={containerRef}
     >
