@@ -10,7 +10,7 @@ import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/par
 
 // Accepts whatever pg returns for a timestamp column. Drizzle's typed `.select()` paths
 // give us `Date`, but raw `executeRows` queries (this file uses both) can surface a string
-// if the pg type parsers are reconfigured — coerce defensively, like projectsRepo does.
+// if the pg type parsers are reconfigured - coerce defensively, like projectsRepo does.
 const epochMs = (v: unknown): number | null => {
   if (v === null || v === undefined) return null;
   return new Date(v as string | number | Date).getTime();

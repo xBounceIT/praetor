@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 
-const TEST_JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
+const TEST_JWT_SECRET = process.env.JWT_SECRET || 'praetor-test-jwt-secret';
 
 const SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000;
 

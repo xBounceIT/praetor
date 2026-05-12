@@ -55,7 +55,19 @@
     "projectTasks": "Attività del Progetto",
     "addTaskRow": "Aggiungi Attività",
     "taskName": "Nome Attività",
-    "expectedEffort": "Impegno (h)",
+    "expectedEffort": "Impegno totale (h)",
+    "monthlyEffort": "Impegno mensile (h)",
+    "billingType": "Consuntivazione",
+    "billingFrequency": "Frequenza",
+    "billingTypes": {
+      "retainer": "Canone",
+      "timeAndMaterials": "A misura",
+      "mixed": "Misto"
+    },
+    "billingFrequencies": {
+      "monthly": "Mensile",
+      "oneTime": "Una tantum"
+    },
     "taskRevenue": "Ricavo",
     "taskNotes": "Note",
     "noTasksAdded": "Nessuna attività aggiunta.",

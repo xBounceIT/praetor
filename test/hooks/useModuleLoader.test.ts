@@ -19,6 +19,8 @@ describe('useModuleLoader', () => {
     const { result } = renderHook(() => useModuleLoader());
     expect(result.current.loadedModules.size).toBe(0);
     expect(result.current.moduleLoadErrors).toEqual({});
+    expect(result.current.loadingModules.size).toBe(0);
+    expect(result.current.isModuleLoading('crm')).toBe(false);
   });
 
   test('loadDatasets filters by enabled and applies fulfilled results', async () => {
@@ -86,6 +88,39 @@ describe('useModuleLoader', () => {
     expect(consoleErrorMock).toHaveBeenCalled();
   });
 
+  test('loadDatasets tracks module loading until requests settle', async () => {
+    const { result } = renderHook(() => useModuleLoader());
+    const apply = mock((_data: unknown) => {});
+    let resolveLoad!: (value: string) => void;
+    const pendingLoad = new Promise<string>((resolve) => {
+      resolveLoad = resolve;
+    });
+
+    let failuresPromise!: Promise<string[]>;
+    act(() => {
+      failuresPromise = result.current.loadDatasets('crm', [
+        {
+          dataset: 'clients',
+          enabled: true,
+          load: () => pendingLoad,
+          apply,
+        },
+      ]);
+    });
+
+    expect(result.current.loadingModules.has('crm')).toBe(true);
+    expect(result.current.isModuleLoading('crm')).toBe(true);
+
+    await act(async () => {
+      resolveLoad('clients-data');
+      expect(await failuresPromise).toEqual([]);
+    });
+
+    expect(apply).toHaveBeenCalledWith('clients-data');
+    expect(result.current.loadingModules.has('crm')).toBe(false);
+    expect(result.current.isModuleLoading('crm')).toBe(false);
+  });
+
   test('loadDatasets returns empty when no requests are enabled', async () => {
     const { result } = renderHook(() => useModuleLoader());
     const apply = mock((_data: unknown) => {});
@@ -140,6 +175,42 @@ describe('useModuleLoader', () => {
     expect(result.current.moduleLoadErrors.crm).toBeUndefined();
   });
 
+  test('invalidateModules removes named modules from loaded set and their errors', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.markModuleLoaded('crm');
+      result.current.markModuleLoaded('sales');
+      result.current.markModuleLoaded('projects');
+      result.current.recordFailures('crm', ['clients']);
+      result.current.recordFailures('sales', ['quotes']);
+    });
+    expect(result.current.loadedModules.size).toBe(3);
+
+    act(() => {
+      result.current.invalidateModules(['crm', 'sales']);
+    });
+
+    expect(result.current.loadedModules.has('crm')).toBe(false);
+    expect(result.current.loadedModules.has('sales')).toBe(false);
+    expect(result.current.loadedModules.has('projects')).toBe(true);
+    expect(result.current.moduleLoadErrors.crm).toBeUndefined();
+    expect(result.current.moduleLoadErrors.sales).toBeUndefined();
+  });
+
+  test('invalidateModules is a no-op when given an empty list', () => {
+    const { result } = renderHook(() => useModuleLoader());
+    act(() => {
+      result.current.markModuleLoaded('crm');
+    });
+    const before = result.current.loadedModules;
+    act(() => {
+      result.current.invalidateModules([]);
+    });
+    // Same identity — proves we didn't allocate a new Set.
+    expect(result.current.loadedModules).toBe(before);
+  });
+
   test('reset clears loaded modules and errors', () => {
     const { result } = renderHook(() => useModuleLoader());
 
@@ -155,5 +226,6 @@ describe('useModuleLoader', () => {
     });
     expect(result.current.loadedModules.size).toBe(0);
     expect(result.current.moduleLoadErrors).toEqual({});
+    expect(result.current.loadingModules.size).toBe(0);
   });
 });

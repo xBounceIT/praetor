@@ -1032,7 +1032,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const versionIdResult = requireNonEmptyString(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
-      // Independent reads — fan out, then run the gating ladder against resolved values.
+      // Independent reads - fan out, then run the gating ladder against resolved values.
       // Same read-only rules as PUT.
       const [linkedOfferId, current, nonDraftLinkedSale, version] = await Promise.all([
         clientQuotesRepo.findLinkedOfferId(idResult.value),
@@ -1078,7 +1078,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const restored = await withDbTransaction(async (tx) => {
-        // Drop draft sales inside the tx — historical line items may not line up with the
+        // Drop draft sales inside the tx - historical line items may not line up with the
         // current draft sale's row references, but if the snapshot/update later fails the
         // rollback must take the deletes with it (otherwise users lose draft orders for
         // an unchanged quote).

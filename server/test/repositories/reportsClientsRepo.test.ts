@@ -91,7 +91,7 @@ describe('getClientsSection', () => {
       },
       testDb,
     );
-    // only count + list — activity Promise.all is short-circuited because clientIds is empty
+    // only count + list - activity Promise.all is short-circuited because clientIds is empty
     expect(exec.calls).toHaveLength(2);
   });
 
@@ -129,6 +129,121 @@ describe('getClientsSection', () => {
         timesheetHours: null,
       },
     ]);
+  });
+
+  test('orders/invoices/timesheets activity rows are mapped per-client', async () => {
+    exec.enqueue({ rows: [{ count: '1' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'c1',
+          name: 'Acme',
+          client_code: null,
+          type: null,
+          contact_name: null,
+          email: null,
+          phone: null,
+          address: null,
+          is_disabled: false,
+        },
+      ],
+    });
+    // Activity Promise.all order: quotes, orders, invoices, timesheets.
+    // Only orders + invoices + timesheets enabled here, so 3 activity queries.
+    exec.enqueue({ rows: [{ client_id: 'c1', order_count: '3', net_value: '750' }] });
+    exec.enqueue({
+      rows: [
+        {
+          client_id: 'c1',
+          invoice_count: '4',
+          total_sum: '1200',
+          outstanding_sum: '300',
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ client_id: 'c1', hours: '12' }] });
+
+    const result = await repo.getClientsSection(
+      {
+        ...baseOpts,
+        canViewOrders: true,
+        canViewInvoices: true,
+        canViewTimesheets: true,
+        canViewAllTimesheets: true,
+      },
+      testDb,
+    );
+    expect(exec.calls).toHaveLength(5);
+    expect(result.activitySummary).toEqual([
+      {
+        clientId: 'c1',
+        quotesCount: null,
+        quotesNet: null,
+        ordersCount: 3,
+        ordersNet: 750,
+        invoicesCount: 4,
+        invoicesTotal: 1200,
+        invoicesOutstanding: 300,
+        timesheetHours: 12,
+      },
+    ]);
+  });
+
+  test('activity rows for unknown client_ids are silently ignored', async () => {
+    exec.enqueue({ rows: [{ count: '1' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'c1',
+          name: 'Acme',
+          client_code: null,
+          type: null,
+          contact_name: null,
+          email: null,
+          phone: null,
+          address: null,
+          is_disabled: false,
+        },
+      ],
+    });
+    // Quote/order/invoice/timesheet rows reference an unknown client; map.get(...) returns
+    // undefined, the `if (!target) continue` skips them, and the existing entry stays unchanged.
+    exec.enqueue({ rows: [{ client_id: 'unknown', quote_count: '99', net_value: '999' }] });
+    exec.enqueue({ rows: [{ client_id: 'unknown', order_count: '5', net_value: '5' }] });
+    exec.enqueue({
+      rows: [
+        {
+          client_id: 'unknown',
+          invoice_count: '5',
+          total_sum: '5',
+          outstanding_sum: '5',
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ client_id: 'unknown', hours: '99' }] });
+
+    const result = await repo.getClientsSection(
+      {
+        ...baseOpts,
+        canViewQuotes: true,
+        canViewOrders: true,
+        canViewInvoices: true,
+        canViewTimesheets: true,
+        canViewAllTimesheets: true,
+      },
+      testDb,
+    );
+    expect(result.activitySummary[0]).toEqual({
+      clientId: 'c1',
+      quotesCount: null,
+      quotesNet: null,
+      ordersCount: null,
+      ordersNet: null,
+      invoicesCount: null,
+      invoicesTotal: null,
+      invoicesOutstanding: null,
+      timesheetHours: null,
+    });
   });
 
   test('timesheet activity respects canViewAllTimesheets scoping', async () => {

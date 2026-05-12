@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   button:not(:disabled),
@@ -11,18 +14,53 @@
 }
 
 @theme {
+  --font-sans: "Satoshi", sans-serif;
   --color-praetor: var(--color-primary);
   --color-secondary: var(--color-secondary);
   --color-accent: var(--color-accent);
   --color-neutral: var(--color-neutral);
 }
 
-:root {
+:root,
+[data-shadcn-theme="light"],
+[data-shadcn-theme="zebra"],
+[data-shadcn-theme="praetor"] {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.21 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.015 286.067);
   --color-primary: #20293f;
   --color-primary-hover: #2d3a55;
   --color-secondary: #94783f;
   --color-accent: #9a2222;
   --color-neutral: #b8b5b3;
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+html,
+body {
+  font-family: "Satoshi", sans-serif;
 }
 
 /* Chrome, Safari, Edge, Opera */
@@ -80,4 +118,293 @@ input[type="number"] {
 
 .custom-horizontal-scrollbar::-webkit-scrollbar-corner {
   display: none !important;
+}
+
+.dark,
+[data-shadcn-theme="dark"] {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.92 0.004 286.32);
+  --primary-foreground: oklch(0.21 0.006 285.885);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.552 0.016 285.938);
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+[data-shadcn-theme="zebra"] {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+[data-shadcn-theme="praetor"] {
+  --sidebar: #20293f;
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.92 0.004 286.32);
+  --sidebar-primary-foreground: #20293f;
+  --sidebar-accent: #2d3a55;
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+[data-shadcn-theme-scope] {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Legacy pages still use neutral Tailwind utilities. Keep them readable inside the
+   scoped shadcn dark theme until those views are migrated to semantic tokens. */
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .text-black,
+    .text-zinc-950,
+    .text-zinc-900,
+    .text-zinc-800,
+    .text-zinc-700,
+    .text-gray-950,
+    .text-gray-900,
+    .text-gray-800,
+    .text-gray-700,
+    .text-slate-950,
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700
+  ) {
+  color: var(--foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .text-zinc-600,
+    .text-zinc-500,
+    .text-zinc-400,
+    .text-zinc-300,
+    .text-gray-600,
+    .text-gray-500,
+    .text-gray-400,
+    .text-gray-300,
+    .text-slate-600,
+    .text-slate-500,
+    .text-slate-400,
+    .text-slate-300
+  ) {
+  color: var(--muted-foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .bg-white,
+    .bg-white\/80,
+    .bg-zinc-50,
+    .bg-zinc-50\/50,
+    .bg-gray-50,
+    .bg-gray-50\/50,
+    .bg-slate-50,
+    .bg-slate-50\/50
+  ) {
+  background-color: var(--card);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .bg-zinc-100,
+    .bg-zinc-100\/30,
+    .bg-gray-100,
+    .bg-gray-100\/30,
+    .bg-slate-100,
+    .bg-slate-100\/30,
+    .bg-zinc-200,
+    .bg-gray-200,
+    .bg-slate-200
+  ) {
+  background-color: var(--muted);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .hover\:bg-zinc-50:hover,
+    .hover\:bg-zinc-50\/50:hover,
+    .hover\:bg-gray-50:hover,
+    .hover\:bg-gray-50\/50:hover,
+    .hover\:bg-slate-50:hover,
+    .hover\:bg-slate-50\/50:hover,
+    .hover\:bg-zinc-100:hover,
+    .hover\:bg-gray-100:hover,
+    .hover\:bg-slate-100:hover,
+    .hover\:bg-zinc-200:hover,
+    .hover\:bg-zinc-200\/50:hover,
+    .hover\:bg-gray-200:hover,
+    .hover\:bg-gray-200\/50:hover,
+    .hover\:bg-slate-200:hover,
+    .hover\:bg-slate-200\/50:hover
+  ) {
+  background-color: var(--accent);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(
+    .border-zinc-100,
+    .border-zinc-200,
+    .border-zinc-300,
+    .border-gray-100,
+    .border-gray-200,
+    .border-gray-300,
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300
+  ) {
+  border-color: var(--border);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.text-praetor, .hover\:text-praetor:hover) {
+  color: var(--secondary-foreground);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.bg-praetor, .hover\:bg-praetor:hover) {
+  background-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge
+  :where(.border-praetor, .focus\:border-praetor:focus) {
+  border-color: var(--secondary);
+}
+
+[data-shadcn-theme="dark"].shadcn-theme-bridge :where(.focus\:ring-praetor:focus) {
+  --tw-ring-color: var(--secondary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@keyframes sidebar-entry-down {
+  from {
+    height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sidebar-entry-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.sidebar-entry-content {
+  overflow: hidden;
+}
+
+.sidebar-entry-content[data-state="open"] {
+  animation: sidebar-entry-down 120ms ease-out;
+}
+
+.sidebar-entry-content[data-state="closed"] {
+  animation: sidebar-entry-up 100ms ease-in;
+}
+
+.standard-table-value-cell :where(:not([data-status-badge], [data-status-badge] *)) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  letter-spacing: normal !important;
+  padding: 0 !important;
+  text-transform: none !important;
+}
+
+.standard-table-value-cell i {
+  display: none !important;
+}
+
+.standard-table-value-cell [data-status-badge] i {
+  display: inline-block !important;
 }
