@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   supplierQuotesList: mock((): Promise<unknown[]> => Promise.resolve([])),
@@ -40,6 +41,7 @@ mock.module('../../services/api', () => ({
       list: () => apiMocks.supplierInvoicesList(),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));

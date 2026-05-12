@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen } from '@testing-library/react';
 import type { Notification } from '../../types';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
 
@@ -18,6 +19,7 @@ mock.module('../../services/api', () => ({
       delete: mock(() => Promise.resolve()),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));

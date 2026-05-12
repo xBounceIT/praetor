@@ -6,7 +6,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { tasksApi } from '../../services/api';
+import { tasksApi } from '../../services/api/tasks';
 import type {
   BillingFrequency,
   Client,
@@ -66,9 +66,9 @@ export interface TasksViewProps {
       ProjectTask,
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
-  ) => void;
-  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
-  onDeleteTask: (id: string) => void;
+  ) => void | Promise<void>;
+  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+  onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;
 }
 
@@ -102,6 +102,8 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
 
@@ -558,21 +560,24 @@ const TasksView: React.FC<TasksViewProps> = ({
     ],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (editingTask && !canUpdateTasks) return;
     if (!editingTask && !canCreateTasks) return;
-    if (name && projectId) {
-      const details = {
-        billingType,
-        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-        monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
-        expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
-        revenue: revenue ? parseFloat(revenue) : undefined,
-        notes: notes.trim() || undefined,
-      };
+    if (!name || !projectId) return;
+    const details = {
+      billingType,
+      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
+      expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
+      revenue: revenue ? parseFloat(revenue) : undefined,
+      notes: notes.trim() || undefined,
+    };
+    setIsSubmitting(true);
+    try {
       if (editingTask) {
-        onUpdateTask(editingTask.id, {
+        await onUpdateTask(editingTask.id, {
           name,
           projectId,
           description,
@@ -580,9 +585,11 @@ const TasksView: React.FC<TasksViewProps> = ({
           ...details,
         });
       } else {
-        onAddTask(name, projectId, undefined, description, details);
+        await onAddTask(name, projectId, undefined, description, details);
       }
       closeModal();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -601,15 +608,26 @@ const TasksView: React.FC<TasksViewProps> = ({
     setNotes('');
   };
 
+  const requestCloseModal = () => {
+    if (isSubmitting || isDeleting) return;
+    closeModal();
+  };
+
   const cancelDelete = () => {
+    if (isDeleting) return;
     setIsDeleteConfirmOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!canDeleteTasks) return;
-    if (editingTask) {
-      onDeleteTask(editingTask.id);
+    if (isDeleting) return;
+    if (!editingTask) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteTask(editingTask.id);
       closeModal();
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -629,6 +647,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={cancelDelete}
         onConfirm={handleDelete}
+        isDeleting={isDeleting}
         title={t('tasks.deleteTaskTitle', { name: editingTask?.name })}
         description={
           <Trans
@@ -654,7 +673,7 @@ const TasksView: React.FC<TasksViewProps> = ({
       />
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
+      <Modal isOpen={isModalOpen} onClose={requestCloseModal}>
         <ModalContent size="2xl">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
             <ModalHeader>
@@ -667,7 +686,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 </span>
                 {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
               </ModalTitle>
-              <ModalCloseButton onClick={closeModal} />
+              <ModalCloseButton onClick={requestCloseModal} disabled={isSubmitting || isDeleting} />
             </ModalHeader>
 
             <ModalBody className="space-y-6">
@@ -898,6 +917,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                   type="button"
                   variant="ghost"
                   onClick={confirmDelete}
+                  disabled={isSubmitting || isDeleting}
                   className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
@@ -908,11 +928,20 @@ const TasksView: React.FC<TasksViewProps> = ({
               )}
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={closeModal}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={requestCloseModal}
+                  disabled={isSubmitting || isDeleting}
+                >
                   {t('common:buttons.cancel')}
                 </Button>
-                <Button type="submit" disabled={!canSubmit}>
-                  {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
+                <Button type="submit" disabled={!canSubmit || isSubmitting}>
+                  {isSubmitting
+                    ? t('common:buttons.saving')
+                    : editingTask
+                      ? t('projects.saveChanges')
+                      : t('tasks.addTask')}
                 </Button>
               </div>
             </ModalFooter>

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { ApiErrorStub } from '../helpers/apiErrorStub';
 
 const apiMocks = {
   entriesCreate: mock(
@@ -20,6 +21,7 @@ mock.module('../../services/api', () => ({
       delete: (id: string) => apiMocks.entriesDelete(id),
     },
   },
+  ApiError: ApiErrorStub,
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
