@@ -10,6 +10,7 @@ import SelectControl from '../shared/SelectControl';
 import { Button } from '../ui/button';
 import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
+import { Separator } from '../ui/separator';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -290,18 +291,18 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-5">
+    <div className="rounded-lg border border-border bg-background shadow-sm p-5">
       <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 leading-none mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground leading-none mb-1">
               {t('entry.loggingFor')}
             </span>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
               <span className="text-base sm:text-lg font-black text-praetor uppercase">
                 {new Date(date).toLocaleDateString(undefined, { weekday: 'long' })}
               </span>
-              <span className="text-sm sm:text-base font-medium text-zinc-400">
+              <span className="text-sm sm:text-base font-medium text-muted-foreground">
                 {new Date(date).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
@@ -325,10 +326,10 @@ const DailyView: React.FC<DailyViewProps> = ({
                 if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
               }}
               searchable={true}
-              className={errors.clientId ? 'border-red-300' : ''}
+              className={errors.clientId ? 'border-destructive' : ''}
             />
             {errors.clientId && (
-              <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
+              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
             )}
           </div>
 
@@ -345,10 +346,10 @@ const DailyView: React.FC<DailyViewProps> = ({
                 filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')
               }
               searchable={true}
-              className={errors.projectId ? 'border-red-300' : ''}
+              className={errors.projectId ? 'border-destructive' : ''}
             />
             {errors.projectId && (
-              <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
+              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
             )}
           </div>
 
@@ -364,13 +365,13 @@ const DailyView: React.FC<DailyViewProps> = ({
                   : t('entry.selectTask')
               }
               searchable={true}
-              className={errors.task ? 'border-red-300' : ''}
+              className={errors.task ? 'border-destructive' : ''}
             />
             {errors.task && (
-              <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
+              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
             )}
             {selectedTaskName === 'custom' && canCreateCustomTask && (
-              <input
+              <Input
                 type="text"
                 placeholder={t('entry.typeCustomTask')}
                 value={selectedTaskName === 'custom' ? '' : selectedTaskName}
@@ -379,7 +380,7 @@ const DailyView: React.FC<DailyViewProps> = ({
                   setSelectedTaskId('');
                   if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
                 }}
-                className="mt-2 w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
+                className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200"
               />
             )}
           </div>
@@ -400,7 +401,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
           <Field className="min-w-0" data-invalid={!!errors.hours}>
             <FieldLabel htmlFor="daily-entry-hours">
-              {t('entry.hours')} <span className="text-red-500">*</span>
+              {t('entry.hours')} <span className="text-destructive">*</span>
             </FieldLabel>
             <Input
               id="daily-entry-hours"
@@ -438,7 +439,7 @@ const DailyView: React.FC<DailyViewProps> = ({
         </div>
 
         {isExceedingGoal && (
-          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
+          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
             <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
             <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
               {t('entry.warningExceedGoal', { goal: dailyGoal })}
@@ -448,21 +449,23 @@ const DailyView: React.FC<DailyViewProps> = ({
 
         {selectedTaskId && (
           <div
-            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-zinc-50 border-zinc-200' : 'bg-transparent border-transparent'}`}
+            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-muted/40 border-border' : 'bg-transparent border-transparent'}`}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setMakeRecurring(!makeRecurring)}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50'}`}
+                className={`text-xs font-bold uppercase tracking-wide ${makeRecurring ? 'text-praetor hover:text-praetor' : 'text-muted-foreground'}`}
               >
                 <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
                 {t('entry.repeatTask')}
-              </button>
+              </Button>
 
               {makeRecurring && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="hidden sm:block h-4 w-px bg-zinc-200 mx-1 shrink-0"></div>
+                  <Separator orientation="vertical" className="hidden sm:block h-4 mx-1" />
                   <SelectControl
                     options={[
                       { id: 'daily', name: t('entry.recurrencePatterns.daily') },
@@ -479,12 +482,12 @@ const DailyView: React.FC<DailyViewProps> = ({
                     onChange={(val) => handleRecurrenceChange(val as string)}
                     className="text-xs min-w-[120px]"
                     placeholder="Pattern..."
-                    buttonClassName="bg-white border border-zinc-200 text-praetor font-medium p-2 text-xs whitespace-nowrap"
+                    buttonClassName="text-xs whitespace-nowrap"
                   />
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                     {t('entry.until')}
                   </span>
-                  <input
+                  <Input
                     type="date"
                     value={recurrenceEndDate}
                     onChange={(e) => {
@@ -492,10 +495,13 @@ const DailyView: React.FC<DailyViewProps> = ({
                       if (errors.recurrenceEndDate)
                         setErrors((prev) => ({ ...prev, recurrenceEndDate: '' }));
                     }}
-                    className={`text-xs bg-white border rounded-md p-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-zinc-200 text-praetor focus:ring-praetor'} font-medium`}
+                    aria-invalid={!!errors.recurrenceEndDate}
+                    className="text-xs font-medium shrink-0 w-auto"
                   />
                   {errors.recurrenceEndDate && (
-                    <p className="text-red-500 text-[10px] font-bold">{errors.recurrenceEndDate}</p>
+                    <p className="text-destructive text-[10px] font-bold">
+                      {errors.recurrenceEndDate}
+                    </p>
                   )}
                 </div>
               )}
