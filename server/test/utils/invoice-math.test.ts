@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeInvoiceTotals } from '../../utils/invoice-math.ts';
+import { computeInvoiceTotals, roundCurrency } from '../../utils/invoice-math.ts';
 
 describe('computeInvoiceTotals', () => {
   test('empty items → zero subtotal and total', () => {
@@ -64,5 +64,15 @@ describe('computeInvoiceTotals', () => {
   test('subtotal equals total (no tax in this codebase)', () => {
     const result = computeInvoiceTotals([{ quantity: 1, unitPrice: 99.99, discount: 0 }]);
     expect(result.subtotal).toBe(result.total);
+  });
+});
+
+describe('roundCurrency', () => {
+  test('rounds to 2 decimals', () => {
+    expect(roundCurrency(0.1 + 0.2)).toBe(0.3);
+  });
+
+  test('rounds halves up', () => {
+    expect(roundCurrency(0.005)).toBe(0.01);
   });
 });
