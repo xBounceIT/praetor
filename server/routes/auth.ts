@@ -91,30 +91,57 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, passwordResult.message);
       }
 
-      const user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+      let user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+
+      let ldapAuthSuccess = false;
+      let autoProvisioned = false;
 
       if (!user) {
-        return reply.code(401).send({ error: 'Invalid username or password' });
+        // No local row yet — give LDAP a chance to authenticate and auto-provision the user
+        // on first login. Silently no-ops when LDAP is disabled.
+        try {
+          const ldapService = (await import('../services/ldap.ts')).default;
+          const provision = await ldapService.authenticateAndProvision(
+            usernameResult.value,
+            passwordResult.value,
+          );
+          if (provision.authenticated && provision.userId) {
+            user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+            ldapAuthSuccess = true;
+            autoProvisioned = !!provision.created;
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          fastify.log.warn(
+            { username: usernameResult.value, errorMessage },
+            'LDAP auto-provision attempt failed',
+          );
+        }
+
+        if (!user) {
+          return reply.code(401).send({ error: 'Invalid username or password' });
+        }
       }
 
       if (user.isDisabled) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      // LDAP Authentication
-      let ldapAuthSuccess = false;
-      try {
-        const ldapService = (await import('../services/ldap.ts')).default;
-        ldapAuthSuccess = await ldapService.authenticate(
-          usernameResult.value,
-          passwordResult.value,
-        );
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        fastify.log.warn(
-          { username: usernameResult.value, errorMessage },
-          'LDAP auth attempt failed; falling back to local password validation',
-        );
+      // LDAP Authentication for existing users (auto-provisioned users already authenticated above)
+      if (!ldapAuthSuccess) {
+        try {
+          const ldapService = (await import('../services/ldap.ts')).default;
+          ldapAuthSuccess = await ldapService.authenticate(
+            usernameResult.value,
+            passwordResult.value,
+          );
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          fastify.log.warn(
+            { username: usernameResult.value, errorMessage },
+            'LDAP auth attempt failed; falling back to local password validation',
+          );
+        }
       }
 
       let validPassword = false;
@@ -130,6 +157,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const token = generateToken(user.id, Date.now(), user.role);
       const permissions = await getRolePermissions(user.role);
+
+      if (autoProvisioned) {
+        await logAudit({
+          request,
+          action: 'user.created',
+          entityType: 'user',
+          entityId: user.id,
+          details: {
+            targetLabel: user.name,
+            secondaryLabel: user.username,
+          },
+          userId: user.id,
+        });
+      }
 
       await logAudit({
         request,

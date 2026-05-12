@@ -36,6 +36,7 @@ const logAuditMock = mock(async () => undefined);
 // External: bcryptjs.compare and the LDAP service (dynamically imported by /login)
 const bcryptCompareMock = mock();
 const ldapAuthenticateMock = mock();
+const ldapAuthenticateAndProvisionMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
 
@@ -64,7 +65,10 @@ beforeAll(async () => {
     compare: bcryptCompareMock,
   }));
   mock.module('../../services/ldap.ts', () => ({
-    default: { authenticate: ldapAuthenticateMock },
+    default: {
+      authenticate: ldapAuthenticateMock,
+      authenticateAndProvision: ldapAuthenticateAndProvisionMock,
+    },
   }));
 
   authRoutePlugin = (await import('../../routes/auth.ts')).default as FastifyPluginAsync;
@@ -110,6 +114,7 @@ const allMocks = [
   logAuditMock,
   bcryptCompareMock,
   ldapAuthenticateMock,
+  ldapAuthenticateAndProvisionMock,
 ];
 
 let testApp: FastifyInstance;
@@ -126,6 +131,7 @@ beforeEach(async () => {
 
   // Defaults for /login: LDAP off (returns false), bcrypt fails by default
   ldapAuthenticateMock.mockResolvedValue(false);
+  ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
   bcryptCompareMock.mockResolvedValue(false);
 
   testApp = await buildRouteTestApp(authRoutePlugin, '/api/auth');
@@ -246,8 +252,83 @@ describe('POST /api/auth/login', () => {
     ]);
   });
 
-  test('401 user not found', async () => {
+  test('401 user not found and LDAP disabled/auth fails', async () => {
     findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'ghost', password: 'whatever' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(ldapAuthenticateAndProvisionMock).toHaveBeenCalledWith('ghost', 'whatever');
+  });
+
+  test('200: user not found triggers LDAP auto-provision; subsequent fetch returns the new user', async () => {
+    const NEW_LDAP_USER = {
+      id: 'u_new',
+      name: 'New LDAP User',
+      username: 'newldap',
+      role: 'user',
+      avatarInitials: 'NL',
+      isDisabled: false,
+      passwordHash: '$2a$10$invalidpasswordhashforldapuser00000000000000',
+    };
+    findLoginUserByUsernameMock
+      .mockResolvedValueOnce(null) // initial lookup → triggers provisioning
+      .mockResolvedValueOnce(NEW_LDAP_USER); // post-provision re-fetch
+    ldapAuthenticateAndProvisionMock.mockResolvedValue({
+      authenticated: true,
+      userId: 'u_new',
+      created: true,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'newldap', password: 'pw' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.user).toMatchObject({
+      id: 'u_new',
+      username: 'newldap',
+      role: 'user',
+    });
+
+    // The auto-provision path must not double-authenticate via authenticate()
+    expect(ldapAuthenticateMock).not.toHaveBeenCalled();
+    // bcrypt must NOT have been called — the LDAP placeholder hash must never match a real password
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+
+    // Both user.created and user.login audits must fire, in that order
+    expect(logAuditMock).toHaveBeenCalledTimes(2);
+    expect(logAuditMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        action: 'user.created',
+        entityType: 'user',
+        entityId: 'u_new',
+      }),
+    );
+    expect(logAuditMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        action: 'user.login',
+        entityType: 'user',
+        entityId: 'u_new',
+      }),
+    );
+  });
+
+  test('401: user not found and LDAP auto-provision throws → handler returns 401, not 500', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockRejectedValue(new Error('LDAP server down'));
 
     const res = await testApp.inject({
       method: 'POST',

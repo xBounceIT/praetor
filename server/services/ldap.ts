@@ -43,6 +43,16 @@ interface LdapSearchEntry {
   object: Record<string, unknown>;
 }
 
+const flattenAttr = (value: unknown): string | undefined => {
+  if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : undefined;
+  return typeof value === 'string' ? value : undefined;
+};
+
+const pickDisplayName = (entry: Record<string, unknown> | undefined): string | undefined => {
+  if (!entry) return undefined;
+  return flattenAttr(entry.cn) ?? flattenAttr(entry.displayName);
+};
+
 class LDAPService {
   config: ldapRepo.LdapConfig | null;
 
@@ -100,19 +110,27 @@ class LDAPService {
   }
 
   async authenticate(username: string, password: string): Promise<boolean> {
+    const result = await this.authenticateWithProfile(username, password);
+    return result.authenticated;
+  }
+
+  async authenticateWithProfile(
+    username: string,
+    password: string,
+  ): Promise<{ authenticated: boolean; userDn?: string; entry?: Record<string, unknown> }> {
     let client: LdapClient | null = null;
     try {
       client = await this.getClient();
       if (!client) {
-        return false;
+        return { authenticated: false };
       }
       const ldapClient = client;
       const config = this.config;
       if (!config) {
-        return false;
+        return { authenticated: false };
       }
 
-      // Bind with service account first to find the user's DN
+      // Service-account bind to look up the user's DN, then re-bind as the user to verify creds.
       await new Promise<void>((resolve, reject) => {
         ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
           if (err) reject(err);
@@ -120,26 +138,22 @@ class LDAPService {
         });
       });
 
-      // Find user DN
-      const userDn = await this.findUserDn(ldapClient, username);
-      if (!userDn) {
-        return false;
+      const userEntry = await this.findUserEntry(ldapClient, username);
+      if (!userEntry) {
+        return { authenticated: false };
       }
 
-      // Try to bind as the user
-      // We need a new client for this to verify credentials safely without messing up the service connection state
-      // or we can just re-bind. Re-binding on the same client is standard.
       await new Promise<void>((resolve, reject) => {
-        ldapClient.bind(userDn, password, (err) => {
+        ldapClient.bind(userEntry.dn, password, (err) => {
           if (err) reject(err);
           else resolve();
         });
       });
 
-      return true;
+      return { authenticated: true, userDn: userEntry.dn, entry: userEntry.object };
     } catch (err) {
       logger.error({ err: serializeError(err), username }, 'LDAP auth error');
-      return false;
+      return { authenticated: false };
     } finally {
       if (client) {
         client.unbind((err) => {
@@ -151,7 +165,58 @@ class LDAPService {
     }
   }
 
+  // Authenticate against LDAP and, on success, ensure a local user row exists. Returns the
+  // local userId only when authentication succeeded; the caller then re-fetches the row.
+  async authenticateAndProvision(
+    username: string,
+    password: string,
+  ): Promise<{ authenticated: boolean; userId?: string; created?: boolean }> {
+    const result = await this.authenticateWithProfile(username, password);
+    if (!result.authenticated) {
+      return { authenticated: false };
+    }
+
+    const existing = await usersRepo.findLoginUserByUsername(username);
+    if (existing) {
+      return { authenticated: true, userId: existing.id, created: false };
+    }
+
+    const name = pickDisplayName(result.entry) ?? username;
+    const id = generatePrefixedId('u');
+    try {
+      await usersRepo.createUser({
+        id,
+        name,
+        username,
+        passwordHash: usersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
+        role: 'user',
+        avatarInitials: computeAvatarInitials(name),
+      });
+      logger.info({ username, userId: id }, 'LDAP auto-provisioned new user on first login');
+      return { authenticated: true, userId: id, created: true };
+    } catch (err) {
+      // Race: a concurrent login may have just created the row. Re-fetch and reuse it.
+      const racedExisting = await usersRepo.findLoginUserByUsername(username);
+      if (racedExisting) {
+        return { authenticated: true, userId: racedExisting.id, created: false };
+      }
+      logger.error(
+        { err: serializeError(err), username },
+        'Failed to auto-provision LDAP user on first login',
+      );
+      return { authenticated: false };
+    }
+  }
+
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
+    const entry = await this.findUserEntry(client, username);
+    return entry?.dn ?? null;
+  }
+
+  async findUserEntry(
+    client: LdapClient,
+    username: string,
+  ): Promise<{ dn: string; object: Record<string, unknown> } | null> {
     const config = this.config;
     if (!config) {
       return null;
@@ -159,16 +224,17 @@ class LDAPService {
     const searchOptions = {
       scope: 'sub',
       filter: buildUserLookupFilter(config.userFilter, username),
+      attributes: ['uid', 'cn', 'sn', 'givenName', 'mail', 'displayName', 'sAMAccountName'],
     };
 
     return new Promise((resolve, reject) => {
       client.search(config.baseDn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
-        let foundDn: string | null = null;
+        let found: { dn: string; object: Record<string, unknown> } | null = null;
 
         res.on('searchEntry', (entry: LdapSearchEntry) => {
-          foundDn = entry.objectName;
+          found = { dn: entry.objectName, object: entry.object ?? {} };
         });
 
         res.on('error', (err: Error) => {
@@ -179,7 +245,7 @@ class LDAPService {
           if (result.status !== 0) {
             reject(new Error('LDAP search failed status: ' + result.status));
           } else {
-            resolve(foundDn);
+            resolve(found);
           }
         });
       });
@@ -246,27 +312,15 @@ class LDAPService {
       let createdCount = 0;
 
       for (const entry of entries) {
-        let username = entry.uid;
-        if (Array.isArray(username)) username = username[0];
-
-        // Fallback for AD, where the username attribute is sAMAccountName rather than uid.
-        if (!username && entry.sAMAccountName) {
-          username = entry.sAMAccountName;
-          if (Array.isArray(username)) username = username[0];
-        }
+        // Fall back to sAMAccountName when uid is missing (AD path).
+        const username = flattenAttr(entry.uid) ?? flattenAttr(entry.sAMAccountName);
 
         if (!username) {
           logger.warn('Skipping LDAP entry without username');
           continue;
         }
 
-        const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
-        let name: string;
-        if (nameValue) {
-          name = Array.isArray(nameValue) ? nameValue[0] : nameValue;
-        } else {
-          name = username;
-        }
+        const name = pickDisplayName(entry as Record<string, unknown>) ?? username;
 
         const existing = await usersRepo.findLoginUserByUsername(username);
 

@@ -589,3 +589,135 @@ describe('syncUsers', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 });
+
+describe('authenticateAndProvision', () => {
+  test('returns authenticated:false when LDAP is disabled', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, enabled: false });
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('returns authenticated:false when LDAP credentials are rejected', async () => {
+    nextFixture = {
+      bindResponses: [null, new Error('wrong password')],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result.authenticated).toBe(false);
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('returns existing userId without creating when local row already exists', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue({ id: 'u-existing' });
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: true, userId: 'u-existing', created: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('auto-provisions a new user on first successful LDAP login using cn for the name', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: { uid: 'alice', cn: 'Alice Wonderland' },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: true, userId: 'u_test_id', created: true });
+    expect(createUserMock).toHaveBeenCalledWith({
+      id: 'u_test_id',
+      name: 'Alice Wonderland',
+      username: 'alice',
+      passwordHash: realUsersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
+      role: 'user',
+      avatarInitials: 'AL',
+    });
+  });
+
+  test('falls back to displayName, then to the typed username, when cn is missing', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=bob,dc=test,dc=com',
+              object: { uid: 'bob', displayName: ['Bobby D'] },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    await ldapService.authenticateAndProvision('bob', 'pw');
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Bobby D', username: 'bob' }),
+    );
+
+    createUserMock.mockReset();
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=carol,dc=test,dc=com', object: { uid: 'carol' } }],
+          status: 0,
+        },
+      ],
+    };
+    await ldapService.authenticateAndProvision('carol', 'pw');
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'carol', username: 'carol' }),
+    );
+  });
+
+  test('on duplicate-key race during create, re-fetches the existing row and reports created:false', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    // First call (existing lookup): not found → triggers create attempt.
+    // createUser fails (unique violation). Second findLoginUserByUsername returns the raced row.
+    findLoginUserByUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'u-raced' });
+    createUserMock.mockRejectedValueOnce(new Error('duplicate key value violates unique'));
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: true, userId: 'u-raced', created: false });
+  });
+});
