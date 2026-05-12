@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
+import { render } from '../helpers/render';
 
 installI18nMock();
 
