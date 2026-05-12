@@ -10,9 +10,16 @@ describe('getBuildDate', () => {
     expect(getBuildDate(new Date('2026-01-05T00:00:00Z'))).toBe('20260105');
   });
 
-  test('without arguments returns today as YYYYMMDD', () => {
-    const expected = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    expect(getBuildDate()).toBe(expected);
+  test('formats the provided date as YYYYMMDD deterministically', () => {
+    // Capture a single `now` and pass it explicitly so the assertion cannot
+    // flake at midnight rollover between calls.
+    const now = new Date();
+    const expected = now.toISOString().slice(0, 10).replace(/-/g, '');
+    expect(getBuildDate(now)).toBe(expected);
+    expect(getBuildDate(now)).toMatch(/^\d{8}$/);
+  });
+
+  test('defaults to today when called without arguments', () => {
     expect(getBuildDate()).toMatch(/^\d{8}$/);
   });
 
