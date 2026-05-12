@@ -157,8 +157,11 @@ const clientSummarySchema = {
   additionalProperties: false,
 } as const;
 
+// anyOf, not oneOf: the summary shape ({id, name, description}) also validates
+// against clientSchema because clientSchema only requires id and name. oneOf
+// would mark valid responses as ambiguous under strict JSON Schema/OpenAPI.
 const clientListItemSchema = {
-  oneOf: [clientSchema, clientSummarySchema],
+  anyOf: [clientSchema, clientSummarySchema],
 } as const;
 
 const clientCreateBodySchema = {

@@ -25,6 +25,21 @@ export type AuthenticatedActor = {
   permissions: string[];
 };
 
+// Mirrors the DB check constraint on time_entries.location.
+const VALID_LOCATIONS = ['remote', 'office', 'customer_premise', 'transfer'] as const;
+type ValidLocation = (typeof VALID_LOCATIONS)[number];
+
+const parseOptionalLocation = (
+  value: unknown,
+  fail: (status: number, message: string) => never,
+): ValidLocation | undefined => {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  if (!(VALID_LOCATIONS as readonly string[]).includes(value)) {
+    fail(400, `Invalid location: ${value}`);
+  }
+  return value as ValidLocation;
+};
+
 export class TimeEntryServiceError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -154,8 +169,7 @@ export const createTimeEntry = async (
     }
   }
 
-  const location =
-    typeof input.location === 'string' && input.location.trim() ? input.location : 'remote';
+  const location = parseOptionalLocation(input.location, fail) ?? 'remote';
 
   return entriesRepo.create({
     id: generatePrefixedId('te'),
@@ -212,8 +226,7 @@ export const updateTimeEntry = async (
     notes: validatedNotes,
     isPlaceholder:
       input.isPlaceholder === undefined ? undefined : parseBoolean(input.isPlaceholder),
-    location:
-      typeof input.location === 'string' && input.location.trim() ? input.location : undefined,
+    location: parseOptionalLocation(input.location, fail),
     taskId: backfilledTaskId,
   });
 

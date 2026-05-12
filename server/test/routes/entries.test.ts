@@ -718,6 +718,29 @@ describe('PUT /api/entries/:id', () => {
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.location).toBe('office');
   });
+
+  test('400 unknown location value (rejected before repo call)', async () => {
+    // Previously a non-empty invalid value passed through to the repo and
+    // bubbled up as a 500 from the DB CHECK constraint. Now caught at the
+    // service layer.
+    entriesFindContextMock.mockResolvedValue({
+      userId: 'u1',
+      projectId: 'p1',
+      task: 'Dev',
+      taskId: 't1',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { location: 'foo' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('Invalid location');
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/entries/:id', () => {
