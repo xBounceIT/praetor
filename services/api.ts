@@ -5,6 +5,7 @@
 
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
+export * from './api/client';
 export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
@@ -61,8 +62,6 @@ import { suppliersApi } from './api/suppliers';
 import { tasksApi } from './api/tasks';
 import { usersApi } from './api/users';
 import { workUnitsApi } from './api/workUnits';
-
-export { ApiError, getApiBase, getAuthToken, setAuthToken };
 
 export default {
   ApiError,
