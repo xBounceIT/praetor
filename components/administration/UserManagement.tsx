@@ -776,6 +776,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
     }
     return t(`hr:workforce.authMethod.${method}`);
   };
+  const getAuthMethodBadgeType = (user: User): StatusType => {
+    switch (user.authMethod || 'local') {
+      case 'ldap':
+        return 'auth_ldap';
+      case 'oidc':
+        return 'auth_oidc';
+      case 'saml':
+        return 'auth_saml';
+      default:
+        return 'auth_local';
+    }
+  };
   const getUserStatusLabel = (user: User) =>
     user.isDisabled ? t('common:common.disabled') : t('common:common.active');
   const getRolePresentation = (user: User) => {
@@ -842,7 +854,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
     {
       header: t('hr:workforce.authMethod.column'),
       accessorFn: (user) => getAuthMethodLabel(user),
-      cell: ({ row }) => <StatusBadge type="inherited" label={getAuthMethodLabel(row)} />,
+      cell: ({ row }) => (
+        <StatusBadge type={getAuthMethodBadgeType(row)} label={getAuthMethodLabel(row)} />
+      ),
     },
     {
       header: t('common:labels.status'),
