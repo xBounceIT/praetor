@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { installI18nMock } from '../helpers/i18n';
+import { render } from '../helpers/render';
 
 installI18nMock();
 
@@ -125,7 +126,7 @@ describe('<Calendar />', () => {
     render(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
     // Click the month-name button in the header (March in Italian = "Marzo")
     fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated names — click "Mag" for May
+    // Picker shows abbreviated names - click "Mag" for May
     fireEvent.click(screen.getByText('Mag'));
     // Header should now show full name "Maggio"
     expect(screen.getByText('Maggio')).toBeInTheDocument();
@@ -139,7 +140,7 @@ describe('<Calendar />', () => {
       </div>,
     );
     fireEvent.click(screen.getByText('Marzo'));
-    // Picker shows abbreviated month names — "Apr" appears only when picker is open
+    // Picker shows abbreviated month names - "Apr" appears only when picker is open
     expect(screen.getByText('Apr')).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByTestId('outside'));
@@ -157,7 +158,7 @@ describe('<Calendar />', () => {
         allowWeekendSelection={false}
       />,
     );
-    // 2025-01-01 (Capodanno) — disabled because it's a national holiday
+    // 2025-01-01 (Capodanno) - disabled because it's a national holiday
     const day1Buttons = screen.getAllByText('1').map((el) => el.closest('button'));
     // The first "1" in the calendar grid is Jan 1, 2025 (Wednesday)
     const jan1Button = day1Buttons.find((btn) => btn?.disabled);

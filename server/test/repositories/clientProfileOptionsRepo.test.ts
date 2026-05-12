@@ -10,7 +10,7 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// listByCategory/getUsageCount/update use executeRows for the usage_count subquery — rows
+// listByCategory/getUsageCount/update use executeRows for the usage_count subquery - rows
 // come back with snake_case named keys (matching the SQL aliases). findByCategoryAndId,
 // findByCategoryAndValue, getNextSortOrder, create, deleteById use the query builder
 // (rowMode: 'array' positional rows in schema declaration order).
@@ -129,7 +129,7 @@ describe('update', () => {
       { value: 'tech', sortOrder: null, previousValue: 'tech' },
       testDb,
     );
-    // 2 calls only — no cascade UPDATE clients
+    // 2 calls only - no cascade UPDATE clients
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql.toLowerCase()).toContain('update "client_profile_options"');
     expect(result?.value).toBe('tech');

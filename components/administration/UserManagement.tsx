@@ -1,16 +1,51 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usersApi } from '../../services/api';
-import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usersApi } from '../../services/api/users';
+import type {
+  Client,
+  Project,
+  ProjectTask,
+  Role,
+  SsoProvider,
+  User,
+  UserAuthMethod,
+} from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
-import CustomSelect from '../shared/CustomSelect';
+import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
-import StandardTable from '../shared/StandardTable';
-import StatusBadge from '../shared/StatusBadge';
+import SelectControl from '../shared/SelectControl';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
-import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+
+const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
+  authMethod === 'oidc' || authMethod === 'saml';
+
+const sanitizeUsernamePart = (s: string) =>
+  s
+    .normalize('NFD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 
 export interface UserManagementProps {
   users: User[];
@@ -27,13 +62,17 @@ export interface UserManagementProps {
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   onUpdateUserRoles: (id: string, roleIds: string[], primaryRoleId: string) => Promise<void>;
+  onUpdateUserAuthMethod: (
+    id: string,
+    authMethod: UserAuthMethod,
+    authProviderId?: string | null,
+  ) => Promise<void>;
   currentUserId: string;
   permissions: string[];
   roles: Role[];
+  ssoProviders: SsoProvider[];
   currency: string;
 }
-
-const USERS_ROWS_PER_PAGE_STORAGE_KEY = 'praetor_workforce_users_rowsPerPage';
 
 const UserManagement: React.FC<UserManagementProps> = ({
   users,
@@ -44,9 +83,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
   onDeleteUser,
   onUpdateUser,
   onUpdateUserRoles,
+  onUpdateUserAuthMethod,
   currentUserId,
   permissions,
   roles,
+  ssoProviders,
   currency,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
@@ -156,11 +197,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
-  const [usersRowsPerPage, setUsersRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem(USERS_ROWS_PER_PAGE_STORAGE_KEY);
-    return saved ? parseInt(saved, 10) : 5;
-  });
+  const [authMethodUser, setAuthMethodUser] = useState<User | null>(null);
+  const [authMethodDraft, setAuthMethodDraft] = useState<UserAuthMethod>('local');
+  const [authProviderDraft, setAuthProviderDraft] = useState<string>('');
+  const [authMethodError, setAuthMethodError] = useState('');
+  const [isSavingAuthMethod, setIsSavingAuthMethod] = useState(false);
 
   const canCreateUsers = hasPermission(
     permissions,
@@ -239,13 +280,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setNewRole(roleOptions[0]?.id || '');
     usernameManuallyEdited.current = false;
     setFormErrors({});
-  };
-
-  const handleUsersRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setUsersRowsPerPage(value);
-    localStorage.setItem(USERS_ROWS_PER_PAGE_STORAGE_KEY, value.toString());
-    setUsersCurrentPage(1);
   };
 
   React.useEffect(() => {
@@ -458,6 +492,43 @@ const UserManagement: React.FC<UserManagementProps> = ({
       .finally(() => {
         setIsLoadingEditRoles(false);
       });
+  };
+
+  const openAuthMethodDialog = (user: User) => {
+    const method = user.authMethod || 'local';
+    setAuthMethodUser(user);
+    setAuthMethodDraft(method);
+    setAuthProviderDraft(user.authProviderId || '');
+    setAuthMethodError('');
+  };
+
+  const closeAuthMethodDialog = () => {
+    if (isSavingAuthMethod) return;
+    setAuthMethodUser(null);
+    setAuthMethodError('');
+  };
+
+  const saveAuthMethod = async () => {
+    if (!authMethodUser) return;
+    const requiresProvider = isSsoAuthMethod(authMethodDraft);
+    if (requiresProvider && !authProviderDraft) {
+      setAuthMethodError(t('hr:workforce.authMethod.providerRequired'));
+      return;
+    }
+    setIsSavingAuthMethod(true);
+    setAuthMethodError('');
+    try {
+      await onUpdateUserAuthMethod(
+        authMethodUser.id,
+        authMethodDraft,
+        requiresProvider ? authProviderDraft : null,
+      );
+      setAuthMethodUser(null);
+    } catch (err) {
+      setAuthMethodError((err as Error).message || t('common:messages.errorOccurred'));
+    } finally {
+      setIsSavingAuthMethod(false);
+    }
   };
 
   const closeEditModal = () => {
@@ -685,25 +756,26 @@ const UserManagement: React.FC<UserManagementProps> = ({
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
     .filter((user) => matchesUserSearch(user, userSearchValue));
 
-  const usersTotalPages = Math.ceil(usersFiltered.length / usersRowsPerPage);
-
-  React.useEffect(() => {
-    if (usersTotalPages === 0) {
-      if (usersCurrentPage !== 1) {
-        setUsersCurrentPage(1);
-      }
-      return;
-    }
-
-    if (usersCurrentPage > usersTotalPages) {
-      setUsersCurrentPage(usersTotalPages);
-    }
-  }, [usersCurrentPage, usersTotalPages]);
-
-  const usersStartIndex = (usersCurrentPage - 1) * usersRowsPerPage;
-  const paginatedUsers = usersFiltered.slice(usersStartIndex, usersStartIndex + usersRowsPerPage);
   const emptyEmailLabel = t('common:common.none');
   const noUsersFoundLabel = t('hr:workforce.noUsers');
+  const authMethodOptions: Array<{ id: UserAuthMethod; name: string }> = [
+    { id: 'local', name: t('hr:workforce.authMethod.local') },
+    { id: 'ldap', name: t('hr:workforce.authMethod.ldap') },
+    { id: 'oidc', name: t('hr:workforce.authMethod.oidc') },
+    { id: 'saml', name: t('hr:workforce.authMethod.saml') },
+  ];
+  const isSsoAuthMethodDraft = isSsoAuthMethod(authMethodDraft);
+  const providerOptions = isSsoAuthMethodDraft
+    ? ssoProviders.filter((provider) => provider.enabled && provider.protocol === authMethodDraft)
+    : [];
+  const getAuthMethodLabel = (user: User) => {
+    const method = user.authMethod || 'local';
+    if (isSsoAuthMethod(method)) {
+      const protocol = method.toUpperCase();
+      return `${protocol}: ${user.authProviderName || t('hr:workforce.authMethod.providerMissing')}`;
+    }
+    return t(`hr:workforce.authMethod.${method}`);
+  };
   const getUserStatusLabel = (user: User) =>
     user.isDisabled ? t('common:common.disabled') : t('common:common.active');
   const getRolePresentation = (user: User) => {
@@ -713,25 +785,217 @@ const UserManagement: React.FC<UserManagementProps> = ({
     const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
 
     return {
-      roleBadgeClass: isAdminRole
-        ? 'bg-slate-800 text-white border-slate-700'
+      roleBadgeType: (isAdminRole
+        ? 'role_admin'
         : isTopManagerRole
-          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          ? 'role_top_manager'
           : isManagerRole
-            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            ? 'role_manager'
             : role?.isSystem
-              ? 'bg-slate-100 text-slate-600 border-slate-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      roleIcon: isAdminRole
-        ? 'fa-shield-halved'
-        : isTopManagerRole
-          ? 'fa-crown'
-          : isManagerRole
-            ? 'fa-briefcase'
-            : 'fa-user',
+              ? 'role_user'
+              : 'role_custom') as StatusType,
       roleName: role?.name || user.role,
     };
   };
+
+  const userColumns: Column<User>[] = [
+    {
+      header: t('hr:workforce.user'),
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <div className="size-8 rounded-full bg-zinc-100 text-praetor flex items-center justify-center text-xs font-bold">
+            {row.avatarInitials}
+          </div>
+          <span className="font-bold text-zinc-800">{row.name}</span>
+          {row.id === currentUserId && (
+            <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
+              {t('hr:workforce.you')}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: t('hr:workforce.username'),
+      accessorKey: 'username',
+      cell: ({ row }) => <span className="text-sm text-zinc-600 font-mono">{row.username}</span>,
+    },
+    {
+      header: t('common:labels.email'),
+      accessorFn: (user) => user.email || emptyEmailLabel,
+      cell: ({ row }) =>
+        row.email ? (
+          <span className="text-sm font-medium text-zinc-600 break-all">{row.email}</span>
+        ) : (
+          <span className="text-sm font-medium text-zinc-400">{emptyEmailLabel}</span>
+        ),
+    },
+    {
+      header: t('hr:workforce.role'),
+      accessorFn: (user) => getRolePresentation(user).roleName,
+      cell: ({ row }) => {
+        const { roleBadgeType, roleName } = getRolePresentation(row);
+        return <StatusBadge type={roleBadgeType} label={roleName} />;
+      },
+    },
+    {
+      header: t('hr:workforce.authMethod.column'),
+      accessorFn: (user) => getAuthMethodLabel(user),
+      cell: ({ row }) => <StatusBadge type="inherited" label={getAuthMethodLabel(row)} />,
+    },
+    {
+      header: t('common:labels.status'),
+      accessorFn: (user) => getUserStatusLabel(user),
+      cell: ({ row }) => (
+        <StatusBadge
+          type={row.isDisabled ? 'disabled' : 'active'}
+          label={getUserStatusLabel(row)}
+        />
+      ),
+    },
+    {
+      header: t('hr:workforce.actions'),
+      id: 'actions',
+      align: 'right',
+      sticky: 'right',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const hasManagedTopManagerAssignments =
+          row.hasTopManagerRole || row.role === TOP_MANAGER_ROLE_ID;
+
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {canManageAssignments && !hasManagedTopManagerAssignments && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      aria-label={t('hr:workforce.manageAssignments')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openAssignments(row.id);
+                      }}
+                      className="text-zinc-400 hover:text-praetor transition-colors p-2"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('hr:workforce.manageAssignments')}</TooltipContent>
+              </Tooltip>
+            )}
+            {canUpdateUsers && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        aria-label={t('hr:workforce.editUser')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(row);
+                        }}
+                        className="text-zinc-400 hover:text-praetor transition-colors p-2"
+                      >
+                        <i className="fa-solid fa-user-pen"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('hr:workforce.editUser')}</TooltipContent>
+                </Tooltip>
+                {row.employeeType === 'app_user' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          aria-label={t('hr:workforce.authMethod.changeAction')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAuthMethodDialog(row);
+                          }}
+                          disabled={row.id === currentUserId}
+                          className="text-zinc-400 hover:text-praetor disabled:opacity-0 transition-colors p-2"
+                        >
+                          <i className="fa-solid fa-key"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('hr:workforce.authMethod.changeAction')}</TooltipContent>
+                  </Tooltip>
+                )}
+                {row.isDisabled ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          aria-label={t('hr:workforce.reEnableUser')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateUser(row.id, { isDisabled: false });
+                          }}
+                          className="text-zinc-400 hover:text-praetor transition-colors p-2 rounded-lg"
+                        >
+                          <i className="fa-solid fa-rotate-left"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('hr:workforce.reEnableUser')}</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          aria-label={t('hr:workforce.disableUser')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateUser(row.id, { isDisabled: true });
+                          }}
+                          disabled={row.id === currentUserId}
+                          className="text-amber-700 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
+                        >
+                          <i className="fa-solid fa-ban"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('hr:workforce.disableUser')}</TooltipContent>
+                  </Tooltip>
+                )}
+              </>
+            )}
+            {canDeleteUsers && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      aria-label={t('hr:workforce.deleteUser')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(row);
+                      }}
+                      disabled={row.id === currentUserId}
+                      className="text-zinc-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('hr:workforce.deleteUser')}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -739,19 +1003,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
       <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.deleteUser')}</h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <h3 className="text-lg font-semibold text-zinc-800">
+                {t('hr:workforce.deleteUser')}
+              </h3>
+              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
                 {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -766,21 +1032,113 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       </Modal>
 
+      <Dialog
+        open={!!authMethodUser}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeAuthMethodDialog();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('hr:workforce.authMethod.changeAction')}</DialogTitle>
+            <DialogDescription>
+              {t('hr:workforce.authMethod.description', { name: authMethodUser?.name })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                {t('hr:workforce.authMethod.methodLabel')}
+              </label>
+              <Select
+                value={authMethodDraft}
+                onValueChange={(value) => {
+                  const next = value as UserAuthMethod;
+                  setAuthMethodDraft(next);
+                  setAuthProviderDraft('');
+                  setAuthMethodError('');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {authMethodOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isSsoAuthMethodDraft && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {t('hr:workforce.authMethod.providerLabel')}
+                </label>
+                <Select
+                  value={authProviderDraft || undefined}
+                  onValueChange={(value) => {
+                    setAuthProviderDraft(value);
+                    setAuthMethodError('');
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('hr:workforce.authMethod.providerPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {providerOptions.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {providerOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('hr:workforce.authMethod.noProviders')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {authMethodError && <p className="text-sm text-destructive">{authMethodError}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeAuthMethodDialog}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button type="button" onClick={saveAuthMethod} disabled={isSavingAuthMethod}>
+              {isSavingAuthMethod ? t('common:buttons.saving') : t('common:buttons.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit User Modal */}
       <Modal isOpen={!!editingUser} onClose={closeEditModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+              <div className="size-10 bg-zinc-100 rounded-full flex items-center justify-center">
                 <i className="fa-solid fa-user-pen text-praetor"></i>
               </div>
-              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.editUser')}</h3>
+              <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workforce.editUser')}</h3>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.name')}
                   </label>
                   <input
@@ -792,8 +1150,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
                       }
                     }}
-                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.firstName ? 'border-red-400' : 'border-slate-200'
+                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.firstName ? 'border-red-400' : 'border-zinc-200'
                     }`}
                   />
                   {editFormErrors.firstName && (
@@ -801,7 +1159,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.surname')}
                   </label>
                   <input
@@ -813,8 +1171,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, surname: '' }));
                       }
                     }}
-                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.surname ? 'border-red-400' : 'border-slate-200'
+                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.surname ? 'border-red-400' : 'border-zinc-200'
                     }`}
                   />
                   {editFormErrors.surname && (
@@ -824,7 +1182,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                   {t('common:labels.email')}
                 </label>
                 <input
@@ -837,8 +1195,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
-                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                    editFormErrors.email ? 'border-red-400' : 'border-slate-200'
+                  className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                    editFormErrors.email ? 'border-red-400' : 'border-zinc-200'
                   }`}
                 />
                 {editFormErrors.email && (
@@ -851,10 +1209,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   {canEditAssignedRoles ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                           {t('hr:workforce.assignedRoles')}
                         </label>
-                        <div className="max-h-36 overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl p-2 space-y-1">
+                        <div className="max-h-36 overflow-y-auto bg-zinc-50 border border-zinc-200 rounded-xl p-2 space-y-1">
                           {roles
                             .slice()
                             .sort((a, b) => a.name.localeCompare(b.name))
@@ -882,12 +1240,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                         });
                                       }}
                                     />
-                                    <span className="text-sm font-semibold text-slate-700 truncate">
+                                    <span className="text-sm font-semibold text-zinc-700 truncate">
                                       {r.name}
                                     </span>
                                   </div>
                                   {isPrimary && (
-                                    <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded">
                                       {t('hr:workforce.primary')}
                                     </span>
                                   )}
@@ -895,12 +1253,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               );
                             })}
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-[10px] text-zinc-400 mt-1">
                           {t('hr:workforce.primaryRoleHelp')}
                         </p>
                       </div>
 
-                      <CustomSelect
+                      <SelectControl
                         label={t('hr:workforce.primaryRole')}
                         options={editAssignedRoleIds
                           .map((id) => roles.find((r) => r.id === id))
@@ -913,7 +1271,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       />
 
                       {isLoadingEditRoles && (
-                        <p className="text-[10px] text-slate-400 font-bold">
+                        <p className="text-[10px] text-zinc-400 font-bold">
                           {t('hr:workforce.loadingRoles')}
                         </p>
                       )}
@@ -923,7 +1281,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </div>
                   ) : (
                     <>
-                      <CustomSelect
+                      <SelectControl
                         label={t('hr:workforce.role')}
                         options={roleOptions}
                         value={editRole}
@@ -932,7 +1290,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         disabled={isEditingSelf}
                       />
                       {isEditingSelf && (
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-[10px] text-zinc-400 mt-1">
                           {t('hr:workforce.cannotChangeOwnRole')}
                         </p>
                       )}
@@ -943,11 +1301,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
               {canViewCosts && canUpdateUsers && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
                   </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                    <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
+                  <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                    <div className="w-16 flex items-center justify-center text-zinc-400 text-sm font-bold border-r border-zinc-200 py-2 bg-zinc-100/30">
                       {currency}
                     </div>
                     <ValidatedNumberInput
@@ -961,11 +1319,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
               )}
 
               {editingUser?.id !== currentUserId && (
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                   <div>
-                    <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
+                    <p className="text-sm font-bold text-zinc-700">{t('hr:workforce.disabled')}</p>
                   </div>
-                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} color="red" />
+                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} />
                 </div>
               )}
             </div>
@@ -973,14 +1331,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <div className="flex gap-3 pt-2">
               <button
                 onClick={closeEditModal}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={saveEdit}
                 disabled={!hasEditChanges}
-                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-zinc-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'}`}
               >
                 {t('hr:workforce.saveChanges')}
               </button>
@@ -992,16 +1350,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
       {canCreateUsers && (
         <Modal isOpen={isCreateModalOpen} onClose={closeCreateModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+              <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
+                <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
                   <i className="fa-solid fa-user-plus"></i>
                 </div>
                 {t('hr:workforce.createNewUser')}
               </h3>
               <button
                 onClick={closeCreateModal}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -1009,7 +1367,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                     {t('hr:workforce.name')}
                   </label>
                   <input
@@ -1019,23 +1377,23 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       const val = e.target.value;
                       setNewFirstName(val);
                       if (!usernameManuallyEdited.current) {
-                        const surname = newSurname.trim().toLowerCase().replace(/\s+/g, '');
-                        const first = val.trim().toLowerCase().replace(/\s+/g, '');
+                        const surname = sanitizeUsernamePart(newSurname);
+                        const first = sanitizeUsernamePart(val);
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.firstName || formErrors.general) {
-                        setFormErrors({ ...formErrors, firstName: '', general: '' });
+                        setFormErrors((prev) => ({ ...prev, firstName: '', general: '' }));
                       }
                     }}
                     placeholder="e.g. Alice"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                   />
                   {formErrors.firstName && (
                     <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.firstName}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                     {t('hr:workforce.surname')}
                   </label>
                   <input
@@ -1045,16 +1403,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       const val = e.target.value;
                       setNewSurname(val);
                       if (!usernameManuallyEdited.current) {
-                        const first = newFirstName.trim().toLowerCase().replace(/\s+/g, '');
-                        const surname = val.trim().toLowerCase().replace(/\s+/g, '');
+                        const first = sanitizeUsernamePart(newFirstName);
+                        const surname = sanitizeUsernamePart(val);
                         setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
                       }
                       if (formErrors.surname || formErrors.general) {
-                        setFormErrors({ ...formErrors, surname: '', general: '' });
+                        setFormErrors((prev) => ({ ...prev, surname: '', general: '' }));
                       }
                     }}
                     placeholder="e.g. Smith"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                   />
                   {formErrors.surname && (
                     <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
@@ -1062,7 +1420,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('common:labels.email')}
                 </label>
                 <input
@@ -1071,18 +1429,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   onChange={(e) => {
                     setNewEmail(e.target.value);
                     if (formErrors.email || formErrors.general) {
-                      setFormErrors({ ...formErrors, email: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, email: '', general: '' }));
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.email && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.email}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('hr:workforce.username')}
                 </label>
                 <input
@@ -1092,18 +1450,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     usernameManuallyEdited.current = true;
                     setNewUsername(e.target.value);
                     if (formErrors.username || formErrors.general) {
-                      setFormErrors({ ...formErrors, username: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, username: '', general: '' }));
                     }
                   }}
                   placeholder="e.g. alice.smith"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.username && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.username}</p>
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
                   {t('hr:workforce.password')}
                 </label>
                 <input
@@ -1112,18 +1470,18 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   onChange={(e) => {
                     setNewPassword(e.target.value);
                     if (formErrors.password || formErrors.general) {
-                      setFormErrors({ ...formErrors, password: '', general: '' });
+                      setFormErrors((prev) => ({ ...prev, password: '', general: '' }));
                     }
                   }}
                   placeholder="Password"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.password && (
                   <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.password}</p>
                 )}
               </div>
               <div>
-                <CustomSelect
+                <SelectControl
                   label={t('hr:workforce.role')}
                   options={roleOptions}
                   value={newRole}
@@ -1138,13 +1496,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                  className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
                 >
                   {t('common:buttons.cancel')}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-slate-800 transition-colors active:scale-95"
+                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-zinc-800 transition-colors active:scale-95"
                 >
                   {t('common:buttons.add')}
                 </button>
@@ -1157,284 +1515,51 @@ const UserManagement: React.FC<UserManagementProps> = ({
       {/* Page header: search + add button */}
       <div className="flex justify-between items-center gap-4">
         <div className="relative flex-1">
-          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300 text-xs"></i>
           <input
             type="text"
             placeholder={t('hr:workforce.searchUsers')}
             value={userSearch}
-            onChange={(e) => {
-              setUserSearch(e.target.value);
-              setUsersCurrentPage(1);
-            }}
-            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
+            onChange={(e) => setUserSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
           />
         </div>
         {canCreateUsers && (
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('hr:workforce.addUser')}
-          </button>
+          <HeaderAddButton onClick={() => setIsCreateModalOpen(true)}>
+            {t('hr:workforce.addUser')}
+          </HeaderAddButton>
         )}
       </div>
 
-      <StandardTable
+      <StandardTable<User>
         title={t('hr:workforce.title')}
-        totalCount={usersFiltered.length}
-        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('common:labels.rowsPerPage')}:
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={usersRowsPerPage.toString()}
-                onChange={(val) => handleUsersRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('common:pagination.showing', {
-                  start: paginatedUsers.length > 0 ? usersStartIndex + 1 : 0,
-                  end: Math.min(usersStartIndex + usersRowsPerPage, usersFiltered.length),
-                  total: usersFiltered.length,
-                })}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setUsersCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={usersCurrentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: usersTotalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setUsersCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      usersCurrentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setUsersCurrentPage((prev) => Math.min(usersTotalPages, prev + 1))}
-                disabled={usersCurrentPage === usersTotalPages || usersTotalPages === 0}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          </>
+        data={usersFiltered}
+        columns={userColumns}
+        defaultRowsPerPage={5}
+        emptyState={noUsersFoundLabel}
+        rowClassName={(user) =>
+          user.isDisabled
+            ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-zinc-50'
+            : 'hover:bg-zinc-50'
         }
-      >
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('hr:workforce.user')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('hr:workforce.username')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('common:labels.email')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('hr:workforce.role')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('common:labels.status')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
-                {t('hr:workforce.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {paginatedUsers.map((user) => {
-              const canEdit = canUpdateUsers;
-              const { roleBadgeClass, roleIcon, roleName } = getRolePresentation(user);
-              const hasManagedTopManagerAssignments =
-                user.hasTopManagerRole || user.role === TOP_MANAGER_ROLE_ID;
-
-              return (
-                <tr
-                  key={user.id}
-                  onClick={() => canEdit && handleEdit(user)}
-                  className={`group hover:bg-slate-50 transition-colors ${
-                    user.isDisabled
-                      ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0'
-                      : ''
-                  } ${canEdit ? 'cursor-pointer' : ''}`}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">
-                        {user.avatarInitials}
-                      </div>
-                      <span className="font-bold text-slate-800">{user.name}</span>
-                      {user.id === currentUserId && (
-                        <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
-                          {t('hr:workforce.you')}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-slate-600 font-mono">{user.username}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {user.email ? (
-                      <span className="text-sm font-medium text-slate-600 break-all">
-                        {user.email}
-                      </span>
-                    ) : (
-                      <span className="text-sm font-medium text-slate-400">{emptyEmailLabel}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
-                    >
-                      <i className={`fa-solid ${roleIcon}`}></i>
-                      {roleName}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge
-                      type={user.isDisabled ? 'disabled' : 'active'}
-                      label={getUserStatusLabel(user)}
-                    />
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {canManageAssignments && !hasManagedTopManagerAssignments && (
-                        <Tooltip label={t('hr:workforce.manageAssignments')}>
-                          {() => (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openAssignments(user.id);
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                            >
-                              <i className="fa-solid fa-link"></i>
-                            </button>
-                          )}
-                        </Tooltip>
-                      )}
-                      {canUpdateUsers && (
-                        <>
-                          <Tooltip label={t('hr:workforce.editUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(user);
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-user-pen"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                          {user.isDisabled ? (
-                            <Tooltip label={t('hr:workforce.reEnableUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUpdateUser(user.id, { isDisabled: false });
-                                  }}
-                                  className="text-slate-400 hover:text-praetor transition-colors p-2 rounded-lg"
-                                >
-                                  <i className="fa-solid fa-rotate-left"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                          ) : (
-                            <Tooltip label={t('hr:workforce.disableUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUpdateUser(user.id, { isDisabled: true });
-                                  }}
-                                  disabled={user.id === currentUserId}
-                                  className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
-                                >
-                                  <i className="fa-solid fa-ban"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                          )}
-                        </>
-                      )}
-                      {canDeleteUsers && (
-                        <Tooltip label={t('hr:workforce.deleteUser')}>
-                          {() => (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmDelete(user);
-                              }}
-                              disabled={user.id === currentUserId}
-                              className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          )}
-                        </Tooltip>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {paginatedUsers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
-                  {noUsersFoundLabel}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
+        onRowClick={canUpdateUsers ? handleEdit : undefined}
+      />
 
       {/* Assignment Modal */}
       <Modal
         isOpen={!!managingUserId}
         onClose={closeAssignments}
         zIndex={50}
-        backdropClass="bg-slate-900/50 backdrop-blur-sm"
+        backdropClass="bg-zinc-900/50 backdrop-blur-sm"
       >
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-            <h3 className="font-bold text-lg text-slate-800">
+          <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+            <h3 className="font-semibold text-lg text-zinc-800">
               {t('hr:workforce.manageAccess', { name: managingUser?.name })}
             </h3>
             <button
               onClick={closeAssignments}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-zinc-400 hover:text-zinc-600 transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -1448,21 +1573,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <CustomSelect
+                  <SelectControl
                     options={clientFilterOptions}
                     value={filterClientId}
                     onChange={(val) => setFilterClientId(val as string)}
                     placeholder={t('hr:workforce.filterByClient')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                   />
-                  <CustomSelect
+                  <SelectControl
                     options={projectFilterOptions}
                     value={filterProjectId}
                     onChange={(val) => setFilterProjectId(val as string)}
                     placeholder={t('hr:workforce.filterByProject')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
                     disabled={projectFilterOptions.length === 1}
                   />
                 </div>
@@ -1472,12 +1597,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 >
                   {/* Clients Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                           {t('hr:workforce.clients')}
                         </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                           {assignments.clientIds.length}
                         </span>
                       </div>
@@ -1486,7 +1611,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder={t('hr:workforce.searchClients')}
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1495,8 +1620,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={client.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.clientIds.includes(client.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-300'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -1506,21 +1631,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               onChange={() => toggleAssignment('client', client.id)}
                               className="sr-only peer"
                             />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                               <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                className={`size-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
                             </div>
                           </div>
                           <span
-                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                           >
                             {client.name}
                           </span>
                         </label>
                       ))}
                       {clients.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
+                        <p className="text-xs text-zinc-400 italic">
                           {t('hr:workforce.noClientsFound')}
                         </p>
                       )}
@@ -1529,12 +1654,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {/* Projects Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                           Projects
                         </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                           {assignments.projectIds.length}
                         </span>
                       </div>
@@ -1543,7 +1668,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder="Search projects..."
                         value={projectSearch}
                         onChange={(e) => setProjectSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1552,8 +1677,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={project.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.projectIds.includes(project.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-300'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -1563,19 +1688,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               onChange={() => toggleAssignment('project', project.id)}
                               className="sr-only peer"
                             />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                               <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                className={`size-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
                             </div>
                           </div>
                           <div className="flex flex-col">
                             <span
-                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                             >
                               {project.name}
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-zinc-400">
                               {clients.find((c) => c.id === project.clientId)?.name ||
                                 t('hr:workforce.unknownClient')}
                             </span>
@@ -1583,7 +1708,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         </label>
                       ))}
                       {projects.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
+                        <p className="text-xs text-zinc-400 italic">
                           {t('hr:workforce.noProjectsFound')}
                         </p>
                       )}
@@ -1592,12 +1717,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {canManageAssignments && (
                     <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                          <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
                             Tasks
                           </h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                          <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
                             {assignments.taskIds.length}
                           </span>
                         </div>
@@ -1606,7 +1731,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           placeholder="Search tasks..."
                           value={taskSearch}
                           onChange={(e) => setTaskSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1617,8 +1742,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               key={task.id}
                               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                                 assignments.taskIds.includes(task.id)
-                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                                  ? 'bg-zinc-50 border-zinc-300 shadow-sm'
+                                  : 'bg-white border-zinc-200 hover:border-zinc-300'
                               }`}
                             >
                               <div className="relative flex items-center justify-center shrink-0">
@@ -1628,19 +1753,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                   onChange={() => toggleAssignment('task', task.id)}
                                   className="sr-only peer"
                                 />
-                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                                   <div
-                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                    className={`size-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                                   ></div>
                                 </div>
                               </div>
                               <div className="flex flex-col">
                                 <span
-                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
                                 >
                                   {task.name}
                                 </span>
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[10px] text-zinc-400">
                                   {project?.name || t('hr:workforce.unknownProject')}
                                 </span>
                               </div>
@@ -1648,7 +1773,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           );
                         })}
                         {tasks.length === 0 && (
-                          <p className="text-xs text-slate-400 italic">
+                          <p className="text-xs text-zinc-400 italic">
                             {t('hr:workforce.noTasksFound')}
                           </p>
                         )}
@@ -1660,17 +1785,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
             )}
           </div>
 
-          <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+          <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
             <button
               onClick={closeAssignments}
-              className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
+              className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
               onClick={saveAssignments}
               disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
+              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200' : 'bg-praetor text-white hover:bg-zinc-800'}`}
             >
               {t('hr:workforce.saveAssignments')}
             </button>

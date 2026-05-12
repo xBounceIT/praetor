@@ -13,7 +13,7 @@ const logger = createChildLogger({ module: 'db' });
 //     and DB-readiness `SELECT 1` via the `query` helper below before the app starts;
 //   - the demo-seed scripts (`db/demoSeed.ts`, `scripts/seed-demo.ts`) and the legacy
 //     `db/add_*.ts` artifacts can issue raw parameterized queries via `query` below;
-//   - `routes/reports.ts` can build a separate `drizzle(pool, …)` instance with a query-
+//   - `routes/reports.ts` can build a separate `drizzle(pool, ...)` instance with a query-
 //     count `logger`, so per-request dataset budgets stay enforced.
 // Application repository code goes through the shared `db` from `db/drizzle.ts`.
 const pool = new Pool(createDbPoolConfig());

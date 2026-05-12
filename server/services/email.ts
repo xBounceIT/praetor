@@ -12,7 +12,7 @@ export type EmailConfigInput = Partial<Omit<emailRepo.EmailConfig, 'smtpPassword
 class EmailService {
   // Per-instance cache, only invalidated by `saveConfig`. `ensureReady` populates it on first
   // miss; subsequent reads are sticky until `saveConfig` overwrites it. External DB mutation or
-  // multi-instance deployments would see stale config until restart — fine for single-instance
+  // multi-instance deployments would see stale config until restart - fine for single-instance
   // Praetor today, since writes flow through `saveConfig`.
   private config: emailRepo.EmailConfig | null;
 

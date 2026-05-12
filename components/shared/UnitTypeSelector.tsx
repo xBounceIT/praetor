@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { SupplierUnitType } from '../../types';
-import CustomSelect from './CustomSelect';
+import SelectControl from './SelectControl';
 
 interface UnitTypeSelectorProps {
   value: SupplierUnitType;
@@ -23,7 +23,7 @@ const UnitTypeSelector: React.FC<UnitTypeSelectorProps> = ({
 
   if (isSupply) {
     return (
-      <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+      <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
         {quantity === 1 ? t(`${i18nPrefix}.unit`) : t(`${i18nPrefix}.units`)}
       </span>
     );
@@ -36,14 +36,14 @@ const UnitTypeSelector: React.FC<UnitTypeSelectorProps> = ({
   ];
 
   return (
-    <CustomSelect
+    <SelectControl
       options={unitOptions}
       value={value}
       onChange={(val) => onChange(val as SupplierUnitType)}
       disabled={disabled}
       searchable={false}
       className="shrink-0"
-      buttonClassName="px-2 py-2 bg-white border border-slate-200 rounded-lg text-xs min-w-[4rem]"
+      buttonClassName="p-2 bg-white border border-zinc-200 rounded-lg text-xs min-w-[4rem]"
     />
   );
 };

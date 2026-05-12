@@ -3,7 +3,7 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { parseDbNumber, toDbText } from '../utils/parse.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
 
-// Raw SQL via `executeRows` bypasses Drizzle's typed null-handling — `toDbText` (trim + ''
+// Raw SQL via `executeRows` bypasses Drizzle's typed null-handling - `toDbText` (trim + ''
 // fallback) is applied manually so stray whitespace doesn't render awkward cells in the UI.
 
 type ProjectRow = {
@@ -49,7 +49,7 @@ export const getTimesheetsSection = async (
   const { fromDate, toDate, allowedTimesheetUserIds, topLimit } = opts;
   // Date-range filter shared by every query; binds 2 or 3 positional params depending on whether
   // user-scoping is active. Top-N queries append a LIMIT param after this clause's params.
-  // `sql.param()` forces the array to bind as a single Postgres parameter — without it, a JS
+  // `sql.param()` forces the array to bind as a single Postgres parameter - without it, a JS
   // array embedded directly in a `sql` template would be expanded into `(item1, item2, ...)`,
   // which doesn't match the `ANY($N)` shape we want.
   const baseWhere = allowedTimesheetUserIds
@@ -278,7 +278,7 @@ export const getProjectsSection = async (
 
   // Per-project hours come from time_entries; user/project scoping toggles a JOIN and two
   // optional WHERE-clause filters. The promise stays null when the viewer can't see any
-  // timesheets — caller falls back to [].
+  // timesheets - caller falls back to [].
   const projectScopeJoin = canViewAllProjects
     ? sql``
     : sql`JOIN user_projects up ON up.project_id = te.project_id`;

@@ -22,13 +22,13 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD },
   { id: 'timesheets.recurring', actions: CRUD },
-  { id: 'timesheets.tracker_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'timesheets.tracker_all', actions: CRUD, isScope: true },
 
   // CRM
   { id: 'crm.clients', actions: CRUD },
-  { id: 'crm.clients_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'crm.clients_all', actions: CRUD, isScope: true },
   { id: 'crm.suppliers', actions: CRUD },
-  { id: 'crm.suppliers_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'crm.suppliers_all', actions: CRUD, isScope: true },
 
   // Sales
   { id: 'sales.client_quotes', actions: CRUD },
@@ -46,9 +46,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Projects
   { id: 'projects.manage', actions: CRUD },
-  { id: 'projects.manage_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'projects.manage_all', actions: CRUD, isScope: true },
   { id: 'projects.tasks', actions: CRUD },
-  { id: 'projects.tasks_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'projects.tasks_all', actions: CRUD, isScope: true },
   { id: 'projects.assignments', actions: ['update'] },
 
   // HR
@@ -57,7 +57,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.costs', actions: VIEW_UPDATE },
   { id: 'hr.employee_assignments', actions: ['update'] },
   { id: 'hr.work_units', actions: CRUD },
-  { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'hr.work_units_all', actions: CRUD, isScope: true },
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'] },
@@ -206,7 +206,7 @@ export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
-  // Auth hot path — parallelize the role and permissions lookups.
+  // Auth hot path - parallelize the role and permissions lookups.
   const [role, rawExplicit] = await Promise.all([
     rolesRepo.findById(roleId),
     rolesRepo.listExplicitPermissions(roleId),
@@ -230,6 +230,30 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
 
 export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>
   !!permissions?.includes(permission);
+
+export const scopeResourceFor = (resource: PermissionResource): PermissionResource | undefined => {
+  const scoped = `${resource}_all`;
+  return PERMISSION_DEFINITIONS.some((definition) => definition.id === scoped) ? scoped : undefined;
+};
+
+export const equivalentPermissionsFor = (
+  resource: PermissionResource,
+  action: PermissionAction,
+): Permission[] => {
+  const permissions = [buildPermission(resource, action)];
+  const scopeResource = scopeResourceFor(resource);
+  if (scopeResource) permissions.push(buildPermission(scopeResource, action));
+  return permissions;
+};
+
+export const hasAnyPermission = (permissions: string[] | undefined, required: string[]) =>
+  required.some((permission) => permissions?.includes(permission));
+
+export const hasScopedActionPermission = (
+  permissions: string[] | undefined,
+  resource: PermissionResource,
+  action: PermissionAction,
+) => hasAnyPermission(permissions, equivalentPermissionsFor(resource, action));
 
 export const requestHasPermission = (
   request: { user?: { permissions?: string[] } },

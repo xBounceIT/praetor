@@ -1,8 +1,12 @@
 export type UserRole = string;
 export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
+export type StoredBillingType = 'retainer' | 'time_and_materials';
+export type BillingType = StoredBillingType | 'mixed';
+export type BillingFrequency = 'monthly' | 'one_time';
 
 export interface RoleSummary {
   id: string;
@@ -26,6 +30,9 @@ export interface User {
   costPerHour?: number;
   isDisabled?: boolean;
   employeeType?: EmployeeType;
+  authMethod?: UserAuthMethod;
+  authProviderId?: string | null;
+  authProviderName?: string | null;
 }
 
 export interface Role {
@@ -145,6 +152,8 @@ export interface Project {
   isDisabled?: boolean;
   createdAt?: number;
   orderId?: string;
+  billingType?: BillingType;
+  billingFrequency?: BillingFrequency;
 }
 
 export interface ProjectTask {
@@ -158,10 +167,13 @@ export interface ProjectTask {
   recurrenceEnd?: string;
   recurrenceDuration?: number;
   expectedEffort?: number;
+  monthlyEffort?: number;
   revenue?: number;
   notes?: string;
   isDisabled?: boolean;
   createdAt?: number;
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
 }
 
 export interface TimeEntry {
@@ -199,6 +211,50 @@ export interface LdapConfig {
   roleMappings: LdapRoleMapping[];
   tlsCaCertificate: string;
 }
+
+export interface LdapTestResponse {
+  success: boolean;
+  authenticated: boolean;
+  username: string;
+  message: string;
+  userDn?: string;
+  groups: string[];
+  roleIds: string[];
+}
+
+export type SsoProtocol = 'oidc' | 'saml';
+
+export interface SsoRoleMapping {
+  externalGroup: string;
+  role: string;
+}
+
+export interface SsoProvider {
+  id: string;
+  protocol: SsoProtocol;
+  slug: string;
+  name: string;
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  metadataUrl: string;
+  metadataXml: string;
+  entryPoint: string;
+  idpIssuer: string;
+  idpCert: string;
+  spIssuer: string;
+  privateKey: string;
+  publicCert: string;
+  usernameAttribute: string;
+  nameAttribute: string;
+  emailAttribute: string;
+  groupsAttribute: string;
+  roleMappings: SsoRoleMapping[];
+}
+
+export type PublicSsoProvider = Pick<SsoProvider, 'protocol' | 'slug' | 'name'>;
 
 export type SmtpEncryption = 'insecure' | 'ssl' | 'tls';
 
@@ -472,6 +528,7 @@ export type View =
   | 'reports/ai-reporting'
   // Standalone
   | 'settings'
+  | 'docs'
   | 'docs/api'
   | 'docs/frontend';
 
@@ -623,6 +680,16 @@ export interface SupplierQuoteVersionRow {
 
 export interface SupplierQuoteVersion extends SupplierQuoteVersionRow {
   snapshot: SupplierQuoteVersionSnapshot;
+}
+
+export interface SupplierQuoteAttachment {
+  id: string;
+  quoteId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedByUserId: string | null;
+  createdAt: number;
 }
 
 export interface SupplierSaleOrderItem {
