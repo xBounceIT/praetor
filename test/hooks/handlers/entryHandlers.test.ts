@@ -163,11 +163,13 @@ describe('makeEntryHandlers', () => {
   const lastCreateArg = <K extends string>(key: K) =>
     (apiMocks.entriesCreate.mock.calls.at(-1)?.[0] as Record<K, unknown>)[key];
 
-  // Regression: App.tsx wraps makeEntryHandlers in useMemo with
-  // [currentUser, viewingUserId] as deps. If a future refactor drops a dep,
-  // the factory will not be rebuilt and the closure will use stale values.
-  // These tests reproduce that memoization pattern so a regression breaks the
-  // test here instead of only in production.
+  // These tests verify that handlers see fresh user-identity values when the
+  // factory is rebuilt under correct memoization. They don't directly mirror
+  // App.tsx's `[currentUser, viewingUserId]` dep array — each case varies
+  // only one of the two — but together they cover both axes of the invariant.
+  // A drop of either dep in App.tsx would still leak through if the dropped
+  // value happened to be the constant one in the matching test, so these are
+  // best-effort coverage rather than a hard guarantee.
   test('handlers see the latest viewingUserId after a state change', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: `e-${Date.now()}`, createdAt: Date.now(), ...(data as object) }),
