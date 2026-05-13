@@ -112,7 +112,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
           <div className="flex justify-between">
             <span className="text-sm font-medium text-muted-foreground">{taxRow.label}</span>
             <span className="text-sm font-semibold text-foreground">
-              {taxRow.amount.toFixed(2)} {currency}
+              {formatAmount(taxRow.amount)} {currency}
             </span>
           </div>
         )}
