@@ -231,7 +231,8 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
         c.address_country, c.address_state, c.address_cap, c.address_province,
         c.address_civic_number, c.address_line,
         c.ateco_code, c.website, c.sector, c.number_of_employees,
-        c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
+        c.revenue, c.fiscal_code, c.vat_number, c.tax_code,
+        c.office_count_range, c.created_at,
         NULL::numeric as total_sent_quotes,
         NULL::numeric as total_accepted_orders
       FROM clients c

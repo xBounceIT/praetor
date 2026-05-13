@@ -208,6 +208,19 @@ describe('list', () => {
     expect(exec.calls[0].params).toContain('u-1');
     expect(result[0].totalSentQuotes).toBeUndefined();
   });
+
+  test('scoped list selects vat_number and tax_code (no null regression for non-admin users)', async () => {
+    // Regression: the scoped branch of list() enumerates columns explicitly (not SELECT c.*),
+    // so adding vat_number/tax_code to the schema also requires adding them to this SELECT.
+    // Without them, mapClientRow would always read `undefined` and return null for both
+    // identifiers in /api/clients responses for non-admin users.
+    exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
+    const result = await clientsRepo.list({ canViewAllClients: false, userId: 'u-1' }, testDb);
+    expect(exec.calls[0].sql).toContain('c.vat_number');
+    expect(exec.calls[0].sql).toContain('c.tax_code');
+    expect(result[0].vatNumber).toBe('IT01234567890');
+    expect(result[0].taxCode).toBe('RSSMRO80A01H501Z');
+  });
 });
 
 describe('listByIds', () => {
