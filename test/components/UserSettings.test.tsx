@@ -198,6 +198,27 @@ describe('<UserSettings /> Security tab', () => {
     }
   });
 
+  test('rejects a new password identical to the current password without calling the API', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('security.title'));
+
+    const samePassword = 'same-pw-1234';
+    fireEvent.change(screen.getByLabelText('password.currentPassword'), {
+      target: { value: samePassword },
+    });
+    fireEvent.change(screen.getByLabelText('password.newPassword'), {
+      target: { value: samePassword },
+    });
+    fireEvent.change(screen.getByLabelText('password.confirmNewPassword'), {
+      target: { value: samePassword },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /password.updatePassword/ }));
+
+    expect(await screen.findByText('password.sameAsCurrent')).toBeInTheDocument();
+    expect(onUpdatePassword).not.toHaveBeenCalled();
+  });
+
   test('finishes token load when the user leaves and returns to Security before it resolves', async () => {
     let resolveToken!: (value: typeof tokenMetadata & { token: string }) => void;
     const onGetPersonalAccessToken = mock(
