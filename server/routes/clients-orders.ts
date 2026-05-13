@@ -783,7 +783,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
-      const existingOrder = await clientsOrdersRepo.findForUpdate(idResult.value);
+      const existingOrder = await clientsOrdersRepo.findExisting(idResult.value);
       if (!existingOrder) {
         return reply.code(404).send({ error: 'Order not found' });
       }
@@ -1136,7 +1136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const [current, version] = await Promise.all([
-        clientsOrdersRepo.findForUpdate(idResult.value),
+        clientsOrdersRepo.findExisting(idResult.value),
         orderVersionsRepo.findById(idResult.value, versionIdResult.value),
       ]);
 

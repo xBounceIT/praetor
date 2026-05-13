@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
@@ -127,7 +127,11 @@ export type ExistingClientOrder = {
   notes: string | null;
 };
 
-export const findForUpdate = async (
+// Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
+// (not `findForUpdate`) because it does not acquire a row lock - callers run the read,
+// validate, and then issue a separate UPDATE outside any locking scope. If you need true
+// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+export const findExisting = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<ExistingClientOrder | null> => {
@@ -221,7 +225,7 @@ export const findItemsForOrder = async (
     .select()
     .from(saleItems)
     .where(eq(saleItems.saleId, orderId))
-    .orderBy(saleItems.createdAt);
+    .orderBy(asc(saleItems.createdAt), asc(saleItems.id));
   return rows.map(mapItem);
 };
 

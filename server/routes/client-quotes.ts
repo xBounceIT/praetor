@@ -693,7 +693,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
       }
 
-      const current = await clientQuotesRepo.findCurrentForUpdate(idResult.value);
+      const current = await clientQuotesRepo.findCurrent(idResult.value);
       if (!current) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
@@ -1036,7 +1036,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Same read-only rules as PUT.
       const [linkedOfferId, current, nonDraftLinkedSale, version] = await Promise.all([
         clientQuotesRepo.findLinkedOfferId(idResult.value),
-        clientQuotesRepo.findCurrentForUpdate(idResult.value),
+        clientQuotesRepo.findCurrent(idResult.value),
         clientQuotesRepo.findNonDraftLinkedSale(idResult.value),
         quoteVersionsRepo.findById(idResult.value, versionIdResult.value),
       ]);

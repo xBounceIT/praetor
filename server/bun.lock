@@ -13,6 +13,7 @@
         "@modelcontextprotocol/node": "^2.0.0-alpha.2",
         "@modelcontextprotocol/server": "^2.0.0-alpha.2",
         "@node-saml/node-saml": "^5.1.0",
+        "ajv-formats": "^3.0.1",
         "bcryptjs": "^3.0.3",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",

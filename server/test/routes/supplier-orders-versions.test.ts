@@ -33,7 +33,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const soExistsByIdMock = mock();
-const soFindExistingForUpdateMock = mock();
+const soFindExistingMock = mock();
 const soFindLinkedInvoiceIdMock = mock();
 const soFindFullForSnapshotMock = mock();
 const soFindItemsForOrderMock = mock();
@@ -73,7 +73,7 @@ beforeAll(async () => {
   mock.module('../../repositories/supplierOrdersRepo.ts', () => ({
     ...supplierOrdersRepoSnap,
     existsById: soExistsByIdMock,
-    findExistingForUpdate: soFindExistingForUpdateMock,
+    findExisting: soFindExistingMock,
     findLinkedInvoiceId: soFindLinkedInvoiceIdMock,
     findFullForSnapshot: soFindFullForSnapshotMock,
     findItemsForOrder: soFindItemsForOrderMock,
@@ -191,7 +191,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   soExistsByIdMock,
-  soFindExistingForUpdateMock,
+  soFindExistingMock,
   soFindLinkedInvoiceIdMock,
   soFindFullForSnapshotMock,
   soFindItemsForOrderMock,
@@ -310,7 +310,7 @@ describe('GET /api/accounting/supplier-orders/:id/versions/:versionId', () => {
 describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingForUpdateMock.mockResolvedValue({
+    soFindExistingMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -389,7 +389,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('404 when current order does not exist', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingForUpdateMock.mockResolvedValue(null);
+    soFindExistingMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -403,7 +403,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('409 when order is non-draft', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingForUpdateMock.mockResolvedValue({
+    soFindExistingMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -453,7 +453,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('404 when version not found (and no cross-order leak)', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingForUpdateMock.mockResolvedValue({
+    soFindExistingMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -511,7 +511,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
 describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', () => {
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
-    soFindExistingForUpdateMock.mockResolvedValue({
+    soFindExistingMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -540,7 +540,7 @@ describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', (
   });
 
   test('PUT with id-only rename does NOT snapshot (no content change)', async () => {
-    soFindExistingForUpdateMock.mockResolvedValue({
+    soFindExistingMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',

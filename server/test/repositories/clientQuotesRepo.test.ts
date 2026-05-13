@@ -96,22 +96,22 @@ describe('existsById / findIdConflict', () => {
   });
 });
 
-describe('findCurrentForUpdate', () => {
+describe('findCurrent', () => {
   test('returns parsed status and discount fields', async () => {
     exec.enqueue({ rows: [['sent', '15.5', 'currency']] });
-    const result = await clientQuotesRepo.findCurrentForUpdate('cq-1', testDb);
+    const result = await clientQuotesRepo.findCurrent('cq-1', testDb);
     expect(result).toEqual({ status: 'sent', discount: 15.5, discountType: 'currency' });
   });
 
   test('defaults discountType to percentage when null', async () => {
     exec.enqueue({ rows: [['draft', 0, null]] });
-    const result = await clientQuotesRepo.findCurrentForUpdate('cq-1', testDb);
+    const result = await clientQuotesRepo.findCurrent('cq-1', testDb);
     expect(result?.discountType).toBe('percentage');
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await clientQuotesRepo.findCurrentForUpdate('cq-x', testDb)).toBeNull();
+    expect(await clientQuotesRepo.findCurrent('cq-x', testDb)).toBeNull();
   });
 });
 
@@ -356,6 +356,14 @@ describe('findItemsForQuote', () => {
     expect(exec.calls[0].params).toContain('cq-1');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('qi-1');
+  });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await clientQuotesRepo.findItemsForQuote('cq-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
   });
 });
 

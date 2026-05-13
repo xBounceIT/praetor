@@ -658,7 +658,7 @@ describe('PUT /api/clients/:id', () => {
 });
 
 describe('DELETE /api/clients/:id', () => {
-  test('200 happy + audit', async () => {
+  test('204 happy + audit', async () => {
     deleteClientByIdMock.mockResolvedValue({ id: 'c-1', name: 'ACME', clientCode: 'ACME-01' });
 
     const res = await testApp.inject({
@@ -667,14 +667,14 @@ describe('DELETE /api/clients/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Client deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.deleted', entityId: 'c-1' }),
     );
   });
 
-  test('200 crm.clients_all.delete bypasses assigned-client check', async () => {
+  test('204 crm.clients_all.delete bypasses assigned-client check', async () => {
     getRolePermissionsMock.mockResolvedValue(['crm.clients_all.delete']);
     isClientAssignedToUserMock.mockResolvedValue(false);
     deleteClientByIdMock.mockResolvedValue({ id: 'c-1', name: 'ACME', clientCode: 'ACME-01' });
@@ -685,7 +685,7 @@ describe('DELETE /api/clients/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(204);
     expect(isClientAssignedToUserMock).not.toHaveBeenCalled();
     expect(deleteClientByIdMock).toHaveBeenCalledWith('c-1');
   });
@@ -913,7 +913,7 @@ describe('PUT /api/clients/profile-options/:category/:id', () => {
 });
 
 describe('DELETE /api/clients/profile-options/:category/:id', () => {
-  test('200 deletes profile option when unused', async () => {
+  test('204 deletes profile option when unused', async () => {
     cpoFindByCategoryAndIdMock.mockResolvedValue({ id: 'cpo-1', value: 'Tech' });
     cpoGetUsageCountMock.mockResolvedValue(0);
     cpoDeleteByIdMock.mockResolvedValue(true);
@@ -924,8 +924,8 @@ describe('DELETE /api/clients/profile-options/:category/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Profile option deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.profile_option.deleted' }),
     );

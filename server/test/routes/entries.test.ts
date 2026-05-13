@@ -793,7 +793,7 @@ describe('PUT /api/entries/:id', () => {
 });
 
 describe('DELETE /api/entries/:id', () => {
-  test('200 own entry', async () => {
+  test('204 own entry', async () => {
     entriesFindOwnerMock.mockResolvedValue('u1');
     entriesDeleteByIdMock.mockResolvedValue(undefined);
 
@@ -803,8 +803,8 @@ describe('DELETE /api/entries/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Entry deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(entriesDeleteByIdMock).toHaveBeenCalledWith('te-1');
   });
 
@@ -1271,7 +1271,7 @@ describe('POST /api/entries/recurring/generate', () => {
 });
 
 describe('DELETE /api/entries (bulk)', () => {
-  test('200 manager-scoped restricts to viewer', async () => {
+  test('204 manager-scoped restricts to viewer', async () => {
     entriesBulkDeleteMock.mockResolvedValue(3);
 
     const res = await testApp.inject({
@@ -1280,8 +1280,8 @@ describe('DELETE /api/entries (bulk)', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 3 entries' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: 'p1',
@@ -1292,7 +1292,7 @@ describe('DELETE /api/entries (bulk)', () => {
     );
   });
 
-  test('200 admin scope deletes across all users', async () => {
+  test('204 admin scope deletes across all users', async () => {
     getRolePermissionsMock.mockResolvedValue([
       ...TRACKER_ALL_PERMS,
       'timesheets.tracker_all.delete',
@@ -1305,13 +1305,13 @@ describe('DELETE /api/entries (bulk)', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(204);
     expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
       expect.objectContaining({ restrictToManagerScopeOf: undefined }),
     );
   });
 
-  test('200 futureOnly=true sets fromDate to today', async () => {
+  test('204 futureOnly=true sets fromDate to today', async () => {
     entriesBulkDeleteMock.mockResolvedValue(1);
 
     const res = await testApp.inject({
@@ -1320,7 +1320,7 @@ describe('DELETE /api/entries (bulk)', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(204);
     expect(entriesBulkDeleteMock).toHaveBeenCalledTimes(1);
     const callArgs = entriesBulkDeleteMock.mock.calls[0][0];
     expect(callArgs.fromDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -1349,7 +1349,7 @@ describe('DELETE /api/entries (bulk)', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
   });
 
-  test('200 with only timesheets.tracker_all.delete widens scope across users', async () => {
+  test('204 with only timesheets.tracker_all.delete widens scope across users', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.delete']);
     entriesBulkDeleteMock.mockResolvedValue(5);
 
@@ -1359,8 +1359,8 @@ describe('DELETE /api/entries (bulk)', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 5 entries' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: 'p1',
@@ -1370,7 +1370,7 @@ describe('DELETE /api/entries (bulk)', () => {
     );
   });
 
-  test('200 with only timesheets.recurring.delete stays restricted to actor', async () => {
+  test('204 with only timesheets.recurring.delete stays restricted to actor', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.recurring.delete']);
     entriesBulkDeleteMock.mockResolvedValue(2);
 
@@ -1380,8 +1380,8 @@ describe('DELETE /api/entries (bulk)', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Deleted 2 entries' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: 'p1',

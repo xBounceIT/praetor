@@ -445,7 +445,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const [existingOrder, idConflict] = await Promise.all([
-        supplierOrdersRepo.findExistingForUpdate(idResult.value),
+        supplierOrdersRepo.findExisting(idResult.value),
         nextIdValue
           ? supplierOrdersRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
@@ -704,7 +704,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const [linkedInvoiceId, current, version] = await Promise.all([
         supplierOrdersRepo.findLinkedInvoiceId(idResult.value),
-        supplierOrdersRepo.findExistingForUpdate(idResult.value),
+        supplierOrdersRepo.findExisting(idResult.value),
         supplierOrderVersionsRepo.findById(idResult.value, versionIdResult.value),
       ]);
 

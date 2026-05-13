@@ -72,10 +72,10 @@ describe('findById', () => {
   });
 });
 
-describe('findExistingForUpdate', () => {
+describe('findExisting', () => {
   test('returns mapped object with linkedQuoteId', async () => {
     exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'draft']] });
-    expect(await supplierOrdersRepo.findExistingForUpdate('so-1', testDb)).toEqual({
+    expect(await supplierOrdersRepo.findExisting('so-1', testDb)).toEqual({
       id: 'so-1',
       linkedQuoteId: 'q-1',
       supplierId: 's-1',
@@ -86,7 +86,7 @@ describe('findExistingForUpdate', () => {
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await supplierOrdersRepo.findExistingForUpdate('so-x', testDb)).toBeNull();
+    expect(await supplierOrdersRepo.findExisting('so-x', testDb)).toBeNull();
   });
 });
 
@@ -229,6 +229,14 @@ describe('findItemsForOrder', () => {
     expect(exec.calls[0].params).toContain('so-1');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('ssi-1');
+  });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierOrdersRepo.findItemsForOrder('so-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
   });
 });
 

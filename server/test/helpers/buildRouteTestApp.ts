@@ -1,13 +1,23 @@
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
+import { ajvFormatsPlugin, ajvFormatsPluginOptions } from '../../utils/ajv-formats.ts';
 
 // Why no `@fastify/rate-limit`: the plugin's onResponse hook double-writes after
 // `authMiddlewareMock` hijacks an early-401/403 reply. Decorating `rateLimit` as a no-op gives
 // route files the decorator they expect without that hook.
+//
+// AJV is wired with the same `ajv-formats` plugin/options as the real app (server/app.ts) so
+// route schemas using `format: 'date-time'` etc. validate identically under test.
 export const buildRouteTestApp = async (
   routePlugin: FastifyPluginAsync,
   prefix: string,
 ): Promise<FastifyInstance> => {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    ajv: {
+      customOptions: {},
+      plugins: [[ajvFormatsPlugin, ajvFormatsPluginOptions]],
+    },
+  });
   app.decorate('rateLimit', () => async () => {});
   await app.register(routePlugin, { prefix });
   await app.ready();

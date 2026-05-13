@@ -82,7 +82,7 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOfferIt
   const rows = await exec
     .select()
     .from(customerOfferItems)
-    .orderBy(asc(customerOfferItems.createdAt));
+    .orderBy(asc(customerOfferItems.createdAt), asc(customerOfferItems.id));
   return rows.map(mapItem);
 };
 
@@ -114,7 +114,11 @@ export type ExistingOffer = {
   status: string;
 };
 
-export const findForUpdate = async (
+// Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
+// (not `findForUpdate`) because it does not acquire a row lock - callers run the read,
+// validate, and then issue a separate UPDATE outside any locking scope. If you need true
+// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+export const findExisting = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<ExistingOffer | null> => {
@@ -184,7 +188,8 @@ export const findItemsForOffer = async (
   const rows = await exec
     .select()
     .from(customerOfferItems)
-    .where(eq(customerOfferItems.offerId, offerId));
+    .where(eq(customerOfferItems.offerId, offerId))
+    .orderBy(asc(customerOfferItems.createdAt), asc(customerOfferItems.id));
   return rows.map(mapItem);
 };
 

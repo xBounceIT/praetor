@@ -310,4 +310,12 @@ describe('findItemsForInvoice', () => {
     expect(exec.calls[0].params).toContain('INV-1');
     expect(result[0].id).toBe('inv-item-1');
   });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await invoicesRepo.findItemsForInvoice('INV-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
+  });
 });

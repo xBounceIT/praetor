@@ -343,12 +343,12 @@ describe('findIdConflict', () => {
   });
 });
 
-describe('findForUpdate', () => {
+describe('findExisting', () => {
   test('returns mapped existing order when found', async () => {
     exec.enqueue({
       rows: [['co-1', null, null, 'c-1', 'Acme', 'net30', '5', 'currency', 'draft', null]],
     });
-    const result = await repo.findForUpdate('co-1', testDb);
+    const result = await repo.findExisting('co-1', testDb);
     expect(result).toEqual({
       id: 'co-1',
       linkedQuoteId: null,
@@ -367,13 +367,13 @@ describe('findForUpdate', () => {
     exec.enqueue({
       rows: [['co-1', null, null, 'c-1', 'Acme', 'net30', '0', 'weird', 'draft', null]],
     });
-    const result = await repo.findForUpdate('co-1', testDb);
+    const result = await repo.findExisting('co-1', testDb);
     expect(result?.discountType).toBe('percentage');
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await repo.findForUpdate('co-x', testDb)).toBeNull();
+    expect(await repo.findExisting('co-x', testDb)).toBeNull();
   });
 });
 
@@ -400,6 +400,14 @@ describe('findItemsForOrder', () => {
     expect(exec.calls[0].params).toContain('co-1');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('si-1');
+  });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await repo.findItemsForOrder('co-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
   });
 });
 

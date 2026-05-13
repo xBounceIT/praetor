@@ -469,8 +469,8 @@ describe('DELETE /api/roles/:id', () => {
       headers: adminAuth(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Role deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(deleteRoleMock).toHaveBeenCalledWith('role-x');
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'role.deleted' }));
   });

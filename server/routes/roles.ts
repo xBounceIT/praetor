@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
-import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
@@ -273,7 +273,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete role',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -306,7 +306,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           targetLabel: roleRow.name,
         },
       });
-      return { message: 'Role deleted' };
+      return reply.code(204).send();
     },
   );
 

@@ -34,7 +34,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const coExistsByIdMock = mock();
-const coFindForUpdateMock = mock();
+const coFindExistingMock = mock();
 const coFindFullForSnapshotMock = mock();
 const coFindItemsForOrderMock = mock();
 const coFindIdConflictMock = mock();
@@ -77,7 +77,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
     existsById: coExistsByIdMock,
-    findForUpdate: coFindForUpdateMock,
+    findExisting: coFindExistingMock,
     findFullForSnapshot: coFindFullForSnapshotMock,
     findItemsForOrder: coFindItemsForOrderMock,
     findIdConflict: coFindIdConflictMock,
@@ -198,7 +198,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   coExistsByIdMock,
-  coFindForUpdateMock,
+  coFindExistingMock,
   coFindFullForSnapshotMock,
   coFindItemsForOrderMock,
   coFindIdConflictMock,
@@ -314,7 +314,7 @@ describe('GET /api/clients-orders/:id/versions/:versionId', () => {
 
 describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -382,7 +382,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   });
 
   test('404 when current order does not exist', async () => {
-    coFindForUpdateMock.mockResolvedValue(null);
+    coFindExistingMock.mockResolvedValue(null);
     ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
 
     const res = await testApp.inject({
@@ -397,7 +397,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   });
 
   test('409 when order has linkedOfferId', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: 'off-1',
@@ -423,7 +423,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   });
 
   test('409 when order has linkedQuoteId', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: 'q-1',
       linkedOfferId: null,
@@ -449,7 +449,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   });
 
   test('409 when order is non-draft', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -504,7 +504,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
   });
 
   test('404 when version not found (and no cross-order leak)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -582,7 +582,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
 
 describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -617,7 +617,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT with status-only update does NOT snapshot (no locked field changes)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -644,7 +644,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT on source-linked order does NOT snapshot (status-only edit)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: 'q-1',
       linkedOfferId: null,
@@ -670,7 +670,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT with field present but value unchanged does NOT snapshot', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -717,7 +717,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT changing only an item productCost snapshots (regression)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -764,7 +764,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT changing only an item unitType snapshots', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,
@@ -809,7 +809,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,

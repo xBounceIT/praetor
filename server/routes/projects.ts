@@ -327,7 +327,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete project',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardErrorResponses,
         },
       },
@@ -376,7 +376,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: deletedProject.clientId,
         },
       });
-      return { message: 'Project deleted' };
+      return reply.code(204).send();
     },
   );
 
