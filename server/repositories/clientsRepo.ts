@@ -91,21 +91,38 @@ const formatAddress = ({
     .join(', ');
 };
 
+// Safely coerce a raw column value to `string | null`. Anything that is not a string
+// becomes null, which is preferable to the legacy `as string | null` casts that could
+// surface `undefined` or non-string DB types as the literal `"undefined"` downstream.
+const stringOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+const parseCreatedAt = (value: unknown): number | undefined => {
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isFinite(t) ? t : undefined;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : undefined;
+  }
+  return undefined;
+};
+
 export const mapClientRow = (c: Record<string, unknown>): Client => {
-  const fiscalCode = (c.fiscal_code as string | null) || null;
-  const createdAt = c.created_at ? new Date(c.created_at as string).getTime() : undefined;
+  const fiscalCode = stringOrNull(c.fiscal_code);
+  const createdAt = parseCreatedAt(c.created_at);
   const contacts = parseContactsFromDb(c.contacts);
   const primary = contacts[0] ?? null;
 
-  const addressCountry = (c.address_country as string | null) || null;
-  const addressState = (c.address_state as string | null) || null;
-  const addressCap = (c.address_cap as string | null) || null;
-  const addressProvince = (c.address_province as string | null) || null;
-  const addressCivicNumber = (c.address_civic_number as string | null) || null;
-  const addressLine = (c.address_line as string | null) || null;
+  const addressCountry = stringOrNull(c.address_country);
+  const addressState = stringOrNull(c.address_state);
+  const addressCap = stringOrNull(c.address_cap);
+  const addressProvince = stringOrNull(c.address_province);
+  const addressCivicNumber = stringOrNull(c.address_civic_number);
+  const addressLine = stringOrNull(c.address_line);
 
   const address =
-    (c.address as string | null) ||
+    stringOrNull(c.address) ||
     formatAddress({
       civicNumber: addressCivicNumber,
       line: addressLine,
@@ -117,16 +134,16 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
     null;
 
   return {
-    id: c.id as string,
-    name: c.name as string,
-    description: (c.description as string | null) ?? null,
-    isDisabled: c.is_disabled as boolean,
-    type: c.type as string,
+    id: typeof c.id === 'string' ? c.id : '',
+    name: typeof c.name === 'string' ? c.name : '',
+    description: stringOrNull(c.description),
+    isDisabled: c.is_disabled === true,
+    type: typeof c.type === 'string' ? c.type : '',
     contacts,
-    contactName: (c.contact_name as string | null) || primary?.fullName || null,
-    clientCode: (c.client_code as string | null) ?? null,
-    email: (c.email as string | null) || primary?.email || null,
-    phone: (c.phone as string | null) || primary?.phone || null,
+    contactName: stringOrNull(c.contact_name) || primary?.fullName || null,
+    clientCode: stringOrNull(c.client_code),
+    email: stringOrNull(c.email) || primary?.email || null,
+    phone: stringOrNull(c.phone) || primary?.phone || null,
     address,
     addressCountry,
     addressState,
@@ -134,16 +151,23 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
     addressProvince,
     addressCivicNumber,
     addressLine,
-    atecoCode: (c.ateco_code as string | null) ?? null,
-    website: (c.website as string | null) ?? null,
-    sector: (c.sector as string | null) ?? null,
-    numberOfEmployees: (c.number_of_employees as string | null) ?? null,
-    revenue: (c.revenue as string | null) ?? null,
+    atecoCode: stringOrNull(c.ateco_code),
+    website: stringOrNull(c.website),
+    sector: stringOrNull(c.sector),
+    numberOfEmployees: stringOrNull(c.number_of_employees),
+    revenue: stringOrNull(c.revenue),
     fiscalCode,
-    officeCountRange: (c.office_count_range as string | null) ?? null,
-    totalSentQuotes: parseDbNumber(c.total_sent_quotes as string | number | null, undefined),
+    officeCountRange: stringOrNull(c.office_count_range),
+    totalSentQuotes: parseDbNumber(
+      typeof c.total_sent_quotes === 'string' || typeof c.total_sent_quotes === 'number'
+        ? c.total_sent_quotes
+        : null,
+      undefined,
+    ),
     totalAcceptedOrders: parseDbNumber(
-      c.total_accepted_orders as string | number | null,
+      typeof c.total_accepted_orders === 'string' || typeof c.total_accepted_orders === 'number'
+        ? c.total_accepted_orders
+        : null,
       undefined,
     ),
     vatNumber: fiscalCode,

@@ -18,7 +18,7 @@ export const rolesApi = {
       method: 'PUT',
       body: JSON.stringify({ permissions }),
     }),
-  delete: (id: string): Promise<{ message: string }> =>
+  delete: (id: string): Promise<void> =>
     fetchApi(`/roles/${id}`, {
       method: 'DELETE',
     }),

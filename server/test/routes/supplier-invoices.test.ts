@@ -33,7 +33,7 @@ const findInvoiceForLinkedSaleMock = mock();
 const maxSequenceForYearMock = mock();
 const createMock = mock();
 const insertItemsMock = mock();
-const findExistingForUpdateMock = mock();
+const findExistingMock = mock();
 const findIdConflictMock = mock();
 const updateMock = mock();
 const replaceItemsMock = mock();
@@ -71,7 +71,7 @@ beforeAll(async () => {
     maxSequenceForYear: maxSequenceForYearMock,
     create: createMock,
     insertItems: insertItemsMock,
-    findExistingForUpdate: findExistingForUpdateMock,
+    findExisting: findExistingMock,
     findIdConflict: findIdConflictMock,
     update: updateMock,
     replaceItems: replaceItemsMock,
@@ -158,7 +158,7 @@ const allMocks = [
   maxSequenceForYearMock,
   createMock,
   insertItemsMock,
-  findExistingForUpdateMock,
+  findExistingMock,
   findIdConflictMock,
   updateMock,
   replaceItemsMock,
@@ -423,7 +423,7 @@ describe('POST /api/supplier-invoices', () => {
 
 describe('PUT /api/supplier-invoices/:id', () => {
   test('200 partial update on draft invoice', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',
@@ -448,7 +448,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('200 update with new items uses replaceItems', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',
@@ -471,7 +471,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('404 invoice not found', async () => {
-    findExistingForUpdateMock.mockResolvedValue(null);
+    findExistingMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -485,7 +485,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('409 non-draft invoice with locked field updates is read-only', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'sent',
       issueDate: '2025-06-01',
@@ -505,7 +505,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('409 id conflict on rename', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',
@@ -525,7 +525,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('400 dueDate before issueDate using effective dates', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',
@@ -546,7 +546,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('400 empty items array on update', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',
@@ -565,7 +565,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('404 update returns null after transaction', async () => {
-    findExistingForUpdateMock.mockResolvedValue({
+    findExistingMock.mockResolvedValue({
       id: 'SINV-2025-0001',
       status: 'draft',
       issueDate: '2025-06-01',

@@ -804,7 +804,7 @@ describe('PUT /api/tasks/:id', () => {
 });
 
 describe('DELETE /api/tasks/:id', () => {
-  test('200: happy delete with audit', async () => {
+  test('204: happy delete with audit', async () => {
     deleteByIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
 
     const res = await testApp.inject({
@@ -813,8 +813,8 @@ describe('DELETE /api/tasks/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Task deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.deleted', entityId: 't-1' }),
     );

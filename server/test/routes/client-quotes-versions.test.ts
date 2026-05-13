@@ -35,7 +35,7 @@ const getRolePermissionsMock = mock();
 
 const cqExistsByIdMock = mock();
 const cqFindLinkedOfferIdMock = mock();
-const cqFindCurrentForUpdateMock = mock();
+const cqFindCurrentMock = mock();
 const cqFindNonDraftLinkedSaleMock = mock();
 const cqFindAnyLinkedSaleMock = mock();
 const cqDeleteDraftSalesForQuoteMock = mock();
@@ -82,7 +82,7 @@ beforeAll(async () => {
     ...clientQuotesRepoSnap,
     existsById: cqExistsByIdMock,
     findLinkedOfferId: cqFindLinkedOfferIdMock,
-    findCurrentForUpdate: cqFindCurrentForUpdateMock,
+    findCurrent: cqFindCurrentMock,
     findNonDraftLinkedSale: cqFindNonDraftLinkedSaleMock,
     findAnyLinkedSale: cqFindAnyLinkedSaleMock,
     deleteDraftSalesForQuote: cqDeleteDraftSalesForQuoteMock,
@@ -204,7 +204,7 @@ const allMocks = [
   getRolePermissionsMock,
   cqExistsByIdMock,
   cqFindLinkedOfferIdMock,
-  cqFindCurrentForUpdateMock,
+  cqFindCurrentMock,
   cqFindNonDraftLinkedSaleMock,
   cqFindAnyLinkedSaleMock,
   cqDeleteDraftSalesForQuoteMock,
@@ -326,7 +326,7 @@ describe('GET /api/sales/client-quotes/:id/versions/:versionId', () => {
 describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -404,7 +404,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('404 when current quote does not exist', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue(null);
+    cqFindCurrentMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -418,7 +418,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('409 when quote is confirmed', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'confirmed',
       discount: 0,
       discountType: 'percentage',
@@ -436,7 +436,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('409 when non-draft linked sale exists', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -488,7 +488,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('404 when version not found (and no cross-quote leak)', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -540,7 +540,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -569,7 +569,7 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
 
   test('PUT with id-only rename does NOT snapshot (no content change)', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentForUpdateMock.mockResolvedValue({
+    cqFindCurrentMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',

@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
@@ -152,7 +152,11 @@ export const findItemsForInvoice = async (
   invoiceId: string,
   exec: DbExecutor = db,
 ): Promise<InvoiceItem[]> => {
-  const rows = await exec.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
+  const rows = await exec
+    .select()
+    .from(invoiceItems)
+    .where(eq(invoiceItems.invoiceId, invoiceId))
+    .orderBy(asc(invoiceItems.createdAt), asc(invoiceItems.id));
   return rows.map(mapItem);
 };
 

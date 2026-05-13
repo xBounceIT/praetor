@@ -249,6 +249,14 @@ describe('findItemsForQuote', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('sqi-1');
   });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.findItemsForQuote('q-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
+  });
 });
 
 describe('findFullForSnapshot', () => {

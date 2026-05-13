@@ -8,11 +8,7 @@ import {
 import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
-import {
-  messageResponseSchema,
-  standardErrorResponses,
-  standardRateLimitedErrorResponses,
-} from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -839,7 +835,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete client',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardErrorResponses,
         },
       },
@@ -868,7 +864,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: deleted.clientCode ?? undefined,
         },
       });
-      return { message: 'Client deleted' };
+      return reply.code(204).send();
     },
   );
 
@@ -1064,7 +1060,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['category', 'id'],
         },
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardErrorResponses,
         },
       },
@@ -1108,7 +1104,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { message: 'Profile option deleted' };
+      return reply.code(204).send();
     },
   );
 }

@@ -513,7 +513,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existingOffer = await clientOffersRepo.findForUpdate(idResult.value);
+      const existingOffer = await clientOffersRepo.findExisting(idResult.value);
       if (!existingOffer) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
@@ -871,7 +871,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // would need SELECT ... FOR UPDATE here AND matching locking in the sale-create path.
       const result: RestoreOutcome = await withDbTransaction(async (tx) => {
         const [current, linkedSaleId, version] = await Promise.all([
-          clientOffersRepo.findForUpdate(idResult.value, tx),
+          clientOffersRepo.findExisting(idResult.value, tx),
           clientOffersRepo.findLinkedSaleId(idResult.value, tx),
           offerVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
         ]);

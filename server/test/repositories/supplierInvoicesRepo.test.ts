@@ -79,6 +79,23 @@ describe('listAllItems', () => {
   });
 });
 
+describe('findItemsForInvoice', () => {
+  test('filters by invoice_id and maps rows', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await supplierInvoicesRepo.findItemsForInvoice('SINV-2026-0001', testDb);
+    expect(exec.calls[0].params).toContain('SINV-2026-0001');
+    expect(result[0].id).toBe('sinv-item-1');
+  });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierInvoicesRepo.findItemsForInvoice('SINV-2026-0001', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
+  });
+});
+
 describe('findInvoiceForLinkedSale', () => {
   test('returns id when found', async () => {
     exec.enqueue({ rows: [['SINV-2026-0001']] });
@@ -93,10 +110,10 @@ describe('findInvoiceForLinkedSale', () => {
   });
 });
 
-describe('findExistingForUpdate', () => {
+describe('findExisting', () => {
   test('returns id, status, issueDate, dueDate', async () => {
     exec.enqueue({ rows: [['SINV-2026-0001', 'draft', '2026-04-01', '2026-04-30']] });
-    expect(await supplierInvoicesRepo.findExistingForUpdate('SINV-2026-0001', testDb)).toEqual({
+    expect(await supplierInvoicesRepo.findExisting('SINV-2026-0001', testDb)).toEqual({
       id: 'SINV-2026-0001',
       status: 'draft',
       issueDate: '2026-04-01',

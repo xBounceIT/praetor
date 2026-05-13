@@ -6,11 +6,7 @@ import {
   requireScopedPermission,
 } from '../middleware/auth.ts';
 import type { TimeEntry } from '../repositories/entriesRepo.ts';
-import {
-  messageResponseSchema,
-  standardErrorResponses,
-  standardRateLimitedErrorResponses,
-} from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   bulkDeleteTimeEntries,
   createTimeEntry,
@@ -295,7 +291,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete time entry',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardErrorResponses,
         },
       },
@@ -305,7 +301,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { id } = request.params as { id: string };
       try {
-        return await deleteTimeEntry(actorFromRequest(request), id);
+        // Service still returns `{ message }` because the MCP tool surface relays it back to
+        // the client; the REST route discards it and returns 204-no-body per REST norms.
+        await deleteTimeEntry(actorFromRequest(request), id);
+        return reply.code(204).send();
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }
@@ -365,7 +364,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Bulk delete time entries',
         querystring: entriesBulkDeleteQuerySchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -380,12 +379,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         placeholderOnly?: string;
       };
       try {
-        return await bulkDeleteTimeEntries(actorFromRequest(request), {
+        await bulkDeleteTimeEntries(actorFromRequest(request), {
           projectId,
           task,
           futureOnly,
           placeholderOnly,
         });
+        return reply.code(204).send();
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }

@@ -101,7 +101,8 @@ export const findItemsForQuote = async (
   const rows = await exec
     .select()
     .from(supplierQuoteItems)
-    .where(eq(supplierQuoteItems.quoteId, quoteId));
+    .where(eq(supplierQuoteItems.quoteId, quoteId))
+    .orderBy(asc(supplierQuoteItems.createdAt), asc(supplierQuoteItems.id));
   return rows.map(mapItem);
 };
 

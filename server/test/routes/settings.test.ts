@@ -386,8 +386,8 @@ describe('MCP token settings routes', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'MCP token revoked' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(revokeMcpTokenForUserMock).toHaveBeenCalledWith('mcp-token-1', 'u1');
   });
 

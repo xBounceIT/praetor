@@ -32,6 +32,7 @@ import suppliersRoutes from './routes/suppliers.ts';
 import tasksRoutes from './routes/tasks.ts';
 import usersRoutes from './routes/users.ts';
 import workUnitsRoutes from './routes/work-units.ts';
+import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
@@ -79,6 +80,13 @@ export const buildApp = async () => {
   const fastify = Fastify({
     logger: loggerOptions,
     trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
+    // Register `ajv-formats` so JSON-schema `format` keywords (`date-time`, `date`, `email`, ...)
+    // are actually validated. Without this, schemas like `{ type: 'string', format: 'date-time' }`
+    // silently accept any string. See server/utils/ajv-formats.ts for the plugin wiring.
+    ajv: {
+      customOptions: {},
+      plugins: [[ajvFormatsPlugin, ajvFormatsPluginOptions]],
+    },
   });
 
   await fastify.register(cors, {

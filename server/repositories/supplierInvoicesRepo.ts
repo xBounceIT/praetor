@@ -84,7 +84,8 @@ export const findItemsForInvoice = async (
   const rows = await exec
     .select()
     .from(supplierInvoiceItems)
-    .where(eq(supplierInvoiceItems.invoiceId, invoiceId));
+    .where(eq(supplierInvoiceItems.invoiceId, invoiceId))
+    .orderBy(asc(supplierInvoiceItems.createdAt), asc(supplierInvoiceItems.id));
   return rows.map(mapItem);
 };
 
@@ -100,7 +101,11 @@ export const findInvoiceForLinkedSale = async (
   return rows[0]?.id ?? null;
 };
 
-export const findExistingForUpdate = async (
+// Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
+// (not `findExistingForUpdate`) because it does not acquire a row lock - callers run the read,
+// validate, and then issue a separate UPDATE outside any locking scope. If you need true
+// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+export const findExisting = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{

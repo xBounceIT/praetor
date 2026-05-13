@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { quoteItems, quotes } from '../db/schema/quotes.ts';
@@ -161,7 +161,11 @@ export const findIdConflict = async (
   return rows.length > 0;
 };
 
-export const findCurrentForUpdate = async (
+// Reads the minimal set of fields needed to gate updates / restores. Named `findCurrent`
+// (not `findCurrentForUpdate`) because it does not acquire a row lock - callers run the read,
+// validate, and then issue a separate UPDATE outside any locking scope. If you need true
+// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+export const findCurrent = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{
@@ -305,7 +309,11 @@ export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
-  const rows = await exec.select().from(quoteItems).where(eq(quoteItems.quoteId, quoteId));
+  const rows = await exec
+    .select()
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, quoteId))
+    .orderBy(asc(quoteItems.createdAt), asc(quoteItems.id));
   return rows.map(mapItem);
 };
 

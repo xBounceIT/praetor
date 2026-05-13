@@ -86,17 +86,17 @@ describe('existsById / findIdConflict', () => {
   });
 });
 
-describe('findForUpdate', () => {
+describe('findExisting', () => {
   test('returns existing offer fields needed for permission checks', async () => {
     exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
-    const result = await clientOffersRepo.findForUpdate('co-1', testDb);
+    const result = await clientOffersRepo.findExisting('co-1', testDb);
     expect(result?.linkedQuoteId).toBe('cq-1');
     expect(result?.status).toBe('draft');
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
-    expect(await clientOffersRepo.findForUpdate('co-x', testDb)).toBeNull();
+    expect(await clientOffersRepo.findExisting('co-x', testDb)).toBeNull();
   });
 });
 
@@ -135,6 +135,14 @@ describe('findItemsForOffer', () => {
     expect(exec.calls[0].params).toEqual(['co-1']);
     expect(result.map((i) => i.id)).toEqual(['coi-1', 'coi-2']);
     expect(result[1].quantity).toBe(3);
+  });
+
+  test('orders rows deterministically by created_at then id', async () => {
+    exec.enqueue({ rows: [] });
+    await clientOffersRepo.findItemsForOffer('co-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('order by');
+    expect(sql).toMatch(/"created_at".*,.*"id"/);
   });
 
   test('returns [] when no items for offer', async () => {

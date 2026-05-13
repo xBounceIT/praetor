@@ -678,8 +678,8 @@ describe('DELETE /api/projects/:id', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'Project deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(deleteByIdMock).toHaveBeenCalledWith('p-1', undefined);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.deleted', entityId: 'p-1' }),

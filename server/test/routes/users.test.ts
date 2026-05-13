@@ -622,7 +622,7 @@ describe('POST /api/users', () => {
 // =========================================================================
 
 describe('DELETE /api/users/:id', () => {
-  test('200 admin deletes app_user', async () => {
+  test('204 admin deletes app_user', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     deleteByIdMock.mockResolvedValue(true);
 
@@ -632,8 +632,8 @@ describe('DELETE /api/users/:id', () => {
       headers: adminAuth(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ message: 'User deleted' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
     expect(deleteByIdMock).toHaveBeenCalledWith('u-target');
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.deleted', entityId: 'u-target' }),

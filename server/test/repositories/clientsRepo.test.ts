@@ -126,6 +126,52 @@ describe('mapClientRow', () => {
     expect(result.vatNumber).toBe('IT12345');
     expect(result.taxCode).toBe('IT12345');
   });
+
+  test('coerces missing string columns to null (no "undefined" leakage)', () => {
+    // Row has *no* address_* columns at all; legacy `as string` casts would surface them as
+    // the string `"undefined"`. Guarded mapping must produce nulls instead.
+    const minimalRow = {
+      id: 'c-2',
+      name: 'Minimal',
+      is_disabled: false,
+      type: 'company',
+      contacts: null,
+    };
+    const result = clientsRepo.mapClientRow(minimalRow);
+    expect(result.description).toBeNull();
+    expect(result.clientCode).toBeNull();
+    expect(result.email).toBeNull();
+    expect(result.phone).toBeNull();
+    expect(result.address).toBeNull();
+    expect(result.addressCountry).toBeNull();
+    expect(result.addressState).toBeNull();
+    expect(result.addressCap).toBeNull();
+    expect(result.addressProvince).toBeNull();
+    expect(result.addressCivicNumber).toBeNull();
+    expect(result.addressLine).toBeNull();
+    expect(result.atecoCode).toBeNull();
+    expect(result.website).toBeNull();
+    expect(result.sector).toBeNull();
+    expect(result.numberOfEmployees).toBeNull();
+    expect(result.revenue).toBeNull();
+    expect(result.fiscalCode).toBeNull();
+    expect(result.officeCountRange).toBeNull();
+    // None of these should ever be the literal string "undefined".
+    for (const value of Object.values(result)) {
+      expect(value).not.toBe('undefined');
+    }
+  });
+
+  test('coerces non-string column values to null instead of casting through', () => {
+    // Numeric column where a string is expected - shouldn't crash, just becomes null.
+    const result = clientsRepo.mapClientRow({
+      ...baseRow,
+      description: 12345,
+      website: { url: 'x' },
+    });
+    expect(result.description).toBeNull();
+    expect(result.website).toBeNull();
+  });
 });
 
 describe('list', () => {

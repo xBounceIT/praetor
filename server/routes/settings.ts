@@ -262,7 +262,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['id'],
         },
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -276,7 +276,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const revoked = await mcpTokensRepo.revokeForUser(idResult.value, request.user.id);
       if (!revoked) return reply.code(404).send({ error: 'MCP token not found' });
 
-      return { message: 'MCP token revoked' };
+      return reply.code(204).send();
     },
   );
 

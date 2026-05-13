@@ -555,7 +555,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete user',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardErrorResponses,
         },
       },
@@ -592,7 +592,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: user.username,
         },
       });
-      return { message: 'User deleted' };
+      return reply.code(204).send();
     },
   );
 

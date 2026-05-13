@@ -257,7 +257,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Delete work unit',
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
+          204: { type: 'null' },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -281,7 +281,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           targetLabel: deleted.name,
         },
       });
-      return { message: 'Work unit deleted' };
+      return reply.code(204).send();
     },
   );
 
