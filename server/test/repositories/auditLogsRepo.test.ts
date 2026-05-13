@@ -41,10 +41,9 @@ describe('list', () => {
     expect(exec.calls[0].params).toEqual(['2024-01-01', '2024-12-31']);
   });
 
-  // Regression test for Medium B11: without `AT TIME ZONE 'UTC'`, comparing the `timestamp`
-  // column `al.created_at` to a `timestamptz` literal forces Postgres to convert via
-  // `current_setting('TimeZone')`, yielding different result sets across deployments with
-  // different session timezones.
+  // Without `AT TIME ZONE 'UTC'`, comparing the `timestamp` column `al.created_at` to a
+  // `timestamptz` literal forces Postgres to convert via `current_setting('TimeZone')`,
+  // yielding different result sets across deployments with different session timezones.
   test('anchors filter values to UTC (independent of session timezone)', async () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.list(

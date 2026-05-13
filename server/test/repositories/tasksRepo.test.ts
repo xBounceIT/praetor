@@ -297,13 +297,13 @@ describe('hours aggregation', () => {
     expect(onClause).toContain('t_inner.name = "te"."task"');
   });
 
-  // Regression test for Critical #10: when two tasks share (project_id, name), the legacy
-  // OR-branch `ON t.id = te.task_id OR (te.task_id IS NULL AND ...)` multiplied rows because
-  // a single time-entry with task_id IS NULL matched every duplicate. The LATERAL
-  // `SELECT ... LIMIT 1` enforces one task row per time entry. We can't simulate true row
-  // multiplication against the fake DB (it returns whatever we enqueue), but we CAN assert
-  // the structural guarantee that prevents it: a LATERAL subquery with LIMIT 1, ordering
-  // FK matches first then by lowest task id (matching findIdByProjectAndName's contract).
+  // When two tasks share (project_id, name), the legacy OR-branch
+  // `ON t.id = te.task_id OR (te.task_id IS NULL AND ...)` multiplied rows because a single
+  // time-entry with task_id IS NULL matched every duplicate. The LATERAL `SELECT ... LIMIT 1`
+  // enforces one task row per time entry. We can't simulate true row multiplication against
+  // the fake DB (it returns whatever we enqueue), but we CAN assert the structural guarantee
+  // that prevents it: a LATERAL subquery with LIMIT 1, ordering FK matches first then by
+  // lowest task id (matching findIdByProjectAndName's contract).
   test('legacy fallback resolves duplicate task names to a single row (no multiplication)', async () => {
     exec.enqueue({ rows: [{ projectId: 'p-1', task: 'Dev', total: 4 }] });
     const result = await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);

@@ -45,7 +45,7 @@ export const extractJoinOn = (sql: string, tableName: string, alias: string): st
  * Uses a balanced-paren walk from the first `(` after `JOIN LATERAL`, so nested parentheses
  * inside the subquery (e.g. the ORDER BY tuple comparison) are handled correctly.
  */
-export const extractLateralBody = (sql: string, alias: string): string | null => {
+const extractLateralBody = (sql: string, alias: string): string | null => {
   const startMatch = sql.match(/JOIN\s+LATERAL\s*\(/i);
   if (!startMatch || startMatch.index === undefined) return null;
   const openIdx = sql.indexOf('(', startMatch.index);
@@ -77,7 +77,7 @@ export const extractLateralBody = (sql: string, alias: string): string | null =>
 export const extractTasksJoinOn = (sql: string): string | null => {
   const body = extractLateralBody(sql, 't');
   if (!body) return null;
-  const m = body.match(/WHERE\s+([\s\S]*?)(?=\s+(?:ORDER|LIMIT|GROUP|\)|$))/i);
+  const m = body.match(/WHERE\s+([\s\S]*?)(?=\s+(?:ORDER|LIMIT|GROUP)\b|\s*$)/i);
   return m ? m[1] : body;
 };
 
