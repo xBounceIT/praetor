@@ -1641,7 +1641,7 @@ const StandardTable = <T extends object>({
 
       <div
         ref={tableContainerRef}
-        className={`rounded-lg border border-border bg-card shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
+        className={`rounded-lg border border-border bg-background shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
       >
         {shouldRenderTable ? (
           <Table
@@ -1712,7 +1712,7 @@ const StandardTable = <T extends object>({
                         <TableHead
                           style={{ width: colWidth, minWidth: minColumnWidth }}
                           aria-label={isActionColumn ? col.header : undefined}
-                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
+                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
                         >
                           {isActionColumn ? (
                             <div
@@ -1903,7 +1903,7 @@ const StandardTable = <T extends object>({
                                 col.onCellDoubleClick?.(row);
                               }}
                               style={{ width: colWidth, minWidth: minColumnWidth }}
-                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-card transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
                             >
                               {isActionColumn ? (
                                 actionMenuItems ? (
