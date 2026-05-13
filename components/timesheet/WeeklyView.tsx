@@ -708,7 +708,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           </div>
         </div>
 
-        <div className="-mx-5 overflow-x-auto">
+        <div className="-mx-5 -mb-5 overflow-x-auto">
           <Table className="border-collapse">
             <TableHeader className="bg-muted/40">
               <TableRow className="border-b border-border">
