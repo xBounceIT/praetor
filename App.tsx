@@ -827,14 +827,14 @@ const AppContent: React.FC = () => {
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
-    setHasLoadedLdapConfig(false);
-    setHasLoadedSsoProviders(false);
-    setHasLoadedEmailConfig(false);
-    setHasLoadedRoles(false);
     setGeneralSettings(INITIAL_GENERAL_SETTINGS);
+    setHasLoadedLdapConfig(false);
     setLdapConfig(INITIAL_LDAP_CONFIG);
+    setHasLoadedEmailConfig(false);
     setEmailConfig(INITIAL_EMAIL_CONFIG);
+    setHasLoadedSsoProviders(false);
     setSsoProviders([]);
+    setHasLoadedRoles(false);
     setRoles([]);
     setUsers([]);
     setClients([]);
