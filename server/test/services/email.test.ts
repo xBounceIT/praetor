@@ -61,7 +61,7 @@ const buildEnabledConfig = (overrides: Partial<typeof DEFAULT_REPO_CONFIG> = {})
 });
 
 const resetSingleton = () => {
-  (emailService as unknown as { config: unknown }).config = null;
+  emailService.invalidateConfig();
 };
 
 beforeEach(() => {

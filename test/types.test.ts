@@ -10,30 +10,39 @@ type AssertEqual<T, U> =
 
 const trueValue: true = true;
 
+// Each test in this file is a pure type-level check: the typed variable assignments
+// below either compile or trigger a `@ts-expect-error`, and `tsc --noEmit` is what
+// makes the test "fail" by breaking the build. The runtime `expect(true).toBe(true)`
+// is just a placeholder so Bun's reporter shows the spec as executed — comparing the
+// typed literals to themselves would pass vacuously regardless of the type definitions.
 describe('UserRole literal union', () => {
   test('accepts the four built-in role ids', () => {
     const admin: UserRole = 'admin';
     const manager: UserRole = 'manager';
     const user: UserRole = 'user';
     const topManager: UserRole = 'top_manager';
-    expect([admin, manager, user, topManager]).toEqual(['admin', 'manager', 'user', 'top_manager']);
+    void [admin, manager, user, topManager];
+    expect(true).toBe(true);
   });
 
   test('KnownUserRole rejects typos like "amdin"', () => {
     // @ts-expect-error - 'amdin' is not a built-in role id
     const typo: KnownUserRole = 'amdin';
-    void typo;
     // The valid spelling compiles without error.
     const valid: KnownUserRole = 'admin';
-    expect(valid).toBe('admin');
+    void [typo, valid];
+    expect(true).toBe(true);
   });
 
   test('UserRole still accepts arbitrary strings (custom DB-defined roles)', () => {
     // The `string & {}` escape hatch keeps `UserRole` assignable from any string so
     // custom role ids stored in the `roles` table continue to work.
     const custom: UserRole = 'custom_role_from_db';
-    expect(custom).toBe('custom_role_from_db');
+    void custom;
     const knownExtendsUserRole: AssertExtends<KnownUserRole, UserRole> = trueValue;
+    // trueValue's type is the literal `true`; this assertion verifies the compile-time
+    // relationship (KnownUserRole extends UserRole) rather than the runtime value, which
+    // is trivially true by construction.
     expect(knownExtendsUserRole).toBe(true);
   });
 });
@@ -42,27 +51,28 @@ describe('Permission literal union', () => {
   test('accepts well-formed known permissions', () => {
     const view: Permission = 'crm.clients.view';
     const update: Permission = 'administration.roles.update';
-    expect([view, update]).toEqual(['crm.clients.view', 'administration.roles.update']);
+    void [view, update];
+    expect(true).toBe(true);
   });
 
   test('KnownPermission rejects typos in the resource/action segments', () => {
     // @ts-expect-error - 'crm.clinets.view' has a misspelled resource
     const typo: KnownPermission = 'crm.clinets.view';
-    void typo;
     // @ts-expect-error - 'view2' is not a known action
     const badAction: KnownPermission = 'crm.clients.view2';
-    void badAction;
     const valid: KnownPermission = 'crm.clients.view';
-    expect(valid).toBe('crm.clients.view');
+    void [typo, badAction, valid];
+    expect(true).toBe(true);
   });
 
   test('Permission still accepts arbitrary strings (DB-driven extensibility)', () => {
     const custom: Permission = 'custom.module.view';
-    expect(custom).toBe('custom.module.view');
+    void custom;
     const knownExtendsPermission: AssertEqual<
       Permission extends string ? true : false,
       true
     > = trueValue;
+    // Compile-time assertion of a type relationship; runtime value is trivially true.
     expect(knownExtendsPermission).toBe(true);
   });
 });

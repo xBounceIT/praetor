@@ -2,9 +2,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'b
 import realFs from 'fs';
 import realSelfsigned from 'selfsigned';
 
-// Suppress the "Generated self-signed SSL certificate" log line so test output stays clean.
+// We suppress the "Generated self-signed SSL certificate" log line so test output stays
+// clean, but the override is installed in beforeAll and restored in afterAll so a thrown
+// error during module load (or between files) cannot leave console.log silenced globally.
 const ORIGINAL_CONSOLE_LOG = console.log;
-console.log = () => undefined;
 
 // Snapshot real exports before installing mocks (mock.module inside beforeAll is not hoisted).
 const fsSnapshot = { ...realFs };
@@ -19,6 +20,7 @@ const generateMock = mock<(attrs: unknown, opts: unknown) => { private: string; 
 );
 
 beforeAll(() => {
+  console.log = () => undefined;
   // ssl.ts only consumes these four named exports from `fs`; preserve the rest verbatim
   // so any other module loaded by the test harness keeps working.
   mock.module('fs', () => ({
