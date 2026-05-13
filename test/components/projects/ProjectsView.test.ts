@@ -110,6 +110,19 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     expect(source).toMatch(/onAddProject\(\s*\{[\s\S]*offerId,[\s\S]*\}\s*\)/);
   });
 
+  test('offer selector filters by client and auto-fills client on select', async () => {
+    // Mirror of the order pattern: prevents picking an offer for client X while the project is
+    // being assigned to client Y. Server enforces the same invariant.
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    // Filter offers to the selected client (unless no client is set yet)
+    expect(source).toContain('.filter((o) => !clientId || o.clientId === clientId)');
+    // On offer select, push the offer's clientId into form state
+    expect(source).toContain('setClientId(nextOffer.clientId);');
+  });
+
   test('edit-mode revenue uses editingProject.orderId, not the empty create-form orderId', async () => {
     // Regression for the order-derived branch silently falling back to "manual" on edit:
     // the form's `orderId` state is empty in openEditModal (no order selector is shown in the

@@ -6,6 +6,7 @@ import {
   requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
+import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
@@ -113,6 +114,7 @@ const projectUpdateBodySchema = {
 
 class PermissionError extends Error {}
 class OrderClientMismatchError extends Error {}
+class OfferClientMismatchError extends Error {}
 
 const canAccessClient = (
   request: FastifyRequest,
@@ -263,6 +265,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (orderClientId !== null && orderClientId !== clientIdResult.value) {
           return badRequest(reply, 'orderId does not belong to the specified clientId');
         }
+      }
+
+      const offerClientId = await clientOffersRepo.findClientIdById(offerIdResult.value);
+      if (offerClientId !== null && offerClientId !== clientIdResult.value) {
+        return badRequest(reply, 'offerId does not belong to the specified clientId');
       }
 
       try {
@@ -526,6 +533,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
           }
 
+          // Same cross-check for offers: when the offer is changed or set, verify it belongs
+          // to the (requested or unchanged) project client. Skipped when the patch clears the
+          // offer (value === null) — no inconsistency possible.
+          if (offerIdPatch.provided && offerIdPatch.value !== null) {
+            const offerClientId = await clientOffersRepo.findClientIdById(offerIdPatch.value, tx);
+            if (offerClientId !== null && offerClientId !== requestedClientId) {
+              throw new OfferClientMismatchError(
+                'offerId does not belong to the specified clientId',
+              );
+            }
+          }
+
           const updated = await projectsRepo.update(
             idResult.value,
             {
@@ -581,6 +600,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(404).send({ error: err.message });
         }
         if (err instanceof OrderClientMismatchError) {
+          return reply.code(400).send({ error: err.message });
+        }
+        if (err instanceof OfferClientMismatchError) {
           return reply.code(400).send({ error: err.message });
         }
         if (err instanceof ForeignKeyError) {

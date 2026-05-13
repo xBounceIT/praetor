@@ -815,10 +815,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     // Hide drafts (incomplete) and denied (no longer relevant). Show 'sent' and 'accepted' so a
     // project can be linked to an offer that's still under negotiation as well as a won one.
     .filter((o) => o.status === 'sent' || o.status === 'accepted')
+    // Also filter to the currently-selected client. Prevents picking an offer for client X while
+    // the project is being assigned to client Y; the server enforces the same invariant.
+    .filter((o) => !clientId || o.clientId === clientId)
     .map((o) => ({
       id: o.id,
       name: `${o.clientName} - ${o.id}`,
     }));
+  // If the currently-bound offer would be filtered out (different client, or status now not
+  // in the visible set), surface it anyway so the user sees what's selected and can act on it.
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
@@ -1234,7 +1239,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         options={offerOptions}
                         value={offerId}
                         onChange={(val) => {
-                          setOfferId(val as string);
+                          const nextOfferId = val as string;
+                          setOfferId(nextOfferId);
+                          // Auto-fill the client from the chosen offer — mirrors the order
+                          // selector's behavior so the offer/client pair stays consistent.
+                          const nextOffer = offers.find((o) => o.id === nextOfferId);
+                          if (nextOffer && nextOffer.clientId !== clientId) {
+                            setClientId(nextOffer.clientId);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                          }
                           if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
                         }}
                         label={

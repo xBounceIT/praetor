@@ -142,6 +142,17 @@ export const findStatusAndClientName = async (
   return rows[0] ?? null;
 };
 
+export const findClientIdById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ clientId: customerOffers.clientId })
+    .from(customerOffers)
+    .where(eq(customerOffers.id, id));
+  return rows[0]?.clientId ?? null;
+};
+
 export const findExistingForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
