@@ -445,32 +445,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Parse each optional patch field into a `{provided, value}` tuple so we can distinguish
       // "absent from body" (skip) from "explicitly null" (clear) in the repo call below.
+      type Patch<T> = { provided: true; value: T | null } | { provided: false };
       const parsePatch = <T>(
         key: 'offerId' | 'startDate' | 'endDate' | 'revenue',
         parse: (raw: unknown) => { ok: true; value: T | null } | { ok: false; message: string },
-      ): { provided: true; value: T | null } | { provided: false } | { error: string } => {
-        if (!Object.hasOwn(body, key)) return { provided: false };
+      ): { ok: true; patch: Patch<T> } | { ok: false; error: string } => {
+        if (!Object.hasOwn(body, key)) return { ok: true, patch: { provided: false } };
         const r = parse((body as Record<string, unknown>)[key]);
-        return r.ok ? { provided: true, value: r.value } : { error: r.message };
+        return r.ok
+          ? { ok: true, patch: { provided: true, value: r.value } }
+          : { ok: false, error: r.message };
       };
 
-      const offerIdPatch = parsePatch<string>('offerId', (v) =>
+      const offerIdResult = parsePatch<string>('offerId', (v) =>
         optionalNonEmptyString(v, 'offerId'),
       );
-      if ('error' in offerIdPatch) return badRequest(reply, offerIdPatch.error);
+      if (!offerIdResult.ok) return badRequest(reply, offerIdResult.error);
+      const offerIdPatch = offerIdResult.patch;
 
-      const startDatePatch = parsePatch<string>('startDate', (v) =>
+      const startDateResult = parsePatch<string>('startDate', (v) =>
         optionalDateString(v, 'startDate'),
       );
-      if ('error' in startDatePatch) return badRequest(reply, startDatePatch.error);
+      if (!startDateResult.ok) return badRequest(reply, startDateResult.error);
+      const startDatePatch = startDateResult.patch;
 
-      const endDatePatch = parsePatch<string>('endDate', (v) => optionalDateString(v, 'endDate'));
-      if ('error' in endDatePatch) return badRequest(reply, endDatePatch.error);
+      const endDateResult = parsePatch<string>('endDate', (v) => optionalDateString(v, 'endDate'));
+      if (!endDateResult.ok) return badRequest(reply, endDateResult.error);
+      const endDatePatch = endDateResult.patch;
 
-      const revenuePatch = parsePatch<number>('revenue', (v) =>
+      const revenueResult = parsePatch<number>('revenue', (v) =>
         optionalNonNegativeNumber(v, 'revenue'),
       );
-      if ('error' in revenuePatch) return badRequest(reply, revenuePatch.error);
+      if (!revenueResult.ok) return badRequest(reply, revenueResult.error);
+      const revenuePatch = revenueResult.patch;
 
       let updatedProject: {
         updated: projectsRepo.Project;
@@ -514,23 +521,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
             : [];
 
+          // Final orderId/offerId after this patch lands: the patch value if specified,
+          // otherwise the existing column value. We only need the existing values when the
+          // client is also changing (an unchanged client means the existing link was already
+          // valid). Cross-checking both is otherwise the same lookup that previously ran
+          // only against patch values — running both in parallel pipelines on one connection.
           const orderIdPatch = orderId === undefined ? undefined : orderId || null;
-          if (typeof orderIdPatch === 'string') {
-            const orderClientId = await clientsOrdersRepo.findClientIdById(orderIdPatch, tx);
-            if (orderClientId !== null && orderClientId !== requestedClientId) {
-              throw new OrderClientMismatchError(
-                'orderId does not belong to the specified clientId',
-              );
-            }
-          }
+          const orderPatchPresent = orderIdPatch !== undefined;
+          const existingLinks =
+            clientChanged && (!orderPatchPresent || !offerIdPatch.provided)
+              ? await projectsRepo.findClientLinksById(idResult.value, tx)
+              : null;
+          const finalOrderId = orderPatchPresent ? orderIdPatch : (existingLinks?.orderId ?? null);
+          const finalOfferId = offerIdPatch.provided
+            ? offerIdPatch.value
+            : (existingLinks?.offerId ?? null);
 
-          if (offerIdPatch.provided && offerIdPatch.value !== null) {
-            const offerClientId = await clientOffersRepo.findClientIdById(offerIdPatch.value, tx);
-            if (offerClientId !== null && offerClientId !== requestedClientId) {
-              throw new OfferClientMismatchError(
-                'offerId does not belong to the specified clientId',
-              );
-            }
+          const [orderClientId, offerClientId] = await Promise.all([
+            finalOrderId ? clientsOrdersRepo.findClientIdById(finalOrderId, tx) : null,
+            finalOfferId ? clientOffersRepo.findClientIdById(finalOfferId, tx) : null,
+          ]);
+          if (finalOrderId && orderClientId !== null && orderClientId !== requestedClientId) {
+            throw new OrderClientMismatchError('orderId does not belong to the specified clientId');
+          }
+          if (finalOfferId && offerClientId !== null && offerClientId !== requestedClientId) {
+            throw new OfferClientMismatchError('offerId does not belong to the specified clientId');
           }
 
           const updated = await projectsRepo.update(

@@ -39,6 +39,7 @@ const createMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
 const findDateRangeByIdMock = mock();
+const findClientLinksByIdMock = mock();
 const deleteByIdMock = mock();
 const lockClientIdByIdMock = mock();
 const lockNameAndClientByIdMock = mock();
@@ -92,6 +93,7 @@ beforeAll(async () => {
     update: updateMock,
     findById: findByIdMock,
     findDateRangeById: findDateRangeByIdMock,
+    findClientLinksById: findClientLinksByIdMock,
     deleteById: deleteByIdMock,
     lockClientIdById: lockClientIdByIdMock,
     lockNameAndClientById: lockNameAndClientByIdMock,
@@ -192,6 +194,7 @@ const allMocks = [
   updateMock,
   findByIdMock,
   findDateRangeByIdMock,
+  findClientLinksByIdMock,
   deleteByIdMock,
   lockClientIdByIdMock,
   lockNameAndClientByIdMock,
@@ -869,6 +872,66 @@ describe('PUT /api/projects/:id', () => {
       expect.objectContaining({ clientId: 'c-new', orderId: 'co-9' }),
       undefined,
     );
+  });
+
+  test('400: client change rejected when the still-attached existing offerId is for a different client', async () => {
+    // Only `clientId` is patched; the existing offerId points at the old client and is now
+    // inconsistent. The PUT must re-validate the existing link, not just patch values.
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: 'of-old' });
+    findOfferClientIdByIdMock.mockResolvedValue('c-old');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'offerId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: client change rejected when the still-attached existing orderId is for a different client', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-old', offerId: null });
+    findOrderClientIdByIdMock.mockResolvedValue('c-old');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: client change with no existing links skips the consistency lookups', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null });
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, clientId: 'c-new' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
+    expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
   });
 
   test('200: empty-string orderId is normalized to null on update', async () => {
