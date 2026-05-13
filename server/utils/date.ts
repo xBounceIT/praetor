@@ -12,6 +12,11 @@ export const formatLocalDateOnly = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+export const parseLocalDateOnly = (dateOnly: string): Date => {
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export const normalizeNullableDateOnly = (value: unknown, fieldName: string) => {
   if (value === undefined || value === null) return null;
   if (value instanceof Date) return formatLocalDateOnly(value);

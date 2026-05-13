@@ -1836,34 +1836,26 @@ const App: React.FC = () => {
     return [currentUser];
   }, [users, currentUser]);
 
-  const generateRecurringEntries = useCallback(
-    async (_tasksOverride?: ProjectTask[]) => {
-      // Server-side generation via `POST /api/entries/recurring/generate`. The legacy
-      // client-side implementation walked each recurring task and inserted one entry at a
-      // time for a rolling 14-day window (or up to the task's `recurrenceEnd`). The server
-      // applies the same matching rules + idempotency, so the rolling-window UX is preserved
-      // while pushing the per-row inserts off the main thread.
-      if (!currentUser) return;
+  const generateRecurringEntries = useCallback(async () => {
+    if (!currentUser) return;
 
-      const today = new Date();
-      const fromDate = getLocalDateString(today);
-      const future = new Date(today);
-      future.setDate(today.getDate() + 14);
-      const toDate = getLocalDateString(future);
+    const today = new Date();
+    const fromDate = getLocalDateString(today);
+    const future = new Date(today);
+    future.setDate(today.getDate() + 14);
+    const toDate = getLocalDateString(future);
 
-      try {
-        const result = await api.entries.generateRecurring({ fromDate, toDate });
-        if (result.generated.length > 0) {
-          setEntries((prev) =>
-            [...result.generated, ...prev].sort((a, b) => b.createdAt - a.createdAt),
-          );
-        }
-      } catch (err) {
-        console.error('Failed to generate recurring entries:', err);
+    try {
+      const result = await api.entries.generateRecurring({ fromDate, toDate });
+      if (result.generated.length > 0) {
+        setEntries((prev) =>
+          [...result.generated, ...prev].sort((a, b) => b.createdAt - a.createdAt),
+        );
       }
-    },
-    [currentUser],
-  );
+    } catch (err) {
+      console.error('Failed to generate recurring entries:', err);
+    }
+  }, [currentUser]);
 
   const trackerCatalogs = useMemo(
     () =>

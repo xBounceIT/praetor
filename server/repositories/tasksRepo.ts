@@ -61,34 +61,32 @@ export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
   return rows.map(mapRow);
 };
 
-/**
- * List recurring tasks (is_recurring = true, is_disabled = false) assigned to a user.
- * Used by the recurring time-entry generator to discover which templates apply.
- */
+const taskSelectFields = {
+  id: tasks.id,
+  name: tasks.name,
+  projectId: tasks.projectId,
+  description: tasks.description,
+  isRecurring: tasks.isRecurring,
+  recurrencePattern: tasks.recurrencePattern,
+  recurrenceStart: tasks.recurrenceStart,
+  recurrenceEnd: tasks.recurrenceEnd,
+  recurrenceDuration: tasks.recurrenceDuration,
+  expectedEffort: tasks.expectedEffort,
+  monthlyEffort: tasks.monthlyEffort,
+  revenue: tasks.revenue,
+  notes: tasks.notes,
+  isDisabled: tasks.isDisabled,
+  createdAt: tasks.createdAt,
+  billingType: tasks.billingType,
+  billingFrequency: tasks.billingFrequency,
+} as const;
+
 export const listRecurringForUser = async (
   userId: string,
   exec: DbExecutor = db,
 ): Promise<Task[]> => {
   const rows = await exec
-    .select({
-      id: tasks.id,
-      name: tasks.name,
-      projectId: tasks.projectId,
-      description: tasks.description,
-      isRecurring: tasks.isRecurring,
-      recurrencePattern: tasks.recurrencePattern,
-      recurrenceStart: tasks.recurrenceStart,
-      recurrenceEnd: tasks.recurrenceEnd,
-      recurrenceDuration: tasks.recurrenceDuration,
-      expectedEffort: tasks.expectedEffort,
-      monthlyEffort: tasks.monthlyEffort,
-      revenue: tasks.revenue,
-      notes: tasks.notes,
-      isDisabled: tasks.isDisabled,
-      createdAt: tasks.createdAt,
-      billingType: tasks.billingType,
-      billingFrequency: tasks.billingFrequency,
-    })
+    .select(taskSelectFields)
     .from(tasks)
     .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
     .where(
@@ -100,25 +98,7 @@ export const listRecurringForUser = async (
 
 export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Task[]> => {
   const rows = await exec
-    .select({
-      id: tasks.id,
-      name: tasks.name,
-      projectId: tasks.projectId,
-      description: tasks.description,
-      isRecurring: tasks.isRecurring,
-      recurrencePattern: tasks.recurrencePattern,
-      recurrenceStart: tasks.recurrenceStart,
-      recurrenceEnd: tasks.recurrenceEnd,
-      recurrenceDuration: tasks.recurrenceDuration,
-      expectedEffort: tasks.expectedEffort,
-      monthlyEffort: tasks.monthlyEffort,
-      revenue: tasks.revenue,
-      notes: tasks.notes,
-      isDisabled: tasks.isDisabled,
-      createdAt: tasks.createdAt,
-      billingType: tasks.billingType,
-      billingFrequency: tasks.billingFrequency,
-    })
+    .select(taskSelectFields)
     .from(tasks)
     .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
     .where(eq(userTasks.userId, userId))

@@ -7,7 +7,7 @@ import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
-import { formatLocalDateOnly, todayLocalDateOnly } from '../utils/date.ts';
+import { formatLocalDateOnly, parseLocalDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { isItalianHoliday } from '../utils/holidays.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { hasScopedActionPermission } from '../utils/permissions.ts';
@@ -254,25 +254,16 @@ export const deleteTimeEntry = async (
   return { message: 'Entry deleted' };
 };
 
-// Recurring time-entry generation.
+// Recurring time-entry generation. Supported patterns:
+//   - 'daily'                : every weekday in the window
+//   - 'weekly'               : same weekday as `recurrence_start`
+//   - 'monthly'              : same day-of-month as `recurrence_start`
+//   - 'monthly:<nth>:<dow>'  : Nth (first/second/third/fourth/last) weekday of the month;
+//                              `dow` is 0=Sun..6=Sat (matches JS `Date.getDay()`)
 //
-// Supported recurrence patterns (matching rules mirrored from the legacy client-side path
-// so existing templates keep producing the same days):
-//
-//   - 'daily'                : every weekday in the window.
-//   - 'weekly'               : same weekday as `recurrence_start`.
-//   - 'monthly'              : same day-of-month as `recurrence_start`.
-//   - 'monthly:<nth>:<dow>'  : Nth (`first`/`second`/`third`/`fourth`/`last`) weekday of
-//                              the month. `dow` is 0=Sun..6=Sat (matches JS `Date.getDay()`).
-//
-// Sundays, configured Saturdays, and Italian holidays are always skipped. Days outside the
-// template's `[recurrence_start, recurrence_end]` window are skipped. Existing entries
-// (matched by date + projectId + task name) are skipped, so re-running is a no-op.
-
-const dateOnlyToLocal = (dateOnly: string): Date => {
-  const [year, month, day] = dateOnly.split('-').map(Number);
-  return new Date(year, month - 1, day);
-};
+// Sundays, configured Saturdays, Italian holidays, and days outside the template's
+// `[recurrence_start, recurrence_end]` window are skipped. Existing entries (date +
+// projectId + task name) are skipped, so re-running is idempotent.
 
 const recurrenceMatches = (day: Date, pattern: string, start: Date): boolean => {
   if (pattern === 'daily') return true;
@@ -319,9 +310,6 @@ export type GenerateRecurringResult = {
   range: { fromDate: string; toDate: string };
 };
 
-// Hard cap on the window to avoid pathological generation (the legacy client-side limit
-// extended the window per-template only up to the recurrence end-date; the explicit API
-// makes the caller responsible for the range, so we cap it server-side).
 const MAX_RECURRING_DAYS = 366;
 
 export const generateRecurringEntries = async (
@@ -336,8 +324,8 @@ export const generateRecurringEntries = async (
   const toDate = requireValid(parseDateString(input.toDate, 'toDate'));
   if (fromDate > toDate) badRequest('fromDate must be on or before toDate');
 
-  const fromLocal = dateOnlyToLocal(fromDate);
-  const toLocal = dateOnlyToLocal(toDate);
+  const fromLocal = parseLocalDateOnly(fromDate);
+  const toLocal = parseLocalDateOnly(toDate);
   const windowDays =
     Math.round((toLocal.getTime() - fromLocal.getTime()) / (24 * 60 * 60 * 1000)) + 1;
   if (windowDays > MAX_RECURRING_DAYS) {
@@ -407,15 +395,17 @@ export const generateRecurringEntries = async (
     const project = projectsByProjectId.get(task.projectId);
     if (!project) continue;
 
-    const templateStart = task.recurrenceStart ? dateOnlyToLocal(task.recurrenceStart) : fromLocal;
-    const templateEnd = task.recurrenceEnd ? dateOnlyToLocal(task.recurrenceEnd) : null;
+    const templateStart = task.recurrenceStart
+      ? parseLocalDateOnly(task.recurrenceStart)
+      : fromLocal;
+    const templateEnd = task.recurrenceEnd ? parseLocalDateOnly(task.recurrenceEnd) : null;
 
     const iterStart = templateStart > fromLocal ? templateStart : fromLocal;
     const iterEnd = templateEnd && templateEnd < toLocal ? templateEnd : toLocal;
     if (iterStart > iterEnd) continue;
 
     for (
-      const cursor = new Date(iterStart);
+      let cursor = new Date(iterStart);
       cursor <= iterEnd;
       cursor.setDate(cursor.getDate() + 1)
     ) {
