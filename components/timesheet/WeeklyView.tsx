@@ -548,7 +548,32 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     );
   };
 
-  const hasPendingEdits = Object.values(pendingEdits).some((row) => Object.keys(row).length > 0);
+  // True when at least one pending edit would actually change state on
+  // submit — i.e. a non-zero new value on a fresh cell, or an existing entry
+  // whose duration / note differs from its baseline. Mirrors submitRow's
+  // gating so the button stays disabled when the user types a value and then
+  // clears it (net zero change).
+  const hasPendingEdits = useMemo(() => {
+    const rowHasChange = (rowKey: string, baseDays: DayMap) => {
+      const edits = pendingEdits[rowKey];
+      if (!edits) return false;
+      for (const [dateStr, edit] of Object.entries(edits)) {
+        const base = baseDays[dateStr];
+        const newDuration = parseDuration(edit.duration);
+        const baseDuration = base ? parseDuration(base.duration) : 0;
+        const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
+        if (base?.entryId) {
+          if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) return true;
+        } else if (newDuration > 0) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (rowHasChange(FORM_ROW_KEY, formRowBaseDays)) return true;
+    return entryRows.some((row) => rowHasChange(row.key, row.baseDays));
+  }, [pendingEdits, formRowBaseDays, entryRows]);
   const weeklyGoal = dailyGoal * 5;
 
   const handleExportToCsv = () => {
