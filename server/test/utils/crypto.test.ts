@@ -1,15 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { decrypt, encrypt, MASKED_SECRET } from '../../utils/crypto.ts';
+import {
+  __resetEncryptionKeyCacheForTests,
+  decrypt,
+  encrypt,
+  MASKED_SECRET,
+} from '../../utils/crypto.ts';
 
 const ORIGINAL_KEY = process.env.ENCRYPTION_KEY;
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = 'test-encryption-key-for-unit-tests';
+  __resetEncryptionKeyCacheForTests();
 });
 
 afterAll(() => {
   if (ORIGINAL_KEY === undefined) delete process.env.ENCRYPTION_KEY;
   else process.env.ENCRYPTION_KEY = ORIGINAL_KEY;
+  __resetEncryptionKeyCacheForTests();
 });
 
 describe('encrypt', () => {
@@ -42,11 +49,13 @@ describe('encrypt without ENCRYPTION_KEY', () => {
   beforeAll(() => {
     savedKey = process.env.ENCRYPTION_KEY;
     delete process.env.ENCRYPTION_KEY;
+    __resetEncryptionKeyCacheForTests();
   });
 
   afterAll(() => {
     if (savedKey === undefined) delete process.env.ENCRYPTION_KEY;
     else process.env.ENCRYPTION_KEY = savedKey;
+    __resetEncryptionKeyCacheForTests();
   });
 
   test('throws when ENCRYPTION_KEY is missing', () => {

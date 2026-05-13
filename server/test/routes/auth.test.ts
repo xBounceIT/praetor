@@ -16,6 +16,9 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
+// hashPersonalAccessToken (HMAC-keyed) requires ENCRYPTION_KEY at call time.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
+
 // Snapshot real exports so afterAll can restore them. Snapshot must run BEFORE mock.module
 // fires (i.e., before beforeAll executes) - see comment in middleware/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
@@ -161,8 +164,10 @@ beforeEach(async () => {
     userId: 'u1',
     tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
     tokenPrefix: 'praetor_pat_valid',
-    createdAt: new Date('2026-05-11T08:00:00.000Z'),
-    updatedAt: new Date('2026-05-11T09:00:00.000Z'),
+    // Use "now" so the middleware's PAT idle-timeout check (30d default) never expires
+    // these fixtures as wall-clock time advances past the test's authorship date.
+    createdAt: new Date(),
+    updatedAt: new Date(),
     lastUsedAt: null,
   });
   markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);

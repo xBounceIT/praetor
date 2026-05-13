@@ -5,14 +5,23 @@ const IV_LENGTH = 16;
 
 export const MASKED_SECRET = '********';
 
-function getEncryptionKey(): Buffer {
+// SHA-256 of ENCRYPTION_KEY: a stable 32-byte buffer used as the AES-256 key for
+// encrypt/decrypt and as the HMAC key for PAT / MCP-token hashing. Memoized because PAT auth
+// runs on every authenticated request; ENCRYPTION_KEY is process-stable so this is safe.
+let cachedEncryptionKey: Buffer | null = null;
+export function getEncryptionKey(): Buffer {
+  if (cachedEncryptionKey !== null) return cachedEncryptionKey;
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
     throw new Error('ENCRYPTION_KEY environment variable is required');
   }
-  // Hash the key to ensure it's exactly 32 bytes for AES-256
-  return crypto.createHash('sha256').update(key).digest();
+  cachedEncryptionKey = crypto.createHash('sha256').update(key).digest();
+  return cachedEncryptionKey;
 }
+
+export const __resetEncryptionKeyCacheForTests = () => {
+  cachedEncryptionKey = null;
+};
 
 export function encrypt(plaintext: string): string {
   if (!plaintext) return '';
