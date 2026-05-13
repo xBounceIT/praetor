@@ -123,6 +123,32 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     expect(source).toContain('setClientId(nextOffer.clientId);');
   });
 
+  test('changing the order, offer, or client clears any link that no longer matches', async () => {
+    // Symmetric cascading reset so the user can never reach the server-side cross-check via
+    // a stale (clientId, orderId, offerId) tuple. Each handler clears the OTHER two links if
+    // they belonged to a different client.
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    // Direct client picker (edit + create modes) goes through applyClientChange which clears
+    // both stale order and stale offer.
+    expect(source).toContain('const applyClientChange = (nextClientId: string)');
+    expect(source).toMatch(/applyClientChange[\s\S]*currentOffer\.clientId !== nextClientId/);
+    expect(source).toMatch(/applyClientChange[\s\S]*currentOrder\.clientId !== nextClientId/);
+
+    // Order picker clears stale offer inline (it sets the order itself, so applyClientChange
+    // can't be reused — its closure would re-clear the order via batched state).
+    expect(source).toMatch(
+      /setOrderId\(nextOrderId\)[\s\S]*currentOffer\.clientId !== nextOrder\.clientId[\s\S]*setOfferId\(''\)/,
+    );
+
+    // Offer picker clears stale order inline (same reasoning).
+    expect(source).toMatch(
+      /setOfferId\(nextOfferId\)[\s\S]*currentOrder\.clientId !== nextOffer\.clientId[\s\S]*setOrderId\(''\)/,
+    );
+  });
+
   test('edit-mode revenue uses editingProject.orderId, not the empty create-form orderId', async () => {
     // Regression for the order-derived branch silently falling back to "manual" on edit:
     // the form's `orderId` state is empty in openEditModal (no order selector is shown in the

@@ -372,6 +372,31 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectBillingChanged(false);
   };
 
+  // Change the project's client and reset any currently-bound order/offer that belonged to a
+  // different client. Keeps the (clientId, orderId, offerId) triple consistent in the form so
+  // the user never reaches the server-side cross-check via a stale selection.
+  //
+  // Use this from the direct client picker. The order picker has its own inline logic — it sets
+  // the new order explicitly, so it must only clear a stale offer (not the order it just set).
+  const applyClientChange = (nextClientId: string) => {
+    setClientId(nextClientId);
+    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+    if (offerId) {
+      const currentOffer = offers.find((o) => o.id === offerId);
+      if (!currentOffer || currentOffer.clientId !== nextClientId) {
+        setOfferId('');
+        if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+      }
+    }
+    if (orderId) {
+      const currentOrder = orders.find((o) => o.id === orderId);
+      if (!currentOrder || currentOrder.clientId !== nextClientId) {
+        setOrderId('');
+        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -1069,8 +1094,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           options={clientOptions}
                           value={clientId}
                           onChange={(val) => {
-                            setClientId(val as string);
-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            applyClientChange(val as string);
                           }}
                           label={
                             <>
@@ -1112,12 +1136,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           onChange={(val) => {
                             const nextOrderId = val as string;
                             setOrderId(nextOrderId);
-                            const nextOrder = orders.find((o) => o.id === nextOrderId);
-                            if (nextOrder) {
-                              setClientId(nextOrder.clientId);
-                              if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                            }
                             if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                            const nextOrder = orders.find((o) => o.id === nextOrderId);
+                            if (!nextOrder) return;
+                            setClientId(nextOrder.clientId);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            // The order was just set explicitly — only clear a stale offer here,
+                            // not the order itself (applyClientChange would because state updates
+                            // are batched and the orderId closure still holds the old value).
+                            if (offerId) {
+                              const currentOffer = offers.find((o) => o.id === offerId);
+                              if (!currentOffer || currentOffer.clientId !== nextOrder.clientId) {
+                                setOfferId('');
+                                if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                              }
+                            }
                           }}
                           label={t('projects:projects.orderOptionalLabel')}
                           placeholder={t('projects:projects.selectOrder')}
@@ -1132,8 +1165,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           options={clientOptions}
                           value={clientId}
                           onChange={(val) => {
-                            setClientId(val as string);
-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            applyClientChange(val as string);
                           }}
                           label={
                             <>
@@ -1241,14 +1273,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         onChange={(val) => {
                           const nextOfferId = val as string;
                           setOfferId(nextOfferId);
+                          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
                           // Auto-fill the client from the chosen offer — mirrors the order
                           // selector's behavior so the offer/client pair stays consistent.
                           const nextOffer = offers.find((o) => o.id === nextOfferId);
-                          if (nextOffer && nextOffer.clientId !== clientId) {
+                          if (!nextOffer) return;
+                          if (nextOffer.clientId !== clientId) {
                             setClientId(nextOffer.clientId);
                             if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
                           }
-                          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                          // Mirror of the order picker's cleanup: clear a stale order that
+                          // belonged to the previous client. The offer was just set explicitly,
+                          // so don't clear it.
+                          if (orderId) {
+                            const currentOrder = orders.find((o) => o.id === orderId);
+                            if (!currentOrder || currentOrder.clientId !== nextOffer.clientId) {
+                              setOrderId('');
+                              if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                            }
+                          }
                         }}
                         label={
                           <>
