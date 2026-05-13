@@ -1,4 +1,4 @@
-import { ArrowUp } from 'lucide-react';
+import { Save } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -160,8 +160,8 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
                 showSubmitSuccess && 'bg-emerald-600 hover:bg-emerald-600',
               )}
             >
+              <Save className="size-4" aria-hidden="true" />
               {showSubmitSuccess ? t('weekly.success') : t('weekly.submitTime')}
-              <ArrowUp className="size-4" aria-hidden="true" />
             </Button>
           </div>
         </div>

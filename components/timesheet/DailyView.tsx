@@ -1,3 +1,4 @@
+import { Save } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -294,6 +295,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
           <div className="min-w-0 flex items-end">
             <Button type="submit" disabled={!hasValidDuration} className="h-10 w-full rounded-lg">
+              <Save className="size-4" aria-hidden="true" />
               {t('entry.logTime')}
             </Button>
           </div>
