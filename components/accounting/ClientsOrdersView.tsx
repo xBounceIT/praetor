@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Alert, AlertAction, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
@@ -722,35 +723,39 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
               <ModalBody className="flex-1 space-y-5">
                 {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  <Alert variant="warning" className="items-center">
+                    <AlertIcon>
+                      <i className="fa-solid fa-clock-rotate-left"></i>
+                    </AlertIcon>
+                    <AlertTitle className="text-xs">
                       {t('accounting:clientsOrders.versionHistory.previewBanner', {
                         date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
                         defaultValue: 'Previewing version from {{date}}',
                       })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-amber-700 dark:text-amber-300"
-                    >
-                      {t('accounting:clientsOrders.versionHistory.backToCurrent', {
-                        defaultValue: 'Back to current',
-                      })}
-                    </Button>
-                  </div>
+                    </AlertTitle>
+                    <AlertAction>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={handleClearPreview}
+                        className="h-auto px-0 text-amber-700 dark:text-amber-300"
+                      >
+                        {t('accounting:clientsOrders.versionHistory.backToCurrent', {
+                          defaultValue: 'Back to current',
+                        })}
+                      </Button>
+                    </AlertAction>
+                  </Alert>
                 )}
                 {editingOrder && editingOrder.status !== 'draft' && (
-                  <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                  <Alert variant="warning" className="items-center">
+                    <AlertTitle className="text-xs">
                       {t('accounting:clientsOrders.readOnlyStatus', {
                         status: getOrderStatusLabel(editingOrder.status, t),
                       })}
-                    </span>
-                  </div>
+                    </AlertTitle>
+                  </Alert>
                 )}
                 {/* Linked Offer Info */}
                 {formData.linkedOfferId && (

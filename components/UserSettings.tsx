@@ -19,6 +19,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
+import { Alert, AlertContent, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -911,16 +912,19 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             </form>
 
             {rawMcpToken && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
+              <Alert
+                variant="warning"
+                className="flex-col gap-3 p-4 text-foreground dark:text-foreground"
+              >
+                <div className="flex w-full items-start justify-between gap-4">
+                  <AlertContent>
+                    <AlertTitle className="text-sm font-semibold text-foreground">
                       {t('mcp.rawTokenTitle')}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    </AlertTitle>
+                    <AlertDescription className="text-xs text-muted-foreground">
                       {t('mcp.rawTokenDescription')}
-                    </p>
-                  </div>
+                    </AlertDescription>
+                  </AlertContent>
                   <CopyButton
                     variant="outline"
                     size="sm"
@@ -930,10 +934,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     className="shrink-0"
                   />
                 </div>
-                <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
+                <code className="block w-full rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
                   {rawMcpToken}
                 </code>
-              </div>
+              </Alert>
             )}
 
             <div className="space-y-3">

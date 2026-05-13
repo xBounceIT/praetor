@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Alert, AlertAction, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -698,30 +699,34 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
               <ModalBody className="flex-1 space-y-5">
                 {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 bg-amber-50">
-                    <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
+                  <Alert variant="warning" className="items-center">
+                    <AlertIcon>
                       <i className="fa-solid fa-clock-rotate-left"></i>
+                    </AlertIcon>
+                    <AlertTitle className="text-xs font-bold">
                       {t('sales:supplierQuotes.versionHistory.previewBanner', {
                         date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
                         defaultValue: 'Previewing version from {{date}}',
                       })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-xs font-semibold text-amber-800"
-                    >
-                      {t('sales:supplierQuotes.versionHistory.backToCurrent', {
-                        defaultValue: 'Back to current',
-                      })}
-                    </Button>
-                  </div>
+                    </AlertTitle>
+                    <AlertAction>
+                      <Button
+                        type="button"
+                        variant="link"
+                        onClick={handleClearPreview}
+                        className="h-auto px-0 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                      >
+                        {t('sales:supplierQuotes.versionHistory.backToCurrent', {
+                          defaultValue: 'Back to current',
+                        })}
+                      </Button>
+                    </AlertAction>
+                  </Alert>
                 )}
                 {baseReadOnly && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                    <span className="text-amber-700 text-xs font-bold">{readOnlyReason}</span>
-                  </div>
+                  <Alert variant="warning" className="items-center">
+                    <AlertTitle className="text-xs font-bold">{readOnlyReason}</AlertTitle>
+                  </Alert>
                 )}
                 {editingQuote?.linkedOrderId && (
                   <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">

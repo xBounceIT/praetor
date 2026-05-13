@@ -7,6 +7,7 @@ import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
+import { Alert, AlertIcon, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
@@ -438,12 +439,17 @@ const DailyView: React.FC<DailyViewProps> = ({
         </div>
 
         {isExceedingGoal && (
-          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-            <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-            <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
+          <Alert
+            variant="warning"
+            className="items-center gap-2 px-2 py-2 animate-in fade-in slide-in-from-left-4"
+          >
+            <AlertIcon className="pt-0">
+              <i className="fa-solid fa-triangle-exclamation"></i>
+            </AlertIcon>
+            <AlertTitle className="text-[10px] font-bold uppercase leading-none">
               {t('entry.warningExceedGoal', { goal: dailyGoal })}
-            </p>
-          </div>
+            </AlertTitle>
+          </Alert>
         )}
 
         {selectedTaskId && (
