@@ -82,7 +82,7 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOfferIt
   const rows = await exec
     .select()
     .from(customerOfferItems)
-    .orderBy(asc(customerOfferItems.createdAt));
+    .orderBy(asc(customerOfferItems.createdAt), asc(customerOfferItems.id));
   return rows.map(mapItem);
 };
 

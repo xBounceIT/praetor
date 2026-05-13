@@ -74,7 +74,7 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<SupplierQuote
   const rows = await exec
     .select()
     .from(supplierQuoteItems)
-    .orderBy(asc(supplierQuoteItems.createdAt));
+    .orderBy(asc(supplierQuoteItems.createdAt), asc(supplierQuoteItems.id));
   return rows.map(mapItem);
 };
 
