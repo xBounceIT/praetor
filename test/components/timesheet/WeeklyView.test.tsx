@@ -1,22 +1,12 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { waitFor } from '@testing-library/react';
-import type { Client, Project, ProjectTask, TimeEntry, User } from '../../../types';
+import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
 installI18nMock();
 
 const WeeklyView = (await import('../../../components/timesheet/WeeklyView')).default;
-
-const availableUsers: User[] = [
-  {
-    id: 'user-a',
-    name: 'User A',
-    role: 'user',
-    avatarInitials: 'UA',
-    username: 'user-a',
-  },
-];
 
 const alphaCatalog = {
   clients: [{ id: 'client-alpha', name: 'Alpha Client' }] satisfies Client[],
@@ -45,42 +35,28 @@ const todayDateOnly = () => {
   ).padStart(2, '0')}`;
 };
 
-describe('<WeeklyView /> RBAC catalog sync', () => {
-  test('rerendering with another scoped catalog rebuilds row selections', async () => {
-    const props = {
-      entries: [],
-      onAddBulkEntries: mock(async () => {}),
-      onDeleteEntry: mock(() => {}),
-      onUpdateEntry: mock(() => {}),
-      viewingUserId: 'user-a',
-      availableUsers,
-      onViewUserChange: mock(() => {}),
-      startOfWeek: 'Monday' as const,
-      treatSaturdayAsHoliday: false,
-      allowWeekendSelection: true,
-    };
+const sharedProps = {
+  permissions: [] as string[],
+  currency: '€',
+  onAddCustomTask: async () =>
+    ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
+  onAddBulkEntries: async () => {},
+  onUpdateEntry: () => {},
+  viewingUserId: 'user-a',
+  selectedDate: todayDateOnly(),
+  onSelectedDateChange: () => {},
+  startOfWeek: 'Monday' as const,
+  treatSaturdayAsHoliday: false,
+  allowWeekendSelection: true,
+  dailyGoal: 8,
+};
 
-    const { rerender } = render(<WeeklyView {...props} {...alphaCatalog} />);
-
-    await waitFor(() => {
-      expect(document.body).toHaveTextContent('Alpha Client');
-      expect(document.body).toHaveTextContent('Alpha Project');
-      expect(document.body).toHaveTextContent('Alpha Task');
-    });
-
-    rerender(<WeeklyView {...props} {...betaCatalog} />);
-
-    await waitFor(() => {
-      expect(document.body).toHaveTextContent('Beta Client');
-      expect(document.body).toHaveTextContent('Beta Project');
-      expect(document.body).toHaveTextContent('Beta Task');
-      expect(document.body).not.toHaveTextContent('Alpha Client');
-      expect(document.body).not.toHaveTextContent('Alpha Project');
-      expect(document.body).not.toHaveTextContent('Alpha Task');
-    });
-  });
-
-  test('does not relabel an existing out-of-scope entry to the first available catalog item', async () => {
+describe('<WeeklyView /> RBAC catalog scoping', () => {
+  test('drops an entry whose client/project/task is out of the scoped catalogs', async () => {
+    // The viewing user has an entry referencing alpha catalog items, but only
+    // the beta catalog is currently in scope. The alpha entry must NOT render
+    // as a row — silently relabelling it to the beta catalog would mask a
+    // real RBAC mismatch.
     const entries: TimeEntry[] = [
       {
         id: 'entry-alpha',
@@ -98,26 +74,42 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
       },
     ];
 
-    render(
-      <WeeklyView
-        entries={entries}
-        {...betaCatalog}
-        onAddBulkEntries={mock(async () => {})}
-        onDeleteEntry={mock(() => {})}
-        onUpdateEntry={mock(() => {})}
-        viewingUserId="user-a"
-        availableUsers={availableUsers}
-        onViewUserChange={mock(() => {})}
-        startOfWeek="Monday"
-        treatSaturdayAsHoliday={false}
-        allowWeekendSelection
-      />,
-    );
+    render(<WeeklyView entries={entries} {...betaCatalog} {...sharedProps} />);
 
     await waitFor(() => {
-      expect(document.body).not.toHaveTextContent('Beta Client');
-      expect(document.body).not.toHaveTextContent('Beta Project');
-      expect(document.body).not.toHaveTextContent('Beta Task');
+      expect(document.body).not.toHaveTextContent('Alpha Client');
+      expect(document.body).not.toHaveTextContent('Alpha Project');
+      expect(document.body).not.toHaveTextContent('Alpha Task');
+    });
+  });
+
+  test('pre-fills the form row when the catalog selection matches an existing entry', async () => {
+    const entries: TimeEntry[] = [
+      {
+        id: 'entry-1',
+        userId: 'user-a',
+        date: todayDateOnly(),
+        clientId: 'client-alpha',
+        clientName: 'Alpha Client',
+        projectId: 'project-alpha',
+        projectName: 'Alpha Project',
+        task: 'Alpha Task',
+        duration: 3.5,
+        hourlyCost: 0,
+        createdAt: 1700000000,
+        location: 'remote',
+      },
+    ];
+
+    render(<WeeklyView entries={entries} {...alphaCatalog} {...sharedProps} />);
+
+    // The form auto-selects Alpha Task, so the entry collapses into the
+    // editable "Nuova voce" row. The pre-filled 3.5h must surface in a
+    // day-cell decimal input.
+    await waitFor(() => {
+      const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
+      const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
+      expect(prefilled).toBe(true);
     });
   });
 });

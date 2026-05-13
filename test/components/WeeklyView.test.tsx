@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { screen } from '@testing-library/react';
 import { act } from 'react';
-import type { Client, Project, ProjectTask, TimeEntry, User } from '../../types';
+import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
 
@@ -13,28 +13,30 @@ const clients: Client[] = [];
 const projects: Project[] = [];
 const projectTasks: ProjectTask[] = [];
 const entries: TimeEntry[] = [];
-const availableUsers: User[] = [
-  {
-    id: 'u-1',
-    name: 'Test User',
-    role: 'user',
-    avatarInitials: 'TU',
-    username: 'testuser',
-  },
-];
+
+const todayDateOnly = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+};
 
 const baseProps = {
   entries,
   clients,
   projects,
   projectTasks,
+  permissions: [],
+  currency: '€',
+  onAddCustomTask: async () =>
+    ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
   onAddBulkEntries: async () => {},
-  onDeleteEntry: () => {},
   onUpdateEntry: () => {},
   viewingUserId: 'u-1',
-  availableUsers,
-  onViewUserChange: () => {},
+  selectedDate: todayDateOnly(),
+  onSelectedDateChange: () => {},
   treatSaturdayAsHoliday: false,
+  dailyGoal: 8,
 };
 
 /**

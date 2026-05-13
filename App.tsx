@@ -405,72 +405,72 @@ const TrackerView: React.FC<{
         </div>
       </div>
 
+      {/* Manager Selection Header — shared across daily and weekly modes. */}
+      {availableUsers.length > 1 && (
+        <div className="max-w-xl mx-auto">
+          <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
+              >
+                {viewingUser?.avatarInitials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                  {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+                </p>
+                <p className="text-sm font-bold text-foreground truncate">{viewingUser?.name}</p>
+              </div>
+            </div>
+            <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+              <div className="flex min-h-6 items-center justify-between gap-2">
+                <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+                {!isViewingSelf && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onViewUserChange(currentUser.id)}
+                    className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    {t('tracker.backToMe')}
+                  </Button>
+                )}
+              </div>
+              <SelectControl
+                options={userOptions}
+                value={viewingUserId}
+                onChange={(val) => onViewUserChange(val as string)}
+                searchable={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {trackerMode === 'weekly' ? (
         <WeeklyView
           entries={entries}
           clients={clients}
           projects={projects}
           projectTasks={projectTasks}
-          onDeleteEntry={onDeleteEntry}
+          permissions={permissions}
+          currency={currency}
+          onAddCustomTask={onAddCustomTask}
+          onAddBulkEntries={onAddBulkEntries}
           onUpdateEntry={onUpdateEntry}
           viewingUserId={viewingUserId}
-          currentUserId={currentUser.id}
-          availableUsers={availableUsers}
-          onViewUserChange={onViewUserChange}
-          onAddBulkEntries={onAddBulkEntries}
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
           startOfWeek={startOfWeek}
           treatSaturdayAsHoliday={treatSaturdayAsHoliday}
           allowWeekendSelection={allowWeekendSelection}
           defaultLocation={defaultLocation}
+          dailyGoal={dailyGoal}
         />
       ) : (
         <div className="space-y-6">
-          {/* Manager Selection Header */}
-          {availableUsers.length > 1 && (
-            <div className="max-w-xl mx-auto">
-              <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
-                  >
-                    {viewingUser?.avatarInitials}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                      {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                    </p>
-                    <p className="text-sm font-bold text-foreground truncate">
-                      {viewingUser?.name}
-                    </p>
-                  </div>
-                </div>
-                <div className="w-full sm:w-56 space-y-1.5 shrink-0">
-                  <div className="flex min-h-6 items-center justify-between gap-2">
-                    <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
-                    {!isViewingSelf && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => onViewUserChange(currentUser.id)}
-                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                        {t('tracker.backToMe')}
-                      </Button>
-                    )}
-                  </div>
-                  <SelectControl
-                    options={userOptions}
-                    value={viewingUserId}
-                    onChange={(val) => onViewUserChange(val as string)}
-                    searchable={true}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
               <DailyView
