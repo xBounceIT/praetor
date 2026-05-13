@@ -1,5 +1,5 @@
 import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db, executeRows, withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { productCategories } from '../db/schema/productCategories.ts';
 import { productSubcategories } from '../db/schema/productSubcategories.ts';
 import { products } from '../db/schema/products.ts';
@@ -415,30 +415,28 @@ export const updateProductTypeFields = async (
 
 // Both propagate fns issue TWO updates that must be atomic: if the second update fails after
 // the first commits, products and product_categories drift out of sync (a category points at
-// a type/costUnit no row in products still uses, or vice versa). When a caller supplies an
-// explicit `exec` they own the transactional scope; otherwise we wrap in `withDbTransaction`
-// so the standalone call is safe.
-export const propagateProductTypeName = async (
+// a type/costUnit no row in products still uses, or vice versa). `runAtomically` wraps a
+// standalone call in `withDbTransaction` while reusing a caller-supplied `exec` so we don't
+// open a nested transaction.
+export const propagateProductTypeName = (
   oldName: string,
   newName: string,
   exec: DbExecutor = db,
-): Promise<void> => {
-  const run = async (tx: DbExecutor): Promise<void> => {
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
     await tx.update(products).set({ type: newName }).where(eq(products.type, oldName));
     await tx
       .update(productCategories)
       .set({ type: newName })
       .where(eq(productCategories.type, oldName));
-  };
-  return exec === db ? withDbTransaction(run) : run(exec);
-};
+  });
 
-export const propagateProductTypeCostUnit = async (
+export const propagateProductTypeCostUnit = (
   typeName: string,
   costUnit: CostUnit,
   exec: DbExecutor = db,
-): Promise<void> => {
-  const run = async (tx: DbExecutor): Promise<void> => {
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
     await tx
       .update(products)
       .set({ costUnit })
@@ -447,9 +445,7 @@ export const propagateProductTypeCostUnit = async (
       .update(productCategories)
       .set({ costUnit })
       .where(eq(productCategories.type, typeName));
-  };
-  return exec === db ? withDbTransaction(run) : run(exec);
-};
+  });
 
 export const countProductsForType = async (
   typeName: string,

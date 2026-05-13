@@ -399,9 +399,10 @@ describe('product type propagations', () => {
 
   // Regression: B14. Each propagate fn issues TWO updates that must be atomic so a failure on
   // the SECOND update doesn't leave products/internal_product_categories drifted out of sync.
-  // The repo wraps in withDbTransaction when called without an explicit exec; when an explicit
-  // tx is supplied (as here via testDb), the caller owns the transactional scope and a thrown
-  // error from the underlying executor should propagate up to that caller's rollback.
+  // The repo uses `runAtomically`, which wraps in a transaction only when no explicit exec is
+  // supplied; when the caller passes its own `exec` (as here via testDb) the existing scope is
+  // reused and a thrown error from the underlying executor propagates up to that caller's
+  // rollback.
   test('propagateProductTypeName propagates an error from the SECOND update so the caller can roll back', async () => {
     exec.enqueue({ rows: [], rowCount: 5 });
     exec.enqueue(() => {
