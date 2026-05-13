@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  index,
   numeric,
   pgTable,
   text,
@@ -42,6 +43,7 @@ export const tasks = pgTable(
     monthlyEffort: numeric('monthly_effort', { precision: 10, scale: 2 }).default('0'),
   },
   (table) => [
+    index('idx_tasks_project_id').on(table.projectId),
     check(
       'tasks_billing_type_check',
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,

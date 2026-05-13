@@ -23,11 +23,18 @@ export type AuditLogFilter = {
 
 export const list = async (filter: AuditLogFilter, exec: DbExecutor = db): Promise<AuditLog[]> => {
   const conditions: SQL[] = [];
+  // Interpret incoming filter strings as UTC. `::timestamptz AT TIME ZONE 'UTC'` first parses
+  // the string as a timestamptz (honoring any explicit offset like `Z` or `+02:00`), then
+  // converts to a `timestamp without time zone` representing UTC wall-clock. That matches
+  // the type of `al.created_at` (declared `timestamp`, not `timestamptz`), so the comparison
+  // doesn't trigger an implicit session-timezone conversion. A bare `::timestamptz` cast
+  // would have made the comparison depend on the server's `TimeZone` GUC, yielding different
+  // result sets across deployments.
   if (filter.startDate) {
-    conditions.push(sql`al.created_at >= ${filter.startDate}::timestamptz`);
+    conditions.push(sql`al.created_at >= ${filter.startDate}::timestamptz AT TIME ZONE 'UTC'`);
   }
   if (filter.endDate) {
-    conditions.push(sql`al.created_at <= ${filter.endDate}::timestamptz`);
+    conditions.push(sql`al.created_at <= ${filter.endDate}::timestamptz AT TIME ZONE 'UTC'`);
   }
 
   const whereClause =

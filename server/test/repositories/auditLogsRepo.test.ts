@@ -21,24 +21,37 @@ describe('list', () => {
   test('emits a >= clause bound to $1 when only startDate is set', async () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.list({ startDate: '2024-01-01' }, testDb);
-    expect(exec.calls[0].sql).toContain('al.created_at >= $1::timestamptz');
+    expect(exec.calls[0].sql).toContain(`al.created_at >= $1::timestamptz AT TIME ZONE 'UTC'`);
     expect(exec.calls[0].params).toEqual(['2024-01-01']);
   });
 
   test('emits a <= clause bound to $1 (not $2) when only endDate is set', async () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.list({ endDate: '2024-12-31' }, testDb);
-    expect(exec.calls[0].sql).toContain('al.created_at <= $1::timestamptz');
+    expect(exec.calls[0].sql).toContain(`al.created_at <= $1::timestamptz AT TIME ZONE 'UTC'`);
     expect(exec.calls[0].params).toEqual(['2024-12-31']);
   });
 
   test('emits both clauses joined by AND when both dates are set', async () => {
     exec.enqueue({ rows: [] });
     await auditLogsRepo.list({ startDate: '2024-01-01', endDate: '2024-12-31' }, testDb);
-    expect(exec.calls[0].sql).toContain('al.created_at >= $1::timestamptz');
-    expect(exec.calls[0].sql).toContain('al.created_at <= $2::timestamptz');
+    expect(exec.calls[0].sql).toContain(`al.created_at >= $1::timestamptz AT TIME ZONE 'UTC'`);
+    expect(exec.calls[0].sql).toContain(`al.created_at <= $2::timestamptz AT TIME ZONE 'UTC'`);
     expect(exec.calls[0].sql).toContain(' AND ');
     expect(exec.calls[0].params).toEqual(['2024-01-01', '2024-12-31']);
+  });
+
+  // Regression test for Medium B11: without `AT TIME ZONE 'UTC'`, comparing the `timestamp`
+  // column `al.created_at` to a `timestamptz` literal forces Postgres to convert via
+  // `current_setting('TimeZone')`, yielding different result sets across deployments with
+  // different session timezones.
+  test('anchors filter values to UTC (independent of session timezone)', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list(
+      { startDate: '2024-01-01T00:00:00Z', endDate: '2024-12-31T23:59:59Z' },
+      testDb,
+    );
+    expect(exec.calls[0].sql).toContain(`AT TIME ZONE 'UTC'`);
   });
 
   test('returns createdAt verbatim from pg as a number', async () => {

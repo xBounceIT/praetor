@@ -277,25 +277,42 @@ describe('hours aggregation', () => {
     exec.enqueue({ rows: [] });
     await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);
     const sql = exec.calls[0].sql;
-    // FROM clause declares the `te` alias; JOIN clause declares the `t` alias.
+    // FROM clause declares the `te` alias; LATERAL subquery declares the `t` alias.
     expect(sql).toContain('FROM time_entries te');
-    expect(sql).toContain('JOIN tasks t');
+    expect(sql).toContain('JOIN LATERAL');
     expect(sql).toContain('JOIN user_tasks ut ON ut.task_id = "t"."id"');
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].params).toContain('p-1');
 
-    // Both JOIN branches must sit inside the same `JOIN tasks t ON ...` clause, OR-combined.
-    // Asserting against the extracted ON clause (rather than the whole SQL) prevents a
-    // regression that moves one branch into an unrelated CTE or WHERE filter from passing
-    // silently - both predicates have to live in the same join condition. Helper is shared
-    // with reportsHoursRepo.test.ts (test/helpers/sqlAssertions.ts).
+    // Both JOIN branches must sit inside the LATERAL subquery's WHERE clause, OR-combined.
+    // Asserting against the extracted body (rather than the whole SQL) prevents a regression
+    // that moves one branch into an unrelated CTE or outer WHERE filter from passing silently.
+    // Helper is shared with reportsHoursRepo.test.ts (test/helpers/sqlAssertions.ts).
     const onClause = extractTasksJoinOn(sql);
     expect(onClause).not.toBeNull();
-    expect(onClause).toContain('"t"."id" = "te"."task_id"');
+    expect(onClause).toContain('t_inner.id = "te"."task_id"');
     expect(onClause).toMatch(/\bOR\b/);
     expect(onClause).toContain('"te"."task_id" IS NULL');
-    expect(onClause).toContain('"t"."project_id" = "te"."project_id"');
-    expect(onClause).toContain('"t"."name" = "te"."task"');
+    expect(onClause).toContain('t_inner.project_id = "te"."project_id"');
+    expect(onClause).toContain('t_inner.name = "te"."task"');
+  });
+
+  // Regression test for Critical #10: when two tasks share (project_id, name), the legacy
+  // OR-branch `ON t.id = te.task_id OR (te.task_id IS NULL AND ...)` multiplied rows because
+  // a single time-entry with task_id IS NULL matched every duplicate. The LATERAL
+  // `SELECT ... LIMIT 1` enforces one task row per time entry. We can't simulate true row
+  // multiplication against the fake DB (it returns whatever we enqueue), but we CAN assert
+  // the structural guarantee that prevents it: a LATERAL subquery with LIMIT 1, ordering
+  // FK matches first then by lowest task id (matching findIdByProjectAndName's contract).
+  test('legacy fallback resolves duplicate task names to a single row (no multiplication)', async () => {
+    exec.enqueue({ rows: [{ projectId: 'p-1', task: 'Dev', total: 4 }] });
+    const result = await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);
+    const sql = exec.calls[0].sql;
+
+    expect(sql).toContain('JOIN LATERAL');
+    expect(sql).toMatch(/LIMIT\s+1/);
+    expect(sql).toMatch(/ORDER BY[\s\S]*t_inner\.id/);
+    expect(result).toEqual([{ projectId: 'p-1', task: 'Dev', total: 4 }]);
   });
 });
 
