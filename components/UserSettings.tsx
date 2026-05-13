@@ -611,8 +611,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'language' && (
-        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
             <CardTitle className="flex items-center gap-3 text-base">
               <Languages aria-hidden="true" className="size-4 text-praetor" />
               {t('language.title')}
@@ -637,7 +637,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       }
                     }}
                     className={cn(
-                      'flex-row items-start gap-3 p-4 border-border cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       active && 'border-primary ring-2 ring-primary/40',
                     )}
                   >
