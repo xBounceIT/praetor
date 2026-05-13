@@ -165,6 +165,7 @@ export type StandardTableProps<T extends object = object> = {
   tableContainerClassName?: string;
   footer?: ReactNode;
   footerClassName?: string;
+  footerExtras?: ReactNode;
   children?: ReactNode;
   emptyState?: ReactNode;
   isLoading?: boolean;
@@ -188,6 +189,7 @@ const StandardTable = <T extends object>({
   tableContainerClassName,
   footer: externalFooter,
   footerClassName,
+  footerExtras,
   children,
   emptyState,
   isLoading = false,
@@ -1305,6 +1307,8 @@ const StandardTable = <T extends object>({
             </SelectContent>
           </Select>
         </div>
+
+        {footerExtras}
 
         <div className="flex items-center gap-2">
           <Button

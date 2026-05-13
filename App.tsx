@@ -342,15 +342,25 @@ const TrackerView: React.FC<{
         disableFiltering: true,
         sticky: 'right',
         cell: ({ row }) => (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(row);
-            }}
-            className="text-zinc-200 hover:text-red-500 transition-colors p-1"
-          >
-            <i className="fa-solid fa-trash-can text-xs" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClick(row);
+                  }}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+          </Tooltip>
         ),
       },
     ],
@@ -488,14 +498,14 @@ const TrackerView: React.FC<{
                     })
                   : t('entry.recentActivity')
               }
-              headerExtras={
+              footerExtras={
                 selectedDate ? (
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase">
+                  <div className="flex-1 min-w-0 text-center">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       {t('tracker.dayTotal')}
                     </p>
                     <p
-                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
+                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-destructive' : 'text-praetor'}`}
                     >
                       {dailyTotal.toFixed(2)} h
                     </p>
