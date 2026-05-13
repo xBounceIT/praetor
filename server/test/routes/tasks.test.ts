@@ -312,12 +312,13 @@ describe('POST /api/tasks', () => {
         billingType: 'time_and_materials',
         billingFrequency: 'monthly',
       }),
+      undefined,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1');
-    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1');
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
+    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1', undefined, undefined);
     expect(assignTaskToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1');
-    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1');
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
+    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1', undefined);
     expect(assignTaskToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.created', entityType: 'task' }),
@@ -360,6 +361,7 @@ describe('POST /api/tasks', () => {
         billingType: 'retainer',
         billingFrequency: 'one_time',
       }),
+      undefined,
     );
   });
 
@@ -518,6 +520,37 @@ describe('POST /api/tasks', () => {
 
     expect(res.statusCode).toBe(403);
     expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('500: failing auto-assignment rolls back task insert (atomic)', async () => {
+    // Simulate a real transaction: if the callback rejects, nothing is committed.
+    // The fake `withDbTransaction` here runs the callback and lets the rejection
+    // propagate — that's the same shape `db.transaction` exposes for callers, so
+    // the route's behavior on rollback is what we're asserting.
+    let createInvoked = false;
+    createMock.mockImplementation(async () => {
+      createInvoked = true;
+      return SAMPLE_TASK;
+    });
+    findClientIdMock.mockResolvedValue('c-1');
+    assignTaskToTopManagersMock.mockImplementation(async () => {
+      throw new Error('boom');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'Implement feature', projectId: 'p-1' },
+    });
+
+    // Failing assignment propagates → 500. The whole block was inside
+    // `withDbTransaction`, so a real DB would have rolled back the task insert.
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(createInvoked).toBe(true);
+    // Audit log lives after the awaited transaction, so a failed txn must skip it.
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 

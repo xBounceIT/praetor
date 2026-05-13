@@ -285,37 +285,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const id = generatePrefixedId('t');
 
+      // Read-only lookup against an existing project row; the FK constraint on the task
+      // insert below is the real integrity check. Hoisted out of the txn so we don't hold
+      // the txn's connection while waiting on a plain SELECT.
+      const clientId = await projectsRepo.findClientId(projectIdResult.value);
+
       try {
-        const created = await tasksRepo.create({
-          id,
-          name: nameResult.value,
-          projectId: projectIdResult.value,
-          description: description || null,
-          isRecurring: isRecurringValue,
-          recurrencePattern: recurrencePattern || null,
-          recurrenceStart: start,
-          recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffortResult.value ?? 0,
-          monthlyEffort: monthlyEffortResult.value ?? 0,
-          revenue: revenueResult.value ?? 0,
-          notes: notes || null,
-          isDisabled: false,
-          billingType: taskBillingType,
-          billingFrequency: taskBillingFrequency,
+        // Atomicity: task insert + auto-assignments must all succeed or all roll back.
+        // Without the transaction, an assignment failure left the task committed but
+        // unassigned (orphan) while the handler still returned 500.
+        const created = await withDbTransaction(async (tx) => {
+          const task = await tasksRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              projectId: projectIdResult.value,
+              description: description || null,
+              isRecurring: isRecurringValue,
+              recurrencePattern: recurrencePattern || null,
+              recurrenceStart: start,
+              recurrenceDuration: durationResult.value || 0,
+              expectedEffort: expectedEffortResult.value ?? 0,
+              monthlyEffort: monthlyEffortResult.value ?? 0,
+              revenue: revenueResult.value ?? 0,
+              notes: notes || null,
+              isDisabled: false,
+              billingType: taskBillingType,
+              billingFrequency: taskBillingFrequency,
+            },
+            tx,
+          );
+
+          const assignments: Promise<void>[] = [
+            userAssignmentsRepo.assignProjectToUser(
+              request.user.id,
+              projectIdResult.value,
+              undefined,
+              tx,
+            ),
+            userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
+            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
+            userAssignmentsRepo.assignTaskToTopManagers(id, tx),
+          ];
+          if (clientId) {
+            assignments.push(
+              userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx),
+              userAssignmentsRepo.assignClientToTopManagers(clientId, tx),
+            );
+          }
+          await Promise.all(assignments);
+
+          return task;
         });
 
-        const clientId = await projectsRepo.findClientId(projectIdResult.value);
-
-        await Promise.all(
-          [
-            clientId ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId) : null,
-            userAssignmentsRepo.assignProjectToUser(request.user.id, projectIdResult.value),
-            userAssignmentsRepo.assignTaskToUser(request.user.id, id),
-            clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId) : null,
-            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value),
-            userAssignmentsRepo.assignTaskToTopManagers(id),
-          ].filter((p): p is Promise<void> => p !== null),
-        );
+        // Audit log is best-effort and intentionally outside the transaction: a logging
+        // failure must not roll back the resource that was successfully created.
         await logAudit({
           request,
           action: 'task.created',

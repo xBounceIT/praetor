@@ -341,8 +341,13 @@ describe('POST /api/clients', () => {
 
     expect(res.statusCode).toBe(201);
     expect(createClientMock).toHaveBeenCalledTimes(1);
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', expect.any(String));
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith(expect.any(String));
+    expect(assignClientToUserMock).toHaveBeenCalledWith(
+      'u1',
+      expect.any(String),
+      undefined,
+      undefined,
+    );
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith(expect.any(String), undefined);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.created', entityType: 'client' }),
     );
@@ -507,6 +512,38 @@ describe('POST /api/clients', () => {
       payload: validBody,
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  test('500: failing auto-assignment rolls back client insert (atomic)', async () => {
+    // Simulate a real transaction: if the callback rejects, nothing is committed.
+    // The fake `withDbTransaction` here runs the callback and lets the rejection
+    // propagate — that's the same shape `db.transaction` exposes for callers, so
+    // the route's behavior on rollback is what we're asserting.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    let createInvoked = false;
+    createClientMock.mockImplementation(async () => {
+      createInvoked = true;
+      return SAMPLE_CLIENT;
+    });
+    assignClientToTopManagersMock.mockImplementation(async () => {
+      throw new Error('boom');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    // Failing assignment propagates → 500. The whole block was inside
+    // `withDbTransaction`, so a real DB would have rolled back the client insert.
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(createInvoked).toBe(true);
+    // Audit log lives after the awaited transaction, so a failed txn must skip it.
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 
