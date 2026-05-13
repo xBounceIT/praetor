@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { mapExternalGroupsToRoleIds } from '../../services/external-auth.ts';
+import {
+  mapExternalGroupsToMatchedRoleIds,
+  mapExternalGroupsToRoleIds,
+} from '../../services/external-auth.ts';
 
 describe('mapExternalGroupsToRoleIds', () => {
   test('returns all matching roles in mapping order', () => {
@@ -35,5 +38,41 @@ describe('mapExternalGroupsToRoleIds', () => {
     );
 
     expect(result).toEqual(['user']);
+  });
+});
+
+describe('mapExternalGroupsToMatchedRoleIds', () => {
+  test('returns empty array when no mapping matches (no default fallback) — regression #318', () => {
+    const result = mapExternalGroupsToMatchedRoleIds(
+      ['cn=guests,ou=groups,dc=example,dc=com'],
+      [{ externalGroup: 'admins', role: 'admin' }],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  test('returns matched roles when groups match', () => {
+    const result = mapExternalGroupsToMatchedRoleIds(
+      ['cn=admins,ou=groups,dc=example,dc=com'],
+      [
+        { externalGroup: 'admins', role: 'admin' },
+        { externalGroup: 'managers', role: 'top_manager' },
+      ],
+    );
+
+    expect(result).toEqual(['admin']);
+  });
+
+  test('returns empty array when no mappings are configured', () => {
+    const result = mapExternalGroupsToMatchedRoleIds(['cn=anything,dc=x'], []);
+    expect(result).toEqual([]);
+  });
+
+  test('returns empty array when no groups are present', () => {
+    const result = mapExternalGroupsToMatchedRoleIds(
+      [],
+      [{ externalGroup: 'admins', role: 'admin' }],
+    );
+    expect(result).toEqual([]);
   });
 });

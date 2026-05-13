@@ -8,7 +8,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
-const DEFAULT_ROLE_ID = 'user';
+export const DEFAULT_ROLE_ID = 'user';
 
 export type ExternalRoleMapping = {
   externalGroup: string;
@@ -68,7 +68,7 @@ const mappingMatchesGroup = (mappingGroup: string, userGroup: string): boolean =
   return aliases.some((alias) => alias.startsWith(`${mapping},`));
 };
 
-export const mapExternalGroupsToRoleIds = (
+export const mapExternalGroupsToMatchedRoleIds = (
   groups: string[],
   mappings: ExternalRoleMapping[],
 ): string[] => {
@@ -79,37 +79,71 @@ export const mapExternalGroupsToRoleIds = (
       if (!roleIds.includes(mapping.role)) roleIds.push(mapping.role);
     }
   }
-  return roleIds.length > 0 ? roleIds : [DEFAULT_ROLE_ID];
+  return roleIds;
+};
+
+export const filterToExistingRoleIds = async (roleIds: string[]): Promise<string[]> => {
+  if (roleIds.length === 0) return [];
+  const existing = await rolesRepo.findExistingIds(roleIds);
+  return roleIds.filter((roleId) => existing.has(roleId));
+};
+
+export const mapExternalGroupsToRoleIds = (
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): string[] => {
+  const matched = mapExternalGroupsToMatchedRoleIds(groups, mappings);
+  return matched.length > 0 ? matched : [DEFAULT_ROLE_ID];
 };
 
 export const filterExistingRoleIds = async (roleIds: string[]): Promise<string[]> => {
-  const existing = await rolesRepo.findExistingIds(roleIds);
-  const filtered = roleIds.filter((roleId) => existing.has(roleId));
+  const filtered = await filterToExistingRoleIds(roleIds);
   return filtered.length > 0 ? filtered : [DEFAULT_ROLE_ID];
 };
 
-export const applyExternalRolesForUser = async (
-  userId: string,
-  groups: string[],
-  mappings: ExternalRoleMapping[],
-): Promise<string[]> => {
-  const mappedRoleIds = await filterExistingRoleIds(mapExternalGroupsToRoleIds(groups, mappings));
-  await applyExternalRoleIdsForUser(userId, mappedRoleIds);
-  return mappedRoleIds;
+const writeExternalRoleIds = async (userId: string, roleIds: string[]): Promise<void> => {
+  await withDbTransaction(async (tx) => {
+    await usersRepo.replaceUserRoles(userId, roleIds, tx);
+    await usersRepo.setPrimaryRole(userId, roleIds[0], tx);
+    await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
+  });
 };
 
-export const applyExternalRoleIdsForUser = async (
+const applyExternalRoleIdsForUser = async (
   userId: string,
   roleIds: string[],
 ): Promise<string[]> => {
   const mappedRoleIds = await filterExistingRoleIds(roleIds);
-  await withDbTransaction(async (tx) => {
-    await usersRepo.replaceUserRoles(userId, mappedRoleIds, tx);
-    await usersRepo.setPrimaryRole(userId, mappedRoleIds[0], tx);
-    await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
-  });
+  await writeExternalRoleIds(userId, mappedRoleIds);
   return mappedRoleIds;
 };
+
+export const applyExternalRolesForUser = (
+  userId: string,
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): Promise<string[]> =>
+  applyExternalRoleIdsForUser(userId, mapExternalGroupsToRoleIds(groups, mappings));
+
+// Preserve admin-assigned roles: only overwrite when LDAP groups actually map to at least one
+// existing role. Returns { applied: false } when no group matched (or the matched roles have
+// since been deleted), so callers can keep the user's current role intact.
+export const applyExternalRoleIdsForUserIfMatched = async (
+  userId: string,
+  roleIds: string[],
+): Promise<{ applied: boolean; roleIds: string[] }> => {
+  const existing = await filterToExistingRoleIds(roleIds);
+  if (existing.length === 0) return { applied: false, roleIds: [] };
+  await writeExternalRoleIds(userId, existing);
+  return { applied: true, roleIds: existing };
+};
+
+export const applyExternalRolesForUserIfMatched = (
+  userId: string,
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): Promise<{ applied: boolean; roleIds: string[] }> =>
+  applyExternalRoleIdsForUserIfMatched(userId, mapExternalGroupsToMatchedRoleIds(groups, mappings));
 
 export const resolveExternalIdentity = async (
   input: ResolveExternalIdentityInput,
