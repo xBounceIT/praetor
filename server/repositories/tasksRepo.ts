@@ -61,27 +61,44 @@ export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
   return rows.map(mapRow);
 };
 
+const taskSelectFields = {
+  id: tasks.id,
+  name: tasks.name,
+  projectId: tasks.projectId,
+  description: tasks.description,
+  isRecurring: tasks.isRecurring,
+  recurrencePattern: tasks.recurrencePattern,
+  recurrenceStart: tasks.recurrenceStart,
+  recurrenceEnd: tasks.recurrenceEnd,
+  recurrenceDuration: tasks.recurrenceDuration,
+  expectedEffort: tasks.expectedEffort,
+  monthlyEffort: tasks.monthlyEffort,
+  revenue: tasks.revenue,
+  notes: tasks.notes,
+  isDisabled: tasks.isDisabled,
+  createdAt: tasks.createdAt,
+  billingType: tasks.billingType,
+  billingFrequency: tasks.billingFrequency,
+} as const;
+
+export const listRecurringForUser = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<Task[]> => {
+  const rows = await exec
+    .select(taskSelectFields)
+    .from(tasks)
+    .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
+    .where(
+      and(eq(userTasks.userId, userId), eq(tasks.isRecurring, true), eq(tasks.isDisabled, false)),
+    )
+    .orderBy(tasks.name);
+  return rows.map(mapRow);
+};
+
 export const listForUser = async (userId: string, exec: DbExecutor = db): Promise<Task[]> => {
   const rows = await exec
-    .select({
-      id: tasks.id,
-      name: tasks.name,
-      projectId: tasks.projectId,
-      description: tasks.description,
-      isRecurring: tasks.isRecurring,
-      recurrencePattern: tasks.recurrencePattern,
-      recurrenceStart: tasks.recurrenceStart,
-      recurrenceEnd: tasks.recurrenceEnd,
-      recurrenceDuration: tasks.recurrenceDuration,
-      expectedEffort: tasks.expectedEffort,
-      monthlyEffort: tasks.monthlyEffort,
-      revenue: tasks.revenue,
-      notes: tasks.notes,
-      isDisabled: tasks.isDisabled,
-      createdAt: tasks.createdAt,
-      billingType: tasks.billingType,
-      billingFrequency: tasks.billingFrequency,
-    })
+    .select(taskSelectFields)
     .from(tasks)
     .innerJoin(userTasks, eq(userTasks.taskId, tasks.id))
     .where(eq(userTasks.userId, userId))

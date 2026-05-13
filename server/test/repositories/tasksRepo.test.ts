@@ -87,6 +87,20 @@ describe('listForUser', () => {
   });
 });
 
+describe('listRecurringForUser', () => {
+  test('filters by user_id, is_recurring = true, and is_disabled = false', async () => {
+    exec.enqueue({ rows: [taskRow({ 4: true })] });
+    const result = await tasksRepo.listRecurringForUser('u-1', testDb);
+    expect(result).toHaveLength(1);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('inner join "user_tasks"');
+    expect(sql).toContain('is_recurring');
+    expect(sql).toContain('is_disabled');
+    // user_id is one of the params.
+    expect(exec.calls[0].params).toContain('u-1');
+  });
+});
+
 describe('create', () => {
   test('inserts and returns the mapped row', async () => {
     exec.enqueue({ rows: [taskRow()] });

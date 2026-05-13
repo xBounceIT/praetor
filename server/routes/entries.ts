@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   authenticateToken,
   requireAnyPermission,
+  requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
 import type { TimeEntry } from '../repositories/entriesRepo.ts';
@@ -14,6 +15,7 @@ import {
   bulkDeleteTimeEntries,
   createTimeEntry,
   deleteTimeEntry,
+  generateRecurringEntries,
   listTimeEntries,
   TimeEntryServiceError,
   updateTimeEntry,
@@ -112,6 +114,34 @@ const entriesListResponseSchema = {
     nextCursor: { type: ['string', 'null'] },
   },
   required: ['entries', 'nextCursor'],
+} as const;
+
+const recurringGenerateBodySchema = {
+  type: 'object',
+  properties: {
+    fromDate: { type: 'string', format: 'date' },
+    toDate: { type: 'string', format: 'date' },
+    userId: { type: 'string' },
+  },
+  required: ['fromDate', 'toDate'],
+} as const;
+
+const recurringGenerateResponseSchema = {
+  type: 'object',
+  properties: {
+    generated: { type: 'array', items: entrySchema },
+    generatedCount: { type: 'integer' },
+    skippedExistingCount: { type: 'integer' },
+    range: {
+      type: 'object',
+      properties: {
+        fromDate: { type: 'string', format: 'date' },
+        toDate: { type: 'string', format: 'date' },
+      },
+      required: ['fromDate', 'toDate'],
+    },
+  },
+  required: ['generated', 'generatedCount', 'skippedExistingCount', 'range'],
 } as const;
 
 const entriesBulkDeleteQuerySchema = {
@@ -276,6 +306,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       try {
         return await deleteTimeEntry(actorFromRequest(request), id);
+      } catch (err) {
+        return handleTimeEntryServiceError(err, reply);
+      }
+    },
+  );
+
+  // POST /recurring/generate - Materialize recurring templates into time entries
+  fastify.post(
+    '/recurring/generate',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('timesheets.recurring.create'),
+      ],
+      schema: {
+        tags: ['entries'],
+        summary: 'Generate time entries from recurring templates',
+        description:
+          'Walks the active recurring task templates assigned to the target user (or the ' +
+          'authenticated user if `userId` is omitted) and inserts a placeholder time entry ' +
+          'for every matching day in `[fromDate, toDate]` that does not already have an ' +
+          'entry for the same (date, project, task) tuple. Idempotent.',
+        body: recurringGenerateBodySchema,
+        response: {
+          200: recurringGenerateResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      try {
+        return await generateRecurringEntries(actorFromRequest(request), request.body ?? {});
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }

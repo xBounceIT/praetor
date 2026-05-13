@@ -330,6 +330,135 @@ describe('create', () => {
   });
 });
 
+describe('createMany', () => {
+  test('returns an empty array without issuing a query for empty input', async () => {
+    const result = await entriesRepo.createMany([], testDb);
+    expect(result).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('inserts multiple rows in a single query and returns mapped rows', async () => {
+    exec.enqueue({
+      rows: [entryRow(), entryRow({ 0: 'e-2', 2: '2026-05-01' })],
+    });
+    const result = await entriesRepo.createMany(
+      [
+        {
+          id: 'e-1',
+          userId: 'u-1',
+          date: '2026-04-30',
+          clientId: 'c-1',
+          clientName: 'Acme',
+          projectId: 'p-1',
+          projectName: 'Alpha',
+          task: 'Dev',
+          taskId: 't-1',
+          notes: null,
+          duration: 1.5,
+          hourlyCost: 100,
+          isPlaceholder: true,
+          location: 'remote',
+        },
+        {
+          id: 'e-2',
+          userId: 'u-1',
+          date: '2026-05-01',
+          clientId: 'c-1',
+          clientName: 'Acme',
+          projectId: 'p-1',
+          projectName: 'Alpha',
+          task: 'Dev',
+          taskId: 't-1',
+          notes: null,
+          duration: 2,
+          hourlyCost: 100,
+          isPlaceholder: true,
+          location: 'remote',
+        },
+      ],
+      testDb,
+    );
+    // Single INSERT with two value-tuples => 14 params per row * 2 rows.
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].params).toHaveLength(28);
+    expect(exec.calls[0].sql).toContain('returning');
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('e-1');
+    expect(result[1].id).toBe('e-2');
+  });
+
+  test('chunks inserts at 1000 rows to stay under PG bind-parameter limits', async () => {
+    // 2500 entries -> 3 chunks: 1000 + 1000 + 500.
+    const inputs = Array.from({ length: 2500 }, (_, i) => ({
+      id: `e-${i}`,
+      userId: 'u-1',
+      date: '2026-04-30',
+      clientId: 'c-1',
+      clientName: 'Acme',
+      projectId: 'p-1',
+      projectName: 'Alpha',
+      task: 'Dev',
+      taskId: 't-1',
+      notes: null,
+      duration: 1,
+      hourlyCost: 100,
+      isPlaceholder: true,
+      location: 'remote',
+    }));
+    exec.enqueue({ rows: inputs.slice(0, 1000).map((i) => entryRow({ 0: i.id })) });
+    exec.enqueue({ rows: inputs.slice(1000, 2000).map((i) => entryRow({ 0: i.id })) });
+    exec.enqueue({ rows: inputs.slice(2000, 2500).map((i) => entryRow({ 0: i.id })) });
+
+    const result = await entriesRepo.createMany(inputs, testDb);
+
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].params).toHaveLength(14_000);
+    expect(exec.calls[1].params).toHaveLength(14_000);
+    expect(exec.calls[2].params).toHaveLength(7_000);
+    expect(result).toHaveLength(2500);
+    expect(result[0].id).toBe('e-0');
+    expect(result[2499].id).toBe('e-2499');
+  });
+});
+
+describe('findExistingRecurringKeys', () => {
+  test('returns a Set keyed by date|projectId|task for matching rows', async () => {
+    // Drizzle returns SELECT rows as positional arrays in projection order:
+    // [date, projectId, task] for our select.
+    exec.enqueue({
+      rows: [
+        ['2026-04-30', 'p-1', 'Dev'],
+        ['2026-05-01', 'p-1', 'Dev'],
+        ['2026-05-02', 'p-2', 'Review'],
+      ],
+    });
+    const result = await entriesRepo.findExistingRecurringKeys(
+      'u-1',
+      '2026-04-30',
+      '2026-05-02',
+      testDb,
+    );
+    expect(result).toEqual(
+      new Set(['2026-04-30|p-1|Dev', '2026-05-01|p-1|Dev', '2026-05-02|p-2|Review']),
+    );
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', '2026-05-02']);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('user_id');
+    expect(sql).toContain('date');
+  });
+
+  test('returns an empty Set when no rows match', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await entriesRepo.findExistingRecurringKeys(
+      'u-1',
+      '2026-04-30',
+      '2026-05-02',
+      testDb,
+    );
+    expect(result.size).toBe(0);
+  });
+});
+
 const newEntry = {
   id: 'e-1',
   userId: 'u-1',
