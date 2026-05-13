@@ -300,8 +300,10 @@ export function optionalBoolean(value: unknown): boolean | null {
   return parseBoolean(value);
 }
 
+const DATE_STRING_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * Validate a date string in YYYY-MM-DD format
+ * Validate a date string in YYYY-MM-DD format.
  */
 export function parseDateString(
   value: unknown,
@@ -311,12 +313,15 @@ export function parseDateString(
   if (!result.ok) {
     return { ok: false, message: `${fieldName} must be a date string` };
   }
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  if (!datePattern.test(result.value)) {
+  if (!DATE_STRING_PATTERN.test(result.value)) {
     return { ok: false, message: `${fieldName} must be in YYYY-MM-DD format` };
   }
   const date = new Date(result.value);
   if (Number.isNaN(date.getTime())) {
+    return { ok: false, message: `${fieldName} must be a valid date` };
+  }
+  // JS silently rolls 2023-02-29 → Mar 1; the round-trip catches the normalization mismatch.
+  if (date.toISOString().slice(0, 10) !== result.value) {
     return { ok: false, message: `${fieldName} must be a valid date` };
   }
   return result;

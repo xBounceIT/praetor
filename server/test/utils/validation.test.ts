@@ -490,6 +490,32 @@ describe('parseDateString', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain('valid date');
   });
+
+  test('rejects Feb 29 in non-leap year (silent JS rollover)', () => {
+    const result = parseDateString('2023-02-29', 'date');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('valid date');
+  });
+
+  test('rejects month 13', () => {
+    const result = parseDateString('2025-13-01', 'date');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('valid date');
+  });
+
+  test('rejects April 31 (impossible day for month)', () => {
+    const result = parseDateString('2024-04-31', 'date');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('valid date');
+  });
+
+  test('accepts Feb 29 in a leap year', () => {
+    expect(parseDateString('2024-02-29')).toEqual({ ok: true, value: '2024-02-29' });
+  });
+
+  test('accepts Feb 28 in a non-leap year', () => {
+    expect(parseDateString('2023-02-28')).toEqual({ ok: true, value: '2023-02-28' });
+  });
 });
 
 describe('optionalDateString', () => {
