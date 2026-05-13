@@ -30,6 +30,40 @@ const resolveJwtSecret = () => {
 
 const JWT_SECRET = resolveJwtSecret();
 
+// JWT signing algorithm. `jwt.sign` (see generateToken below) defaults to HS256, so we pin
+// verification to the same algorithm to prevent algorithm-confusion attacks (e.g. forged
+// tokens using `alg: 'none'` or asymmetric algorithms abusing the HMAC secret as a public key).
+const JWT_ALGORITHM = 'HS256' as const;
+
+const DEFAULT_SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+const resolveSessionMaxDurationMs = (): number => {
+  const raw = process.env.SESSION_MAX_DURATION_MS?.trim();
+  if (!raw) return DEFAULT_SESSION_MAX_DURATION_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_SESSION_MAX_DURATION_MS;
+  }
+  return parsed;
+};
+
+// Resolved lazily on the first authenticated request and cached for the lifetime of the
+// process, so we avoid re-parsing env on every request without forcing tests to set
+// SESSION_MAX_DURATION_MS before the very first `import './middleware/auth.ts'` runs.
+let cachedSessionMaxDurationMs: number | null = null;
+const getSessionMaxDurationMs = (): number => {
+  if (cachedSessionMaxDurationMs === null) {
+    cachedSessionMaxDurationMs = resolveSessionMaxDurationMs();
+  }
+  return cachedSessionMaxDurationMs;
+};
+
+// Test-only escape hatch: forces re-reading SESSION_MAX_DURATION_MS from env on the next
+// authenticated request. Not part of the public production API.
+export const __resetSessionMaxDurationCacheForTests = () => {
+  cachedSessionMaxDurationMs = null;
+};
+
 type SessionJwtPayload = JwtPayload & {
   userId: string;
   sessionStart?: number;
@@ -93,14 +127,16 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as SessionJwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: [JWT_ALGORITHM],
+    }) as SessionJwtPayload;
     const sessionStart = decoded.sessionStart ?? Date.now();
 
-    // Check for max session duration (8 hours)
-    const SESSION_MAX_DURATION = 8 * 60 * 60 * 1000; // 8 hours in ms
+    // Check for max session duration (configurable via SESSION_MAX_DURATION_MS env var,
+    // default 8 hours). Resolved once per process — see getSessionMaxDurationMs above.
     const now = Date.now();
 
-    if (now - sessionStart > SESSION_MAX_DURATION) {
+    if (now - sessionStart > getSessionMaxDurationMs()) {
       return reply.code(401).send({ error: 'Session expired (max duration exceeded)' });
     }
 
@@ -199,8 +235,11 @@ export const generateToken = (
   activeRole?: string,
 ) => {
   // Token expires in 30 minutes (idle timeout)
-  // sessionStart tracks the absolute start of the session (max 8 hours)
-  return jwt.sign({ userId, sessionStart, activeRole }, JWT_SECRET, { expiresIn: '30m' });
+  // sessionStart tracks the absolute start of the session (SESSION_MAX_DURATION_MS, default 8h)
+  return jwt.sign({ userId, sessionStart, activeRole }, JWT_SECRET, {
+    expiresIn: '30m',
+    algorithm: JWT_ALGORITHM,
+  });
 };
 
 export default {

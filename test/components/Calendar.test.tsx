@@ -164,6 +164,30 @@ describe('<Calendar />', () => {
     expect(screen.queryAllByRole('button').filter((b) => b.textContent === 'cal').length).toBe(0);
   });
 
+  test('navigating across months keeps day keys unique (no React key warnings)', () => {
+    // Stable, year-month-day keys mean React never sees duplicate sibling keys
+    // when the calendar re-renders for a different month. Spy on console.error
+    // and rebuild a few months to confirm none of the warnings trigger.
+    const errors: unknown[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      const { rerender } = render(<Calendar selectedDate="2024-01-15" startOfWeek="Monday" />);
+      rerender(<Calendar selectedDate="2024-02-15" startOfWeek="Monday" />);
+      rerender(<Calendar selectedDate="2024-03-15" startOfWeek="Monday" />);
+      rerender(<Calendar selectedDate="2024-04-15" startOfWeek="Monday" />);
+      const keyWarnings = errors.filter((args) => {
+        const msg = Array.isArray(args) && typeof args[0] === 'string' ? args[0] : '';
+        return msg.includes('unique "key"') || msg.includes('Encountered two children');
+      });
+      expect(keyWarnings).toEqual([]);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('Italian holiday Jan 1 marks day as forbidden in single mode', () => {
     const onDateSelect = mock((_d: string) => {});
     render(

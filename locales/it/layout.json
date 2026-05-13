@@ -104,6 +104,7 @@
     "daysAgo": "{{count}}g fa",
     "showProjects": "Mostra progetti",
     "hideProjects": "Nascondi progetti",
-    "delete": "Elimina"
+    "delete": "Elimina",
+    "deleteNotification": "Elimina notifica"
   }
 }

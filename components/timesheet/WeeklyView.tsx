@@ -1,38 +1,58 @@
+import { Eye, EyeOff } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
+import { cn } from '@/lib/utils';
+import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
+import { downloadCsv } from '../../utils/csv';
+import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
-import SelectControl from '../shared/SelectControl';
+import Calendar from '../shared/Calendar';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { useCatalogSelection } from './useCatalogSelection';
+import WeeklyEntryForm, { type WeeklyEntryFormErrors } from './WeeklyEntryForm';
 
 export interface WeeklyViewProps {
   entries: TimeEntry[];
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
+  permissions: string[];
+  currency: string;
+  onAddCustomTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
+    description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
+  ) => Promise<ProjectTask>;
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
-  onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   viewingUserId: string;
-  currentUserId?: string;
-  availableUsers: User[];
-  onViewUserChange: (id: string) => void;
+  selectedDate: string;
+  onSelectedDateChange: (date: string) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection?: boolean;
   defaultLocation?: TimeEntryLocation;
+  dailyGoal: number;
 }
-
-const toLocalISOString = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
   const d = new Date(date);
@@ -46,43 +66,60 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
   return start;
 };
 
+type DayCell = { duration: string; note: string; entryId?: string };
+type DayMap = Record<string, DayCell>;
+
+type EntryRow = {
+  key: string;
+  clientId: string;
+  clientName: string;
+  projectId: string;
+  projectName: string;
+  taskName: string;
+  location: TimeEntryLocation;
+  baseDays: DayMap;
+};
+
+const FORM_ROW_KEY = '__form_row__';
+
+const parseDuration = (raw: string): number => {
+  if (!raw) return 0;
+  const parsed = parseFloat(raw.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const WeeklyView: React.FC<WeeklyViewProps> = ({
   entries,
   clients,
   projects,
   projectTasks,
+  permissions,
+  currency,
+  onAddCustomTask,
   onAddBulkEntries,
-
   onUpdateEntry,
   viewingUserId,
-  currentUserId,
-  availableUsers,
-  onViewUserChange,
+  selectedDate,
+  onSelectedDateChange,
   startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
   defaultLocation = 'remote',
+  dailyGoal,
 }) => {
-  const { t, i18n } = useTranslation('timesheets');
-  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
-    getWeekStart(new Date(), startOfWeek),
-  );
+  const { t } = useTranslation('timesheets');
 
-  // Re-align the current week when the startOfWeek setting changes — generalSettings
-  // loads async, so the prop can flip after mount and the displayed week must follow.
-  useEffect(() => {
-    setCurrentWeekStart((prev) => {
-      const realigned = getWeekStart(prev, startOfWeek);
-      return realigned.getTime() === prev.getTime() ? prev : realigned;
-    });
-  }, [startOfWeek]);
+  const currentWeekStart = useMemo(
+    () => getWeekStart(dateOnlyStringToLocalDate(selectedDate), startOfWeek),
+    [selectedDate, startOfWeek],
+  );
 
   const weekDays = useMemo(() => {
     return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
       const d = new Date(currentWeekStart);
       d.setDate(d.getDate() + offset);
-      const dateStr = toLocalISOString(d);
-      const holidayName = isItalianHoliday(new Date(dateStr + 'T00:00:00'));
+      const dateStr = getLocalDateString(d);
+      const holidayName = isItalianHoliday(new Date(`${dateStr}T00:00:00`));
       const isSunday = d.getDay() === 0;
       const isSaturday = d.getDay() === 6;
       const isWeekendOrHoliday =
@@ -94,431 +131,639 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         dateStr,
         dayKey,
         dayNum: d.getDate(),
-        isToday: dateStr === toLocalISOString(new Date()),
+        isToday: dateStr === getLocalDateString(new Date()),
         isForbidden,
         isWeekendOrHoliday,
         holidayName,
       };
     });
-    // `t` is intentionally excluded: weekDays now carries `dayKey` and the caller
-    // translates at render time, so the heavy date math is not invalidated by
-    // unstable `t` references (which would otherwise re-trigger the in-render
-    // setState that syncs `rows ← initialRows`, causing infinite loops in tests).
   }, [currentWeekStart, treatSaturdayAsHoliday, allowWeekendSelection]);
 
-  type RowData = {
-    clientId: string;
-    projectId: string;
-    taskName: string;
-    location: TimeEntryLocation;
-    days: Record<string, { duration: number; note: string; id?: string }>;
-    weekNote: string;
-  };
-  const [rows, setRows] = useState<RowData[]>([]);
-  const [prevInitialRowsSignature, setPrevInitialRowsSignature] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [rowErrors, setRowErrors] = useState<
-    Record<number, { clientId?: string; projectId?: string; taskName?: string }>
-  >({});
-  const createEmptyRow = useCallback((): RowData => {
-    const firstClientId = clients[0]?.id || '';
-    const firstProjectId = projects.find((p) => p.clientId === firstClientId)?.id || '';
-    const firstTaskName =
-      projectTasks.find((task) => task.projectId === firstProjectId)?.name || '';
+  const weekDates = useMemo(() => weekDays.map((d) => d.dateStr), [weekDays]);
 
-    return {
-      clientId: firstClientId,
-      projectId: firstProjectId,
-      taskName: firstTaskName,
-      location: defaultLocation,
-      days: {},
-      weekNote: '',
-    };
-  }, [clients, projects, projectTasks, defaultLocation]);
-
-  const sanitizeRow = useCallback(
-    (row: RowData): RowData => {
-      const clientIsValid = clients.some((client) => client.id === row.clientId);
-      const clientId = clientIsValid ? row.clientId : '';
-      const validProjects = projects.filter((project) => project.clientId === clientId);
-      const projectIsValid = validProjects.some((project) => project.id === row.projectId);
-      const projectId = projectIsValid ? row.projectId : '';
-      const validTasks = projectTasks.filter((task) => task.projectId === projectId);
-      const taskIsValid = validTasks.some((task) => task.name === row.taskName);
-      const taskName = taskIsValid ? row.taskName : '';
-
-      return {
-        ...row,
-        clientId,
-        projectId,
-        taskName,
-      };
-    },
-    [clients, projects, projectTasks],
+  const userEntries = useMemo(
+    () => entries.filter((e) => e.userId === viewingUserId),
+    [entries, viewingUserId],
   );
 
-  // Initialize rows from existing entries in this week using useMemo
-  const initialRows = useMemo(() => {
-    const weekDates = weekDays.map((d) => d.dateStr);
-    const weekEntries = entries.filter((e) => weekDates.includes(e.date));
+  const selection = useCatalogSelection({
+    clients,
+    projects,
+    projectTasks,
+    defaultLocation,
+  });
 
-    // Group by client/project/task/location
-    const groups: Record<string, RowData> = {};
-    weekEntries.forEach((e) => {
-      const key = `${e.clientId}-${e.projectId}-${e.task}-${e.location || defaultLocation}`;
-      if (!groups[key]) {
-        groups[key] = {
-          clientId: e.clientId,
-          projectId: e.projectId,
-          taskName: e.task,
-          location: e.location || defaultLocation,
-          days: {
-            [e.date]: { duration: e.duration, note: e.notes || '', id: e.id },
+  const [errors, setErrors] = useState<WeeklyEntryFormErrors>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [weekNote, setWeekNote] = useState('');
+  const [hideWeekend, setHideWeekend] = useState(false);
+
+  // Saturday and Sunday columns are hidden when `hideWeekend` is on so the
+  // weekday columns can claim the freed width. State + submit still operate
+  // on all seven days — hiding is purely a display concern, so a user who
+  // had weekend hours pending won't lose them by toggling visibility.
+  const visibleWeekDays = useMemo(
+    () =>
+      hideWeekend
+        ? weekDays.filter((day) => day.dayKey !== 'sat' && day.dayKey !== 'sun')
+        : weekDays,
+    [weekDays, hideWeekend],
+  );
+
+  const [pendingEdits, setPendingEdits] = useState<Record<string, DayMap>>({});
+
+  // Reset pending edits whenever the visible week changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentWeekStart is the intended trigger
+  useEffect(() => {
+    setPendingEdits({});
+  }, [currentWeekStart]);
+
+  // Entries matching the form selection in the current week — used to pre-fill
+  // the "Nuova voce" row so an existing combo isn't double-rendered.
+  const formRowBaseDays = useMemo<DayMap>(() => {
+    if (!selection.clientId || !selection.projectId || !selection.taskName) return {};
+    const days: DayMap = {};
+    for (const entry of userEntries) {
+      if (entry.clientId !== selection.clientId) continue;
+      if (entry.projectId !== selection.projectId) continue;
+      if (entry.task !== selection.taskName) continue;
+      if (!weekDates.includes(entry.date)) continue;
+      days[entry.date] = {
+        duration: String(entry.duration),
+        note: entry.notes ?? '',
+        entryId: entry.id,
+      };
+    }
+    return days;
+  }, [userEntries, weekDates, selection.clientId, selection.projectId, selection.taskName]);
+
+  // Rows for previously-logged combos. Includes every distinct (client,
+  // project, task) the viewing user has used and is still in scope. Combos
+  // with entries in the current week sort first; the rest fall back to most-
+  // recent `createdAt`. The combo matching the form selection is dropped so
+  // the "Nuova voce" row at the top isn't duplicated.
+  const entryRows: EntryRow[] = useMemo(() => {
+    const groups = new Map<
+      string,
+      { row: EntryRow; maxCreatedAt: number; hasWeekEntry: boolean }
+    >();
+    const clientById = new Map(clients.map((c) => [c.id, c]));
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+    const taskKey = (projectId: string, name: string) => `${projectId}|${name}`;
+    const taskSet = new Set(projectTasks.map((task) => taskKey(task.projectId, task.name)));
+
+    for (const entry of userEntries) {
+      if (!clientById.has(entry.clientId)) continue;
+      if (!projectById.has(entry.projectId)) continue;
+      if (!taskSet.has(taskKey(entry.projectId, entry.task))) continue;
+
+      const key = `${entry.clientId}|${entry.projectId}|${entry.task}`;
+      let group = groups.get(key);
+      if (!group) {
+        const client = clientById.get(entry.clientId);
+        const project = projectById.get(entry.projectId);
+        group = {
+          row: {
+            key,
+            clientId: entry.clientId,
+            clientName: client?.name ?? '',
+            projectId: entry.projectId,
+            projectName: project?.name ?? '',
+            taskName: entry.task,
+            location: entry.location ?? defaultLocation,
+            baseDays: {},
           },
-          weekNote: '',
+          maxCreatedAt: entry.createdAt,
+          hasWeekEntry: false,
         };
-      } else {
-        groups[key].days[e.date] = { duration: e.duration, note: e.notes || '', id: e.id };
+        groups.set(key, group);
       }
-    });
-
-    const result = Object.values(groups).map(sanitizeRow);
-    // Add one empty row for new entries
-    if (result.length === 0) {
-      result.push(createEmptyRow());
-    }
-    return result;
-  }, [entries, weekDays, sanitizeRow, createEmptyRow, defaultLocation]);
-  const initialRowsSignature = JSON.stringify(initialRows);
-
-  // Update rows when initialRows changes
-  // Update rows when initialRows changes (pattern: adjust state during render)
-  if (initialRowsSignature !== prevInitialRowsSignature) {
-    setPrevInitialRowsSignature(initialRowsSignature);
-    setRows(initialRows);
-    setHasChanges(false);
-    setRowErrors({});
-  }
-
-  const handleWeekChange = (offset: number) => {
-    const newStart = new Date(currentWeekStart);
-    newStart.setDate(newStart.getDate() + offset * 7);
-    setCurrentWeekStart(newStart);
-    setHasChanges(false);
-    setRowErrors({});
-  };
-
-  const handleValueChange = (
-    rowIndex: number,
-    dateStr: string,
-    field: 'duration' | 'note',
-    value: string,
-  ) => {
-    const newRows = [...rows];
-    if (!newRows[rowIndex].days[dateStr]) {
-      newRows[rowIndex].days[dateStr] = { duration: 0, note: '' };
-    }
-
-    if (field === 'duration') {
-      if (value === '') {
-        newRows[rowIndex].days[dateStr].duration = 0;
-      } else {
-        const parsed = parseFloat(value);
-        newRows[rowIndex].days[dateStr].duration = Number.isNaN(parsed) ? 0 : parsed;
+      if (entry.createdAt > group.maxCreatedAt) group.maxCreatedAt = entry.createdAt;
+      if (weekDates.includes(entry.date)) {
+        group.hasWeekEntry = true;
+        group.row.baseDays[entry.date] = {
+          duration: String(entry.duration),
+          note: entry.notes ?? '',
+          entryId: entry.id,
+        };
+        if (entry.location) group.row.location = entry.location;
       }
-    } else {
-      newRows[rowIndex].days[dateStr].note = value;
-    }
-    setRows(newRows);
-    setHasChanges(true);
-  };
-
-  const handleRowInfoChange = (
-    rowIndex: number,
-    field: Exclude<keyof RowData, 'days'>,
-    value: string,
-  ) => {
-    const newRows = [...rows];
-    if (field === 'location') {
-      newRows[rowIndex].location = value as TimeEntryLocation;
-    } else {
-      newRows[rowIndex][field] = value;
     }
 
-    // Auto-fill project if client changes
-    if (field === 'clientId') {
-      const firstProj = projects.find((p) => p.clientId === value);
-      newRows[rowIndex].projectId = firstProj?.id || '';
-      const firstTask = projectTasks.find((t) => t.projectId === firstProj?.id);
-      newRows[rowIndex].taskName = firstTask?.name || '';
-    }
-    // Auto-fill task if project changes
-    if (field === 'projectId') {
-      const firstTask = projectTasks.find((t) => t.projectId === value);
-      newRows[rowIndex].taskName = firstTask?.name || '';
-    }
+    const formKey =
+      selection.clientId && selection.projectId && selection.taskName
+        ? `${selection.clientId}|${selection.projectId}|${selection.taskName}`
+        : '';
+    if (formKey) groups.delete(formKey);
 
-    // Clear error for the changed field
-    if (rowErrors[rowIndex]?.[field as keyof (typeof rowErrors)[number]]) {
-      const newErrors = { ...rowErrors };
-      if (newErrors[rowIndex]) {
-        delete newErrors[rowIndex][field as keyof (typeof newErrors)[number]];
-        if (Object.keys(newErrors[rowIndex]).length === 0) {
-          delete newErrors[rowIndex];
+    return Array.from(groups.values())
+      .sort((a, b) => {
+        if (a.hasWeekEntry !== b.hasWeekEntry) return a.hasWeekEntry ? -1 : 1;
+        return b.maxCreatedAt - a.maxCreatedAt;
+      })
+      .slice(0, 5)
+      .map((g) => g.row);
+  }, [
+    userEntries,
+    weekDates,
+    clients,
+    projects,
+    projectTasks,
+    selection.clientId,
+    selection.projectId,
+    selection.taskName,
+    defaultLocation,
+  ]);
+
+  // When the set of entry rows changes (e.g. user switches), drop stale edits
+  // that no longer match an existing row. Use a Set of raw keys — each row
+  // key already contains `|`, so split/join would lose boundaries.
+  const entryRowKeySet = useMemo(() => new Set(entryRows.map((r) => r.key)), [entryRows]);
+  useEffect(() => {
+    setPendingEdits((prev) => {
+      let changed = false;
+      const next: Record<string, DayMap> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        if (key === FORM_ROW_KEY || entryRowKeySet.has(key)) {
+          next[key] = value;
+        } else {
+          changed = true;
         }
       }
-      setRowErrors(newErrors);
-    }
-
-    setRows(newRows);
-    setHasChanges(true);
-  };
-
-  const addRow = () => {
-    setRows([...rows, createEmptyRow()]);
-    setHasChanges(true);
-    // Clear errors for the new row index
-    const newRowIndex = rows.length;
-    if (rowErrors[newRowIndex]) {
-      const newErrors = { ...rowErrors };
-      delete newErrors[newRowIndex];
-      setRowErrors(newErrors);
-    }
-  };
-
-  const deleteRow = (rowIndex: number) => {
-    const newRows = rows.filter((_, index) => index !== rowIndex);
-    // Ensure at least one row remains
-    if (newRows.length === 0) {
-      newRows.push(createEmptyRow());
-    }
-    setRows(newRows);
-    setHasChanges(true);
-    // Remove errors for deleted row and shift remaining errors
-    const newErrors: Record<number, { clientId?: string; projectId?: string; taskName?: string }> =
-      {};
-    Object.entries(rowErrors).forEach(([key, value]) => {
-      const idx = parseInt(key, 10);
-      if (idx < rowIndex) {
-        newErrors[idx] = value;
-      } else if (idx > rowIndex) {
-        newErrors[idx - 1] = value;
-      }
+      return changed ? next : prev;
     });
-    setRowErrors(newErrors);
+  }, [entryRowKeySet]);
+
+  const getCellValue = (rowKey: string, dateStr: string, baseDays?: DayMap): DayCell => {
+    const edit = pendingEdits[rowKey]?.[dateStr];
+    if (edit) return edit;
+    if (baseDays?.[dateStr]) return baseDays[dateStr];
+    return { duration: '', note: '' };
+  };
+
+  const updateCell = (
+    rowKey: string,
+    dateStr: string,
+    patch: Partial<Pick<DayCell, 'duration' | 'note'>>,
+    baseCell?: DayCell,
+  ) => {
+    setPendingEdits((prev) => {
+      const rowEdits = prev[rowKey] ?? {};
+      const existing = rowEdits[dateStr];
+      const seed: DayCell = existing ?? baseCell ?? { duration: '', note: '' };
+      const nextCell: DayCell = {
+        duration: patch.duration ?? seed.duration,
+        note: patch.note ?? seed.note,
+        entryId: seed.entryId,
+      };
+      return { ...prev, [rowKey]: { ...rowEdits, [dateStr]: nextCell } };
+    });
+  };
+
+  const renderDayCellInputs = (
+    rowKey: string,
+    day: (typeof weekDays)[number],
+    baseDays: DayMap,
+  ) => {
+    const cell = getCellValue(rowKey, day.dateStr, baseDays);
+    return (
+      <div className="flex flex-col gap-2">
+        <ValidatedNumberInput
+          placeholder="0.0"
+          disabled={day.isForbidden}
+          value={cell.duration}
+          onValueChange={(value) =>
+            updateCell(rowKey, day.dateStr, { duration: value }, baseDays[day.dateStr])
+          }
+          className={cn(
+            'h-9 w-full text-center text-sm font-bold',
+            day.isForbidden && 'opacity-50 cursor-not-allowed',
+          )}
+        />
+        <Input
+          type="text"
+          placeholder={t('weekly.note')}
+          disabled={day.isForbidden}
+          value={cell.note}
+          onChange={(e) =>
+            updateCell(rowKey, day.dateStr, { note: e.target.value }, baseDays[day.dateStr])
+          }
+          className={cn('h-7 text-xs rounded', day.isForbidden && 'opacity-40 cursor-not-allowed')}
+        />
+      </div>
+    );
+  };
+
+  const clearError = (field: keyof WeeklyEntryFormErrors) => {
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    setErrors({});
 
-    // Validation
-    const newErrors: Record<number, { clientId?: string; projectId?: string; taskName?: string }> =
-      {};
-    let hasValidationErrors = false;
+    const newErrors: WeeklyEntryFormErrors = {};
+    const formEdits = pendingEdits[FORM_ROW_KEY] ?? {};
+    const hasFormHours = Object.values(formEdits).some((cell) => parseDuration(cell.duration) > 0);
 
-    rows.forEach((row, rowIndex) => {
-      const hasTimeEntries = Object.values(row.days).some((d) => d.duration > 0);
-      if (!hasTimeEntries) return;
-
-      const rowError: { clientId?: string; projectId?: string; taskName?: string } = {};
-
-      if (!row.clientId) {
-        rowError.clientId = t('common:validation.clientRequired');
-        hasValidationErrors = true;
+    if (hasFormHours) {
+      if (!selection.clientId) newErrors.clientId = t('common:validation.clientRequired');
+      if (!selection.projectId) newErrors.projectId = t('common:validation.projectRequired');
+      if (!selection.taskName) {
+        const availableTasks = projectTasks.filter(
+          (task) => task.projectId === selection.projectId,
+        );
+        if (availableTasks.length > 0) {
+          newErrors.task = t('common:validation.taskNameRequired');
+        }
       }
-      if (!row.projectId) {
-        rowError.projectId = t('common:validation.projectRequired');
-        hasValidationErrors = true;
-      }
-      // Only validate task if project has tasks available
-      const availableTasks = projectTasks.filter((t) => t.projectId === row.projectId);
-      if (availableTasks.length > 0 && !row.taskName) {
-        rowError.taskName = t('common:validation.taskNameRequired');
-        hasValidationErrors = true;
-      }
+    }
 
-      if (Object.keys(rowError).length > 0) {
-        newErrors[rowIndex] = rowError;
-      }
-    });
-
-    if (hasValidationErrors) {
-      setRowErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       setIsLoading(false);
       return;
     }
 
     const entriesToAdd: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[] = [];
 
-    rows.forEach((row) => {
-      const client = clients.find((c) => c.id === row.clientId);
-      const project = projects.find((p) => p.id === row.projectId);
-
-      Object.entries(row.days).forEach(([dateStr, data]) => {
-        if (data.duration > 0) {
-          // If it has an ID, it's an update, but user request implies mirror Anuko which has a Submit for bulk.
-          // For simplicity, we'll only ADD new ones here or we'd need bit more complex logic.
-          // Anuko typically handles both. Let's focus on adding new entries as requested.
-          if (!data.id) {
-            entriesToAdd.push({
-              date: dateStr,
-              clientId: row.clientId,
-              clientName: client?.name || 'Unknown',
-              projectId: row.projectId,
-              projectName: project?.name || 'General',
-              task: row.taskName,
-              duration: data.duration,
-              notes: data.note || row.weekNote, // Use individual note or fallback to week note
-              hourlyCost: 0,
-              location: row.location,
-            });
-          } else {
-            // Handle update if needed? User didn't explicitly ask for editing existing in weekly view,
-            // but it's part of a full mirror. Let's stick to the core request first.
-            onUpdateEntry(data.id, {
-              duration: data.duration,
-              notes: data.note || row.weekNote,
-              task: row.taskName,
-              projectId: row.projectId,
-              clientId: row.clientId,
+    const submitRow = (
+      rowKey: string,
+      meta: {
+        clientId: string;
+        projectId: string;
+        taskName: string;
+        location: TimeEntryLocation;
+        baseDays: DayMap;
+      },
+    ) => {
+      const client = clients.find((c) => c.id === meta.clientId);
+      const project = projects.find((p) => p.id === meta.projectId);
+      const rowEdits = pendingEdits[rowKey] ?? {};
+      for (const day of weekDays) {
+        const base = meta.baseDays[day.dateStr];
+        const edit = rowEdits[day.dateStr];
+        if (!edit) continue;
+        const newDuration = parseDuration(edit.duration);
+        const baseDuration = base ? parseDuration(base.duration) : 0;
+        const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
+        if (base?.entryId) {
+          if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) {
+            // `edit.note` directly so a user can clear a previously-set note.
+            onUpdateEntry(base.entryId, {
+              duration: newDuration,
+              notes: edit.note,
+              task: meta.taskName,
+              projectId: meta.projectId,
+              clientId: meta.clientId,
               clientName: client?.name || 'Unknown',
               projectName: project?.name || 'General',
-              location: row.location,
+              location: meta.location,
             });
           }
+          continue;
         }
-      });
-    });
+        if (newDuration > 0) {
+          entriesToAdd.push({
+            date: day.dateStr,
+            clientId: meta.clientId,
+            clientName: client?.name || 'Unknown',
+            projectId: meta.projectId,
+            projectName: project?.name || 'General',
+            task: meta.taskName,
+            duration: newDuration,
+            notes: edit.note || weekNote,
+            hourlyCost: 0,
+            location: meta.location,
+          });
+        }
+      }
+    };
 
-    if (entriesToAdd.length > 0) {
-      await onAddBulkEntries(entriesToAdd);
+    if (hasFormHours) {
+      submitRow(FORM_ROW_KEY, {
+        clientId: selection.clientId,
+        projectId: selection.projectId,
+        taskName: selection.taskName,
+        location: selection.location,
+        baseDays: formRowBaseDays,
+      });
     }
-    setIsLoading(false);
-    setHasChanges(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+
+    for (const row of entryRows) {
+      submitRow(row.key, {
+        clientId: row.clientId,
+        projectId: row.projectId,
+        taskName: row.taskName,
+        location: row.location,
+        baseDays: row.baseDays,
+      });
+    }
+
+    try {
+      if (entriesToAdd.length > 0) {
+        await onAddBulkEntries(entriesToAdd);
+      }
+      setPendingEdits({});
+      setWeekNote('');
+      setShowSuccess(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const dayTotals = useMemo(() => {
-    const totals: { [key: string]: number } = {};
-    weekDays.forEach((d) => {
-      totals[d.dateStr] = rows.reduce((sum, row) => sum + (row.days[d.dateStr]?.duration || 0), 0);
-    });
-    return totals;
-  }, [rows, weekDays]);
+  useEffect(() => {
+    if (!showSuccess) return;
+    const timer = setTimeout(() => setShowSuccess(false), 2500);
+    return () => clearTimeout(timer);
+  }, [showSuccess]);
 
-  const weekTotal = (Object.values(dayTotals) as number[]).reduce(
-    (a: number, b: number) => a + b,
-    0,
-  );
+  const dayTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const day of weekDays) {
+      let sum = 0;
+      const formEdit = pendingEdits[FORM_ROW_KEY]?.[day.dateStr];
+      if (formEdit) {
+        sum += parseDuration(formEdit.duration);
+      } else {
+        const formBase = formRowBaseDays[day.dateStr];
+        if (formBase) sum += parseDuration(formBase.duration);
+      }
+      for (const row of entryRows) {
+        const edit = pendingEdits[row.key]?.[day.dateStr];
+        if (edit) {
+          sum += parseDuration(edit.duration);
+        } else {
+          const base = row.baseDays[day.dateStr];
+          if (base) sum += parseDuration(base.duration);
+        }
+      }
+      totals[day.dateStr] = sum;
+    }
+    return totals;
+  }, [weekDays, entryRows, pendingEdits, formRowBaseDays]);
+
+  const weekTotal = useMemo(() => Object.values(dayTotals).reduce((a, b) => a + b, 0), [dayTotals]);
+
+  const monthTotal = useMemo(() => {
+    const monthYear = `${currentWeekStart.getFullYear()}-${String(currentWeekStart.getMonth() + 1).padStart(2, '0')}`;
+    return userEntries
+      .filter((e) => e.date.startsWith(monthYear))
+      .reduce((sum, e) => sum + e.duration, 0);
+  }, [userEntries, currentWeekStart]);
+
+  const formSelectionLabels = useMemo(() => {
+    const client = clients.find((c) => c.id === selection.clientId);
+    const project = projects.find((p) => p.id === selection.projectId);
+    return {
+      clientName: client?.name ?? '',
+      projectName: project?.name ?? '',
+      taskName: selection.taskName,
+    };
+  }, [clients, projects, selection.clientId, selection.projectId, selection.taskName]);
+
+  const renderRowLabel = (
+    clientName: string,
+    projectName: string,
+    taskName: string,
+  ): React.ReactNode => {
+    const rows: Array<{ icon: string; text: string }> = [];
+    if (clientName) rows.push({ icon: 'fa-building', text: clientName });
+    if (projectName) rows.push({ icon: 'fa-folder-open', text: projectName });
+    if (taskName) rows.push({ icon: 'fa-list-check', text: taskName });
+    if (rows.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-1">
+        {rows.map(({ icon, text }) => (
+          <div key={icon} className="flex items-center gap-2 text-xs text-foreground">
+            <i
+              className={cn('fa-solid w-3 text-[10px] text-muted-foreground', icon)}
+              aria-hidden="true"
+            />
+            <span className="line-clamp-1">{text}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // True when at least one pending edit would actually change state on
+  // submit — i.e. a non-zero new value on a fresh cell, or an existing entry
+  // whose duration / note differs from its baseline. Mirrors submitRow's
+  // gating so the button stays disabled when the user types a value and then
+  // clears it (net zero change).
+  const hasPendingEdits = useMemo(() => {
+    const rowHasChange = (rowKey: string, baseDays: DayMap) => {
+      const edits = pendingEdits[rowKey];
+      if (!edits) return false;
+      for (const [dateStr, edit] of Object.entries(edits)) {
+        const base = baseDays[dateStr];
+        const newDuration = parseDuration(edit.duration);
+        const baseDuration = base ? parseDuration(base.duration) : 0;
+        const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
+        if (base?.entryId) {
+          if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) return true;
+        } else if (newDuration > 0) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (rowHasChange(FORM_ROW_KEY, formRowBaseDays)) return true;
+    return entryRows.some((row) => rowHasChange(row.key, row.baseDays));
+  }, [pendingEdits, formRowBaseDays, entryRows]);
+  const weeklyGoal = dailyGoal * 5;
+
+  const handleExportToCsv = () => {
+    const formatHours = (hours: number) => (hours > 0 ? hours.toFixed(2) : '');
+    const sumDayValues = (values: string[]) =>
+      values.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+
+    const headerRow = [
+      '',
+      ...visibleWeekDays.map((day) => `${t(`weekly.days.${day.dayKey}`)} ${day.dayNum}`),
+      t('weekly.total'),
+    ];
+    const rows: string[][] = [headerRow];
+
+    const joinLabel = (clientName: string, projectName: string, taskName: string) =>
+      [clientName, projectName, taskName].filter(Boolean).join(' · ');
+
+    const formRowValues = visibleWeekDays.map((day) => {
+      const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
+      return formatHours(parseDuration(cell.duration));
+    });
+    const formRowTotal = sumDayValues(formRowValues);
+    if (formRowTotal > 0) {
+      const label =
+        joinLabel(
+          formSelectionLabels.clientName,
+          formSelectionLabels.projectName,
+          formSelectionLabels.taskName,
+        ) || t('weekly.newEntry');
+      rows.push([label, ...formRowValues, formatHours(formRowTotal)]);
+    }
+
+    for (const row of entryRows) {
+      const dayValues = visibleWeekDays.map((day) => {
+        const cell = getCellValue(row.key, day.dateStr, row.baseDays);
+        return formatHours(parseDuration(cell.duration));
+      });
+      const rowTotal = sumDayValues(dayValues);
+      rows.push([
+        joinLabel(row.clientName, row.projectName, row.taskName),
+        ...dayValues,
+        formatHours(rowTotal),
+      ]);
+    }
+
+    rows.push([
+      t('weekly.total'),
+      ...visibleWeekDays.map((day) => formatHours(dayTotals[day.dateStr] ?? 0)),
+      formatHours(weekTotal),
+    ]);
+
+    downloadCsv(rows, `weekly_timesheet_${getLocalDateString(currentWeekStart)}.csv`);
+  };
 
   return (
     <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
-      {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-lg border border-zinc-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => handleWeekChange(-1)}
-            className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
-          >
-            <i className="fa-solid fa-chevron-left"></i>
-          </button>
-          <div className="text-center min-w-50">
-            <h3 className="text-sm font-semibold text-zinc-800 uppercase tracking-wider">
-              {currentWeekStart.toLocaleDateString(i18n.language, {
-                month: 'short',
-                day: 'numeric',
-              })}{' '}
-              -{' '}
-              {new Date(
-                new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 4),
-              ).toLocaleDateString(i18n.language, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </h3>
-            <p className="text-[10px] font-bold text-praetor uppercase">{t('weekly.weekView')}</p>
-          </div>
-          <button
-            onClick={() => handleWeekChange(1)}
-            className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
-          >
-            <i className="fa-solid fa-chevron-right"></i>
-          </button>
-          <button
-            onClick={() => setCurrentWeekStart(getWeekStart(new Date(), startOfWeek))}
-            className="text-[10px] font-bold text-white bg-praetor hover:bg-praetor/90 uppercase tracking-widest ml-2 px-3 py-1.5 rounded-full transition-colors"
-          >
-            {t('weekly.goToToday')}
-          </button>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
+        <WeeklyEntryForm
+          selectedDate={selectedDate}
+          selection={selection}
+          weekNote={weekNote}
+          errors={errors}
+          onWeekNoteChange={setWeekNote}
+          onClearError={clearError}
+          clients={clients}
+          projects={projects}
+          permissions={permissions}
+          currency={currency}
+          onAddCustomTask={onAddCustomTask}
+          defaultLocation={defaultLocation}
+          onSubmit={handleSubmit}
+          isSubmitting={isLoading}
+          showSubmitSuccess={showSuccess}
+          canSubmit={hasPendingEdits}
+        />
 
-        {availableUsers.length > 1 && (
-          <div className="w-64 space-y-1.5">
-            <div className="flex min-h-6 items-center justify-between gap-2">
-              <FieldLabel>{t('weekly.viewingUser')}</FieldLabel>
-              {currentUserId && viewingUserId !== currentUserId && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => onViewUserChange(currentUserId)}
-                  className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                  {t('tracker.backToMe')}
-                </Button>
-              )}
-            </div>
-            <SelectControl
-              options={availableUsers.map((u) => ({
-                id: u.id,
-                name: u.name,
-                badge: u.id === currentUserId ? t('tracker.you') : undefined,
-              }))}
-              value={viewingUserId}
-              onChange={(val) => onViewUserChange(val as string)}
-              searchable={true}
-            />
-          </div>
-        )}
+        <div className="w-full xl:max-w-[300px] xl:h-full">
+          <Calendar
+            selectedDate={selectedDate}
+            onDateSelect={onSelectedDateChange}
+            entries={userEntries}
+            startOfWeek={startOfWeek}
+            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+            dailyGoal={dailyGoal}
+            allowWeekendSelection={allowWeekendSelection}
+            size="compact"
+          />
+        </div>
       </div>
 
-      {/* Grid */}
-      <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-max text-left border-collapse">
-            <thead className="bg-zinc-50 border-b border-zinc-200">
-              <tr>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
-                  {t('weekly.client')}
-                </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
-                  {t('weekly.project')}
-                </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-28">
-                  {t('weekly.task')}
-                </th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter min-w-24">
-                  {t('weekly.location')}
-                </th>
-                {weekDays.map((day) => (
-                  <th
+      <div className="rounded-lg border border-border bg-background shadow-sm p-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 mb-4">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.weekTotal')}
+              </span>
+              <span
+                className={cn(
+                  'text-lg font-black transition-colors',
+                  weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
+                )}
+              >
+                {weekTotal.toFixed(2)} h
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.monthTotal')}
+              </span>
+              <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={t('common:table.exportToCsv')}
+                    onClick={handleExportToCsv}
+                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                  >
+                    <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
+                    <span>{t('common:table.export')}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('common:table.exportToCsv')}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant={hideWeekend ? 'secondary' : 'outline'}
+                    size="sm"
+                    aria-label={t('weekly.hideWeekend')}
+                    aria-pressed={hideWeekend}
+                    onClick={() => setHideWeekend((v) => !v)}
+                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                  >
+                    {hideWeekend ? (
+                      <EyeOff className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="size-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('weekly.hideWeekend')}</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="-mx-5 -mb-5 overflow-x-auto">
+          <Table className="border-collapse">
+            <TableHeader className="bg-muted/40">
+              <TableRow className="border-b border-border">
+                <TableHead className="px-4 py-3 min-w-56" />
+
+                {visibleWeekDays.map((day) => (
+                  <TableHead
                     key={day.dateStr}
-                    className={`w-28 p-2 text-center relative ${day.isToday ? 'bg-zinc-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={cn(
+                      'min-w-28 px-2 py-2 text-center relative align-middle',
+                      day.isToday && 'bg-accent',
+                      day.isWeekendOrHoliday && 'bg-destructive/5',
+                    )}
                   >
                     <div
-                      className={`flex items-center justify-center gap-1 text-[10px] font-black uppercase ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-500' : 'text-zinc-400'}`}
+                      className={cn(
+                        'flex items-center justify-center gap-1 text-[10px] font-black uppercase',
+                        day.isToday
+                          ? 'text-praetor'
+                          : day.isWeekendOrHoliday
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
+                      )}
                     >
                       {t(`weekly.days.${day.dayKey}`)}
                       {day.holidayName && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="inline-flex">
-                              <span className="size-1.5 bg-red-500 rounded-full animate-pulse block"></span>
+                              <span className="size-1.5 bg-destructive rounded-full animate-pulse block"></span>
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>{day.holidayName}</TooltipContent>
@@ -526,205 +771,114 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       )}
                     </div>
                     <p
-                      className={`text-sm font-black leading-none ${day.isToday ? 'text-praetor' : day.isWeekendOrHoliday ? 'text-red-600' : 'text-zinc-700'}`}
+                      className={cn(
+                        'text-sm font-black leading-none mt-0.5',
+                        day.isToday
+                          ? 'text-praetor'
+                          : day.isWeekendOrHoliday
+                            ? 'text-destructive'
+                            : 'text-foreground',
+                      )}
                     >
                       {day.dayNum}
                     </p>
-                  </th>
+                  </TableHead>
                 ))}
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-tighter w-20 text-center sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
-                  {t('weekly.total')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {rows.map((row, rowIndex) => (
-                <tr
-                  key={rowIndex}
-                  className="group hover:bg-zinc-50/30 transition-all duration-500"
-                >
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1 w-full">
-                      <SelectControl
-                        options={clients.map((c) => ({ id: c.id, name: c.name }))}
-                        value={row.clientId}
-                        onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val as string)}
-                        className={`bg-transparent! ${rowErrors[rowIndex]?.clientId ? 'border-red-500!' : ''}`}
-                        searchable={true}
-                      />
-                      {rowErrors[rowIndex]?.clientId && (
-                        <p className="text-red-500 text-[10px] font-bold">
-                          {rowErrors[rowIndex].clientId}
-                        </p>
-                      )}
-                      <div className="h-7 invisible">Spacer</div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1 w-full">
-                      <SelectControl
-                        options={projects
-                          .filter((p) => p.clientId === row.clientId)
-                          .map((p) => ({ id: p.id, name: p.name }))}
-                        value={row.projectId}
-                        onChange={(val) =>
-                          handleRowInfoChange(rowIndex, 'projectId', val as string)
-                        }
-                        className={`bg-transparent! ${rowErrors[rowIndex]?.projectId ? 'border-red-500!' : ''}`}
-                        placeholder={t('weekly.selectProject')}
-                        searchable={true}
-                      />
-                      {rowErrors[rowIndex]?.projectId && (
-                        <p className="text-red-500 text-[10px] font-bold">
-                          {rowErrors[rowIndex].projectId}
-                        </p>
-                      )}
-                      <div className="h-7 invisible">Spacer</div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1 w-full">
-                      <SelectControl
-                        options={projectTasks
-                          .filter((t) => t.projectId === row.projectId)
-                          .map((t) => ({ id: t.name, name: t.name }))}
-                        value={row.taskName}
-                        onChange={(val) => handleRowInfoChange(rowIndex, 'taskName', val as string)}
-                        className={`bg-transparent! ${rowErrors[rowIndex]?.taskName ? 'border-red-500!' : ''}`}
-                        placeholder={t('weekly.selectTask')}
-                        searchable={true}
-                      />
-                      {rowErrors[rowIndex]?.taskName && (
-                        <p className="text-red-500 text-[10px] font-bold">
-                          {rowErrors[rowIndex].taskName}
-                        </p>
-                      )}
-                      <input
-                        type="text"
-                        placeholder={t('weekly.weekNote')}
-                        value={row.weekNote}
-                        onChange={(e) => handleRowInfoChange(rowIndex, 'weekNote', e.target.value)}
-                        className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded px-2 py-1.5 focus:outline-none focus:border-praetor focus:ring-1 focus:ring-praetor text-zinc-600 h-7"
-                      />
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1 w-full">
-                      <SelectControl
-                        options={[
-                          { id: 'office', name: t('weekly.locationTypes.office') },
-                          {
-                            id: 'customer_premise',
-                            name: t('weekly.locationTypes.customerPremise'),
-                          },
-                          { id: 'remote', name: t('weekly.locationTypes.remote') },
-                          { id: 'transfer', name: t('weekly.locationTypes.transfer') },
-                        ]}
-                        value={row.location}
-                        onChange={(val) => handleRowInfoChange(rowIndex, 'location', val as string)}
-                        className="bg-transparent!"
-                      />
-                      <div className="h-7 invisible">Spacer</div>
-                    </div>
-                  </td>
-                  {weekDays.map((day) => (
-                    <td
-                      key={day.dateStr}
-                      className={`w-28 px-2 py-4 transition-all duration-700 ${day.isToday ? 'bg-zinc-50' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30' : ''} ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'bg-emerald-50' : ''}`}
-                    >
-                      <div className="flex flex-col gap-2 items-center relative">
-                        {showSuccess && row.days[day.dateStr]?.duration > 0 && (
-                          <i className="fa-solid fa-circle-check text-emerald-500 text-[10px] absolute -top-2 -right-1 animate-in fade-in zoom-in duration-300"></i>
-                        )}
-                        <ValidatedNumberInput
-                          placeholder="0.0"
-                          disabled={day.isForbidden}
-                          value={row.days[day.dateStr]?.duration || ''}
-                          onValueChange={(value) =>
-                            handleValueChange(rowIndex, day.dateStr, 'duration', value)
-                          }
-                          className={`w-full text-center text-sm font-black transition-all duration-300 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-zinc-700 bg-zinc-50 border-zinc-200'} ${day.isForbidden ? 'opacity-50 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50 border-red-100' : 'border-zinc-200'} border rounded-lg py-2.5 focus:ring-2 focus:ring-praetor outline-none`}
-                        />
-                        <input
-                          type="text"
-                          placeholder="Note..."
-                          disabled={day.isForbidden}
-                          value={row.days[day.dateStr]?.note || ''}
-                          onChange={(e) =>
-                            handleValueChange(rowIndex, day.dateStr, 'note', e.target.value)
-                          }
-                          className={`w-full text-xs border focus:border-praetor focus:ring-1 focus:ring-praetor rounded px-2 py-1.5 transition-colors h-7 ${showSuccess && row.days[day.dateStr]?.duration > 0 ? 'text-emerald-600 bg-zinc-50' : 'text-red-600 focus:text-zinc-700'} ${day.isForbidden ? 'opacity-30 cursor-not-allowed' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/30 border-red-100' : 'bg-zinc-50 border-zinc-100'}`}
-                        />
-                      </div>
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 text-center sticky right-0 bg-white group-hover:bg-zinc-50 transition-all duration-500 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-sm font-black text-zinc-800">
-                        {Object.values(row.days)
-                          .reduce((sum, d) => sum + (d.duration || 0), 0)
-                          .toFixed(1)}
-                      </span>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <button
-                              onClick={() => deleteRow(rowIndex)}
-                              className="p-1.5 text-red-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
-                            >
-                              <i className="fa-solid fa-trash-can text-sm"></i>
-                            </button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('weekly.deleteRow')}</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-zinc-50/50 border-t border-zinc-200">
-              <tr>
-                <td colSpan={4} className="p-4">
-                  <button
-                    onClick={addRow}
-                    className="text-xs font-bold text-praetor bg-transparent px-4 py-2 rounded-lg flex items-center gap-2 uppercase tracking-widest transition-all duration-300 ease-in-out"
-                  >
-                    <i className="fa-solid fa-plus"></i> {t('weekly.addRow')}
-                  </button>
-                </td>
-                {weekDays.map((day) => (
-                  <td
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow className="bg-praetor/5 hover:bg-praetor/10">
+                <TableCell className="px-4 py-3 align-top whitespace-normal">
+                  <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-2">
+                    {t('weekly.newEntry')}
+                  </p>
+                  {renderRowLabel(
+                    formSelectionLabels.clientName,
+                    formSelectionLabels.projectName,
+                    formSelectionLabels.taskName,
+                  )}
+                </TableCell>
+                {visibleWeekDays.map((day) => (
+                  <TableCell
                     key={day.dateStr}
-                    className={`w-28 px-2 py-4 text-center ${day.isToday ? 'bg-zinc-100' : ''} ${day.isWeekendOrHoliday ? 'bg-red-50/50' : ''}`}
+                    className={cn(
+                      'min-w-28 px-2 py-3 align-top',
+                      day.isToday && 'bg-accent/60',
+                      day.isWeekendOrHoliday && 'bg-destructive/5',
+                    )}
+                  >
+                    {renderDayCellInputs(FORM_ROW_KEY, day, formRowBaseDays)}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow className="hover:bg-transparent border-b-0">
+                <TableCell colSpan={1 + visibleWeekDays.length} className="h-6 p-0" />
+              </TableRow>
+            </TableBody>
+            <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
+              {entryRows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={1 + visibleWeekDays.length}
+                    className="px-4 py-6 text-center text-xs text-muted-foreground"
+                  >
+                    {t('weekly.noRecentTasks')}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                entryRows.map((row) => (
+                  <TableRow key={row.key} className="hover:bg-muted/30">
+                    <TableCell className="px-4 py-3 align-middle whitespace-normal">
+                      {renderRowLabel(row.clientName, row.projectName, row.taskName)}
+                    </TableCell>
+                    {visibleWeekDays.map((day) => {
+                      const cell = getCellValue(row.key, day.dateStr, row.baseDays);
+                      return (
+                        <TableCell
+                          key={day.dateStr}
+                          className={cn(
+                            'min-w-28 px-2 py-3 align-top',
+                            day.isToday && 'bg-accent/60',
+                            day.isWeekendOrHoliday && 'bg-destructive/5',
+                            showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
+                          )}
+                        >
+                          {renderDayCellInputs(row.key, day, row.baseDays)}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+            <TableFooter className="bg-muted/30">
+              <TableRow className="border-t border-border">
+                <TableCell className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  {t('weekly.total')}
+                </TableCell>
+                {visibleWeekDays.map((day) => (
+                  <TableCell
+                    key={day.dateStr}
+                    className={cn(
+                      'min-w-28 px-2 py-3 text-center',
+                      day.isToday && 'bg-accent',
+                      day.isWeekendOrHoliday && 'bg-destructive/5',
+                    )}
                   >
                     <p
-                      className={`text-xs font-black ${(dayTotals[day.dateStr] as number) > 8 ? 'text-red-600' : 'text-praetor'}`}
+                      className={cn(
+                        'text-sm font-black',
+                        dayTotals[day.dateStr] > dailyGoal ? 'text-destructive' : 'text-praetor',
+                      )}
                     >
-                      {(dayTotals[day.dateStr] as number).toFixed(1)}
+                      {dayTotals[day.dateStr].toFixed(1)}
                     </p>
-                  </td>
+                  </TableCell>
                 ))}
-                <td className="p-4 text-center sticky right-0 bg-zinc-50 border-l border-zinc-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
-                  <p className="text-sm font-black text-zinc-900">
-                    {(weekTotal as number).toFixed(1)}{' '}
-                  </p>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
-      </div>
-
-      {/* Footer Actions */}
-      <div className="flex justify-end gap-4 p-4">
-        <button
-          onClick={handleSubmit}
-          disabled={isLoading || !hasChanges}
-          className={`bg-praetor text-white px-10 py-3 rounded-xl hover:bg-zinc-800 transition-all shadow-lg hover:shadow-zinc-200 font-bold text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:grayscale-[0.5] ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
-        >
-          {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
-        </button>
       </div>
     </div>
   );

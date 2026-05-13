@@ -1,11 +1,10 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import type { PublicSsoProvider, User } from '../types';
 
 export interface LoginProps {
-  users: User[];
   onLogin: (user: User, token?: string) => void;
   logoutReason?: 'inactivity' | null;
   onClearLogoutReason?: () => void;
@@ -29,6 +28,17 @@ const Login: React.FC<LoginProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
 
+  // Stash callback in a ref so the SSO-providers fetch effect can run exactly
+  // once on mount even when the parent recreates `onLogin` each render.
+  const onLoginRef = useRef(onLogin);
+  useEffect(() => {
+    onLoginRef.current = onLogin;
+  }, [onLogin]);
+
+  // Mount-only: SSO provider list and ticket consumption shouldn't re-run on
+  // every parent re-render. `onLogin` is read through `onLoginRef`, and `t`
+  // is referenced only for an error message lookup at that moment.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
   useEffect(() => {
     let cancelled = false;
     const url = new URL(window.location.href);
@@ -56,7 +66,7 @@ const Login: React.FC<LoginProps> = ({
       setIsLoading(true);
       try {
         const response = await api.auth.consumeSsoTicket(ticket);
-        if (!cancelled) onLogin(response.user, response.token);
+        if (!cancelled) onLoginRef.current(response.user, response.token);
       } catch (err) {
         if (!cancelled) {
           setError((err as Error).message || t('auth:login.errors.invalidCredentials'));
@@ -72,7 +82,7 @@ const Login: React.FC<LoginProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [onLogin, t]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -167,6 +167,13 @@ class EmailService {
     }
   }
 
+  // Invalidates the in-memory config cache so the next operation re-reads from the repo.
+  // Mirrors `LDAPService.invalidateConfig()` — exposed publicly so tests do not have to
+  // reach into the private `config` field via type casts.
+  invalidateConfig(): void {
+    this.config = null;
+  }
+
   async sendTestEmail(recipientEmail: string): Promise<{
     success: boolean;
     code: string;

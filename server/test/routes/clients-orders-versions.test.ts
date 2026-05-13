@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -559,6 +560,24 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('no longer exists');
   });
+
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
+    setupHappyPath();
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
@@ -787,5 +806,53 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).toHaveBeenCalled();
+  });
+
+  test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'si-new',
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: 999, // differs to force content-change branch
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

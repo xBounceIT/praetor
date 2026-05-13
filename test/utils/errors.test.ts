@@ -30,4 +30,12 @@ describe('getErrorMessage', () => {
     class CustomError extends Error {}
     expect(getErrorMessage(new CustomError('custom'))).toBe('custom');
   });
+
+  test('returns "Unknown error" for whitespace-only Error.message', () => {
+    expect(getErrorMessage(new Error('   '))).toBe('Unknown error');
+  });
+
+  test('returns "Unknown error" for tab/newline-only Error.message', () => {
+    expect(getErrorMessage(new Error('\t\n'))).toBe('Unknown error');
+  });
 });

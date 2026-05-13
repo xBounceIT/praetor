@@ -190,7 +190,8 @@ const LDAP_LOGIN_USER = {
 };
 
 const resetService = () => {
-  (ldapService as unknown as { config: unknown }).config = null;
+  // Use the public cache-invalidation hook rather than reaching into the private field.
+  ldapService.invalidateConfig();
 };
 
 const ENV_KEYS = [

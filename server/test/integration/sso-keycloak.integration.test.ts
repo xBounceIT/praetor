@@ -253,6 +253,9 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
   let ssoService: SsoServiceModule;
 
   beforeAll(async () => {
+    // The service now reads the public base URL from env, not request headers. The integration
+    // tests need an explicit SSO_CALLBACK_BASE_URL set to the Keycloak-facing origin.
+    process.env.SSO_CALLBACK_BASE_URL = REQUEST_ORIGIN;
     mock.module('../../db/drizzle.ts', () => ({
       withDbTransaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn({}),
       db: {},
@@ -367,7 +370,7 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
   });
 
   test('OIDC authorization code flow binds an existing local user and maps Keycloak groups', async () => {
-    const authorizationUrl = await ssoService.startOidcLogin(OIDC_PROVIDER_SLUG, REQUEST_ORIGIN);
+    const authorizationUrl = await ssoService.startOidcLogin(OIDC_PROVIDER_SLUG);
     const loginResult = await loginThroughKeycloak(
       authorizationUrl,
       ALICE_USERNAME,
@@ -376,11 +379,7 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
     expect(loginResult.type).toBe('redirect');
     if (loginResult.type !== 'redirect') throw new Error('Expected OIDC redirect callback');
 
-    const frontendUrl = await ssoService.completeOidcLogin(
-      OIDC_PROVIDER_SLUG,
-      loginResult.url,
-      REQUEST_ORIGIN,
-    );
+    const frontendUrl = await ssoService.completeOidcLogin(OIDC_PROVIDER_SLUG, loginResult.url);
     const ticket = new URL(frontendUrl, 'http://localhost').searchParams.get('sso_ticket');
 
     expect(ticket).toBeTruthy();
@@ -398,17 +397,13 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
   });
 
   test('SAML POST flow creates an unknown Keycloak user with mapped roles', async () => {
-    const authorizationUrl = await ssoService.startSamlLogin(SAML_PROVIDER_SLUG, REQUEST_ORIGIN);
+    const authorizationUrl = await ssoService.startSamlLogin(SAML_PROVIDER_SLUG);
     const loginResult = await loginThroughKeycloak(authorizationUrl, BOB_USERNAME, BOB_PASSWORD);
     expect(loginResult.type).toBe('saml-post');
     if (loginResult.type !== 'saml-post') throw new Error('Expected SAML POST callback');
     expect(loginResult.fields.SAMLResponse).toBeTruthy();
 
-    const frontendUrl = await ssoService.completeSamlLogin(
-      SAML_PROVIDER_SLUG,
-      loginResult.fields,
-      REQUEST_ORIGIN,
-    );
+    const frontendUrl = await ssoService.completeSamlLogin(SAML_PROVIDER_SLUG, loginResult.fields);
     const ticket = new URL(frontendUrl, 'http://localhost').searchParams.get('sso_ticket');
     const createdBob = [...users.values()].find((user) => user.username === BOB_USERNAME);
 

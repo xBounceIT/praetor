@@ -58,6 +58,23 @@ const parseTrustProxyEnv = (value: string | undefined): boolean | string | numbe
   return value.trim();
 };
 
+// Exported for testing. In production, sanitize 5xx response bodies so internal error details
+// (stack traces, DB column names, etc.) never reach API clients. The full error is still
+// recorded server-side via request.log.error. 4xx responses pass through unchanged so
+// validation/auth/etc. messages remain useful to API clients in every environment.
+export const buildErrorResponseMessage = (
+  error: Error & { statusCode?: number },
+  env: NodeJS.ProcessEnv = process.env,
+): { statusCode: number; message: string } => {
+  const statusCode = error.statusCode || 500;
+  const isProduction = env.NODE_ENV === 'production';
+  const shouldMaskMessage = isProduction && statusCode >= 500;
+  const message = shouldMaskMessage
+    ? 'Internal server error'
+    : error.message || 'Internal server error';
+  return { statusCode, message };
+};
+
 export const buildApp = async () => {
   const fastify = Fastify({
     logger: loggerOptions,
@@ -168,9 +185,8 @@ export const buildApp = async () => {
       'Unhandled request error',
     );
 
-    reply.code(error.statusCode || 500).send({
-      error: error.message || 'Internal server error',
-    });
+    const { statusCode, message } = buildErrorResponseMessage(error);
+    reply.code(statusCode).send({ error: message });
   });
 
   return fastify;

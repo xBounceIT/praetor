@@ -6,6 +6,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
+import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -13,6 +14,17 @@ import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/valida
 // sync prevents a save flow where a 32-64 KB chain passes the picker but fails the API.
 const TLS_CA_MAX_LENGTH = 65536;
 const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
+
+// bindPassword is masked on GET so the secret never leaves the server, and PUT
+// treats the same sentinel as "no change" so a round-tripped form save preserves
+// the stored value. The sentinel matches the repo-wide MASKED_SECRET convention
+// already used by smtpPassword, clientSecret, privateKey, and API keys.
+// (tlsCaCertificate is a public CA certificate, not a private key, so it is
+// returned as-is.)
+const maskBindPassword = (config: ldapRepo.LdapConfig): ldapRepo.LdapConfig => ({
+  ...config,
+  bindPassword: config.bindPassword ? MASKED_SECRET : '',
+});
 
 // Returns the patch fragment to merge into ldapRepo.update():
 //   - omitted body field   -> {} (preserve existing column)
@@ -153,7 +165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request, _reply) => (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG,
+    async (_request, _reply) => maskBindPassword((await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG),
   );
 
   // PUT /config - Update LDAP configuration (admin only)
@@ -189,14 +201,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enabled,
         serverUrl,
         baseDn,
-        bindDn,
-        bindPassword,
         userFilter,
         groupBaseDn,
         groupFilter,
         roleMappings,
         autoProvisionAll,
       } = body;
+      // bindPassword === MASKED_SECRET means "preserve the stored secret" (the UI round-trips
+      // the masked value when the operator did not edit the field). To satisfy the paired
+      // validation below, bindDn is also dropped from the patch, but only when the client's
+      // bindDn matches what is currently stored - otherwise a request that changes bindDn
+      // while keeping the masked password would silently swallow the DN edit and return 200.
+      // To actually rotate bindDn, the operator must re-enter bindPassword (supply a non-mask
+      // value) so the credentials are updated together.
+      const isBindPasswordMasked = body.bindPassword === MASKED_SECRET;
+      let bindDn: string | undefined;
+      let bindPassword: string | undefined;
+      if (isBindPasswordMasked) {
+        const storedConfig = (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG;
+        if (body.bindDn !== undefined && body.bindDn !== storedConfig.bindDn) {
+          return badRequest(
+            reply,
+            'bindDn cannot be changed while bindPassword is masked; re-enter bindPassword to rotate credentials',
+          );
+        }
+        bindDn = undefined;
+        bindPassword = undefined;
+      } else {
+        bindDn = body.bindDn;
+        bindPassword = body.bindPassword;
+      }
       const enabledValue = parseBoolean(enabled);
       const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
       if (!tlsCaResult.ok) {
@@ -304,7 +338,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: updated.serverUrl,
         },
       });
-      return updated;
+      return maskBindPassword(updated);
     },
   );
 

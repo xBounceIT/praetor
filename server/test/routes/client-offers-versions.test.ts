@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -498,6 +499,24 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     });
     expect(res.statusCode).toBe(403);
   });
+
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
+    setupHappyPath();
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
@@ -550,5 +569,54 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).not.toHaveBeenCalled();
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'draft',
+    });
+    coFindFullForSnapshotMock.mockResolvedValue({
+      offer: { ...SAMPLE_OFFER, linkedQuoteId: null },
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_OFFER, linkedQuoteId: null });
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-offers/off-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'coi-new',
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 1,
+            unitPrice: 100,
+            productCost: 50,
+            productMolPercentage: null,
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+            supplierQuoteSupplierName: null,
+            supplierQuoteUnitPrice: null,
+            discount: 0,
+            note: null,
+            unitType: 'hours',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

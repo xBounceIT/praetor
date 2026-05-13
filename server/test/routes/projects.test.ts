@@ -986,6 +986,9 @@ describe('PUT /api/projects/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // Guard the optional-chained access below: without this, a missing call would make
+    // `updateArgs?.orderId` collapse to `undefined` and the assertion would pass vacuously.
+    expect(updateMock).toHaveBeenCalled();
     const updateArgs = updateMock.mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined;
     expect(updateArgs?.orderId).toBeUndefined();
   });

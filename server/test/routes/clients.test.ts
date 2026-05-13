@@ -364,6 +364,7 @@ describe('POST /api/clients', () => {
     });
 
     expect(res.statusCode).toBe(201);
+    expect(createClientMock).toHaveBeenCalledTimes(1);
     const id = createClientMock.mock.calls[0][0].id as string;
     expect(id).toMatch(/^c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
@@ -398,6 +399,9 @@ describe('POST /api/clients', () => {
     ]);
 
     for (const r of results) expect(r.statusCode).toBe(201);
+    // Guard the Set/array length check below: without this, `new Set([]).size === [].length`
+    // would pass vacuously if the mock was never called.
+    expect(createClientMock).toHaveBeenCalledTimes(3);
     const ids = createClientMock.mock.calls.map((c) => (c[0] as { id: string }).id);
     expect(new Set(ids).size).toBe(ids.length);
   });

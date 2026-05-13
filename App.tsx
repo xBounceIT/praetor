@@ -384,26 +384,70 @@ const TrackerView: React.FC<{
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {/* Top Middle Toggle */}
       <div className="flex justify-center">
-        <div className="relative grid grid-cols-2 bg-zinc-200/50 p-1 rounded-full w-full max-w-60">
+        <div className="relative grid grid-cols-2 bg-background border border-border shadow-sm p-1 rounded-full w-full max-w-60">
           <div
-            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-muted rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
               trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
             }`}
           ></div>
           <button
             onClick={() => setTrackerMode('daily')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {t('tracker.mode.daily')}
           </button>
           <button
             onClick={() => setTrackerMode('weekly')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-zinc-500 hover:text-zinc-700'}`}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {t('tracker.mode.weekly')}
           </button>
         </div>
       </div>
+
+      {/* Manager Selection Header — shared across daily and weekly modes. */}
+      {availableUsers.length > 1 && (
+        <div className="max-w-xl mx-auto">
+          <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
+              >
+                {viewingUser?.avatarInitials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                  {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+                </p>
+                <p className="text-sm font-bold text-foreground truncate">{viewingUser?.name}</p>
+              </div>
+            </div>
+            <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+              <div className="flex min-h-6 items-center justify-between gap-2">
+                <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+                {!isViewingSelf && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onViewUserChange(currentUser.id)}
+                    className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    {t('tracker.backToMe')}
+                  </Button>
+                )}
+              </div>
+              <SelectControl
+                options={userOptions}
+                value={viewingUserId}
+                onChange={(val) => onViewUserChange(val as string)}
+                searchable={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {trackerMode === 'weekly' ? (
         <WeeklyView
@@ -411,66 +455,22 @@ const TrackerView: React.FC<{
           clients={clients}
           projects={projects}
           projectTasks={projectTasks}
-          onDeleteEntry={onDeleteEntry}
+          permissions={permissions}
+          currency={currency}
+          onAddCustomTask={onAddCustomTask}
+          onAddBulkEntries={onAddBulkEntries}
           onUpdateEntry={onUpdateEntry}
           viewingUserId={viewingUserId}
-          currentUserId={currentUser.id}
-          availableUsers={availableUsers}
-          onViewUserChange={onViewUserChange}
-          onAddBulkEntries={onAddBulkEntries}
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
           startOfWeek={startOfWeek}
           treatSaturdayAsHoliday={treatSaturdayAsHoliday}
           allowWeekendSelection={allowWeekendSelection}
           defaultLocation={defaultLocation}
+          dailyGoal={dailyGoal}
         />
       ) : (
         <div className="space-y-6">
-          {/* Manager Selection Header */}
-          {availableUsers.length > 1 && (
-            <div className="max-w-xl mx-auto">
-              <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
-                  >
-                    {viewingUser?.avatarInitials}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                      {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                    </p>
-                    <p className="text-sm font-bold text-foreground truncate">
-                      {viewingUser?.name}
-                    </p>
-                  </div>
-                </div>
-                <div className="w-full sm:w-56 space-y-1.5 shrink-0">
-                  <div className="flex min-h-6 items-center justify-between gap-2">
-                    <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
-                    {!isViewingSelf && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => onViewUserChange(currentUser.id)}
-                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                        {t('tracker.backToMe')}
-                      </Button>
-                    )}
-                  </div>
-                  <SelectControl
-                    options={userOptions}
-                    value={viewingUserId}
-                    onChange={(val) => onViewUserChange(val as string)}
-                    searchable={true}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
               <DailyView
@@ -618,6 +618,7 @@ const TrackerView: React.FC<{
 };
 
 const App: React.FC = () => {
+  const { t: tApp } = useTranslation(['common', 'reports']);
   useLayoutEffect(() => {
     applyTheme(getTheme());
   }, []);
@@ -2238,7 +2239,6 @@ const App: React.FC = () => {
   if (!currentUser)
     return (
       <Login
-        users={users}
         onLogin={handleLogin}
         logoutReason={logoutReason}
         onClearLogoutReason={clearLogoutReason}
@@ -2744,7 +2744,7 @@ const App: React.FC = () => {
                     <div className="text-center">
                       <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
                       <p className="text-zinc-700 font-medium">
-                        AI reporting settings failed to load.
+                        {tApp('reports:aiReporting.settingsFailedToLoad')}
                       </p>
                     </div>
                   </div>
@@ -2752,7 +2752,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                      <p className="text-zinc-600 font-medium">Loading…</p>
+                      <p className="text-zinc-600 font-medium">{tApp('common:states.loading')}</p>
                     </div>
                   </div>
                 )

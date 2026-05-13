@@ -266,7 +266,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                           </button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>Edit</TooltipContent>
+                      <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
                     </Tooltip>
                   )}
                   {canDeleteWorkUnits && (
@@ -281,7 +281,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                           </button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>Delete</TooltipContent>
+                      <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
                     </Tooltip>
                   )}
                 </div>
