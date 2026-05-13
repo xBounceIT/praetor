@@ -43,8 +43,8 @@ export type Client = {
   createdAt: number | undefined;
 };
 
-// Classify a thrown error from a clients insert/update as a known unique-constraint violation
-// so callers can surface a domain-level message without coupling to raw Postgres index names.
+// Domain enum so callers can map unique-constraint violations to user-facing messages
+// without coupling to the raw Postgres index names.
 export type ClientUniqueViolationKind = 'fiscal_code' | 'client_code';
 
 export const classifyUniqueViolation = (err: unknown): ClientUniqueViolationKind | null => {

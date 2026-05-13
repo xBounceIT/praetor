@@ -307,18 +307,22 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
-// Pass a forwarding arrow rather than a direct reference so test `mock.module` replacements
-// of `userAssignmentsRepo.*` resolve at call time, not module-load time.
 const canAccessClient = makeAccessChecker(
   (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
   'crm.clients_all.view',
 );
 
-const handleClientUniqueViolation = (err: unknown, reply: FastifyReply): FastifyReply | null => {
+const handleClientUniqueViolation = (err: unknown, reply: FastifyReply): boolean => {
   const kind = clientsRepo.classifyUniqueViolation(err);
-  if (kind === 'client_code') return badRequest(reply, 'Client ID already exists');
-  if (kind === 'fiscal_code') return badRequest(reply, 'Fiscal code already exists');
-  return null;
+  if (kind === 'client_code') {
+    badRequest(reply, 'Client ID already exists');
+    return true;
+  }
+  if (kind === 'fiscal_code') {
+    badRequest(reply, 'Fiscal code already exists');
+    return true;
+  }
+  return false;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -574,8 +578,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(client);
       } catch (err) {
-        const handled = handleClientUniqueViolation(err, reply);
-        if (handled) return handled;
+        if (handleClientUniqueViolation(err, reply)) return reply;
         throw err;
       }
     },
@@ -813,8 +816,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return client;
       } catch (err) {
-        const handled = handleClientUniqueViolation(err, reply);
-        if (handled) return handled;
+        if (handleClientUniqueViolation(err, reply)) return reply;
         throw err;
       }
     },

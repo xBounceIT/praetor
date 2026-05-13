@@ -119,8 +119,6 @@ const userIdsSchema = {
   required: ['userIds'],
 } as const;
 
-// Pass forwarding arrows rather than direct references so test `mock.module` replacements
-// of `userAssignmentsRepo.*` resolve at call time, not module-load time.
 const canAccessProject = makeAccessChecker(
   (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
   'projects.manage_all.view',

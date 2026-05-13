@@ -118,8 +118,6 @@ class OrderClientMismatchError extends Error {}
 class OfferClientMismatchError extends Error {}
 class DateRangeError extends Error {}
 
-// Pass forwarding arrows rather than direct references so test `mock.module` replacements
-// of `userAssignmentsRepo.*` resolve at call time, not module-load time.
 const canAccessClient = makeAccessChecker(
   (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
   'crm.clients_all.view',
