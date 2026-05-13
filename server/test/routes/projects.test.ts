@@ -35,6 +35,7 @@ const listAllMock = mock();
 const listForUserMock = mock();
 const createMock = mock();
 const updateMock = mock();
+const findByIdMock = mock();
 const deleteByIdMock = mock();
 const lockClientIdByIdMock = mock();
 const lockNameAndClientByIdMock = mock();
@@ -83,6 +84,7 @@ beforeAll(async () => {
     listForUser: listForUserMock,
     create: createMock,
     update: updateMock,
+    findById: findByIdMock,
     deleteById: deleteByIdMock,
     lockClientIdById: lockClientIdByIdMock,
     lockNameAndClientById: lockNameAndClientByIdMock,
@@ -160,6 +162,10 @@ const SAMPLE_PROJECT = {
   isDisabled: false,
   createdAt: 1_700_000_000_000,
   orderId: null,
+  offerId: null,
+  startDate: null,
+  endDate: null,
+  revenue: null,
   billingType: 'time_and_materials',
   billingFrequency: 'monthly',
 };
@@ -172,6 +178,7 @@ const allMocks = [
   listForUserMock,
   createMock,
   updateMock,
+  findByIdMock,
   deleteByIdMock,
   lockClientIdByIdMock,
   lockNameAndClientByIdMock,
@@ -282,6 +289,7 @@ describe('POST /api/projects', () => {
         description: 'A new site',
         color: '#abcdef',
         orderId: 'o-1',
+        offerId: 'of-1',
       },
     });
 
@@ -293,6 +301,7 @@ describe('POST /api/projects', () => {
         color: '#abcdef',
         description: 'A new site',
         orderId: 'o-1',
+        offerId: 'of-1',
         isDisabled: false,
       }),
     );
@@ -305,6 +314,46 @@ describe('POST /api/projects', () => {
     );
   });
 
+  test('201: persists startDate, endDate, offerId, revenue', async () => {
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      offerId: 'of-1',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      revenue: 12345.5,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        name: 'Website',
+        clientId: 'c-1',
+        offerId: 'of-1',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        revenue: 12345.5,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offerId: 'of-1',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        revenue: 12345.5,
+      }),
+    );
+    expect(JSON.parse(res.body)).toMatchObject({
+      offerId: 'of-1',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      revenue: 12345.5,
+    });
+  });
+
   test('201: defaults color when omitted', async () => {
     createMock.mockResolvedValue(SAMPLE_PROJECT);
 
@@ -312,7 +361,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1' },
+      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -328,7 +377,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', orderId: 'co-foreign' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: 'co-foreign' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -346,7 +395,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', orderId: 'co-same' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: 'co-same' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -360,7 +409,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', orderId: '' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: '' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -375,7 +424,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Orderless', clientId: 'c-1' },
+      payload: { name: 'Orderless', clientId: 'c-1', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -387,7 +436,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: '   ', clientId: 'c-1' },
+      payload: { name: '   ', clientId: 'c-1', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -399,11 +448,77 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Website', clientId: '   ' },
+      payload: { name: 'Website', clientId: '   ', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'clientId is required' });
+  });
+
+  test('400: missing offerId', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Website', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+  });
+
+  test('400: startDate after endDate', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        name: 'Website',
+        clientId: 'c-1',
+        offerId: 'of-1',
+        startDate: '2026-12-31',
+        endDate: '2026-01-01',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'startDate must be on or before endDate',
+    });
+  });
+
+  test('400: invalid startDate format', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        name: 'Website',
+        clientId: 'c-1',
+        offerId: 'of-1',
+        startDate: '01/01/2026',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/startDate must be in YYYY-MM-DD format/);
+  });
+
+  test('400: negative revenue', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        name: 'Website',
+        clientId: 'c-1',
+        offerId: 'of-1',
+        revenue: -10,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/revenue must be zero or positive/);
   });
 
   test('400: invalid hex color', async () => {
@@ -411,7 +526,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', color: 'not-a-hex' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', color: 'not-a-hex' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -423,7 +538,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', billingType: 'mixed' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', billingType: 'mixed' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -439,18 +554,34 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-missing' },
+      payload: { name: 'Site', clientId: 'c-missing', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'Client not found' });
   });
 
+  test('400: ForeignKeyError Linked offer mapped to 400', async () => {
+    createMock.mockImplementation(async () => {
+      throw new ForeignKeyError('Linked offer');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Linked offer not found' });
+  });
+
   test('401: missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/projects',
-      payload: { name: 'X', clientId: 'c-1' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -462,7 +593,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(403);
@@ -476,7 +607,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1' },
+      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
     });
 
     expect(res.statusCode).toBe(403);
@@ -760,6 +891,96 @@ describe('PUT /api/projects/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.enabled' }),
     );
+  });
+
+  test('200: patches offerId, startDate, endDate, revenue', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findByIdMock.mockResolvedValue({ ...SAMPLE_PROJECT, startDate: null, endDate: null });
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      offerId: 'of-2',
+      startDate: '2026-02-01',
+      endDate: '2026-11-30',
+      revenue: 9999,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: {
+        offerId: 'of-2',
+        startDate: '2026-02-01',
+        endDate: '2026-11-30',
+        revenue: 9999,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({
+        offerId: 'of-2',
+        startDate: '2026-02-01',
+        endDate: '2026-11-30',
+        revenue: 9999,
+      }),
+      undefined,
+    );
+  });
+
+  test('200: clearing revenue with null is forwarded', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, revenue: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { revenue: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ revenue: null }),
+      undefined,
+    );
+  });
+
+  test('400: startDate after endDate', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findByIdMock.mockResolvedValue({ ...SAMPLE_PROJECT, startDate: null, endDate: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { startDate: '2026-12-31', endDate: '2026-01-01' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'startDate must be on or before endDate',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: ForeignKeyError Linked offer mapped to 400 on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockImplementation(async () => {
+      throw new ForeignKeyError('Linked offer');
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { offerId: 'of-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Linked offer not found' });
   });
 
   test('400: invalid hex color', async () => {

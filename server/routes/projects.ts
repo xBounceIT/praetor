@@ -31,7 +31,9 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
+  optionalDateString,
   optionalEnum,
+  optionalNonNegativeNumber,
   requireNonEmptyString,
   validateHexColor,
 } from '../utils/validation.ts';
@@ -63,6 +65,10 @@ const projectSchema = {
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
     orderId: { type: ['string', 'null'] },
+    offerId: { type: ['string', 'null'] },
+    startDate: { type: ['string', 'null'] },
+    endDate: { type: ['string', 'null'] },
+    revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
@@ -77,10 +83,14 @@ const projectCreateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     orderId: { type: 'string' },
+    offerId: { type: 'string' },
+    startDate: { type: ['string', 'null'] },
+    endDate: { type: ['string', 'null'] },
+    revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
-  required: ['name', 'clientId'],
+  required: ['name', 'clientId', 'offerId'],
 } as const;
 
 const projectUpdateBodySchema = {
@@ -92,6 +102,10 @@ const projectUpdateBodySchema = {
     color: { type: 'string' },
     isDisabled: { type: 'boolean' },
     orderId: { type: ['string', 'null'] },
+    offerId: { type: ['string', 'null'] },
+    startDate: { type: ['string', 'null'] },
+    endDate: { type: ['string', 'null'] },
+    revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
@@ -183,7 +197,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
       };
-      const body = request.body as { billingType?: string; billingFrequency?: string };
+      const body = request.body as {
+        billingType?: string;
+        billingFrequency?: string;
+        offerId?: string;
+        startDate?: string | null;
+        endDate?: string | null;
+        revenue?: number | string | null;
+      };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -196,6 +217,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
+
+      const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
+      if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
+
+      const startDateResult = optionalDateString(body.startDate, 'startDate');
+      if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
+      const endDateResult = optionalDateString(body.endDate, 'endDate');
+      if (!endDateResult.ok) return badRequest(reply, endDateResult.message);
+      if (
+        startDateResult.value &&
+        endDateResult.value &&
+        startDateResult.value > endDateResult.value
+      ) {
+        return badRequest(reply, 'startDate must be on or before endDate');
+      }
+
+      const revenueResult = optionalNonNegativeNumber(body.revenue, 'revenue');
+      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
 
       const billingTypeResult = optionalEnum(body.billingType, STORED_BILLING_TYPES, 'billingType');
       if (!billingTypeResult.ok) return badRequest(reply, billingTypeResult.message);
@@ -235,6 +274,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description: description || null,
           isDisabled: false,
           orderId: orderId || null,
+          offerId: offerIdResult.value,
+          startDate: startDateResult.value,
+          endDate: endDateResult.value,
+          revenue: revenueResult.value,
           billingType,
           billingFrequency,
         });
@@ -353,6 +396,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         color?: string;
         isDisabled?: boolean;
         orderId?: string | null;
+        offerId?: string | null;
+        startDate?: string | null;
+        endDate?: string | null;
+        revenue?: number | string | null;
         billingType?: string;
         billingFrequency?: string;
       };
@@ -386,6 +433,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'billingFrequency',
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
+
+      let offerIdPatch: { provided: boolean; value: string | null } = {
+        provided: false,
+        value: null,
+      };
+      if (Object.hasOwn(body, 'offerId')) {
+        if (body.offerId === null || body.offerId === '') {
+          offerIdPatch = { provided: true, value: null };
+        } else {
+          const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
+          if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
+          offerIdPatch = { provided: true, value: offerIdResult.value };
+        }
+      }
+
+      let startDatePatch: { provided: boolean; value: string | null } = {
+        provided: false,
+        value: null,
+      };
+      if (Object.hasOwn(body, 'startDate')) {
+        const r = optionalDateString(body.startDate, 'startDate');
+        if (!r.ok) return badRequest(reply, r.message);
+        startDatePatch = { provided: true, value: r.value };
+      }
+
+      let endDatePatch: { provided: boolean; value: string | null } = {
+        provided: false,
+        value: null,
+      };
+      if (Object.hasOwn(body, 'endDate')) {
+        const r = optionalDateString(body.endDate, 'endDate');
+        if (!r.ok) return badRequest(reply, r.message);
+        endDatePatch = { provided: true, value: r.value };
+      }
+
+      if (startDatePatch.provided || endDatePatch.provided) {
+        const existing = await projectsRepo.findById(idResult.value);
+        const nextStart = startDatePatch.provided
+          ? startDatePatch.value
+          : (existing?.startDate ?? null);
+        const nextEnd = endDatePatch.provided ? endDatePatch.value : (existing?.endDate ?? null);
+        if (nextStart && nextEnd && nextStart > nextEnd) {
+          return badRequest(reply, 'startDate must be on or before endDate');
+        }
+      }
+
+      let revenuePatch: { provided: boolean; value: number | null } = {
+        provided: false,
+        value: null,
+      };
+      if (Object.hasOwn(body, 'revenue')) {
+        const r = optionalNonNegativeNumber(body.revenue, 'revenue');
+        if (!r.ok) return badRequest(reply, r.message);
+        revenuePatch = { provided: true, value: r.value };
+      }
 
       let updatedProject: {
         updated: projectsRepo.Project;
@@ -433,6 +535,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               description: description || undefined,
               isDisabled,
               orderId: orderIdPatch,
+              offerId: offerIdPatch.provided ? offerIdPatch.value : undefined,
+              startDate: startDatePatch.provided ? startDatePatch.value : undefined,
+              endDate: endDatePatch.provided ? endDatePatch.value : undefined,
+              revenue: revenuePatch.provided ? revenuePatch.value : undefined,
               billingType: billingTypeResult.value ?? undefined,
               billingFrequency: billingFrequencyResult.value ?? undefined,
             },

@@ -202,6 +202,7 @@ export const normalizeProduct = (p: Product): Product => ({
 
 export const normalizeProject = (p: Project): Project => ({
   ...p,
+  revenue: p.revenue === undefined || p.revenue === null ? null : Number(p.revenue),
   ...normalizeProjectBilling(p.billingType, p.billingFrequency),
 });
 

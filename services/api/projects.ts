@@ -12,6 +12,10 @@ export const projectsApi = {
     description?: string;
     color?: string;
     orderId?: string;
+    offerId: string;
+    startDate?: string | null;
+    endDate?: string | null;
+    revenue?: number | null;
     billingType?: StoredBillingType;
     billingFrequency?: BillingFrequency;
   }): Promise<Project> =>

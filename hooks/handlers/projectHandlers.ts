@@ -17,20 +17,26 @@ export type ProjectHandlersDeps = {
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
+export type AddProjectInput = {
+  name: string;
+  clientId: string;
+  offerId: string;
+  orderId?: string;
+  description?: string;
+  draftTasks?: DraftTaskInput[];
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
+};
+
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
   const { projects, setProjects, setProjectTasks, setEntries } = deps;
 
-  const add = async (
-    name: string,
-    clientId: string,
-    orderId: string | undefined,
-    description?: string,
-    draftTasks?: DraftTaskInput[],
-    billingType?: StoredBillingType,
-    billingFrequency?: BillingFrequency,
-  ) => {
+  const add = async (input: AddProjectInput) => {
     try {
-      if (!clientId) throw new Error('Client is required');
+      if (!input.clientId) throw new Error('Client is required');
 
       const usedColors = projects.map((p) => p.color);
       const availableColors = COLORS.filter((c) => !usedColors.includes(c));
@@ -40,19 +46,23 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
           : COLORS[Math.floor(Math.random() * COLORS.length)];
 
       const project = await api.projects.create({
-        name,
-        clientId,
-        description,
+        name: input.name,
+        clientId: input.clientId,
+        description: input.description,
         color,
-        orderId,
-        billingType,
-        billingFrequency,
+        orderId: input.orderId || undefined,
+        offerId: input.offerId,
+        startDate: input.startDate ?? null,
+        endDate: input.endDate ?? null,
+        revenue: input.revenue ?? null,
+        billingType: input.billingType,
+        billingFrequency: input.billingFrequency,
       });
       setProjects((prev) => [...prev, project]);
 
-      if (draftTasks && draftTasks.length > 0) {
+      if (input.draftTasks && input.draftTasks.length > 0) {
         const createdTasks = await Promise.all(
-          draftTasks.map((t) =>
+          input.draftTasks.map((t) =>
             api.tasks.create(
               t.name,
               project.id,

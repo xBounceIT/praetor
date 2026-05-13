@@ -1,7 +1,18 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  date,
+  index,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
+import { customerOffers } from './customerOffers.ts';
 
 export const projects = pgTable(
   'projects',
@@ -20,6 +31,13 @@ export const projects = pgTable(
     // import from sales. `projectsRepo` still keys off the constraint name when handling FK
     // violation errors.
     orderId: varchar('order_id', { length: 100 }),
+    offerId: varchar('offer_id', { length: 100 }).references(() => customerOffers.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+    startDate: date('start_date', { mode: 'string' }),
+    endDate: date('end_date', { mode: 'string' }),
+    revenue: numeric('revenue', { precision: 15, scale: 2 }),
     billingType: varchar('billing_type', { length: 30 })
       .$type<'retainer' | 'time_and_materials'>()
       .notNull()
@@ -42,6 +60,14 @@ export const projects = pgTable(
     check(
       'projects_time_and_materials_monthly_check',
       sql`${table.billingType} != 'time_and_materials' OR ${table.billingFrequency} = 'monthly'`,
+    ),
+    check(
+      'projects_date_range_check',
+      sql`${table.startDate} IS NULL OR ${table.endDate} IS NULL OR ${table.startDate} <= ${table.endDate}`,
+    ),
+    check(
+      'projects_revenue_non_negative_check',
+      sql`${table.revenue} IS NULL OR ${table.revenue} >= 0`,
     ),
   ],
 );

@@ -12,6 +12,7 @@ import type {
   BillingFrequency,
   BillingType,
   Client,
+  ClientOffer,
   ClientsOrder,
   Project,
   ProjectTask,
@@ -20,6 +21,7 @@ import type {
   User,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { calculatePricingTotals } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -86,24 +88,31 @@ const billingFrequencyOptions = [
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
 
+export type AddProjectFormInput = {
+  name: string;
+  clientId: string;
+  offerId: string;
+  orderId?: string;
+  description?: string;
+  draftTasks?: DraftTaskInput[];
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
+};
+
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
   orders: ClientsOrder[];
+  offers: ClientOffer[];
   permissions: string[];
   users: User[];
   roles: Role[];
   currency: string;
   tasks: ProjectTask[];
-  onAddProject: (
-    name: string,
-    clientId: string,
-    orderId: string | undefined,
-    description?: string,
-    tasks?: DraftTaskInput[],
-    billingType?: StoredBillingType,
-    billingFrequency?: BillingFrequency,
-  ) => void;
+  onAddProject: (input: AddProjectFormInput) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
   onAddTask: (
@@ -125,6 +134,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
   orders,
+  offers,
   permissions,
   users,
   roles,
@@ -168,6 +178,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+  const [offerId, setOfferId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [revenue, setRevenue] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Draft tasks state (create modal only)
@@ -278,6 +292,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setBillingType('time_and_materials');
     setBillingFrequency('monthly');
     setProjectBillingChanged(false);
+    setOfferId('');
+    setStartDate('');
+    setEndDate('');
+    setRevenue('');
     setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
@@ -302,6 +320,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         : (project.billingFrequency ?? 'monthly'),
     );
     setProjectBillingChanged(false);
+    setOfferId(project.offerId ?? '');
+    setStartDate(project.startDate ?? '');
+    setEndDate(project.endDate ?? '');
+    setRevenue(
+      project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
+    );
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
@@ -350,10 +374,27 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
 
+    if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+
+    if (startDate && endDate && startDate > endDate) {
+      newErrors.dateRange = t('projects:projects.dateRangeInvalid');
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
+
+    const submitActivitySum = (editingProject ? editingProjectTasks : draftTasks).reduce(
+      (sum, t) => sum + (Number(t.revenue) || 0),
+      0,
+    );
+    const submitOrder = editingProject?.orderId
+      ? orders.find((o) => o.id === editingProject.orderId)
+      : orders.find((o) => o.id === orderId);
+    const submitSource: 'activities' | 'order' | 'manual' =
+      submitActivitySum > 0 ? 'activities' : submitOrder ? 'order' : 'manual';
+    const persistedRevenue = submitSource === 'manual' && revenue ? parseFloat(revenue) : null;
 
     if (editingProject) {
       const updates: Partial<Project> = {
@@ -362,6 +403,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         description,
         color,
         isDisabled: tempIsDisabled,
+        offerId,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        revenue: persistedRevenue,
       };
       if (displayProjectBillingType !== 'mixed' || projectBillingChanged) {
         updates.billingType = billingType;
@@ -381,15 +426,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           revenue: t.revenue ? parseFloat(t.revenue) : undefined,
           notes: t.notes.trim() || undefined,
         }));
-      onAddProject(
+      onAddProject({
         name,
         clientId,
-        orderId || undefined,
+        orderId: orderId || undefined,
+        offerId,
         description,
-        taskInputs.length > 0 ? taskInputs : undefined,
+        draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
         billingType,
-        billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-      );
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        revenue: persistedRevenue,
+      });
     }
     closeModal();
   };
@@ -746,6 +795,51 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
+  // The edit modal keeps the form's `orderId` empty (the order selector is only shown in create
+  // mode); the existing project's link lives on `editingProject.orderId`. Resolve the effective
+  // order so the order-derived revenue branch works in both modes.
+  const effectiveOrder = editingProject?.orderId
+    ? orders.find((o) => o.id === editingProject.orderId)
+    : selectedOrder;
+
+  const offerOptions = offers
+    .filter((o) => o.status === 'accepted')
+    .map((o) => ({
+      id: o.id,
+      name: `${o.clientName} - ${o.id}`,
+    }));
+  if (offerId && !offerOptions.some((o) => o.id === offerId)) {
+    const fallback = offers.find((o) => o.id === offerId);
+    if (fallback) {
+      offerOptions.unshift({ id: fallback.id, name: `${fallback.clientName} - ${fallback.id}` });
+    }
+  }
+
+  const activitiesRevenueSum = (editingProject ? editingProjectTasks : draftTasks).reduce(
+    (sum, t) => sum + (Number(t.revenue) || 0),
+    0,
+  );
+
+  const orderRevenue = effectiveOrder
+    ? calculatePricingTotals(
+        effectiveOrder.items,
+        Number(effectiveOrder.discount || 0),
+        'hours',
+        effectiveOrder.discountType,
+      ).total
+    : 0;
+
+  const revenueSource: 'activities' | 'order' | 'manual' =
+    activitiesRevenueSum > 0 ? 'activities' : effectiveOrder ? 'order' : 'manual';
+  const displayedRevenue =
+    revenueSource === 'activities'
+      ? activitiesRevenueSum
+      : revenueSource === 'order'
+        ? orderRevenue
+        : revenue
+          ? parseFloat(revenue)
+          : 0;
+
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
@@ -1075,6 +1169,83 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       className="min-h-20 resize-none"
                     />
                   </Field>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field data-invalid={Boolean(errors.dateRange)}>
+                      <FieldLabel htmlFor="project-start-date">
+                        {t('projects:projects.startDate')}
+                      </FieldLabel>
+                      <Input
+                        id="project-start-date"
+                        type="date"
+                        value={startDate}
+                        aria-invalid={Boolean(errors.dateRange)}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                        }}
+                      />
+                    </Field>
+                    <Field data-invalid={Boolean(errors.dateRange)}>
+                      <FieldLabel htmlFor="project-end-date">
+                        {t('projects:projects.endDate')}
+                      </FieldLabel>
+                      <Input
+                        id="project-end-date"
+                        type="date"
+                        value={endDate}
+                        aria-invalid={Boolean(errors.dateRange)}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                        }}
+                      />
+                    </Field>
+                  </div>
+                  {errors.dateRange && (
+                    <FieldError className="text-xs">{errors.dateRange}</FieldError>
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-offer"
+                        options={offerOptions}
+                        value={offerId}
+                        onChange={(val) => {
+                          setOfferId(val as string);
+                          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                        }}
+                        label={t('projects:projects.offerReference')}
+                        placeholder={t('projects:projects.selectOffer')}
+                        searchable={true}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.offerId}</FieldError>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="project-revenue">
+                        {`${t('projects:projects.projectRevenue')} (${currency})`}
+                      </FieldLabel>
+                      <Input
+                        id="project-revenue"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
+                        readOnly={revenueSource !== 'manual'}
+                        onChange={(e) => setRevenue(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {revenueSource === 'activities'
+                          ? t('projects:projects.revenueFromActivities')
+                          : revenueSource === 'order'
+                            ? t('projects:projects.revenueFromOrder')
+                            : t('projects:projects.revenueManualHint')}
+                      </p>
+                    </Field>
+                  </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <SelectControl

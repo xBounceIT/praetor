@@ -25,6 +25,12 @@ For each project and task, you can set the billing type: retainer or time and ma
 
 Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
 
+When creating or editing a project you can also fill in:
+
+- **Project start date** and **Project end date** — define the planned window; the end date must not precede the start date.
+- **Offer reference** — links the project to an accepted offer. This field is required.
+- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
+
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
 ## Work units

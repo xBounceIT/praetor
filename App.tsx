@@ -2541,6 +2541,7 @@ const App: React.FC = () => {
                   projects={projects}
                   clients={clients}
                   orders={clientsOrders}
+                  offers={clientOffers}
                   currency={generalSettings.currency}
                   permissions={currentUser.permissions || []}
                   users={availableUsers}
