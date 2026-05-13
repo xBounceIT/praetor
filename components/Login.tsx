@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import api from '../services/api';
+import api, { ApiError } from '../services/api';
 import type { PublicSsoProvider, User } from '../types';
 
 export interface LoginProps {
@@ -84,6 +84,13 @@ const Login: React.FC<LoginProps> = ({
     };
   }, []);
 
+  const messageForLoginError = (err: unknown): string => {
+    if (err instanceof ApiError && err.errorCode === 'ldap_unavailable') {
+      return t('auth:login.errors.ldapUnavailable');
+    }
+    return (err as Error).message || t('auth:login.errors.invalidCredentials');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFieldErrors({});
@@ -104,7 +111,7 @@ const Login: React.FC<LoginProps> = ({
       const response = await api.auth.login(username, password);
       onLogin(response.user, response.token);
     } catch (err) {
-      setError((err as Error).message || t('auth:login.errors.invalidCredentials'));
+      setError(messageForLoginError(err));
     } finally {
       setIsLoading(false);
     }

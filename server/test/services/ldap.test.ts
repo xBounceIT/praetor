@@ -445,6 +445,22 @@ describe('authenticate', () => {
     );
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
+
+  test('skips findUserGroups when user-bind fails (regression: avoid N+1 on wrong password)', async () => {
+    nextFixture = {
+      bindResponses: [null, new Error('invalid credentials')],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+      ],
+    };
+    const result = await ldapService.authenticateWithProfile('alice', 'pw');
+    expect(result.authenticated).toBe(false);
+    // Only the user-lookup search runs; the group search must NOT have been issued.
+    expect(lastClientStats?.searchCalls).toHaveLength(1);
+  });
 });
 
 describe('findUserDn (direct, with config preloaded)', () => {

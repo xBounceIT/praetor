@@ -367,10 +367,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
 
       const ldapService = (await import('../services/ldap.ts')).default;
-      const result = await ldapService.authenticateWithProfile(
-        usernameResult.value,
-        passwordResult.value,
-      );
+      let result: Awaited<ReturnType<typeof ldapService.authenticateWithProfile>>;
+      try {
+        result = await ldapService.authenticateWithProfile(
+          usernameResult.value,
+          passwordResult.value,
+        );
+      } catch (err) {
+        // Admin diagnostic — surface the outage in the response body instead of a 500
+        // so the LDAP-config screen can render a clear "server unreachable" message.
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        request.log.warn({ err, username: usernameResult.value }, 'LDAP test failed');
+        return {
+          success: false,
+          authenticated: false,
+          username: usernameResult.value,
+          message: `LDAP server unreachable: ${message}`,
+          groups: [],
+          roleIds: [],
+        };
+      }
       const authenticated = result.authenticated;
 
       return {

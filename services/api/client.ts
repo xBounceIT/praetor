@@ -21,12 +21,14 @@ export const getApiBase = () => API_BASE;
 export class ApiError extends Error {
   public readonly status: number;
   public readonly isNetworkError: boolean;
+  public readonly errorCode?: string;
 
-  constructor(message: string, status: number, isNetworkError = false) {
+  constructor(message: string, status: number, isNetworkError = false, errorCode?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.isNetworkError = isNetworkError;
+    this.errorCode = errorCode;
   }
 }
 
@@ -56,7 +58,12 @@ export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new ApiError(error.message || error.error || `HTTP ${response.status}`, response.status);
+    throw new ApiError(
+      error.message || error.error || `HTTP ${response.status}`,
+      response.status,
+      false,
+      typeof error.errorCode === 'string' ? error.errorCode : undefined,
+    );
   }
 
   if (response.status === 204) {

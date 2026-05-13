@@ -6,11 +6,13 @@
 export class ApiErrorStub extends Error {
   public readonly status: number;
   public readonly isNetworkError: boolean;
+  public readonly errorCode?: string;
 
-  constructor(message: string, status: number, isNetworkError = false) {
+  constructor(message: string, status: number, isNetworkError = false, errorCode?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.isNetworkError = isNetworkError;
+    this.errorCode = errorCode;
   }
 }

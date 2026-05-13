@@ -146,10 +146,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ldapMatchedRoleIds = ldapAuthResult.matchedRoleIds;
           ldapGroups = ldapAuthResult.groups;
         } catch (err) {
-          fastify.log.error(
-            { err, username: usernameResult.value },
-            'LDAP auth attempt failed',
-          );
+          fastify.log.error({ err, username: usernameResult.value }, 'LDAP auth attempt failed');
           return reply.code(503).send(LDAP_UNAVAILABLE_BODY);
         }
       }

@@ -123,6 +123,32 @@ describe('<Login />', () => {
     expect(screen.getByText('Bad credentials')).toBeInTheDocument();
   });
 
+  test('503 ldap_unavailable shows specific i18n message instead of server text', async () => {
+    apiAuthLogin.mockImplementation(() =>
+      Promise.reject(
+        new ApiErrorStub(
+          'Authentication service temporarily unavailable',
+          503,
+          false,
+          'ldap_unavailable',
+        ),
+      ),
+    );
+
+    render(<Login onLogin={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('auth:login.username'), {
+      target: { value: 'admin' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('auth:login.password'), {
+      target: { value: 'secret' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText('auth:login.errors.ldapUnavailable')).toBeInTheDocument();
+  });
+
   test('password toggle flips input type between password and text', () => {
     render(<Login onLogin={() => {}} />);
     const passwordInput = screen.getByPlaceholderText('auth:login.password') as HTMLInputElement;
