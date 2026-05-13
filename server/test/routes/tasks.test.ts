@@ -16,6 +16,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -59,7 +61,7 @@ const isTaskAssignedToUserMock = mock();
 
 // audit + db
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -206,7 +208,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TASKS_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   assignClientToUserMock.mockImplementation(async () => undefined);
   assignProjectToUserMock.mockImplementation(async () => undefined);
@@ -312,13 +314,13 @@ describe('POST /api/tasks', () => {
         billingType: 'time_and_materials',
         billingFrequency: 'monthly',
       }),
-      undefined,
+      TX_SENTINEL,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
-    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1', undefined, undefined);
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, TX_SENTINEL);
+    expect(assignProjectToUserMock).toHaveBeenCalledWith('u1', 'p-1', undefined, TX_SENTINEL);
     expect(assignTaskToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
-    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1', undefined);
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', TX_SENTINEL);
+    expect(assignProjectToTopManagersMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
     expect(assignTaskToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.created', entityType: 'task' }),
@@ -361,7 +363,7 @@ describe('POST /api/tasks', () => {
         billingType: 'retainer',
         billingFrequency: 'one_time',
       }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -932,8 +934,8 @@ describe('POST /api/tasks/:id/users', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ message: 'Task assignments updated' });
-    expect(clearUserAssignmentsMock).toHaveBeenCalledWith('t-1', undefined);
-    expect(addUserAssignmentsMock).toHaveBeenCalledWith('t-1', ['u1', 'u2'], undefined);
+    expect(clearUserAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addUserAssignmentsMock).toHaveBeenCalledWith('t-1', ['u1', 'u2'], TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.users_assigned', entityId: 't-1' }),
     );

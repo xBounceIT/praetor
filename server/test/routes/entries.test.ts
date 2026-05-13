@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -60,7 +61,7 @@ const isTaskAssignedToUserMock = mock();
 const filterAssignedClientIdsMock = mock();
 const filterAssignedProjectIdsMock = mock();
 const filterAssignedTaskIdsMock = mock();
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let entriesRoutePlugin: FastifyPluginAsync;
 
@@ -220,10 +221,10 @@ beforeEach(async () => {
   // encodeCursor remains stable across tests
   entriesEncodeCursorMock.mockImplementation((c: unknown) => `enc:${JSON.stringify(c)}`);
   // Pass-through transaction by default so service-level `withDbTransaction` invocations
-  // forward to the (mocked) repo without trying to open a real DB connection.
-  withDbTransactionMock.mockImplementation(
-    async (cb: (tx: unknown) => unknown) => await cb(undefined),
-  );
+  // forward to the (mocked) repo without trying to open a real DB connection. The default
+  // implementation hands `TX_SENTINEL` to the cb so transactional repo calls land with
+  // a distinguishable last-arg in tests; see helpers/txSentinel.ts.
+  resetWithDbTransactionMock();
 
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);

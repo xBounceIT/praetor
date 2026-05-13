@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { registerMockCleanup } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -14,6 +15,8 @@ mock.module('../../../services/api/workUnits', () => ({
     updateUsers: () => Promise.resolve(),
   },
 }));
+
+registerMockCleanup();
 
 const WorkUnitsView = (await import('../../../components/WorkUnitsView')).default;
 

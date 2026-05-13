@@ -17,6 +17,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -51,7 +52,7 @@ const ovInsertMock = mock();
 const ovBuildSnapshotMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -222,7 +223,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   ovBuildSnapshotMock.mockImplementation((order, items) => ({
     schemaVersion: 1,
@@ -357,7 +358,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     // Pre-restore snapshot inserted with reason='restore'
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'o-1', reason: 'restore', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
     // Order and items applied
     expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1');
@@ -365,7 +366,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(coRestoreSnapshotOrderMock).toHaveBeenCalledWith(
       'o-1',
       expect.objectContaining({ clientId: 'c1', notes: null }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(coReplaceItemsMock).toHaveBeenCalled();
     // Atomically wrapped
@@ -639,7 +640,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(coFindFullForSnapshotMock).toHaveBeenCalled();
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'o-1', reason: 'update', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -786,7 +787,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

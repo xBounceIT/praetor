@@ -15,6 +15,8 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -54,7 +56,7 @@ const assignClientToTopManagersMock = mock(async () => undefined);
 const isClientAssignedToUserMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -219,7 +221,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   assignClientToUserMock.mockImplementation(async () => undefined);
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
@@ -345,9 +347,9 @@ describe('POST /api/clients', () => {
       'u1',
       expect.any(String),
       undefined,
-      undefined,
+      TX_SENTINEL,
     );
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith(expect.any(String), undefined);
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith(expect.any(String), TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.created', entityType: 'client' }),
     );
@@ -1026,7 +1028,7 @@ describe('PUT /api/clients/profile-options/:category/:id', () => {
     cpoFindByCategoryAndIdMock.mockResolvedValue({ id: 'cpo-1', value: 'Tech' });
     cpoFindByCategoryAndValueMock.mockResolvedValue(false);
     cpoUpdateMock.mockResolvedValue({ ...SAMPLE_PROFILE_OPTION, value: 'Tech v2' });
-    withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+    resetWithDbTransactionMock();
 
     const res = await testApp.inject({
       method: 'PUT',

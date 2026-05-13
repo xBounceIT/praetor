@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
+import { registerMockCleanup } from '../helpers/mockCleanup.ts';
 
 const apiMocks = {
   quotesList: mock((): Promise<unknown[]> => Promise.resolve([])),
@@ -60,6 +61,8 @@ mock.module('../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+registerMockCleanup();
 
 const { makeQuoteHandlers } = await import('../../hooks/handlers/quoteHandlers');
 

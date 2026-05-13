@@ -77,6 +77,65 @@ jobs:
       - name: Run tests
         run: bun run test
 
+  db-migrations:
+    name: DB Migrations Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: praetor
+          POSTGRES_PASSWORD: praetor
+          POSTGRES_DB: praetor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: server
+
+      # Catches SQL syntax errors and Drizzle-driver/PG-version incompatibilities that
+      # the file-only drizzle-kit check can't see: an offline drift check passes when
+      # the SQL is consistent with the schema TS, but a typo like `CREAT TABLE` or a
+      # PG-version-specific clause still ships. Running the migrations against a real
+      # Postgres here surfaces that class of bug before the docker-stack job.
+      - name: Apply migrations
+        working-directory: server
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: praetor_test
+          DB_USER: praetor
+          DB_PASSWORD: praetor
+        run: bun run db:migrate
+
+      # Re-uses the existing readiness probe (db/readiness.ts): connects, asserts every
+      # migration file has been applied, and runs `SELECT ... FROM <table> LIMIT 0` for
+      # every table in the schema. Catches Drizzle-ORM ↔ runtime SQL mismatches the
+      # offline tooling can't detect.
+      - name: Verify DB readiness
+        working-directory: server
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: praetor_test
+          DB_USER: praetor
+          DB_PASSWORD: praetor
+        run: bun run db:ready
+
   ldap-integration:
     name: LDAP Integration Tests
     runs-on: ubuntu-latest

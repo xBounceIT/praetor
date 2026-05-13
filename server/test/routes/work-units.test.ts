@@ -13,6 +13,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -40,7 +42,7 @@ const findUserIdsMock = mock();
 const deleteByIdMock = mock();
 const isUserManagerOfUnitMock = mock();
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -154,7 +156,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/work-units');
@@ -230,8 +232,8 @@ describe('POST /api/work-units', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(addManagersMock).toHaveBeenCalledWith(expect.any(String), ['u1', 'u2'], undefined);
-    expect(addUsersToUnitMock).toHaveBeenCalledWith(expect.any(String), ['u1', 'u2'], undefined);
+    expect(addManagersMock).toHaveBeenCalledWith(expect.any(String), ['u1', 'u2'], TX_SENTINEL);
+    expect(addUsersToUnitMock).toHaveBeenCalledWith(expect.any(String), ['u1', 'u2'], TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'work_unit.created',
@@ -319,8 +321,8 @@ describe('PUT /api/work-units/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(clearManagersMock).toHaveBeenCalled();
-    expect(addManagersMock).toHaveBeenCalledWith('wu-1', ['u3', 'u4'], undefined);
-    expect(addUsersToUnitMock).toHaveBeenCalledWith('wu-1', ['u3', 'u4'], undefined);
+    expect(addManagersMock).toHaveBeenCalledWith('wu-1', ['u3', 'u4'], TX_SENTINEL);
+    expect(addUsersToUnitMock).toHaveBeenCalledWith('wu-1', ['u3', 'u4'], TX_SENTINEL);
   });
 
   test('404 when lockById throws NotFoundError', async () => {
@@ -449,8 +451,8 @@ describe('POST /api/work-units/:id/users', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ message: 'Work unit users updated' });
-    expect(clearUsersMock).toHaveBeenCalledWith('wu-1', undefined);
-    expect(addUsersToUnitMock).toHaveBeenCalledWith('wu-1', ['u1', 'u2', 'u3'], undefined);
+    expect(clearUsersMock).toHaveBeenCalledWith('wu-1', TX_SENTINEL);
+    expect(addUsersToUnitMock).toHaveBeenCalledWith('wu-1', ['u1', 'u2', 'u3'], TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'work_unit.users_updated',

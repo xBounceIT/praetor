@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
+import { registerMockCleanup } from '../helpers/mockCleanup.ts';
 
 const apiMocks = {
   suppliersCreate: mock(
@@ -24,6 +25,8 @@ mock.module('../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+registerMockCleanup();
 
 const { makeSupplierHandlers } = await import('../../hooks/handlers/supplierHandlers');
 

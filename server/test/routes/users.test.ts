@@ -20,6 +20,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
@@ -92,7 +93,7 @@ const applyExternalRolesForUserMock = mock();
 
 // audit / drizzle
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -333,7 +334,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(ADMIN_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_USER_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
@@ -714,7 +715,7 @@ describe('PUT /api/users/:id', () => {
     expect(updateUserDynamicMock).toHaveBeenCalledWith(
       'u-target',
       expect.objectContaining({ name: 'Renamed' }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.updated' }));
   });
@@ -786,7 +787,7 @@ describe('PUT /api/users/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['manager'], undefined);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['manager'], TX_SENTINEL);
     expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.role_changed' }),
@@ -1282,8 +1283,8 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'manager'], undefined);
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u-target', 'manager', undefined);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'manager'], TX_SENTINEL);
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u-target', 'manager', TX_SENTINEL);
     expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.roles_updated' }),
@@ -1421,7 +1422,7 @@ describe('PUT /api/users/:id/roles', () => {
 
     replaceUserRolesMock.mockResolvedValue(undefined);
     setPrimaryRoleMock.mockRejectedValue(new Error('primary role update failed'));
-    withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+    resetWithDbTransactionMock();
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1827,7 +1828,7 @@ describe('POST /api/users/:id/assignments', () => {
     // Canonical failure: DELETE half of replaceUserProjects succeeded, then INSERT
     // threw; the exception propagates out of the tx callback.
     replaceUserProjectsMock.mockRejectedValue(new Error('FK violation on user_projects'));
-    withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+    resetWithDbTransactionMock();
 
     const res = await testApp.inject({
       method: 'POST',

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
+import { registerMockCleanup } from '../helpers/mockCleanup.ts';
 
 installI18nMock();
 
@@ -40,6 +41,8 @@ mock.module('../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+registerMockCleanup();
 
 const Login = (await import('../../components/Login')).default;
 

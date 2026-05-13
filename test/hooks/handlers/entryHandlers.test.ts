@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import { useMemo } from 'react';
+import { registerMockCleanup } from '../../helpers/mockCleanup.ts';
 
 const apiMocks = {
   entriesCreate: mock(
@@ -25,6 +26,8 @@ mock.module('../../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+registerMockCleanup();
 
 const { makeEntryHandlers } = await import('../../../hooks/handlers/entryHandlers');
 
