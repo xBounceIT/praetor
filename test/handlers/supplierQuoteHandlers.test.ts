@@ -85,14 +85,19 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
       : null;
   const supplierQuoteFilterId = makeStubScalar<string | null>(initialFilterId);
   const setActiveView = mock(() => {});
+  // Pull out raw-value override (test-only convenience) before spreading so it
+  // does not leak into the factory deps shape.
+  const { supplierQuoteFilterId: _initial, ...factoryOverrides } = overrides;
   const handlers = makeSupplierQuoteHandlers({
-    supplierQuoteFilterId: supplierQuoteFilterId.get(),
+    // Backed by a closure over the stub so tests can mutate the value mid-test
+    // and observe the getter pattern (mirrors the ref-backed App.tsx getter).
+    getSupplierQuoteFilterId: () => supplierQuoteFilterId.get(),
     setSupplierQuotes: supplierQuotes.setter as never,
     setSupplierOrders: supplierOrders.setter as never,
     setSupplierInvoices: supplierInvoices.setter as never,
     setSupplierQuoteFilterId: supplierQuoteFilterId.setter as never,
     setActiveView: setActiveView as never,
-    ...overrides,
+    ...(factoryOverrides as Record<string, never>),
   });
   return {
     handlers,
@@ -201,6 +206,54 @@ describe('makeSupplierQuoteHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('updateSupplierQuote reads filter via getter at call time, not capture time', async () => {
+    // Factory is created with filter=null. The buggy version captured that
+    // null value and would never re-apply the filter even after the user
+    // navigated to a filtered view. The getter must observe the current value
+    // at invocation time.
+    apiMocks.supplierQuotesUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id: `${id}-v2`, ...(updates as object) }),
+    );
+    apiMocks.supplierQuotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.supplierOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers({ supplierQuoteFilterId: null });
+
+    // After factory creation, user pins the filter to the quote we'll update.
+    ctx.supplierQuoteFilterId.setter('sq-1' as never);
+
+    await ctx.handlers.updateSupplierQuote('sq-1', { status: 'sent' } as never);
+
+    // Filter must have followed the new id — proof the getter was read at
+    // invocation time, not at factory creation.
+    expect(ctx.supplierQuoteFilterId.get()).toBe('sq-1-v2');
+  });
+
+  test('updateSupplierQuote does NOT re-apply filter that was cleared during await', async () => {
+    let resolver: () => void = () => {};
+    apiMocks.supplierQuotesUpdate.mockImplementation(
+      (id: string, updates: unknown) =>
+        new Promise((resolve) => {
+          resolver = () => resolve({ id: `${id}-v2`, ...(updates as object) } as never);
+        }),
+    );
+    apiMocks.supplierQuotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.supplierOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers({ supplierQuoteFilterId: 'sq-1' });
+
+    // Kick off the update; do NOT await yet.
+    const pending = ctx.handlers.updateSupplierQuote('sq-1', { status: 'sent' } as never);
+
+    // Simulate the user navigating away mid-await (App.tsx clears filter).
+    ctx.supplierQuoteFilterId.setter(null as never);
+
+    resolver();
+    await pending;
+
+    // The handler must respect the cleared filter. The buggy version would
+    // have re-applied 'sq-1-v2'.
+    expect(ctx.supplierQuoteFilterId.get()).toBe(null);
   });
 
   test('deleteSupplierQuote removes from list', async () => {

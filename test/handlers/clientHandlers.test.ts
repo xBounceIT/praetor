@@ -78,7 +78,7 @@ describe('makeClientHandlers', () => {
     );
     const clients = makeStubSetter<ClientLike>([{ id: 'c1' }]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -93,7 +93,7 @@ describe('makeClientHandlers', () => {
   test('add rethrows on api error', async () => {
     apiMocks.clientsCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: makeStubSetter<ClientLike>([]).setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -110,7 +110,7 @@ describe('makeClientHandlers', () => {
       { id: 'c2', name: 'Beta' },
     ]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -136,7 +136,7 @@ describe('makeClientHandlers', () => {
     ]);
 
     const handlers = makeClientHandlers({
-      projects: projects.get() as never,
+      getProjects: (() => projects.get()) as never,
       setClients: clients.setter,
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
@@ -150,6 +150,40 @@ describe('makeClientHandlers', () => {
     expect(tasks.get()).toEqual([{ id: 't2', projectId: 'p3' }]);
   });
 
+  test('delete reads latest projects via getter (not capture-time snapshot)', async () => {
+    // At factory creation, the user has one project; after the factory is
+    // built they add a second one before clicking delete. The buggy version
+    // captured the initial array and missed the second project's tasks.
+    apiMocks.clientsDelete.mockImplementation(() => Promise.resolve());
+    let projectsState: ProjectLike[] = [{ id: 'p1', clientId: 'c1' }];
+    const clients = makeStubSetter<ClientLike>([{ id: 'c1' }, { id: 'c2' }]);
+    const projectsSetter = makeStubSetter<ProjectLike>(projectsState);
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', projectId: 'p1' },
+      { id: 't2', projectId: 'p2' }, // task for the late-added project
+      { id: 't3', projectId: 'pX' }, // unrelated
+    ]);
+    const handlers = makeClientHandlers({
+      // Getter reads the LATEST `projectsState` at invocation time.
+      getProjects: (() => projectsState) as never,
+      setClients: clients.setter,
+      setProjects: projectsSetter.setter,
+      setProjectTasks: tasks.setter,
+    });
+
+    // Second project for c1 added after factory creation.
+    projectsState = [
+      { id: 'p1', clientId: 'c1' },
+      { id: 'p2', clientId: 'c1' },
+    ];
+
+    await handlers.delete('c1');
+
+    // Both t1 (for p1) and t2 (for p2) must have been pruned — proof the
+    // getter saw the post-factory project list.
+    expect(tasks.get().map((t) => t.id)).toEqual(['t3']);
+  });
+
   test('updateProfileOption refetches and replaces clients', async () => {
     apiMocks.clientsUpdateProfileOption.mockImplementation(() =>
       Promise.resolve({ id: 'po-1', value: 'updated' }),
@@ -159,7 +193,7 @@ describe('makeClientHandlers', () => {
     );
     const clients = makeStubSetter<ClientLike>([{ id: 'c-old' }]);
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: clients.setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -177,7 +211,7 @@ describe('makeClientHandlers', () => {
   test('createProfileOption rethrows on api error', async () => {
     apiMocks.clientsCreateProfileOption.mockImplementation(() => Promise.reject(new Error('nope')));
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: makeStubSetter<ClientLike>([]).setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
@@ -190,7 +224,7 @@ describe('makeClientHandlers', () => {
   test('deleteProfileOption awaits api call', async () => {
     apiMocks.clientsDeleteProfileOption.mockImplementation(() => Promise.resolve());
     const handlers = makeClientHandlers({
-      projects: [],
+      getProjects: () => [],
       setClients: makeStubSetter<ClientLike>([]).setter,
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
