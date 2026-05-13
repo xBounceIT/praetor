@@ -153,6 +153,7 @@ const SAMPLE_ENTRY = {
   notes: null,
   duration: 4,
   hourlyCost: 50,
+  cost: 200, // mapBuilderRow surfaces duration * hourlyCost
   isPlaceholder: false,
   location: 'remote',
   createdAt: 1_700_000_000_000,

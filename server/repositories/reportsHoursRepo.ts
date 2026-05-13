@@ -1,7 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { roundCurrency } from '../utils/invoice-math.ts';
 import { parseDbNumber, toDbText } from '../utils/parse.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
+
+const parseCost = (value: string | number | null | undefined): number =>
+  roundCurrency(parseDbNumber(value, 0));
 
 // Raw SQL via `executeRows` bypasses Drizzle's typed null-handling - `toDbText` (trim + ''
 // fallback) is applied manually so stray whitespace doesn't render awkward cells in the UI.
@@ -159,14 +163,14 @@ export const getTimesheetsSection = async (
     totals: {
       hours: totalHours,
       entryCount: totalEntries,
-      cost: parseDbNumber(totals[0]?.total_cost, 0),
+      cost: parseCost(totals[0]?.total_cost),
       avgEntryHours: totalEntries > 0 ? totalHours / totalEntries : 0,
     },
     byMonth: byMonth.map((r) => ({
       label: toDbText(r.label),
       hours: parseDbNumber(r.hours, 0),
       entryCount: parseDbNumber(r.entry_count, 0),
-      cost: parseDbNumber(r.total_cost, 0),
+      cost: parseCost(r.total_cost),
     })),
     byLocation: byLocation.map((r) => ({
       location: toDbText(r.location),
@@ -314,7 +318,7 @@ export const getProjectsSection = async (
     ? hoursRows.map((r) => ({
         label: toDbText(r.label),
         hours: parseDbNumber(r.hours, 0),
-        cost: parseDbNumber(r.cost, 0),
+        cost: parseCost(r.cost),
       }))
     : [];
   const topByHours = [...projectStats]

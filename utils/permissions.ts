@@ -66,6 +66,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
+  // Mirrors backend's `reports.cost.view` - gates the Cost column / totals in any view
+  // that surfaces per-entry or aggregated cost numbers (timesheet lists, reports).
+  { id: 'reports.cost', actions: ['view'], module: 'reports' },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },

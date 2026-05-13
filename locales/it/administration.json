@@ -62,7 +62,8 @@
       "work_units_all": "Unità di Lavoro (Tutte)"
     },
     "reports": {
-      "ai_reporting": "Reportistica IA"
+      "ai_reporting": "Reportistica IA",
+      "cost": "Report costi"
     },
     "configuration": {
       "authentication": "Autenticazione",

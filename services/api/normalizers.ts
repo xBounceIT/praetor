@@ -238,11 +238,23 @@ export const normalizeClientsOrder = (o: ClientsOrder): ClientsOrder => ({
   items: (o.items || []).map(normalizeClientsOrderItem),
 });
 
-export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => ({
-  ...e,
-  duration: Number(e.duration || 0),
-  hourlyCost: Number(e.hourlyCost || 0),
-});
+export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => {
+  // `hourlyCost` / `cost` are gated behind `reports.cost.view` server-side and may be
+  // entirely absent from the payload. Preserve the absence (rather than coercing to 0)
+  // so the UI can branch on permission visibility instead of getting a misleading zero.
+  const normalized: TimeEntry = { ...e, duration: Number(e.duration || 0) };
+  if (e.hourlyCost !== undefined && e.hourlyCost !== null) {
+    normalized.hourlyCost = Number(e.hourlyCost);
+  } else {
+    delete normalized.hourlyCost;
+  }
+  if (e.cost !== undefined && e.cost !== null) {
+    normalized.cost = Number(e.cost);
+  } else {
+    delete normalized.cost;
+  }
+  return normalized;
+};
 
 export const normalizeTask = (t: ProjectTask): ProjectTask => ({
   ...t,

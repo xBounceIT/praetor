@@ -23,6 +23,17 @@ Use results as analytical support, not as a replacement for official data. Befor
 - Always verify amounts, dates, and references mentioned in the answer.
 - Rephrase the question if the answer is too generic.
 
+## Cost in reports
+
+Praetor computes the cost of each time entry as `duration * hourly cost`, using the same currency precision as invoices. The hourly cost stored on the entry is the rate that was in effect when the entry was logged, so retroactive changes to a user's hourly cost do not rewrite history.
+
+Cost aggregates per project, client, user, and period are included in AI reporting datasets only when your role has the `reports.cost` permission. Without it:
+
+- The `cost` field is stripped from time entries returned by the API.
+- Cost totals and "top by cost" lists are omitted from AI reporting datasets; hours and entry counts remain available.
+
+To grant or revoke cost visibility, edit the role in Administration > Roles and toggle the "Reports > Cost reports" entry.
+
 ## MCP Access For External Agents
 
 Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol compatible agents. Agents must authenticate with a personal MCP token created from Settings > MCP Tokens.

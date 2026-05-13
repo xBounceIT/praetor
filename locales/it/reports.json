@@ -1,4 +1,8 @@
 {
+  "cost": "Costo",
+  "costTotal": "Costo totale",
+  "costPerHour": "Costo orario",
+  "costPermissionRequired": "I dati di costo sono nascosti perche' il tuo ruolo non ha il permesso 'reports.cost'.",
   "aiReporting": {
     "newChat": "Nuova Chat",
     "session": "Sessione",

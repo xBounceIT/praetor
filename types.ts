@@ -243,7 +243,11 @@ export interface TimeEntry {
   taskId?: string | null;
   notes?: string;
   duration: number;
-  hourlyCost: number;
+  // `hourlyCost` and `cost` are stripped server-side when the caller lacks
+  // `reports.cost.view` - components must treat them as optional and fall back when
+  // missing rather than assuming both are always present.
+  hourlyCost?: number;
+  cost?: number;
   createdAt: number;
   isPlaceholder?: boolean;
   location?: TimeEntryLocation;

@@ -1,4 +1,8 @@
 {
+  "cost": "Cost",
+  "costTotal": "Total cost",
+  "costPerHour": "Hourly cost",
+  "costPermissionRequired": "Cost data is hidden because your role does not have the 'reports.cost' permission.",
   "aiReporting": {
     "newChat": "New Chat",
     "session": "Session",

@@ -206,6 +206,22 @@ describe('mapRawRow (exercised via listAll return path)', () => {
     const result = await entriesRepo.listAll({}, testDb);
     expect(result.entries[0].createdAt).toBe(0);
   });
+
+  test('cost is surfaced on the raw-SQL read path (duration * hourly_cost, rounded)', async () => {
+    // 1.5h * $100 = $150
+    exec.enqueue({ rows: [rawRow] });
+    const result = await entriesRepo.listAll({}, testDb);
+    expect(result.entries[0].duration).toBe(1.5);
+    expect(result.entries[0].hourlyCost).toBe(100);
+    expect(result.entries[0].cost).toBe(150);
+  });
+
+  test('cost is 0 when hourly_cost is null on a raw row', async () => {
+    exec.enqueue({ rows: [{ ...rawRow, hourly_cost: null }] });
+    const result = await entriesRepo.listAll({}, testDb);
+    expect(result.entries[0].hourlyCost).toBe(0);
+    expect(result.entries[0].cost).toBe(0);
+  });
 });
 
 describe('findOwner', () => {
@@ -283,6 +299,7 @@ describe('create', () => {
     expect(exec.calls[0].sql).toContain('returning');
     expect(result.duration).toBe(1.5);
     expect(result.hourlyCost).toBe(100);
+    expect(result.cost).toBe(150);
     expect(result.userId).toBe('u-1');
     expect(result.taskId).toBe('t-1');
   });
@@ -341,6 +358,24 @@ describe('mapBuilderRow (exercised via create return path)', () => {
     exec.enqueue({ rows: [entryRow({ 11: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.hourlyCost).toBe(0);
+    // cost = duration * hourlyCost — when hourlyCost falls back to 0, cost is also 0
+    expect(result.cost).toBe(0);
+  });
+
+  test('cost is computed on read as duration * hourly_cost (rounded)', async () => {
+    // duration=2.5h, hourly_cost=$73.20 -> 183.00
+    exec.enqueue({ rows: [entryRow({ 10: '2.5', 11: '73.20' })] });
+    const result = await entriesRepo.create(newEntry, testDb);
+    expect(result.duration).toBe(2.5);
+    expect(result.hourlyCost).toBe(73.2);
+    expect(result.cost).toBe(183);
+  });
+
+  test('cost rounds to currency precision', async () => {
+    // 1h * 0.015 = 0.015 -> rounds half-up to 0.02
+    exec.enqueue({ rows: [entryRow({ 10: '1', 11: '0.015' })] });
+    const result = await entriesRepo.create(newEntry, testDb);
+    expect(result.cost).toBe(0.02);
   });
 
   test('null is_placeholder coerces to false', async () => {

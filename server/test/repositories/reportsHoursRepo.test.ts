@@ -67,6 +67,26 @@ describe('getTimesheetsSection', () => {
     });
   });
 
+  test('cost values are rounded to 2 decimals to match invoice currency precision', async () => {
+    // SUM(duration * hourly_cost) can emit long-tail floats; rounding aligns with
+    // computeEntryCost so per-entry rollups equal the sum of per-entry costs.
+    exec.enqueue({ rows: [{ hours: '10', entry_count: '1', total_cost: '306.675' }] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({
+      rows: [{ label: '2026-01', hours: '10', entry_count: '1', total_cost: '306.675' }],
+    });
+    exec.enqueue({ rows: [] });
+    const result = await repo.getTimesheetsSection(
+      { fromDate: FROM, toDate: TO, allowedTimesheetUserIds: null, topLimit: 10 },
+      testDb,
+    );
+    expect(result.totals.cost).toBe(306.68);
+    expect(result.byMonth[0].cost).toBe(306.68);
+  });
+
   test('avgEntryHours is 0 when no entries', async () => {
     exec.enqueue({ rows: [{ hours: '0', entry_count: '0', total_cost: '0' }] });
     enqueueEmptyN(6);

@@ -23,6 +23,17 @@ Usa i risultati come supporto all'analisi, non come sostituto dei dati ufficiali
 - Controlla sempre importi, date e riferimenti citati nella risposta.
 - Riformula la domanda se la risposta è troppo generica.
 
+## Costi nei report
+
+Praetor calcola il costo di ogni voce di consuntivo come `durata * costo orario` con la stessa precisione decimale usata per le fatture. Il costo orario salvato sulla voce è quello in vigore al momento dell'inserimento, quindi le modifiche retroattive al costo orario di un dipendente non riscrivono lo storico.
+
+Gli aggregati di costo per progetto, cliente, utente e periodo sono inclusi nei dataset di AI reporting solo se il tuo ruolo ha il permesso `reports.cost`. Senza questo permesso:
+
+- Il campo `cost` viene rimosso dalle voci di consuntivo restituite dall'API.
+- I totali e i top per costo vengono omessi dai dataset di AI reporting; restano disponibili le ore e il numero di voci.
+
+Per concedere o revocare la visibilità dei costi, modifica il ruolo in Amministrazione > Ruoli e abilita o disabilita la voce "Reports > Cost reports".
+
 ## Accesso MCP per agenti esterni
 
 Praetor espone un endpoint MCP remoto su `/api/mcp` per agenti compatibili con Model Context Protocol. Gli agenti devono autenticarsi con un token MCP personale, creato da Impostazioni > Token MCP.

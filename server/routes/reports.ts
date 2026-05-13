@@ -865,9 +865,14 @@ export const buildBusinessDataset = async (
       top: 50,
     };
 
+    const canViewCost = hasPermission(request, 'reports.cost.view');
+    if (canViewCost) {
+      addGrantedPermissions(request, ['reports.cost.view'], permissionsApplied);
+    }
+
     if (canViewTimesheets && shouldIncludeDatasetSection(requestedSections, 'timesheets')) {
       includedSections.add('timesheets');
-      dataset.timesheets = await reportsHoursRepo.getTimesheetsSection(
+      const timesheets = await reportsHoursRepo.getTimesheetsSection(
         {
           fromDate,
           toDate,
@@ -876,6 +881,19 @@ export const buildBusinessDataset = async (
         },
         datasetDb,
       );
+      // Strip cost numbers for callers without `reports.cost.view` - they may still see
+      // hours and entry counts, but not the cost roll-ups that reveal hourly rates.
+      dataset.timesheets = canViewCost
+        ? timesheets
+        : {
+            ...timesheets,
+            totals: {
+              hours: timesheets.totals.hours,
+              entryCount: timesheets.totals.entryCount,
+              avgEntryHours: timesheets.totals.avgEntryHours,
+            },
+            byMonth: timesheets.byMonth.map(({ cost: _c, ...rest }) => rest),
+          };
     }
 
     const supplierWorkflowViewPermissions = [
@@ -975,7 +993,7 @@ export const buildBusinessDataset = async (
       );
 
       const canViewAllProjects = hasPermission(request, 'projects.manage_all.view');
-      dataset.projects = await reportsHoursRepo.getProjectsSection(
+      const projects = await reportsHoursRepo.getProjectsSection(
         {
           viewerId,
           fromDate,
@@ -989,6 +1007,15 @@ export const buildBusinessDataset = async (
         },
         datasetDb,
       );
+      // `topByCost` and the per-row `cost` on `topByHours` both reveal cost numbers, so
+      // both go behind `reports.cost.view`.
+      dataset.projects = canViewCost
+        ? projects
+        : {
+            ...projects,
+            topByHours: projects.topByHours.map(({ cost: _c, ...rest }) => rest),
+            topByCost: [],
+          };
     }
 
     const canListTasks = [
