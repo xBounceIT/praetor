@@ -50,18 +50,15 @@ describe('numericForDb', () => {
   });
 
   test('formats very large numbers without scientific notation', () => {
-    // `String(1e21)` would yield '1e+21' which PostgreSQL's NUMERIC parser rejects.
     expect(numericForDb(1e21)).toBe('1000000000000000000000');
   });
 
   test('formats very small numbers without scientific notation', () => {
-    // `String(1e-7)` would yield '1e-7'.
     expect(numericForDb(1e-7)).toBe('0.0000001');
   });
 
   test('passes plain-decimal strings through unchanged (preserves precision)', () => {
     expect(numericForDb('123.45')).toBe('123.45');
-    // Critical for currency: '0.10' must stay '0.10', not be re-parsed to '0.1'.
     expect(numericForDb('0.10')).toBe('0.10');
     expect(numericForDb('-100.00')).toBe('-100.00');
   });
