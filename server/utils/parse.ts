@@ -20,7 +20,7 @@ export const toDbNumber = (value: unknown): number =>
 
 const PLAIN_DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
 
-// Cached: `new Intl.NumberFormat` is ~1ms per call and this runs on every NUMERIC write.
+// `new Intl.NumberFormat` is ~1ms per call and this runs on every NUMERIC write.
 const PLAIN_DECIMAL_FORMATTER = new Intl.NumberFormat('en-US', {
   useGrouping: false,
   maximumFractionDigits: 20,
