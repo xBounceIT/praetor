@@ -408,14 +408,19 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       });
     }
 
-    if (entriesToAdd.length > 0) {
-      await onAddBulkEntries(entriesToAdd);
+    try {
+      if (entriesToAdd.length > 0) {
+        await onAddBulkEntries(entriesToAdd);
+      }
+      // Only clear edits + flash success when the bulk-add resolves cleanly
+      // — on failure the user's in-flight values must survive so they can
+      // retry. The parent surfaces the error via App.tsx's global handler.
+      setPendingEdits({});
+      setWeekNote('');
+      setShowSuccess(true);
+    } finally {
+      setIsLoading(false);
     }
-
-    setPendingEdits({});
-    setWeekNote('');
-    setIsLoading(false);
-    setShowSuccess(true);
   };
 
   useEffect(() => {
