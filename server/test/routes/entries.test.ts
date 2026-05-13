@@ -673,6 +673,7 @@ describe('PUT /api/entries/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.location).toBeUndefined();
   });
@@ -694,6 +695,7 @@ describe('PUT /api/entries/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.location).toBeUndefined();
   });
@@ -715,6 +717,7 @@ describe('PUT /api/entries/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.location).toBe('office');
   });
@@ -838,6 +841,7 @@ describe('DELETE /api/entries (bulk)', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(entriesBulkDeleteMock).toHaveBeenCalledTimes(1);
     const callArgs = entriesBulkDeleteMock.mock.calls[0][0];
     expect(callArgs.fromDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });

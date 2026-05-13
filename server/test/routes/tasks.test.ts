@@ -381,6 +381,7 @@ describe('POST /api/tasks', () => {
     });
 
     expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledTimes(1);
     const call = createMock.mock.calls[0][0] as { recurrenceStart: string };
     expect(call.recurrenceStart).toBe(expectedToday);
     // No client → no client cascades

@@ -31,15 +31,26 @@ describe('encrypt', () => {
     const b = encrypt('same-plaintext');
     expect(a).not.toBe(b);
   });
+});
+
+// Isolated in its own describe block so the missing-key state is set up in beforeAll
+// and restored in afterAll. Keeping the deletion out of the test body removes the
+// risk that a thrown assertion would leak the unset env var into later tests.
+describe('encrypt without ENCRYPTION_KEY', () => {
+  let savedKey: string | undefined;
+
+  beforeAll(() => {
+    savedKey = process.env.ENCRYPTION_KEY;
+    delete process.env.ENCRYPTION_KEY;
+  });
+
+  afterAll(() => {
+    if (savedKey === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = savedKey;
+  });
 
   test('throws when ENCRYPTION_KEY is missing', () => {
-    const saved = process.env.ENCRYPTION_KEY;
-    delete process.env.ENCRYPTION_KEY;
-    try {
-      expect(() => encrypt('whatever')).toThrow(/ENCRYPTION_KEY/);
-    } finally {
-      process.env.ENCRYPTION_KEY = saved;
-    }
+    expect(() => encrypt('whatever')).toThrow(/ENCRYPTION_KEY/);
   });
 });
 

@@ -309,6 +309,7 @@ describe('PUT /api/ldap/config - autoProvisionAll', () => {
   test('omitting autoProvisionAll does not pass the key to ldapRepo.update', async () => {
     const response = await putConfig({ enabled: false });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.autoProvisionAll).toBeUndefined();
   });
@@ -316,6 +317,7 @@ describe('PUT /api/ldap/config - autoProvisionAll', () => {
   test('passing autoProvisionAll=true forwards it to ldapRepo.update', async () => {
     const response = await putConfig({ enabled: false, autoProvisionAll: true });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.autoProvisionAll).toBe(true);
   });
@@ -324,6 +326,7 @@ describe('PUT /api/ldap/config - autoProvisionAll', () => {
     ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, autoProvisionAll: true });
     const response = await putConfig({ enabled: false, autoProvisionAll: false });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.autoProvisionAll).toBe(false);
   });
@@ -342,6 +345,7 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
     const messy = `\n\n${validPemCert.replace(/\n/g, '\r\n')}\n\n`;
     const response = await putConfig({ enabled: false, tlsCaCertificate: messy });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.tlsCaCertificate).not.toContain('\r');
     expect(patch.tlsCaCertificate?.endsWith('\n')).toBe(true);
@@ -351,6 +355,7 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('empty string clears the field (passes "" to repo.update)', async () => {
     const response = await putConfig({ enabled: false, tlsCaCertificate: '' });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.tlsCaCertificate).toBe('');
   });
@@ -358,6 +363,7 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('null clears the field (treated like empty)', async () => {
     const response = await putConfig({ enabled: false, tlsCaCertificate: null });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.tlsCaCertificate).toBe('');
   });
@@ -365,6 +371,7 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('whitespace-only string is treated as clear', async () => {
     const response = await putConfig({ enabled: false, tlsCaCertificate: '   \n\t  ' });
     expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.tlsCaCertificate).toBe('');
   });
