@@ -1,43 +1,17 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api/tasks';
-import type {
-  BillingFrequency,
-  Client,
-  Project,
-  ProjectTask,
-  Role,
-  StoredBillingType,
-  User,
-} from '../../types';
+import type { BillingFrequency, Client, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
-import Modal from '../shared/Modal';
-import {
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '../shared/ModalLayout';
-import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import Toggle from '../shared/Toggle';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
-
-const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
-
-export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
+import TaskFormModal, { type RecurringConfig } from './TaskFormModal';
 
 const billingTypeOptions = [
   { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
@@ -66,7 +40,7 @@ export interface TasksViewProps {
       ProjectTask,
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
-  ) => void | Promise<void>;
+  ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;
@@ -89,20 +63,9 @@ const TasksView: React.FC<TasksViewProps> = ({
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
-  const [name, setName] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [description, setDescription] = useState('');
-  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
-  const [monthlyEffort, setMonthlyEffort] = useState('');
-  const [expectedEffort, setExpectedEffort] = useState('');
-  const [revenue, setRevenue] = useState('');
-  const [notes, setNotes] = useState('');
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
-  const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
@@ -172,16 +135,6 @@ const TasksView: React.FC<TasksViewProps> = ({
   const openAddModal = useCallback(() => {
     if (!canCreateTasks) return;
     setEditingTask(null);
-    setName('');
-    setProjectId('');
-    setDescription('');
-    setBillingType('time_and_materials');
-    setBillingFrequency('monthly');
-    setMonthlyEffort('');
-    setExpectedEffort('');
-    setRevenue('');
-    setNotes('');
-    setTempIsDisabled(false);
     setIsModalOpen(true);
   }, [canCreateTasks]);
 
@@ -189,20 +142,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     (task: ProjectTask) => {
       if (!canUpdateTasks) return;
       setEditingTask(task);
-      setName(task.name);
-      setProjectId(task.projectId);
-      setDescription(task.description || '');
-      setBillingType(task.billingType ?? 'time_and_materials');
-      setBillingFrequency(
-        task.billingType === 'time_and_materials'
-          ? 'monthly'
-          : (task.billingFrequency ?? 'monthly'),
-      );
-      setMonthlyEffort(task.monthlyEffort !== undefined ? String(task.monthlyEffort) : '');
-      setExpectedEffort(task.expectedEffort !== undefined ? String(task.expectedEffort) : '');
-      setRevenue(task.revenue !== undefined ? String(task.revenue) : '');
-      setNotes(task.notes ?? '');
-      setTempIsDisabled(task.isDisabled || false);
       setIsModalOpen(true);
     },
     [canUpdateTasks],
@@ -560,57 +499,16 @@ const TasksView: React.FC<TasksViewProps> = ({
     ],
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    if (editingTask && !canUpdateTasks) return;
-    if (!editingTask && !canCreateTasks) return;
-    if (!name || !projectId) return;
-    const details = {
-      billingType,
-      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-      monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
-      expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
-      revenue: revenue ? parseFloat(revenue) : undefined,
-      notes: notes.trim() || undefined,
-    };
-    setIsSubmitting(true);
-    try {
-      if (editingTask) {
-        await onUpdateTask(editingTask.id, {
-          name,
-          projectId,
-          description,
-          isDisabled: tempIsDisabled,
-          ...details,
-        });
-      } else {
-        await onAddTask(name, projectId, undefined, description, details);
-      }
-      closeModal();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const closeModal = () => {
     setIsModalOpen(false);
     setIsDeleteConfirmOpen(false);
     setEditingTask(null);
-    setName('');
-    setProjectId('');
-    setDescription('');
-    setBillingType('time_and_materials');
-    setBillingFrequency('monthly');
-    setMonthlyEffort('');
-    setExpectedEffort('');
-    setRevenue('');
-    setNotes('');
   };
 
-  const requestCloseModal = () => {
-    if (isSubmitting || isDeleting) return;
-    closeModal();
+  const requestCloseFormModal = () => {
+    if (isDeleting) return;
+    setIsModalOpen(false);
+    setEditingTask(null);
   };
 
   const cancelDelete = () => {
@@ -631,15 +529,11 @@ const TasksView: React.FC<TasksViewProps> = ({
     }
   };
 
-  const canSubmit = editingTask ? canUpdateTasks : canCreateTasks;
-
   const closeAssignments = () => {
     setManagingTaskId(null);
   };
 
   const managingTask = tasks.find((t) => t.id === managingTaskId);
-
-  const projectSelectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -672,282 +566,22 @@ const TasksView: React.FC<TasksViewProps> = ({
         disabled={!canUpdateTasks}
       />
 
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={requestCloseModal}>
-        <ModalContent size="2xl">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
-              </ModalTitle>
-              <ModalCloseButton onClick={requestCloseModal} disabled={isSubmitting || isDeleting} />
-            </ModalHeader>
-
-            <ModalBody className="space-y-6">
-              {(() => {
-                const project = projects.find((p) => p.id === projectId);
-                const orderId = project?.orderId;
-                return editingTask && orderId ? (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">
-                          {t('projects:projects.linkedOrder')}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatOrderId(orderId)}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOrder && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={() => onViewOrder(orderId)}
-                        className="px-0"
-                      >
-                        {t('projects:projects.viewOrder')}
-                      </Button>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <SelectControl
-                    id="task-project"
-                    options={projectSelectOptions}
-                    value={projectId}
-                    onChange={(val) => {
-                      const nextProjectId = val as string;
-                      setProjectId(nextProjectId);
-                      if (!editingTask) {
-                        const project = projects.find((item) => item.id === nextProjectId);
-                        const nextBillingType =
-                          project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
-                        setBillingType(nextBillingType);
-                        setBillingFrequency(
-                          nextBillingType === 'time_and_materials'
-                            ? 'monthly'
-                            : (project?.billingFrequency ?? 'monthly'),
-                        );
-                      }
-                    }}
-                    label={t('tasks.project')}
-                    placeholder={t('common:labels.selectOption')}
-                    searchable={true}
-                    buttonClassName="h-9"
-                  />
-
-                  <Field>
-                    <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
-                    <Input
-                      id="task-name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={t('tasks.taskNamePlaceholder')}
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel htmlFor="task-description">{t('tasks.description')}</FieldLabel>
-                  <Textarea
-                    id="task-description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder={t('tasks.taskDescriptionPlaceholder')}
-                    rows={3}
-                    className="min-h-20 resize-none"
-                  />
-                </Field>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                  <SelectControl
-                    id="task-billing-type"
-                    options={translatedBillingTypeOptions}
-                    value={billingType}
-                    onChange={(val) => {
-                      const nextBillingType = val as StoredBillingType;
-                      setBillingType(nextBillingType);
-                      if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
-                    }}
-                    label={t('projects:projects.billingType')}
-                    searchable={false}
-                    buttonClassName="h-9"
-                  />
-                  <SelectControl
-                    id="task-billing-frequency"
-                    options={
-                      billingType === 'retainer'
-                        ? translatedBillingFrequencyOptions
-                        : translatedBillingFrequencyOptions.filter(
-                            (option) => option.id === 'monthly',
-                          )
-                    }
-                    value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
-                    onChange={(val) => setBillingFrequency(val as BillingFrequency)}
-                    label={t('projects:projects.billingFrequency')}
-                    disabled={billingType === 'time_and_materials'}
-                    searchable={false}
-                    buttonClassName="h-9"
-                  />
-                  <Field>
-                    <FieldLabel htmlFor="task-monthly-effort">
-                      {t('projects:projects.monthlyEffort')}
-                    </FieldLabel>
-                    <Input
-                      id="task-monthly-effort"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={monthlyEffort}
-                      onChange={(e) => setMonthlyEffort(e.target.value)}
-                      placeholder="0"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="task-expected-effort">
-                      {t('projects:projects.expectedEffort')}
-                    </FieldLabel>
-                    <Input
-                      id="task-expected-effort"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={expectedEffort}
-                      onChange={(e) => setExpectedEffort(e.target.value)}
-                      placeholder="0"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="task-revenue">
-                      {`${t('projects:projects.taskRevenue')} (${currency})`}
-                    </FieldLabel>
-                    <Input
-                      id="task-revenue"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={revenue}
-                      onChange={(e) => setRevenue(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>
-                  <Textarea
-                    id="task-notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder={t('common:form.placeholderNotes')}
-                    rows={3}
-                    className="min-h-20 resize-none"
-                  />
-                </Field>
-
-                {(() => {
-                  const project = projects.find((p) => p.id === projectId);
-                  const client = clients.find((c) => c.id === project?.clientId);
-                  const isProjectDisabled = project?.isDisabled || false;
-                  const isClientDisabled = client?.isDisabled || false;
-                  const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-                  const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
-
-                  return (
-                    <Field>
-                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                        <div>
-                          <p
-                            className={`text-sm font-medium ${
-                              isInheritedDisabled ? 'text-muted-foreground' : 'text-foreground'
-                            }`}
-                          >
-                            {t('tasks.isDisabled')}
-                          </p>
-                          {isInheritedDisabled && (
-                            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                              <i
-                                className="fa-solid fa-triangle-exclamation"
-                                aria-hidden="true"
-                              ></i>
-                              {isClientDisabled
-                                ? t('projects.inheritedFromDisabledClient', {
-                                    clientName: client?.name,
-                                  })
-                                : t('tasks.inheritedFromDisabledProject', {
-                                    projectName: project?.name,
-                                  })}
-                            </p>
-                          )}
-                        </div>
-                        <Toggle
-                          checked={isCurrentlyDisabled}
-                          onChange={() => {
-                            if (!isInheritedDisabled) {
-                              setTempIsDisabled(!tempIsDisabled);
-                            }
-                          }}
-                          disabled={isInheritedDisabled}
-                        />
-                      </div>
-                    </Field>
-                  );
-                })()}
-              </div>
-            </ModalBody>
-
-            <ModalFooter className="sm:justify-between">
-              {editingTask && canDeleteTasks ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={confirmDelete}
-                  disabled={isSubmitting || isDeleting}
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                  {t('common:buttons.delete')}
-                </Button>
-              ) : (
-                <span />
-              )}
-
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={requestCloseModal}
-                  disabled={isSubmitting || isDeleting}
-                >
-                  {t('common:buttons.cancel')}
-                </Button>
-                <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting
-                    ? t('common:buttons.saving')
-                    : editingTask
-                      ? t('projects.saveChanges')
-                      : t('tasks.addTask')}
-                </Button>
-              </div>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
+      <TaskFormModal
+        isOpen={isModalOpen}
+        onClose={requestCloseFormModal}
+        mode={editingTask ? 'edit' : 'add'}
+        editingTask={editingTask}
+        projects={projects}
+        clients={clients}
+        currency={currency}
+        canCreate={canCreateTasks}
+        canUpdate={canUpdateTasks}
+        canDelete={canDeleteTasks}
+        onAdd={onAddTask}
+        onUpdate={onUpdateTask}
+        onDelete={confirmDelete}
+        onViewOrder={onViewOrder}
+      />
 
       {/* Header */}
       <div className="space-y-4">

@@ -38,7 +38,7 @@ import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
-import type { RecurringConfig } from './TasksView';
+import type { RecurringConfig } from './TaskFormModal';
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
 
@@ -114,7 +114,7 @@ export interface ProjectsViewProps {
       ProjectTask,
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
-  ) => void | Promise<void>;
+  ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;

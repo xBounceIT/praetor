@@ -5,6 +5,10 @@ import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from 
 import { getLocalDateString } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
+import TaskFormModal, {
+  type RecurringConfig,
+  type TaskFormDetails,
+} from '../projects/TaskFormModal';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
 import { Button } from '../ui/button';
@@ -29,6 +33,14 @@ export interface DailyViewProps {
   dailyGoal: number;
   currentDayTotal: number;
   defaultLocation?: TimeEntryLocation;
+  onAddCustomTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: RecurringConfig,
+    description?: string,
+    details?: TaskFormDetails,
+  ) => Promise<ProjectTask>;
+  currency: string;
 }
 
 const DailyView: React.FC<DailyViewProps> = ({
@@ -42,6 +54,8 @@ const DailyView: React.FC<DailyViewProps> = ({
   dailyGoal,
   currentDayTotal,
   defaultLocation = 'remote',
+  onAddCustomTask,
+  currency,
 }) => {
   const { t } = useTranslation('timesheets');
 
@@ -51,7 +65,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedTaskName, setSelectedTaskName] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
-  const [isCustomTaskMode, setIsCustomTaskMode] = useState(false);
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
   const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
@@ -131,29 +145,16 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   useEffect(() => {
     if (filteredTasks.length === 0) {
-      if (isCustomTaskMode && canCreateCustomTask && selectedProjectId !== '') {
-        return;
-      }
       setSelectedTaskId('');
       setSelectedTaskName('');
-      setIsCustomTaskMode(false);
       return;
     }
 
     if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
       setSelectedTaskName(firstFilteredTaskName);
       setSelectedTaskId(firstFilteredTaskId);
-      setIsCustomTaskMode(false);
     }
-  }, [
-    filteredTasks,
-    firstFilteredTaskId,
-    firstFilteredTaskName,
-    selectedTaskId,
-    canCreateCustomTask,
-    selectedProjectId,
-    isCustomTaskMode,
-  ]);
+  }, [filteredTasks, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
 
   useEffect(() => {
     if (selectedClientId === '') {
@@ -231,19 +232,36 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const handleTaskChange = (taskId: string) => {
     if (taskId === 'custom') {
-      setIsCustomTaskMode(true);
-      setSelectedTaskName('');
-      setSelectedTaskId('');
-      setMakeRecurring(false);
-    } else {
-      const task = filteredTasks.find((t) => t.id === taskId);
-      if (task) {
-        setIsCustomTaskMode(false);
-        setSelectedTaskName(task.name);
-        setSelectedTaskId(task.id);
-      }
+      setIsAddTaskModalOpen(true);
+      return;
+    }
+    const task = filteredTasks.find((t) => t.id === taskId);
+    if (task) {
+      setSelectedTaskName(task.name);
+      setSelectedTaskId(task.id);
     }
     if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+  };
+
+  const handleAddCustomTaskSubmit = async (
+    taskName: string,
+    taskProjectId: string,
+    _recurringConfig: RecurringConfig | undefined,
+    description: string,
+    details: TaskFormDetails,
+  ): Promise<ProjectTask> => {
+    // If `onAddCustomTask` rejects, the throw propagates to TaskFormModal's submit handler,
+    // which keeps the modal open and resets `isSubmitting` via its `finally`. No silent failure.
+    const created = await onAddCustomTask(taskName, taskProjectId, undefined, description, details);
+    setSelectedTaskId(created.id);
+    setSelectedTaskName(created.name);
+    // Clear any pending recurrence state from a previously-selected task so the new task
+    // starts with a clean slate.
+    setMakeRecurring(false);
+    setRecurrenceEndDate('');
+    setRecurrencePattern('weekly');
+    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+    return created;
   };
 
   const isExceedingGoal = useMemo(() => {
@@ -256,11 +274,13 @@ const DailyView: React.FC<DailyViewProps> = ({
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));
   const taskOptions = useMemo(() => {
     const opts = filteredTasks.map((t) => ({ id: t.id, name: t.name }));
-    if (canCreateCustomTask) {
+    // Only offer "+ Custom Task..." when a project is selected — the modal locks the project to
+    // the current selection, so an empty project would render a stuck, unsubmittable form.
+    if (canCreateCustomTask && selectedProjectId !== '') {
       opts.push({ id: 'custom', name: t('entry.customTask') });
     }
     return opts;
-  }, [filteredTasks, canCreateCustomTask, t]);
+  }, [filteredTasks, canCreateCustomTask, selectedProjectId, t]);
 
   return (
     <div className="rounded-lg border border-border bg-background shadow-sm p-5">
@@ -336,7 +356,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             <SelectControl
               label={t('entry.task')}
               options={taskOptions}
-              value={selectedTaskId || (isCustomTaskMode ? 'custom' : '')}
+              value={selectedTaskId}
               onChange={(val) => handleTaskChange(val as string)}
               placeholder={
                 filteredTasks.length === 0 && !canCreateCustomTask
@@ -348,19 +368,6 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
             {errors.task && (
               <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
-            )}
-            {isCustomTaskMode && canCreateCustomTask && (
-              <Input
-                type="text"
-                placeholder={t('entry.typeCustomTask')}
-                value={selectedTaskName}
-                onChange={(e) => {
-                  setSelectedTaskName(e.target.value);
-                  setSelectedTaskId('');
-                  if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
-                }}
-                className="mt-2 rounded-lg animate-in fade-in slide-in-from-top-1 duration-200"
-              />
             )}
           </div>
 
@@ -484,6 +491,21 @@ const DailyView: React.FC<DailyViewProps> = ({
           setRecurrencePattern(pattern);
           setIsCustomRepeatModalOpen(false);
         }}
+      />
+      <TaskFormModal
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
+        mode="add"
+        projects={projects}
+        clients={clients}
+        currency={currency}
+        canCreate={canCreateCustomTask}
+        canUpdate={false}
+        canDelete={false}
+        onAdd={handleAddCustomTaskSubmit}
+        onUpdate={() => {}}
+        initialProjectId={selectedProjectId}
+        projectLocked={true}
       />
     </div>
   );
