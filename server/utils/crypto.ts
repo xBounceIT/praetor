@@ -27,21 +27,15 @@ export function encrypt(plaintext: string): string {
 
 export function decrypt(ciphertext: string): string {
   if (!ciphertext) return '';
-  const key = getEncryptionKey();
   const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
   if (!ivB64 || !authTagB64 || !encryptedB64) {
-    // Not encrypted (legacy plaintext) - return as-is
-    return ciphertext;
+    throw new Error('Invalid encrypted value format');
   }
-  try {
-    const iv = Buffer.from(ivB64, 'base64');
-    const authTag = Buffer.from(authTagB64, 'base64');
-    const encrypted = Buffer.from(encryptedB64, 'base64');
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-    return decipher.update(encrypted) + decipher.final('utf8');
-  } catch {
-    // Decryption failed (likely legacy plaintext containing colons) - return as-is
-    return ciphertext;
-  }
+  const key = getEncryptionKey();
+  const iv = Buffer.from(ivB64, 'base64');
+  const authTag = Buffer.from(authTagB64, 'base64');
+  const encrypted = Buffer.from(encryptedB64, 'base64');
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+  return decipher.update(encrypted) + decipher.final('utf8');
 }
