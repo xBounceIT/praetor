@@ -163,11 +163,11 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
 
     // The form row auto-selects Alpha Task, so the entry's combination is
     // collapsed into the form row (deduplication). The pre-filled duration
-    // (3.5h) for today still appears in the grid.
+    // (3.5h) for today must appear in one of the day-cell decimal inputs.
     await waitFor(() => {
       const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
-      const has3point5 = Array.from(inputs).some((input) => input.value === '3.5');
-      expect(has3point5 || document.body.textContent?.includes('3.5')).toBe(true);
+      const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
+      expect(prefilled).toBe(true);
     });
   });
 });

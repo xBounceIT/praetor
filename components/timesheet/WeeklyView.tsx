@@ -252,15 +252,16 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   ]);
 
   // When the set of recent rows changes (e.g. user switches), drop stale edits
-  // that no longer match an existing row.
-  const recentRowKeysSignature = recentRows.map((r) => r.key).join('|');
+  // that no longer match an existing row. Each row's key is itself a
+  // `|`-joined composite, so a join+split would lose key boundaries — use the
+  // raw Set directly.
+  const recentRowKeySet = useMemo(() => new Set(recentRows.map((r) => r.key)), [recentRows]);
   useEffect(() => {
-    const validKeys = new Set([FORM_ROW_KEY, ...recentRowKeysSignature.split('|')]);
     setPendingEdits((prev) => {
       let changed = false;
       const next: Record<string, DayMap> = {};
       for (const [key, value] of Object.entries(prev)) {
-        if (validKeys.has(key)) {
+        if (key === FORM_ROW_KEY || recentRowKeySet.has(key)) {
           next[key] = value;
         } else {
           changed = true;
@@ -268,7 +269,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       }
       return changed ? next : prev;
     });
-  }, [recentRowKeysSignature]);
+  }, [recentRowKeySet]);
 
   const getCellValue = (rowKey: string, dateStr: string, baseDays?: DayMap): DayCell => {
     const edit = pendingEdits[rowKey]?.[dateStr];
