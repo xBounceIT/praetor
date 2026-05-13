@@ -14,6 +14,19 @@ import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/valida
 const TLS_CA_MAX_LENGTH = 65536;
 const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
 
+// Sentinel returned in place of the stored bindPassword on GET /config so the
+// secret never leaves the server. The UI round-trips this sentinel back on save
+// when the operator did not edit the field, and PUT /config drops it from the
+// patch so the existing column value is preserved.
+// (tlsCaCertificate is a public CA certificate, not a private key, so it is
+// returned as-is.)
+const BIND_PASSWORD_MASK = '***';
+
+const maskBindPassword = (config: ldapRepo.LdapConfig): ldapRepo.LdapConfig => ({
+  ...config,
+  bindPassword: config.bindPassword ? BIND_PASSWORD_MASK : '',
+});
+
 // Returns the patch fragment to merge into ldapRepo.update():
 //   - omitted body field   -> {} (preserve existing column)
 //   - null / empty / blank -> { tlsCaCertificate: '' } (clear the column)
@@ -153,7 +166,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request, _reply) => (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG,
+    async (_request, _reply) => maskBindPassword((await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG),
   );
 
   // PUT /config - Update LDAP configuration (admin only)
@@ -189,14 +202,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enabled,
         serverUrl,
         baseDn,
-        bindDn,
-        bindPassword,
         userFilter,
         groupBaseDn,
         groupFilter,
         roleMappings,
         autoProvisionAll,
       } = body;
+      // When the client round-trips the masking sentinel returned by GET /config, treat the
+      // whole bindDn/bindPassword pair as "no change" so the stored secret is preserved. The
+      // UI re-sends the existing bindDn alongside the masked password on every save; without
+      // also clearing bindDn here, the paired-validation below would reject the request when
+      // the operator intentionally avoided re-typing the secret. Operators who actually want
+      // to rotate bindDn must also re-enter bindPassword (i.e. supply a non-mask value).
+      const isBindPasswordMasked = body.bindPassword === BIND_PASSWORD_MASK;
+      const bindDn = isBindPasswordMasked ? undefined : body.bindDn;
+      const bindPassword = isBindPasswordMasked ? undefined : body.bindPassword;
       const enabledValue = parseBoolean(enabled);
       const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
       if (!tlsCaResult.ok) {
@@ -304,7 +324,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: updated.serverUrl,
         },
       });
-      return updated;
+      return maskBindPassword(updated);
     },
   );
 

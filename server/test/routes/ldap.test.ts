@@ -186,6 +186,30 @@ describe('GET /api/ldap/config', () => {
     expect(JSON.parse(response.body).tlsCaCertificate).toBe(validPemCert);
   });
 
+  test('masks a stored bindPassword as "***" so the secret never leaves the server', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, bindPassword: 'super-secret-bind-pw' });
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/ldap/config',
+      headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.bindPassword).toBe('***');
+    expect(response.body).not.toContain('super-secret-bind-pw');
+  });
+
+  test('returns empty bindPassword when none is stored (no spurious mask)', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, bindPassword: '' });
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/ldap/config',
+      headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).bindPassword).toBe('');
+  });
+
   test('returns DEFAULT_CONFIG (with empty tlsCaCertificate) when no row exists', async () => {
     ldapGetMock.mockResolvedValue(null);
     const response = await testApp.inject({
@@ -217,6 +241,51 @@ describe('GET /api/ldap/config', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).autoProvisionAll).toBe(true);
+  });
+});
+
+describe('PUT /api/ldap/config - bindPassword masking', () => {
+  test('bindPassword="***" is dropped from the patch so the stored secret is preserved', async () => {
+    const response = await putConfig({
+      enabled: false,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: '***',
+    });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.bindPassword).toBeUndefined();
+    // bindDn must also be dropped (paired with bindPassword) so the stored credential survives
+    // unchanged; otherwise the COALESCE-on-undefined trick can't preserve the pair atomically.
+    expect(patch.bindDn).toBeUndefined();
+  });
+
+  test('a real new bindPassword (non-mask) is forwarded to ldapRepo.update', async () => {
+    const response = await putConfig({
+      enabled: false,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'a-new-secret',
+    });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.bindPassword).toBe('a-new-secret');
+    expect(patch.bindDn).toBe('cn=admin,dc=example,dc=com');
+  });
+
+  test('PUT response masks bindPassword in the returned config', async () => {
+    ldapUpdateMock.mockImplementation(async () => ({
+      ...BASE_CONFIG,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'a-new-secret',
+    }));
+    const response = await putConfig({
+      enabled: false,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'a-new-secret',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.bindPassword).toBe('***');
+    expect(response.body).not.toContain('a-new-secret');
   });
 });
 
