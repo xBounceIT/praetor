@@ -109,16 +109,6 @@ const writeExternalRoleIds = async (userId: string, roleIds: string[]): Promise<
   });
 };
 
-export const applyExternalRolesForUser = async (
-  userId: string,
-  groups: string[],
-  mappings: ExternalRoleMapping[],
-): Promise<string[]> => {
-  const mappedRoleIds = await filterExistingRoleIds(mapExternalGroupsToRoleIds(groups, mappings));
-  await writeExternalRoleIds(userId, mappedRoleIds);
-  return mappedRoleIds;
-};
-
 export const applyExternalRoleIdsForUser = async (
   userId: string,
   roleIds: string[],
@@ -127,6 +117,13 @@ export const applyExternalRoleIdsForUser = async (
   await writeExternalRoleIds(userId, mappedRoleIds);
   return mappedRoleIds;
 };
+
+export const applyExternalRolesForUser = (
+  userId: string,
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): Promise<string[]> =>
+  applyExternalRoleIdsForUser(userId, mapExternalGroupsToRoleIds(groups, mappings));
 
 // Preserve admin-assigned roles: only overwrite when LDAP groups actually map to at least one
 // existing role. Returns { applied: false } when no group matched (or the matched roles have
