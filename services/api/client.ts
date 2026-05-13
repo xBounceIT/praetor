@@ -75,14 +75,25 @@ export const fetchApiStream = async (
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Network request failed';
+    throw new ApiError(message, 0, true);
+  }
 
   const newToken = response.headers.get('x-auth-token');
   if (newToken) {
     setAuthToken(newToken);
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Request failed' }));
+    throw new ApiError(error.message || error.error || `HTTP ${response.status}`, response.status);
   }
 
   return response;
