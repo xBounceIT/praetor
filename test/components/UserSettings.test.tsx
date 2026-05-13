@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PersonalAccessToken, Settings } from '../../services/api';
+import type { UserAuthMethod } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 
 installI18nMock();
@@ -57,6 +58,9 @@ const onRenewPersonalAccessToken = mock(() =>
 
 const renderSettings = (
   overrides: {
+    authMethod?: UserAuthMethod;
+    authProviderName?: string | null;
+    onUpdate?: (updates: Partial<Settings>) => Promise<void>;
     onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
     onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
   } = {},
@@ -64,7 +68,9 @@ const renderSettings = (
   render(
     <UserSettings
       settings={settings}
-      onUpdate={onUpdate}
+      authMethod={overrides.authMethod}
+      authProviderName={overrides.authProviderName}
+      onUpdate={overrides.onUpdate ?? onUpdate}
       onUpdatePassword={onUpdatePassword}
       onListMcpTokens={onListMcpTokens}
       onCreateMcpToken={onCreateMcpToken}
@@ -388,5 +394,75 @@ describe('<UserSettings /> MCP tokens', () => {
 
     await waitFor(() => expect(onRevokeMcpToken).toHaveBeenCalledWith('mcp-token-1'));
     await waitFor(() => expect(screen.queryByText('Agent')).not.toBeInTheDocument());
+  });
+});
+
+describe('<UserSettings /> non-local auth', () => {
+  beforeEach(() => {
+    for (const m of [
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    ]) {
+      m.mockClear();
+    }
+  });
+
+  test('Profile tab: shows lock banner and disables identity inputs for LDAP users', () => {
+    renderSettings({ authMethod: 'ldap', authProviderName: null });
+
+    expect(screen.getByText('userProfile.lockedBanner')).toBeInTheDocument();
+
+    const fullNameInput = screen.getByDisplayValue('Alice') as HTMLInputElement;
+    const emailInput = screen.getByDisplayValue('alice@example.com') as HTMLInputElement;
+
+    expect(fullNameInput.disabled).toBe(true);
+    expect(fullNameInput.readOnly).toBe(true);
+    expect(emailInput.disabled).toBe(true);
+    expect(emailInput.readOnly).toBe(true);
+
+    expect(screen.queryByRole('button', { name: /general.saveChanges/ })).not.toBeInTheDocument();
+  });
+
+  test('Profile tab: submitting the form is a no-op for non-local users', async () => {
+    const { container } = renderSettings({ authMethod: 'oidc', authProviderName: 'Acme SSO' });
+
+    const form = container.querySelector('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  test('Security tab: replaces the password card with a lock banner; PAT card still renders', async () => {
+    renderSettings({ authMethod: 'saml', authProviderName: 'Corporate SSO' });
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    expect(await screen.findByText('password.lockedBanner')).toBeInTheDocument();
+
+    expect(screen.queryByLabelText('password.currentPassword')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('password.newPassword')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('password.confirmNewPassword')).not.toBeInTheDocument();
+
+    await waitFor(() => expect(onGetPersonalAccessToken).toHaveBeenCalled());
+    expect(screen.getByText('security.personalAccessToken.title')).toBeInTheDocument();
+  });
+
+  test('Language change for non-local users only sends the language field', async () => {
+    renderSettings({ authMethod: 'ldap' });
+
+    fireEvent.click(screen.getByRole('button', { name: /language.title/ }));
+    fireEvent.click(screen.getByText('language.italian'));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(onUpdate).toHaveBeenCalledWith({ language: 'it' });
   });
 });

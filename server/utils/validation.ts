@@ -452,6 +452,13 @@ export function badRequest(reply: FastifyReply, message: string): FastifyReply {
 }
 
 /**
+ * Send a 403 Forbidden response with error message
+ */
+export function forbidden(reply: FastifyReply, message: string): FastifyReply {
+  return reply.code(403).send({ error: message });
+}
+
+/**
  * Validate email format (basic regex)
  */
 export function isValidEmail(value: string): boolean {

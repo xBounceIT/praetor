@@ -5,7 +5,8 @@
     "title": "User Profile",
     "fullName": "Full Name",
     "email": "Email Address",
-    "updateProfile": "Update Profile"
+    "updateProfile": "Update Profile",
+    "lockedBanner": "Your profile is managed by {{provider}} and cannot be edited here."
   },
   "language": {
     "title": "Language",
@@ -53,7 +54,13 @@
     "passwordsDoNotMatch": "New passwords do not match",
     "passwordMinLength": "New password must be at least 8 characters long",
     "sameAsCurrent": "New password must be different from the current password",
-    "incorrectPassword": "Incorrect current password"
+    "incorrectPassword": "Incorrect current password",
+    "lockedBanner": "Your password is managed by {{provider}}. Change it there."
+  },
+  "identityProviders": {
+    "ldap": "LDAP",
+    "oidc": "OIDC",
+    "saml": "SAML"
   },
   "mcp": {
     "title": "MCP Tokens",

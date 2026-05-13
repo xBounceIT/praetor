@@ -47,11 +47,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
+import type { UserAuthMethod } from '../types';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
 
 export interface UserSettingsProps {
   settings: Settings;
+  authMethod?: UserAuthMethod;
+  authProviderName?: string | null;
   isLoading?: boolean;
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -168,6 +171,8 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{
 
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
+  authMethod = 'local',
+  authProviderName = null,
   isLoading = false,
   onUpdate,
   onUpdatePassword,
@@ -179,6 +184,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 }) => {
   const { t } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
+  const isLocalAuth = authMethod === 'local';
+  const identityProviderLabel = isLocalAuth
+    ? ''
+    : authProviderName || t(`settings:identityProviders.${authMethod}`);
 
   // Initialize the editable fields from `settings` once at mount. We deliberately
   // do not re-sync on later `settings` prop changes: the parent re-creates the
@@ -276,6 +285,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Profile fields are mastered by the identity provider for non-local users.
+    if (!isLocalAuth) return;
     // Prevent double-submission when the user mashes Enter / clicks Save twice
     // in quick succession — `onUpdate` is async and a second call would race.
     if (isSaving) return;
@@ -301,7 +312,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     applyLanguagePreference(lang);
     setLanguage(lang);
     try {
-      await onUpdate({ fullName, email, language: lang });
+      // Send only the language so this still works for non-local users
+      // (the backend rejects fullName/email updates for them).
+      await onUpdate({ language: lang });
     } catch (err) {
       console.error('Failed to update language:', err);
       // Roll the optimistic update back so the user can retry the same option.
@@ -505,6 +518,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           </div>
           <form onSubmit={handleSave}>
             <div className="p-6 space-y-6">
+              {!isLocalAuth && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm font-medium text-zinc-700"
+                >
+                  <Lock aria-hidden="true" className="size-4" />
+                  {t('userProfile.lockedBanner', { provider: identityProviderLabel })}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
@@ -514,7 +537,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    disabled={!isLocalAuth}
+                    readOnly={!isLocalAuth}
+                    aria-readonly={!isLocalAuth}
+                    className={cn(
+                      'w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold',
+                      !isLocalAuth && 'cursor-not-allowed opacity-60',
+                    )}
                   />
                 </div>
                 <div>
@@ -525,37 +554,45 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    disabled={!isLocalAuth}
+                    readOnly={!isLocalAuth}
+                    aria-readonly={!isLocalAuth}
+                    className={cn(
+                      'w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold',
+                      !isLocalAuth && 'cursor-not-allowed opacity-60',
+                    )}
                   />
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSaving || !hasChanges}
-                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
-                  isSaved
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                    : isSaving || !hasChanges
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                }`}
-              >
-                {isSaving ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                ) : isSaved ? (
-                  <i className="fa-solid fa-check"></i>
-                ) : (
-                  <i className="fa-solid fa-save"></i>
-                )}
-                {isSaving
-                  ? t('general.saving')
-                  : isSaved
-                    ? t('general.changesSaved')
-                    : t('general.saveChanges')}
-              </button>
-            </div>
+            {isLocalAuth && (
+              <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSaving || !hasChanges}
+                  className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
+                    isSaved
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
+                      : isSaving || !hasChanges
+                        ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                        : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
+                  }`}
+                >
+                  {isSaving ? (
+                    <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  ) : isSaved ? (
+                    <i className="fa-solid fa-check"></i>
+                  ) : (
+                    <i className="fa-solid fa-save"></i>
+                  )}
+                  {isSaving
+                    ? t('general.saving')
+                    : isSaved
+                      ? t('general.changesSaved')
+                      : t('general.saveChanges')}
+                </button>
+              </div>
+            )}
           </form>
         </section>
       )}
@@ -687,82 +724,99 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               </CardTitle>
               <CardDescription>{t('password.description')}</CardDescription>
             </CardHeader>
-            <form onSubmit={handlePasswordUpdate}>
-              <CardContent className="space-y-6 p-6">
-                {passwordError && (
-                  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
-                    <AlertCircle aria-hidden="true" className="size-4" />
-                    {passwordError}
-                  </div>
-                )}
+            {isLocalAuth ? (
+              <form onSubmit={handlePasswordUpdate}>
+                <CardContent className="space-y-6 p-6">
+                  {passwordError && (
+                    <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
+                      <AlertCircle aria-hidden="true" className="size-4" />
+                      {passwordError}
+                    </div>
+                  )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Field>
-                    <FieldLabel htmlFor="security-current-password">
-                      {t('password.currentPassword')}
-                    </FieldLabel>
-                    <Input
-                      id="security-current-password"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                    />
-                  </Field>
-                  <Field className="md:col-start-1">
-                    <FieldLabel htmlFor="security-new-password">
-                      {t('password.newPassword')}
-                    </FieldLabel>
-                    <Input
-                      id="security-new-password"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="security-confirm-password">
-                      {t('password.confirmNewPassword')}
-                    </FieldLabel>
-                    <Input
-                      id="security-confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                    />
-                  </Field>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Field>
+                      <FieldLabel htmlFor="security-current-password">
+                        {t('password.currentPassword')}
+                      </FieldLabel>
+                      <Input
+                        id="security-current-password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                      />
+                    </Field>
+                    <Field className="md:col-start-1">
+                      <FieldLabel htmlFor="security-new-password">
+                        {t('password.newPassword')}
+                      </FieldLabel>
+                      <Input
+                        id="security-new-password"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="security-confirm-password">
+                        {t('password.confirmNewPassword')}
+                      </FieldLabel>
+                      <Input
+                        id="security-confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                      />
+                    </Field>
+                  </div>
+                </CardContent>
+                <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
+                  {(() => {
+                    const { Icon, iconClass, label } = isSavingPassword
+                      ? { Icon: Loader2, iconClass: 'animate-spin', label: t('password.updating') }
+                      : passwordSuccess
+                        ? {
+                            Icon: Check,
+                            iconClass: undefined,
+                            label: t('password.passwordUpdated'),
+                          }
+                        : {
+                            Icon: KeyRound,
+                            iconClass: undefined,
+                            label: t('password.updatePassword'),
+                          };
+                    return (
+                      <Button
+                        type="submit"
+                        disabled={
+                          isSavingPassword || !currentPassword || !newPassword || !confirmPassword
+                        }
+                      >
+                        <Icon aria-hidden="true" className={iconClass} />
+                        {label}
+                      </Button>
+                    );
+                  })()}
+                </CardFooter>
+              </form>
+            ) : (
+              <CardContent className="p-6">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
+                >
+                  <Lock aria-hidden="true" className="size-4" />
+                  {t('password.lockedBanner', { provider: identityProviderLabel })}
                 </div>
               </CardContent>
-              <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
-                {(() => {
-                  const { Icon, iconClass, label } = isSavingPassword
-                    ? { Icon: Loader2, iconClass: 'animate-spin', label: t('password.updating') }
-                    : passwordSuccess
-                      ? { Icon: Check, iconClass: undefined, label: t('password.passwordUpdated') }
-                      : {
-                          Icon: KeyRound,
-                          iconClass: undefined,
-                          label: t('password.updatePassword'),
-                        };
-                  return (
-                    <Button
-                      type="submit"
-                      disabled={
-                        isSavingPassword || !currentPassword || !newPassword || !confirmPassword
-                      }
-                    >
-                      <Icon aria-hidden="true" className={iconClass} />
-                      {label}
-                    </Button>
-                  );
-                })()}
-              </CardFooter>
-            </form>
+            )}
           </Card>
 
           <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
