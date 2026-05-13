@@ -57,6 +57,9 @@ const projectsListNamesByIdsMock = mock();
 const isClientAssignedToUserMock = mock();
 const isProjectAssignedToUserMock = mock();
 const isTaskAssignedToUserMock = mock();
+const filterAssignedClientIdsMock = mock();
+const filterAssignedProjectIdsMock = mock();
+const filterAssignedTaskIdsMock = mock();
 const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
 
 let entriesRoutePlugin: FastifyPluginAsync;
@@ -115,6 +118,9 @@ beforeAll(async () => {
     isClientAssignedToUser: isClientAssignedToUserMock,
     isProjectAssignedToUser: isProjectAssignedToUserMock,
     isTaskAssignedToUser: isTaskAssignedToUserMock,
+    filterAssignedClientIds: filterAssignedClientIdsMock,
+    filterAssignedProjectIds: filterAssignedProjectIdsMock,
+    filterAssignedTaskIds: filterAssignedTaskIdsMock,
   }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsRepoSnap,
@@ -200,6 +206,9 @@ const allMocks = [
   isClientAssignedToUserMock,
   isProjectAssignedToUserMock,
   isTaskAssignedToUserMock,
+  filterAssignedClientIdsMock,
+  filterAssignedProjectIdsMock,
+  filterAssignedTaskIdsMock,
   withDbTransactionMock,
 ];
 
@@ -222,6 +231,16 @@ beforeEach(async () => {
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isTaskAssignedToUserMock.mockResolvedValue(true);
+  // Bulk filters default to "everything is assigned" so happy-path recurring tests pass.
+  filterAssignedClientIdsMock.mockImplementation(
+    async (_userId: string, ids: string[]) => new Set(ids),
+  );
+  filterAssignedProjectIdsMock.mockImplementation(
+    async (_userId: string, ids: string[]) => new Set(ids),
+  );
+  filterAssignedTaskIdsMock.mockImplementation(
+    async (_userId: string, ids: string[]) => new Set(ids),
+  );
 
   testApp = await buildRouteTestApp(entriesRoutePlugin, '/api/entries');
 });
@@ -1180,6 +1199,70 @@ describe('POST /api/entries/recurring/generate', () => {
     expect(body.generatedCount).toBe(0);
     expect(body.skippedExistingCount).toBe(5);
     expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: filters out a recurring task whose client assignment was revoked', async () => {
+    setupHappyPath();
+    // `listRecurringForUser` still returns the task (stale user_tasks row), but the
+    // user no longer has the client assignment - the recurring path must re-apply the
+    // same checks `createTimeEntry` runs and skip this template.
+    filterAssignedClientIdsMock.mockResolvedValue(new Set<string>());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.generatedCount).toBe(0);
+    expect(body.skippedExistingCount).toBe(0);
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+    expect(filterAssignedClientIdsMock).toHaveBeenCalledWith('u1', ['c1']);
+    expect(filterAssignedProjectIdsMock).toHaveBeenCalledWith('u1', ['p1']);
+    expect(filterAssignedTaskIdsMock).toHaveBeenCalledWith('u1', ['t1']);
+  });
+
+  test('200: filters out a recurring task whose project assignment was revoked', async () => {
+    setupHappyPath();
+    filterAssignedProjectIdsMock.mockResolvedValue(new Set<string>());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(0);
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: tracker_all.create bypasses the per-assignment filter', async () => {
+    setupHappyPath();
+    getRolePermissionsMock.mockResolvedValue([...RECURRING_PERMS, 'timesheets.tracker_all.create']);
+    // Even with all bulk filters returning empty, an admin-scope actor should still
+    // generate entries because the filter step is skipped.
+    filterAssignedClientIdsMock.mockResolvedValue(new Set<string>());
+    filterAssignedProjectIdsMock.mockResolvedValue(new Set<string>());
+    filterAssignedTaskIdsMock.mockResolvedValue(new Set<string>());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(5);
+    expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
+    expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
+    expect(filterAssignedProjectIdsMock).not.toHaveBeenCalled();
+    expect(filterAssignedTaskIdsMock).not.toHaveBeenCalled();
   });
 });
 

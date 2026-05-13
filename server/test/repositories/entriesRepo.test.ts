@@ -369,6 +369,39 @@ describe('createMany', () => {
     expect(result[0].id).toBe('e-1');
     expect(result[1].id).toBe('e-2');
   });
+
+  test('chunks inserts at 1000 rows to stay under PG bind-parameter limits', async () => {
+    // 2500 entries -> 3 chunks: 1000 + 1000 + 500.
+    const inputs = Array.from({ length: 2500 }, (_, i) => ({
+      id: `e-${i}`,
+      userId: 'u-1',
+      date: '2026-04-30',
+      clientId: 'c-1',
+      clientName: 'Acme',
+      projectId: 'p-1',
+      projectName: 'Alpha',
+      task: 'Dev',
+      taskId: 't-1',
+      notes: null,
+      duration: 1,
+      hourlyCost: 100,
+      isPlaceholder: true,
+      location: 'remote',
+    }));
+    exec.enqueue({ rows: inputs.slice(0, 1000).map((i) => entryRow({ 0: i.id })) });
+    exec.enqueue({ rows: inputs.slice(1000, 2000).map((i) => entryRow({ 0: i.id })) });
+    exec.enqueue({ rows: inputs.slice(2000, 2500).map((i) => entryRow({ 0: i.id })) });
+
+    const result = await entriesRepo.createMany(inputs, testDb);
+
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].params).toHaveLength(14_000);
+    expect(exec.calls[1].params).toHaveLength(14_000);
+    expect(exec.calls[2].params).toHaveLength(7_000);
+    expect(result).toHaveLength(2500);
+    expect(result[0].id).toBe('e-0');
+    expect(result[2499].id).toBe('e-2499');
+  });
 });
 
 describe('findExistingRecurringKeys', () => {

@@ -362,9 +362,48 @@ export const generateRecurringEntries = async (
   const uniqueProjectIds = Array.from(new Set(recurringTasks.map((t) => t.projectId)));
   const projectsByProjectId = await projectsRepo.listNamesByIds(uniqueProjectIds);
 
+  // `listRecurringForUser` already gates on `user_tasks`, but a stale `user_tasks` row can
+  // outlive a revoked client/project assignment. Re-apply the same per-row checks
+  // `createTimeEntry` runs so the recurring path can't escape an assignment downgrade.
+  let allowedTasks = recurringTasks;
+  if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
+    const uniqueClientIds = Array.from(
+      new Set(
+        recurringTasks
+          .map((t) => projectsByProjectId.get(t.projectId)?.clientId)
+          .filter((id): id is string => id !== undefined),
+      ),
+    );
+    const [assignedClients, assignedProjects, assignedTasks] = await Promise.all([
+      userAssignmentsRepo.filterAssignedClientIds(targetUserId, uniqueClientIds),
+      userAssignmentsRepo.filterAssignedProjectIds(targetUserId, uniqueProjectIds),
+      userAssignmentsRepo.filterAssignedTaskIds(
+        targetUserId,
+        recurringTasks.map((t) => t.id),
+      ),
+    ]);
+    allowedTasks = recurringTasks.filter((t) => {
+      const clientId = projectsByProjectId.get(t.projectId)?.clientId;
+      return (
+        clientId !== undefined &&
+        assignedClients.has(clientId) &&
+        assignedProjects.has(t.projectId) &&
+        assignedTasks.has(t.id)
+      );
+    });
+  }
+  if (allowedTasks.length === 0) {
+    return {
+      generated: [],
+      generatedCount: 0,
+      skippedExistingCount: 0,
+      range: { fromDate, toDate },
+    };
+  }
+
   type PendingEntry = ReturnType<typeof buildPendingEntry>;
   const buildPendingEntry = (
-    task: (typeof recurringTasks)[number],
+    task: (typeof allowedTasks)[number],
     project: NonNullable<ReturnType<typeof projectsByProjectId.get>>,
     dateStr: string,
   ) => ({
@@ -390,7 +429,7 @@ export const generateRecurringEntries = async (
   // task) tuple don't insert duplicate rows in a single generation pass.
   const stagedKeys = new Set<string>();
 
-  for (const task of recurringTasks) {
+  for (const task of allowedTasks) {
     if (!task.recurrencePattern) continue;
     const project = projectsByProjectId.get(task.projectId);
     if (!project) continue;

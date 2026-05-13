@@ -308,6 +308,11 @@ export const create = async (entry: NewEntry, exec: DbExecutor = db): Promise<Ti
   return mapBuilderRow(row);
 };
 
+// Postgres caps bind parameters at 65,535 per statement. With 14 columns per row a single
+// INSERT can safely carry ~4,600 rows; we chunk at 1,000 for a comfortable margin and to
+// keep individual statements bounded in size.
+const CREATE_MANY_CHUNK_SIZE = 1000;
+
 /**
  * Bulk insert variant used by the recurring-entry generator. Returns the inserted rows in
  * the same order they were supplied. Empty input is a no-op.
@@ -317,28 +322,33 @@ export const createMany = async (
   exec: DbExecutor = db,
 ): Promise<TimeEntry[]> => {
   if (entries.length === 0) return [];
-  const rows = await exec
-    .insert(timeEntries)
-    .values(
-      entries.map((entry) => ({
-        id: entry.id,
-        userId: entry.userId,
-        date: entry.date,
-        clientId: entry.clientId,
-        clientName: entry.clientName,
-        projectId: entry.projectId,
-        projectName: entry.projectName,
-        task: entry.task,
-        taskId: entry.taskId,
-        notes: entry.notes,
-        duration: numericForDb(entry.duration),
-        hourlyCost: numericForDb(entry.hourlyCost),
-        isPlaceholder: entry.isPlaceholder,
-        location: entry.location,
-      })),
-    )
-    .returning();
-  return rows.map(mapBuilderRow);
+  const result: TimeEntry[] = [];
+  for (let i = 0; i < entries.length; i += CREATE_MANY_CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CREATE_MANY_CHUNK_SIZE);
+    const rows = await exec
+      .insert(timeEntries)
+      .values(
+        chunk.map((entry) => ({
+          id: entry.id,
+          userId: entry.userId,
+          date: entry.date,
+          clientId: entry.clientId,
+          clientName: entry.clientName,
+          projectId: entry.projectId,
+          projectName: entry.projectName,
+          task: entry.task,
+          taskId: entry.taskId,
+          notes: entry.notes,
+          duration: numericForDb(entry.duration),
+          hourlyCost: numericForDb(entry.hourlyCost),
+          isPlaceholder: entry.isPlaceholder,
+          location: entry.location,
+        })),
+      )
+      .returning();
+    for (const row of rows) result.push(mapBuilderRow(row));
+  }
+  return result;
 };
 
 export type EntryUpdate = {
