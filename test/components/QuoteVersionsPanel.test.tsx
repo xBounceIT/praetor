@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Quote, QuoteVersion, QuoteVersionRow } from '../../types';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 // Stable `t` and `i18n` references so components that put `t` in useCallback dep arrays
 // (e.g. QuoteVersionsPanel.reload) don't infinite-loop in tests. The shared installI18nMock
@@ -65,6 +66,8 @@ mock.module('../../components/shared/DeleteConfirmModal', () => ({
       </div>
     ) : null,
 }));
+
+clearSpyStateAfterAll();
 
 const QuoteVersionsPanel = (await import('../../components/sales/QuoteVersionsPanel')).default;
 

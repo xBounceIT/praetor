@@ -17,6 +17,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -55,7 +56,7 @@ const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -232,7 +233,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({
     schemaVersion: 1,
@@ -365,7 +366,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     // Pre-restore snapshot inserted with reason='restore'
     expect(qvInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ quoteId: 'q-1', reason: 'restore', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
     // Quote and items applied
     expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1');
@@ -373,7 +374,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'q-1',
       expect.objectContaining({ notes: null }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(cqReplaceItemsMock).toHaveBeenCalled();
     // Atomically wrapped
@@ -564,7 +565,7 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
     expect(cqFindFullForSnapshotMock).toHaveBeenCalled();
     expect(qvInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ quoteId: 'q-1', reason: 'update', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

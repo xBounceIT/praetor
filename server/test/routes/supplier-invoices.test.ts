@@ -14,6 +14,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -44,7 +45,7 @@ const deleteByIdMock = mock();
 const findOrderByIdMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -178,7 +179,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/supplier-invoices');

@@ -3,6 +3,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import type { Notification } from '../../types';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 import { render } from '../helpers/render';
 
 installI18nMock();
@@ -23,6 +24,8 @@ mock.module('../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+clearSpyStateAfterAll();
 
 const NotificationBell = (await import('../../components/shared/NotificationBell')).default;
 

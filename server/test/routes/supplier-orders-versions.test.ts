@@ -16,6 +16,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -51,7 +53,7 @@ const sovInsertMock = mock();
 const sovBuildSnapshotMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -217,7 +219,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   sovBuildSnapshotMock.mockImplementation((order, items) => ({
     schemaVersion: 1,
@@ -349,7 +351,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     // Pre-restore snapshot inserted with reason='restore'
     expect(sovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'so-1', reason: 'restore', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
     // Reference checks ran
     expect(suppliersExistsByIdMock).toHaveBeenCalledWith('s-1');
@@ -358,7 +360,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     expect(soRestoreSnapshotOrderMock).toHaveBeenCalledWith(
       'so-1',
       expect.objectContaining({ supplierId: 's-1', supplierName: 'Acme' }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(soReplaceItemsMock).toHaveBeenCalled();
     // Atomically wrapped
@@ -536,7 +538,7 @@ describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', (
     expect(soFindFullForSnapshotMock).toHaveBeenCalled();
     expect(sovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'so-1', reason: 'update', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

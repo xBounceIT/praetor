@@ -2,7 +2,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit from 'fastify-rate-limit';
 import aiRoutes from './routes/ai.ts';
 import authRoutes from './routes/auth.ts';
@@ -74,6 +74,23 @@ export const buildErrorResponseMessage = (
     ? 'Internal server error'
     : error.message || 'Internal server error';
   return { statusCode, message };
+};
+
+// Exported so tests can register the exact production error handler against a minimal
+// Fastify instance, rather than re-implementing setErrorHandler in test setup.
+export const registerErrorHandler = (fastify: FastifyInstance) => {
+  fastify.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
+    request.log.error(
+      {
+        err: serializeError(error),
+        statusCode: error.statusCode,
+      },
+      'Unhandled request error',
+    );
+
+    const { statusCode, message } = buildErrorResponseMessage(error);
+    reply.code(statusCode).send({ error: message });
+  });
 };
 
 export const buildApp = async () => {
@@ -186,18 +203,7 @@ export const buildApp = async () => {
     },
   );
 
-  fastify.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
-    request.log.error(
-      {
-        err: serializeError(error),
-        statusCode: error.statusCode,
-      },
-      'Unhandled request error',
-    );
-
-    const { statusCode, message } = buildErrorResponseMessage(error);
-    reply.code(statusCode).send({ error: message });
-  });
+  registerErrorHandler(fastify);
 
   return fastify;
 };

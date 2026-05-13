@@ -11,6 +11,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -37,7 +39,7 @@ const listExplicitPermissionsForRolesMock = mock();
 
 // audit / drizzle
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -151,7 +153,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(ADMIN_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ADMIN_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   // Default: no explicit permissions on any role
   listExplicitPermissionsMock.mockResolvedValue([]);
@@ -254,7 +256,7 @@ describe('POST /api/roles', () => {
     expect(insertPermissionMock).toHaveBeenCalledWith(
       expect.any(String),
       'timesheets.tracker.view',
-      undefined,
+      TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'role.created' }));
   });
@@ -583,11 +585,11 @@ describe('PUT /api/roles/:id/permissions', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(clearPermissionsMock).toHaveBeenCalledWith('role-x', undefined);
+    expect(clearPermissionsMock).toHaveBeenCalledWith('role-x', TX_SENTINEL);
     expect(insertPermissionMock).toHaveBeenCalledWith(
       'role-x',
       'timesheets.tracker.view',
-      undefined,
+      TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'role.permissions_updated' }),

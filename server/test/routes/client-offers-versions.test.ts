@@ -17,6 +17,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -52,7 +53,7 @@ const ovInsertMock = mock();
 const ovBuildSnapshotMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -223,7 +224,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   ovBuildSnapshotMock.mockImplementation((offer, items) => ({
     schemaVersion: 1,
@@ -354,7 +355,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     // Pre-restore snapshot inserted with reason='restore'
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ offerId: 'off-1', reason: 'restore', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
     // Snapshot reference validation ran inside the tx. The second arg is the tx executor;
     // bun's toHaveBeenCalledWith(..., undefined) hangs the runner, so we read positional
@@ -367,7 +368,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(coRestoreSnapshotOfferMock).toHaveBeenCalledWith(
       'off-1',
       expect.objectContaining({ notes: null }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(coReplaceItemsMock).toHaveBeenCalled();
     // Atomically wrapped
@@ -546,7 +547,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(coFindFullForSnapshotMock).toHaveBeenCalled();
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ offerId: 'off-1', reason: 'update', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

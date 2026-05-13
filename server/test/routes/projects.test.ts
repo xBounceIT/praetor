@@ -16,6 +16,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -66,7 +68,7 @@ const isProjectAssignedToUserMock = mock();
 
 // audit + db
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -224,7 +226,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(MANAGE_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   assignClientToUserMock.mockImplementation(async () => undefined);
   assignProjectToUserMock.mockImplementation(async () => undefined);
@@ -323,11 +325,11 @@ describe('POST /api/projects', () => {
         offerId: 'of-1',
         isDisabled: false,
       }),
-      undefined,
+      TX_SENTINEL,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, TX_SENTINEL);
     expect(assignProjectToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', TX_SENTINEL);
     expect(assignProjectToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
@@ -365,7 +367,7 @@ describe('POST /api/projects', () => {
         endDate: '2026-12-31',
         revenue: 12345.5,
       }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(JSON.parse(res.body)).toMatchObject({
       offerId: 'of-1',
@@ -388,7 +390,7 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ color: '#3b82f6', orderId: null, description: null }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -423,7 +425,7 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'co-same' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -438,7 +440,10 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }), undefined);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: null }),
+      TX_SENTINEL,
+    );
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
@@ -453,7 +458,10 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }), undefined);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: null }),
+      TX_SENTINEL,
+    );
   });
 
   test('400: offerId belonging to a different client is rejected', async () => {
@@ -487,7 +495,7 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ offerId: 'of-same' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -722,7 +730,7 @@ describe('DELETE /api/projects/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
-    expect(deleteByIdMock).toHaveBeenCalledWith('p-1', undefined);
+    expect(deleteByIdMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.deleted', entityId: 'p-1' }),
     );
@@ -810,12 +818,12 @@ describe('PUT /api/projects/:id', () => {
     expect(ensureClientCascadeAssignmentsMock).toHaveBeenCalledWith(
       ['u2', 'u3'],
       'c-new',
-      undefined,
+      TX_SENTINEL,
     );
     expect(removeClientCascadeForUsersIfUnusedMock).toHaveBeenCalledWith(
       ['u2', 'u3'],
       'c-old',
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -835,7 +843,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ orderId: 'co-9' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -891,7 +899,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ offerId: null }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -912,7 +920,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ clientId: 'c-new', orderId: 'co-9' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -991,7 +999,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ orderId: null }),
-      undefined,
+      TX_SENTINEL,
     );
     // No order lookup should fire when normalized to null.
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
@@ -1012,7 +1020,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ orderId: null }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -1118,7 +1126,7 @@ describe('PUT /api/projects/:id', () => {
         endDate: '2026-11-30',
         revenue: 9999,
       }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -1137,7 +1145,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
       expect.objectContaining({ revenue: null }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -1356,11 +1364,19 @@ describe('POST /api/projects/:id/users', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ message: 'Project assignments updated' });
-    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('p-1', undefined);
-    expect(addManualAssignmentsMock).toHaveBeenCalledWith('p-1', ['u2', 'u4'], undefined);
-    expect(ensureClientCascadeAssignmentsMock).toHaveBeenCalledWith(['u2', 'u4'], 'c-1', undefined);
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('p-1', ['u2', 'u4'], TX_SENTINEL);
+    expect(ensureClientCascadeAssignmentsMock).toHaveBeenCalledWith(
+      ['u2', 'u4'],
+      'c-1',
+      TX_SENTINEL,
+    );
     // u3 is removed (was previously assigned but not in new list)
-    expect(removeClientCascadeForUsersIfUnusedMock).toHaveBeenCalledWith(['u3'], 'c-1', undefined);
+    expect(removeClientCascadeForUsersIfUnusedMock).toHaveBeenCalledWith(
+      ['u3'],
+      'c-1',
+      TX_SENTINEL,
+    );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.users_assigned' }),
     );

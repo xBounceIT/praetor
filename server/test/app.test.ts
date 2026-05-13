@@ -1,12 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import Fastify from 'fastify';
-import { buildErrorResponseMessage } from '../app.ts';
-import { serializeError } from '../utils/logger.ts';
+import { buildErrorResponseMessage, registerErrorHandler } from '../app.ts';
 
-// Lightweight harness that mirrors app.ts's setErrorHandler. We don't call buildApp() here
-// because it registers every domain route, opens the DB pool, and requires real LDAP/SSO
-// config — none of which the error-handling contract depends on.
-const buildTestApp = (env: NodeJS.ProcessEnv) => {
+// Lightweight harness that registers the same `registerErrorHandler` used by buildApp(),
+// so the production error-handling path is exercised end-to-end without spinning up DB,
+// LDAP, or SSO. The production handler reads `process.env.NODE_ENV` directly, so each
+// integration test sets/restores it.
+const buildTestApp = () => {
   // Capture log lines for assertions about server-side error visibility. Pino accepts a
   // raw stream destination, so we write each JSON log line into an array we can inspect.
   const logLines: string[] = [];
@@ -22,18 +22,7 @@ const buildTestApp = (env: NodeJS.ProcessEnv) => {
     },
   });
 
-  fastify.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
-    request.log.error(
-      {
-        err: serializeError(error),
-        statusCode: error.statusCode,
-      },
-      'Unhandled request error',
-    );
-
-    const { statusCode, message } = buildErrorResponseMessage(error, env);
-    reply.code(statusCode).send({ error: message });
-  });
+  registerErrorHandler(fastify);
 
   fastify.get('/boom-500', async () => {
     throw new Error('Database password is hunter2');
@@ -53,6 +42,19 @@ const buildTestApp = (env: NodeJS.ProcessEnv) => {
 
   return { fastify, logLines };
 };
+
+// Capture both the value and presence: assigning `undefined` back to `process.env.NODE_ENV`
+// would stringify to the literal `'undefined'` and break later reads, so delete it instead
+// when the var wasn't set at module load.
+const hadOriginalNodeEnv = 'NODE_ENV' in process.env;
+const originalNodeEnv = process.env.NODE_ENV;
+afterEach(() => {
+  if (hadOriginalNodeEnv) {
+    process.env.NODE_ENV = originalNodeEnv;
+  } else {
+    delete process.env.NODE_ENV;
+  }
+});
 
 describe('buildErrorResponseMessage', () => {
   test('production + 500: masks message to "Internal server error"', () => {
@@ -99,9 +101,8 @@ describe('buildErrorResponseMessage', () => {
 
 describe('Fastify error handler integration', () => {
   test('production: a 500 returns the generic message but the real error reaches the log', async () => {
-    const { fastify, logLines } = buildTestApp({
-      NODE_ENV: 'production',
-    } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = 'production';
+    const { fastify, logLines } = buildTestApp();
 
     const response = await fastify.inject({ method: 'GET', url: '/boom-500' });
 
@@ -116,9 +117,8 @@ describe('Fastify error handler integration', () => {
   });
 
   test('production: a 503 also gets the generic message', async () => {
-    const { fastify } = buildTestApp({
-      NODE_ENV: 'production',
-    } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = 'production';
+    const { fastify } = buildTestApp();
 
     const response = await fastify.inject({ method: 'GET', url: '/boom-503' });
 
@@ -129,9 +129,8 @@ describe('Fastify error handler integration', () => {
   });
 
   test('production: a 4xx keeps its original message', async () => {
-    const { fastify } = buildTestApp({
-      NODE_ENV: 'production',
-    } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = 'production';
+    const { fastify } = buildTestApp();
 
     const response = await fastify.inject({ method: 'GET', url: '/boom-400' });
 
@@ -142,9 +141,8 @@ describe('Fastify error handler integration', () => {
   });
 
   test('non-production: 5xx error messages still pass through to the client', async () => {
-    const { fastify } = buildTestApp({
-      NODE_ENV: 'development',
-    } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = 'development';
+    const { fastify } = buildTestApp();
 
     const response = await fastify.inject({ method: 'GET', url: '/boom-500' });
 

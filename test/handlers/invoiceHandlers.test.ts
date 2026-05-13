@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 const apiMocks = {
   invoicesCreate: mock(
@@ -24,6 +25,8 @@ mock.module('../../services/api', () => ({
   getAuthToken: () => null,
   setAuthToken: () => {},
 }));
+
+clearSpyStateAfterAll();
 
 const { makeInvoiceHandlers } = await import('../../hooks/handlers/invoiceHandlers');
 

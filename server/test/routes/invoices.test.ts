@@ -13,6 +13,8 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -38,7 +40,7 @@ const findAmountPaidMock = mock();
 const findIdConflictMock = mock();
 const deleteByIdMock = mock();
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let invoicesRoutePlugin: FastifyPluginAsync;
 
@@ -167,7 +169,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(invoicesRoutePlugin, '/api/invoices');
@@ -271,7 +273,7 @@ describe('POST /api/invoices', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 100, total: 100 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -295,7 +297,7 @@ describe('POST /api/invoices', () => {
         total: 100,
         amountPaid: 0,
       }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -330,7 +332,7 @@ describe('POST /api/invoices', () => {
     // 2 * 50 * 0.9 = 90; no taxRate sent so taxTotal = 0
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 90, taxTotal: 0, total: 90 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -362,7 +364,7 @@ describe('POST /api/invoices', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ amountPaid: 100, total: 100 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -457,7 +459,7 @@ describe('POST /api/invoices', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 0, total: 0 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -493,7 +495,7 @@ describe('POST /api/invoices', () => {
     // taxable = 100, tax = 22, total = 122
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 100, taxTotal: 22, total: 122 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -525,7 +527,7 @@ describe('POST /api/invoices', () => {
     // subtotal = 350, tax = 22 + 20 + 0 = 42, total = 392
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 350, taxTotal: 42, total: 392 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -573,7 +575,7 @@ describe('POST /api/invoices', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 
@@ -622,7 +624,7 @@ describe('PUT /api/invoices/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'inv-1',
       expect.objectContaining({ status: 'sent' }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(findItemsForInvoiceMock).toHaveBeenCalled();
     expect(replaceItemsMock).not.toHaveBeenCalled();
@@ -652,7 +654,7 @@ describe('PUT /api/invoices/:id', () => {
     expect(updateMock).toHaveBeenCalledWith(
       'inv-1',
       expect.objectContaining({ subtotal: 100, total: 100 }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

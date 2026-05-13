@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SupplierQuoteAttachment } from '../../types';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 import { render } from '../helpers/render';
 
 // Stable t/i18n references - components that put `t` in useEffect dep arrays would otherwise
@@ -57,6 +58,8 @@ mock.module('../../components/shared/DeleteConfirmModal', () => ({
       </div>
     ) : null,
 }));
+
+clearSpyStateAfterAll();
 
 const SupplierQuoteAttachmentsSection = (
   await import('../../components/sales/SupplierQuoteAttachmentsSection')

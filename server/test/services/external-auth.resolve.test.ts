@@ -5,6 +5,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const drizzleSnap = { ...realDrizzle };
 const externalIdentitiesRepoSnap = { ...realExternalIdentitiesRepo };
@@ -13,7 +14,7 @@ const settingsRepoSnap = { ...realSettingsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const usersRepoSnap = { ...realUsersRepo };
 
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 const findByIdentityMock = mock();
 const insertIdentityMock = mock();
 const findExistingIdsMock = mock();
@@ -86,7 +87,7 @@ beforeEach(() => {
   ]) {
     m.mockReset();
   }
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   findExistingIdsMock.mockResolvedValue(new Set(['user']));
   syncTopManagerAssignmentsForUserMock.mockResolvedValue(undefined);
   replaceUserRolesMock.mockResolvedValue(undefined);

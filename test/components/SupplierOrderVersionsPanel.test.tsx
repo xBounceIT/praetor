@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SupplierOrderVersion, SupplierOrderVersionRow, SupplierSaleOrder } from '../../types';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 // Stable `t` and `i18n` references so components that put `t` in useCallback dep arrays
 // (e.g. SupplierOrderVersionsPanel.reload) don't infinite-loop in tests. The shared
@@ -65,6 +66,8 @@ mock.module('../../components/shared/DeleteConfirmModal', () => ({
       </div>
     ) : null,
 }));
+
+clearSpyStateAfterAll();
 
 const SupplierOrderVersionsPanel = (
   await import('../../components/accounting/SupplierOrderVersionsPanel')

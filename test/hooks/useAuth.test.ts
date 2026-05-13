@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 const apiMocks = {
   authMe: mock((): Promise<unknown> => Promise.resolve({ id: 'u1' })),
@@ -42,6 +43,8 @@ mock.module('../../services/api', () => ({
 mock.module('../../i18n', () => ({
   default: i18nMock,
 }));
+
+clearSpyStateAfterAll();
 
 const { useAuth } = await import('../../hooks/useAuth');
 

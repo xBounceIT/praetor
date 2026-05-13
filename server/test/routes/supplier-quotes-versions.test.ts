@@ -15,6 +15,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -48,7 +50,7 @@ const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
 
 const logAuditMock = mock(async () => undefined);
-const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -207,7 +209,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
-  withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+  resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   sqvBuildSnapshotMock.mockImplementation((quote, items) => ({
     schemaVersion: 1,
@@ -333,14 +335,14 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     // Pre-restore snapshot inserted with reason='restore'
     expect(sqvInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ quoteId: 'sq-1', reason: 'restore', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(suppliersFindByIdMock).toHaveBeenCalledWith('s1');
     expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
     expect(sqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'sq-1',
       expect.objectContaining({ supplierId: 's1', notes: null }),
-      undefined,
+      TX_SENTINEL,
     );
     expect(sqReplaceItemsMock).toHaveBeenCalled();
     expect(withDbTransactionMock).toHaveBeenCalled();
@@ -462,7 +464,7 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
     expect(sqFindFullForSnapshotMock).toHaveBeenCalled();
     expect(sqvInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ quoteId: 'sq-1', reason: 'update', createdByUserId: 'u1' }),
-      undefined,
+      TX_SENTINEL,
     );
   });
 

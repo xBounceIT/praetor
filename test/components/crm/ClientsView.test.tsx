@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -32,6 +33,8 @@ mock.module('../../../services/api', () => ({
     },
   },
 }));
+
+clearSpyStateAfterAll();
 
 const ClientsView = (await import('../../../components/CRM/ClientsView')).default;
 
