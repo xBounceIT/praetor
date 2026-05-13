@@ -51,10 +51,6 @@ export const supplierQuotesApi = {
       method: 'POST',
       body: formData,
     });
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(errorBody.error || `HTTP ${response.status}`);
-    }
     return (await response.json()) as SupplierQuoteAttachment;
   },
 
@@ -62,10 +58,6 @@ export const supplierQuotesApi = {
     const response = await fetchApiStream(
       `/sales/supplier-quotes/${id}/attachments/${attachmentId}/download`,
     );
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ error: 'Download failed' }));
-      throw new Error(errorBody.error || `HTTP ${response.status}`);
-    }
     return await response.blob();
   },
 

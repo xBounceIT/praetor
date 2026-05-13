@@ -213,12 +213,36 @@ describe('services/api/client', () => {
       await fetchApiStream('/stream');
     });
 
-    test('does not throw on non-ok stream responses; caller handles them', async () => {
+    test('throws ApiError carrying the HTTP status on non-ok stream responses', async () => {
       fetchMock.mockImplementationOnce(async () =>
-        buildResponse({ status: 500, json: () => ({}) }),
+        buildResponse({ status: 500, json: () => ({ message: 'boom' }) }),
       );
-      const response = await fetchApiStream('/bad-stream');
-      expect((response as { status: number }).status).toBe(500);
+      await expect(fetchApiStream('/bad-stream')).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 500,
+        message: 'boom',
+      });
+    });
+
+    test('non-ok stream with unparseable body falls back to "Request failed"', async () => {
+      fetchMock.mockImplementationOnce(async () =>
+        buildResponse({
+          status: 503,
+          json: () => Promise.reject(new Error('not json')),
+        }),
+      );
+      await expect(fetchApiStream('/crash-stream')).rejects.toThrow('Request failed');
+    });
+
+    test('network error from fetch surfaces as ApiError with isNetworkError=true', async () => {
+      fetchMock.mockImplementationOnce(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      await expect(fetchApiStream('/down-stream')).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 0,
+        isNetworkError: true,
+      });
     });
   });
 });
