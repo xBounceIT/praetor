@@ -358,9 +358,12 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
         if (base?.entryId) {
           if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) {
+            // Use `edit.note` directly (not `|| base.note`) so a user can
+            // intentionally clear a previously-set note. `noteChanged` already
+            // gated us on a real change, including '' → 'x' and 'x' → ''.
             onUpdateEntry(base.entryId, {
               duration: newDuration,
-              notes: edit.note || weekNote || base.note,
+              notes: edit.note,
               task: meta.taskName,
               projectId: meta.projectId,
               clientId: meta.clientId,
