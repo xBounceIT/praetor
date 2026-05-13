@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
@@ -320,7 +320,8 @@ export const replaceItems = async (
   orderId: string,
   items: NewSupplierOrderItem[],
   exec: DbExecutor = db,
-): Promise<SupplierOrderItem[]> => {
-  await exec.delete(supplierSaleItems).where(eq(supplierSaleItems.saleId, orderId));
-  return insertItems(orderId, items, exec);
-};
+): Promise<SupplierOrderItem[]> =>
+  runAtomically(exec, async (tx) => {
+    await tx.delete(supplierSaleItems).where(eq(supplierSaleItems.saleId, orderId));
+    return insertItems(orderId, items, tx);
+  });

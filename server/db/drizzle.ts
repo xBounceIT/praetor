@@ -28,6 +28,15 @@ export type DbExecutor = PgDatabase<
 export const withDbTransaction = <T>(callback: (tx: DbExecutor) => Promise<T>): Promise<T> =>
   db.transaction((tx) => callback(tx as unknown as DbExecutor));
 
+// Run `cb` inside a transaction only when the caller has not already supplied one.
+// Repos call this in DELETE-then-INSERT paths so a failing INSERT rolls back the prior
+// DELETE on the default pool; when the caller passes their own `exec` (an open `tx` from
+// `withDbTransaction`), the existing scope is reused and nesting is avoided.
+export const runAtomically = <T>(
+  exec: DbExecutor,
+  cb: (tx: DbExecutor) => Promise<T>,
+): Promise<T> => (exec === db ? withDbTransaction(cb) : cb(exec));
+
 // `exec.execute(sql)` returns either `{ rows }` (real pg driver) or a bare array (some test
 // adapters). Normalize so callers always get `T[]`. Throws on an unrecognized shape so a
 // driver/adapter mismatch surfaces loudly instead of silently returning empty rows.

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { supplierQuoteItems, supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
@@ -336,7 +336,8 @@ export const replaceItems = async (
   quoteId: string,
   items: NewSupplierQuoteItem[],
   exec: DbExecutor = db,
-): Promise<SupplierQuoteItem[]> => {
-  await exec.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
-  return insertItems(quoteId, items, exec);
-};
+): Promise<SupplierQuoteItem[]> =>
+  runAtomically(exec, async (tx) => {
+    await tx.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
+    return insertItems(quoteId, items, tx);
+  });
