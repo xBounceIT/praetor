@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
@@ -25,6 +26,7 @@ const tasksRepoSnap = { ...realTasksRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
+const drizzleSnap = { ...realDrizzle };
 
 // Auth-middleware deps (real authenticateToken runs)
 const findAuthUserByIdMock = mock();
@@ -34,23 +36,28 @@ const getRolePermissionsMock = mock();
 // Route deps
 const findCostPerHourMock = mock();
 const findIdByProjectAndNameMock = mock();
+const listRecurringForUserMock = mock();
 const isUserManagedByMock = mock();
 const generalSettingsGetMock = mock();
 const entriesListAllMock = mock();
 const entriesListForUserMock = mock();
 const entriesListForManagerViewMock = mock();
 const entriesCreateMock = mock();
+const entriesCreateManyMock = mock();
 const entriesUpdateMock = mock();
 const entriesDeleteByIdMock = mock();
 const entriesBulkDeleteMock = mock();
 const entriesFindContextMock = mock();
 const entriesFindOwnerMock = mock();
+const entriesFindExistingRecurringKeysMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
 const projectsFindClientIdMock = mock();
+const projectsListNamesByIdsMock = mock();
 const isClientAssignedToUserMock = mock();
 const isProjectAssignedToUserMock = mock();
 const isTaskAssignedToUserMock = mock();
+const withDbTransactionMock = mock(async (cb: (tx: unknown) => unknown) => cb(undefined));
 
 let entriesRoutePlugin: FastifyPluginAsync;
 
@@ -75,11 +82,13 @@ beforeAll(async () => {
     listForUser: entriesListForUserMock,
     listForManagerView: entriesListForManagerViewMock,
     create: entriesCreateMock,
+    createMany: entriesCreateManyMock,
     update: entriesUpdateMock,
     deleteById: entriesDeleteByIdMock,
     bulkDelete: entriesBulkDeleteMock,
     findContext: entriesFindContextMock,
     findOwner: entriesFindOwnerMock,
+    findExistingRecurringKeys: entriesFindExistingRecurringKeysMock,
     decodeCursor: entriesDecodeCursorMock,
     encodeCursor: entriesEncodeCursorMock,
   }));
@@ -90,10 +99,16 @@ beforeAll(async () => {
   mock.module('../../repositories/tasksRepo.ts', () => ({
     ...tasksRepoSnap,
     findIdByProjectAndName: findIdByProjectAndNameMock,
+    listRecurringForUser: listRecurringForUserMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     findClientId: projectsFindClientIdMock,
+    listNamesByIds: projectsListNamesByIdsMock,
+  }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
   }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
@@ -120,6 +135,7 @@ afterAll(() => {
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
 
 const HAPPY_USER = {
@@ -164,22 +180,27 @@ const allMocks = [
   getRolePermissionsMock,
   findCostPerHourMock,
   findIdByProjectAndNameMock,
+  listRecurringForUserMock,
   isUserManagedByMock,
   generalSettingsGetMock,
   entriesListAllMock,
   entriesListForUserMock,
   entriesListForManagerViewMock,
   entriesCreateMock,
+  entriesCreateManyMock,
   entriesUpdateMock,
   entriesDeleteByIdMock,
   entriesBulkDeleteMock,
   entriesFindContextMock,
   entriesFindOwnerMock,
+  entriesFindExistingRecurringKeysMock,
   entriesDecodeCursorMock,
   projectsFindClientIdMock,
+  projectsListNamesByIdsMock,
   isClientAssignedToUserMock,
   isProjectAssignedToUserMock,
   isTaskAssignedToUserMock,
+  withDbTransactionMock,
 ];
 
 let testApp: FastifyInstance;
@@ -188,6 +209,11 @@ beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   // encodeCursor remains stable across tests
   entriesEncodeCursorMock.mockImplementation((c: unknown) => `enc:${JSON.stringify(c)}`);
+  // Pass-through transaction by default so service-level `withDbTransaction` invocations
+  // forward to the (mocked) repo without trying to open a real DB connection.
+  withDbTransactionMock.mockImplementation(
+    async (cb: (tx: unknown) => unknown) => await cb(undefined),
+  );
 
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
@@ -784,6 +810,376 @@ describe('DELETE /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Not authorized to delete this entry' });
+  });
+});
+
+describe('POST /api/entries/recurring/generate', () => {
+  const RECURRING_PERMS = [
+    'timesheets.tracker.view',
+    'timesheets.recurring.view',
+    'timesheets.recurring.create',
+  ];
+
+  // Sample template: a daily recurring task assigned to u1 with no end date.
+  const dailyTask = {
+    id: 't1',
+    name: 'Daily standup',
+    projectId: 'p1',
+    description: null,
+    isRecurring: true,
+    recurrencePattern: 'daily',
+    recurrenceStart: '2025-06-02', // Monday
+    recurrenceEnd: undefined,
+    recurrenceDuration: 0.5,
+    expectedEffort: undefined,
+    monthlyEffort: undefined,
+    revenue: undefined,
+    notes: undefined,
+    isDisabled: false,
+    createdAt: 1_700_000_000_000,
+    billingType: 'time_and_materials',
+    billingFrequency: 'monthly',
+  };
+
+  const weeklyTask = {
+    ...dailyTask,
+    id: 't2',
+    name: 'Weekly review',
+    recurrencePattern: 'weekly',
+    recurrenceStart: '2025-06-02', // Monday -> only Mondays match
+  };
+
+  const monthlyFirstMondayTask = {
+    ...dailyTask,
+    id: 't3',
+    name: 'Monthly kickoff',
+    recurrencePattern: 'monthly:first:1', // first Monday of the month
+    recurrenceStart: '2025-06-01',
+  };
+
+  const endedTask = {
+    ...dailyTask,
+    id: 't4',
+    name: 'Sunsetting task',
+    recurrencePattern: 'daily',
+    recurrenceStart: '2025-06-02',
+    recurrenceEnd: '2025-06-04', // Mon..Wed only
+  };
+
+  const happyProjectsMap = new Map([
+    ['p1', { projectName: 'Project One', clientId: 'c1', clientName: 'Client One' }],
+  ]);
+
+  const setupHappyPath = () => {
+    getRolePermissionsMock.mockResolvedValue(RECURRING_PERMS);
+    findCostPerHourMock.mockResolvedValue(40);
+    generalSettingsGetMock.mockResolvedValue({
+      treatSaturdayAsHoliday: true,
+      defaultLocation: 'remote',
+    });
+    listRecurringForUserMock.mockResolvedValue([dailyTask]);
+    projectsListNamesByIdsMock.mockResolvedValue(happyProjectsMap);
+    entriesFindExistingRecurringKeysMock.mockResolvedValue(new Set<string>());
+    entriesCreateManyMock.mockImplementation(async (rows: Array<Record<string, unknown>>) =>
+      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000 })),
+    );
+  };
+
+  test('200: generates a daily template across a Mon-Fri window', async () => {
+    setupHappyPath();
+
+    // Use 2025-06-09..2025-06-13 (Mon..Fri, no Italian holidays in this range).
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.generatedCount).toBe(5);
+    expect(body.skippedExistingCount).toBe(0);
+    expect(body.range).toEqual({ fromDate: '2025-06-09', toDate: '2025-06-13' });
+    expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
+
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(inserted.map((e) => e.date)).toEqual([
+      '2025-06-09',
+      '2025-06-10',
+      '2025-06-11',
+      '2025-06-12',
+      '2025-06-13',
+    ]);
+    for (const entry of inserted) {
+      expect(entry).toMatchObject({
+        userId: 'u1',
+        clientId: 'c1',
+        clientName: 'Client One',
+        projectId: 'p1',
+        projectName: 'Project One',
+        task: 'Daily standup',
+        taskId: 't1',
+        duration: 0.5,
+        hourlyCost: 40,
+        isPlaceholder: true,
+        location: 'remote',
+      });
+    }
+  });
+
+  test('200: skips Saturdays/Sundays and Italian holidays', async () => {
+    setupHappyPath();
+    // 2025-06-02 (Mon, Festa della Repubblica - Italian holiday) is skipped.
+    // 2025-06-07 (Sat) and 2025-06-08 (Sun) are skipped.
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-08' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    // Holiday on 06-02 (Repubblica), then Tue-Fri (06-03..06-06) = 4 days
+    expect(inserted.map((e) => e.date)).toEqual([
+      '2025-06-03',
+      '2025-06-04',
+      '2025-06-05',
+      '2025-06-06',
+    ]);
+  });
+
+  test('200: is idempotent - existing keys are skipped', async () => {
+    setupHappyPath();
+    // Pretend 06-10 and 06-11 already exist.
+    entriesFindExistingRecurringKeysMock.mockResolvedValue(
+      new Set(['2025-06-10|p1|Daily standup', '2025-06-11|p1|Daily standup']),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // 5 weekdays total, 2 existing -> 3 new
+    expect(body.generatedCount).toBe(3);
+    expect(body.skippedExistingCount).toBe(2);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(inserted.map((e) => e.date)).toEqual(['2025-06-09', '2025-06-12', '2025-06-13']);
+  });
+
+  test('200: weekly pattern only matches the start weekday', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([weeklyTask]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-15' }, // 2 Mondays
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    // Mondays in window: 06-02 (holiday, skipped), 06-09. 06-15 is Sunday.
+    expect(inserted.map((e) => e.date)).toEqual(['2025-06-09']);
+  });
+
+  test('200: monthly:first:1 only matches the first Monday', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([monthlyFirstMondayTask]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-01', toDate: '2025-08-31' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    // First Mondays of Jun/Jul/Aug 2025: 06-02 (Repubblica holiday -> skipped), 07-07, 08-04.
+    expect(inserted.map((e) => e.date)).toEqual(['2025-07-07', '2025-08-04']);
+  });
+
+  test('200: respects recurrenceEnd', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([endedTask]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-10' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    // recurrenceEnd is 2025-06-04. 06-02 is a holiday, so only 06-03 and 06-04 remain.
+    expect(inserted.map((e) => e.date)).toEqual(['2025-06-03', '2025-06-04']);
+  });
+
+  test('200: empty when no recurring templates exist', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-06' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      generated: [],
+      generatedCount: 0,
+      skippedExistingCount: 0,
+      range: { fromDate: '2025-06-02', toDate: '2025-06-06' },
+    });
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('400: fromDate after toDate', async () => {
+    setupHappyPath();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-10', toDate: '2025-06-02' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'fromDate must be on or before toDate' });
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('400: rejects an oversized window', async () => {
+    setupHappyPath();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2024-01-01', toDate: '2026-12-31' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/Date range too large/);
+  });
+
+  test('403: missing timesheets.recurring.create permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-06' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
+    expect(listRecurringForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403: cross-user generation without manager link or tracker_all.create', async () => {
+    getRolePermissionsMock.mockResolvedValue(RECURRING_PERMS);
+    isUserManagedByMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-02', toDate: '2025-06-06', userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Not authorized to generate entries for this user',
+    });
+    expect(listRecurringForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200: cross-user generation as manager of the target', async () => {
+    setupHappyPath();
+    isUserManagedByMock.mockResolvedValue(true);
+    listRecurringForUserMock.mockResolvedValue([dailyTask]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-03', toDate: '2025-06-03', userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listRecurringForUserMock).toHaveBeenCalledWith('u2');
+    expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(inserted[0].userId).toBe('u2');
+  });
+
+  test('400: invalid YYYY-MM-DD body is rejected by the schema layer', async () => {
+    setupHappyPath();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: 'not-a-date', toDate: '2025-06-06' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: re-running the same window is a no-op (idempotent end-to-end)', async () => {
+    setupHappyPath();
+
+    // First call - generate 5 entries.
+    const first = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' }, // Mon..Fri (no holidays)
+    });
+    expect(first.statusCode).toBe(200);
+    expect(JSON.parse(first.body).generatedCount).toBe(5);
+
+    // Second call - the keys repo now returns the previously inserted set.
+    entriesCreateManyMock.mockReset();
+    entriesCreateManyMock.mockImplementation(async (rows: Array<Record<string, unknown>>) =>
+      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000 })),
+    );
+    entriesFindExistingRecurringKeysMock.mockResolvedValue(
+      new Set([
+        '2025-06-09|p1|Daily standup',
+        '2025-06-10|p1|Daily standup',
+        '2025-06-11|p1|Daily standup',
+        '2025-06-12|p1|Daily standup',
+        '2025-06-13|p1|Daily standup',
+      ]),
+    );
+
+    const second = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+    expect(second.statusCode).toBe(200);
+    const body = JSON.parse(second.body);
+    expect(body.generatedCount).toBe(0);
+    expect(body.skippedExistingCount).toBe(5);
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
   });
 });
 

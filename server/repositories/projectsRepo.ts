@@ -150,6 +150,36 @@ export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<P
   return rows.map(mapRawRow);
 };
 
+/**
+ * Resolve project + client display tuples for a set of project ids in one query.
+ * Used by the recurring time-entry generator to populate the denormalized `client_name`
+ * / `project_name` columns on `time_entries` without N round-trips.
+ */
+export const listNamesByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<Map<string, { projectName: string; clientId: string; clientName: string }>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await executeRows<{
+    id: string;
+    name: string;
+    client_id: string;
+    client_name: string;
+  }>(
+    exec,
+    sql`SELECT p.id, p.name, p.client_id, c.name AS client_name
+          FROM projects p
+          INNER JOIN clients c ON c.id = p.client_id
+         WHERE p.id = ANY(${ids})`,
+  );
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { projectName: row.name, clientId: row.client_id, clientName: row.client_name },
+    ]),
+  );
+};
+
 export const findClientId = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ clientId: projects.clientId })

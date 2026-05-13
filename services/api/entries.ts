@@ -7,6 +7,13 @@ export type EntriesPage = {
   nextCursor: string | null;
 };
 
+export type GenerateRecurringResponse = {
+  generated: TimeEntry[];
+  generatedCount: number;
+  skippedExistingCount: number;
+  range: { fromDate: string; toDate: string };
+};
+
 export const entriesApi = {
   listPage: async (
     options: { userId?: string; cursor?: string | null; limit?: number } = {},
@@ -42,5 +49,21 @@ export const entriesApi = {
     if (options?.futureOnly) params.append('futureOnly', 'true');
     if (options?.placeholderOnly) params.append('placeholderOnly', 'true');
     return fetchApi(`/entries?${params.toString()}`, { method: 'DELETE' });
+  },
+
+  /**
+   * Materialize recurring task templates into placeholder time entries server-side.
+   * Idempotent: re-running with the same window does not create duplicates.
+   */
+  generateRecurring: async (input: {
+    fromDate: string;
+    toDate: string;
+    userId?: string;
+  }): Promise<GenerateRecurringResponse> => {
+    const result = await fetchApi<GenerateRecurringResponse>('/entries/recurring/generate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return { ...result, generated: result.generated.map(normalizeTimeEntry) };
   },
 };

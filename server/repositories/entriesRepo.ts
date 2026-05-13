@@ -1,4 +1,4 @@
-import { and, eq, gte, type SQL, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
@@ -209,6 +209,34 @@ export const decodeCursor = (raw: string): EntriesCursor | null => {
   }
 };
 
+/**
+ * Returns the set of `${date}|${projectId}|${task}` keys for entries owned by `userId`
+ * whose date falls in [fromDate, toDate] inclusive. Used by the recurring-entry generator
+ * to skip days that already have a matching entry (idempotent runs).
+ */
+export const findExistingRecurringKeys = async (
+  userId: string,
+  fromDate: string,
+  toDate: string,
+  exec: DbExecutor = db,
+): Promise<Set<string>> => {
+  const rows = await exec
+    .select({
+      date: timeEntries.date,
+      projectId: timeEntries.projectId,
+      task: timeEntries.task,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.date, fromDate),
+        lte(timeEntries.date, toDate),
+      ),
+    );
+  return new Set(rows.map((row) => `${row.date}|${row.projectId}|${row.task}`));
+};
+
 export const findOwner = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ userId: timeEntries.userId })
@@ -278,6 +306,39 @@ export const create = async (entry: NewEntry, exec: DbExecutor = db): Promise<Ti
     })
     .returning();
   return mapBuilderRow(row);
+};
+
+/**
+ * Bulk insert variant used by the recurring-entry generator. Returns the inserted rows in
+ * the same order they were supplied. Empty input is a no-op.
+ */
+export const createMany = async (
+  entries: NewEntry[],
+  exec: DbExecutor = db,
+): Promise<TimeEntry[]> => {
+  if (entries.length === 0) return [];
+  const rows = await exec
+    .insert(timeEntries)
+    .values(
+      entries.map((entry) => ({
+        id: entry.id,
+        userId: entry.userId,
+        date: entry.date,
+        clientId: entry.clientId,
+        clientName: entry.clientName,
+        projectId: entry.projectId,
+        projectName: entry.projectName,
+        task: entry.task,
+        taskId: entry.taskId,
+        notes: entry.notes,
+        duration: numericForDb(entry.duration),
+        hourlyCost: numericForDb(entry.hourlyCost),
+        isPlaceholder: entry.isPlaceholder,
+        location: entry.location,
+      })),
+    )
+    .returning();
+  return rows.map(mapBuilderRow);
 };
 
 export type EntryUpdate = {
