@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { registerMockCleanup } from '../../helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 
 type QuoteLike = { id: string; status: string; isExpired?: boolean; expirationDate?: string };
 type OfferLike = { id: string };
@@ -68,7 +68,7 @@ mock.module('../../../services/api', () => ({
   setAuthToken: () => {},
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 const { makeQuoteHandlers } = await import('../../../hooks/handlers/quoteHandlers');
 

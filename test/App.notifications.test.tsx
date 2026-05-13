@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { StrictMode, useCallback, useRef, useState } from 'react';
 import type { Notification } from '../types';
 import { ApiErrorStub } from './helpers/apiErrorStub';
-import { registerMockCleanup } from './helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from './helpers/mockCleanup.ts';
 
 /**
  * App.tsx's `handleDeleteNotification` is too tangled to mount the full tree
@@ -32,7 +32,7 @@ mock.module('../services/api', () => ({
   setAuthToken: () => {},
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 type NotificationsHookResult = {
   handleDelete: (id: string) => Promise<void>;

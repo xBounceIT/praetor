@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createPortal } from 'react-dom';
 import type { Client, Project, ProjectTask, Role, User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
-import { registerMockCleanup } from '../../helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -50,7 +50,7 @@ mock.module('../../../components/shared/DeleteConfirmModal', () => ({
       : null,
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 const TasksView = (await import('../../../components/projects/TasksView')).default;
 

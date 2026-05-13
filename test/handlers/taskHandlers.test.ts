@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
-import { registerMockCleanup } from '../helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 const apiMocks = {
   tasksUpdate: mock(
@@ -24,7 +24,7 @@ mock.module('../../services/api', () => ({
   setAuthToken: () => {},
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 const { makeTaskHandlers } = await import('../../hooks/handlers/taskHandlers');
 

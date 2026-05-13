@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { registerMockCleanup } from '../helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 // Mock the i18n module BEFORE importing the SUT, so the import binding picks up
 // our stub (mirrors the pattern in test/hooks/useAuth.test.ts).
@@ -11,7 +11,7 @@ mock.module('../../i18n', () => ({
   default: i18nMock,
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 const { applyLanguagePreference } = await import('../../utils/language');
 

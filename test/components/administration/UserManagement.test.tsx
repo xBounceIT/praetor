@@ -5,7 +5,7 @@ import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { THEME_STORAGE_KEY } from '../../../utils/theme';
 import { installI18nMock } from '../../helpers/i18n';
-import { registerMockCleanup } from '../../helpers/mockCleanup.ts';
+import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -20,7 +20,7 @@ mock.module('../../../services/api/users', () => ({
   usersApi: usersApiMock,
 }));
 
-registerMockCleanup();
+clearSpyStateAfterAll();
 
 const UserManagement = (await import('../../../components/administration/UserManagement')).default;
 
