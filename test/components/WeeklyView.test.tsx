@@ -14,15 +14,21 @@ const projects: Project[] = [];
 const projectTasks: ProjectTask[] = [];
 const entries: TimeEntry[] = [];
 
+const todayDateOnly = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+};
+
 const baseProps = {
   entries,
   clients,
   projects,
   projectTasks,
-  onAddBulkEntries: async () => {},
-  onDeleteEntry: () => {},
-  onUpdateEntry: () => {},
   viewingUserId: 'u-1',
+  selectedDate: todayDateOnly(),
+  onSelectedDateChange: () => {},
   treatSaturdayAsHoliday: false,
   dailyGoal: 8,
 };
