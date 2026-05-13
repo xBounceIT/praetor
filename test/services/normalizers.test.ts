@@ -775,6 +775,11 @@ describe('normalizeGeneralSettings', () => {
 });
 
 describe('normalizeInvoiceItem', () => {
+  test('keeps "unit" unitOfMeasure when set', () => {
+    const item = make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: 'unit' });
+    expect(normalizeInvoiceItem(item).unitOfMeasure).toBe('unit');
+  });
+
   test('keeps "hours" unitOfMeasure when set', () => {
     const item = make<InvoiceItem>(baseInvoiceItem, {
       unitOfMeasure: 'hours',
@@ -787,9 +792,33 @@ describe('normalizeInvoiceItem', () => {
     expect(result.unitPrice).toBe(50);
   });
 
-  test('falls back to "unit" for unknown unitOfMeasure', () => {
+  test('falls back to "unit" for unknown unitOfMeasure (kg)', () => {
     const item = make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: 'kg' });
     expect(normalizeInvoiceItem(item).unitOfMeasure).toBe('unit');
+  });
+
+  test('falls back to "unit" for unknown unitOfMeasure (days)', () => {
+    // Regression: the old `=== 'hours' ? 'hours' : 'unit'` pattern would have done the
+    // same thing here. The new allowlist still rejects 'days' because it's not in the
+    // server enum — but the allowlist makes that decision explicit instead of
+    // silently flattening every non-'hours' value, so adding new units later is a
+    // single-line change.
+    const item = make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: 'days' });
+    expect(normalizeInvoiceItem(item).unitOfMeasure).toBe('unit');
+  });
+
+  test('falls back to "unit" for missing/null/undefined unitOfMeasure', () => {
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: undefined }))
+        .unitOfMeasure,
+    ).toBe('unit');
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: null }))
+        .unitOfMeasure,
+    ).toBe('unit');
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: '' })).unitOfMeasure,
+    ).toBe('unit');
   });
 
   test('defaults missing numeric fields to 0', () => {

@@ -34,6 +34,8 @@ const baseRow = {
   number_of_employees: '10-50',
   revenue: '1M-5M',
   fiscal_code: 'IT12345',
+  vat_number: 'IT01234567890',
+  tax_code: 'RSSMRO80A01H501Z',
   office_count_range: '1',
   total_sent_quotes: '500',
   total_accepted_orders: '1500.5',
@@ -45,8 +47,8 @@ const baseRow = {
 //
 // id, name, is_disabled, created_at, type, contact_name, client_code, email, phone,
 // address, description, ateco_code, website, sector, number_of_employees, revenue,
-// fiscal_code, office_count_range, contacts, address_country, address_state, address_cap,
-// address_province, address_civic_number, address_line
+// fiscal_code, vat_number, tax_code, office_count_range, contacts, address_country,
+// address_state, address_cap, address_province, address_civic_number, address_line
 const POSITIONAL_CLIENT_ROW: readonly unknown[] = [
   'c-1',
   'Acme',
@@ -65,6 +67,8 @@ const POSITIONAL_CLIENT_ROW: readonly unknown[] = [
   '10-50',
   '1M-5M',
   'IT12345',
+  'IT01234567890', // vat_number
+  'RSSMRO80A01H501Z', // tax_code
   '1',
   [{ fullName: 'Alice', email: 'a@x.com', phone: '555', role: 'CEO' }],
   'IT',
@@ -121,10 +125,22 @@ describe('mapClientRow', () => {
     expect(result.totalAcceptedOrders).toBeUndefined();
   });
 
-  test('mirrors fiscalCode into vatNumber and taxCode', () => {
+  test('sources vatNumber and taxCode from their own columns, not from fiscal_code', () => {
     const result = clientsRepo.mapClientRow(baseRow);
-    expect(result.vatNumber).toBe('IT12345');
-    expect(result.taxCode).toBe('IT12345');
+    expect(result.fiscalCode).toBe('IT12345');
+    expect(result.vatNumber).toBe('IT01234567890');
+    expect(result.taxCode).toBe('RSSMRO80A01H501Z');
+  });
+
+  test('returns null vatNumber/taxCode when their columns are NULL (no fallback to fiscal_code)', () => {
+    const result = clientsRepo.mapClientRow({
+      ...baseRow,
+      vat_number: null,
+      tax_code: null,
+    });
+    expect(result.fiscalCode).toBe('IT12345');
+    expect(result.vatNumber).toBeNull();
+    expect(result.taxCode).toBeNull();
   });
 
   test('coerces missing string columns to null (no "undefined" leakage)', () => {
@@ -191,6 +207,19 @@ describe('list', () => {
     expect(exec.calls[0].sql).toContain('uc.user_id =');
     expect(exec.calls[0].params).toContain('u-1');
     expect(result[0].totalSentQuotes).toBeUndefined();
+  });
+
+  test('scoped list selects vat_number and tax_code (no null regression for non-admin users)', async () => {
+    // Regression: the scoped branch of list() enumerates columns explicitly (not SELECT c.*),
+    // so adding vat_number/tax_code to the schema also requires adding them to this SELECT.
+    // Without them, mapClientRow would always read `undefined` and return null for both
+    // identifiers in /api/clients responses for non-admin users.
+    exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
+    const result = await clientsRepo.list({ canViewAllClients: false, userId: 'u-1' }, testDb);
+    expect(exec.calls[0].sql).toContain('c.vat_number');
+    expect(exec.calls[0].sql).toContain('c.tax_code');
+    expect(result[0].vatNumber).toBe('IT01234567890');
+    expect(result[0].taxCode).toBe('RSSMRO80A01H501Z');
   });
 });
 
@@ -297,6 +326,8 @@ describe('create', () => {
         numberOfEmployees: null,
         revenue: null,
         fiscalCode: 'IT12345',
+        vatNumber: 'IT01234567890',
+        taxCode: 'RSSMRO80A01H501Z',
         officeCountRange: null,
       },
       testDb,
@@ -305,9 +336,13 @@ describe('create', () => {
     expect(exec.calls[0].params).toContain('c-1');
     expect(exec.calls[0].params).toContain(false);
     expect(exec.calls[0].params).toContain('IT12345');
+    expect(exec.calls[0].params).toContain('IT01234567890');
+    expect(exec.calls[0].params).toContain('RSSMRO80A01H501Z');
     // Drizzle's jsonb encoder serializes JS arrays to JSON strings before passing to pg.
     expect(exec.calls[0].params).toContain('[{"fullName":"Alice"}]');
     expect(result.id).toBe('c-1');
+    expect(result.vatNumber).toBe('IT01234567890');
+    expect(result.taxCode).toBe('RSSMRO80A01H501Z');
   });
 });
 
@@ -333,6 +368,10 @@ describe('update', () => {
         atecoCode: null,
         website: null,
         fiscalCode: null,
+        vatNumber: 'IT99999',
+        vatNumberProvided: true,
+        taxCode: null,
+        taxCodeProvided: false,
         contactName: 'X',
         contactNameProvided: true,
         email: null,
@@ -352,11 +391,13 @@ describe('update', () => {
     );
     expect(exec.calls[0].sql).toContain('CASE WHEN');
     expect(exec.calls[0].sql).toContain('COALESCE');
-    expect(exec.calls[0].params).toHaveLength(31);
+    expect(exec.calls[0].sql).toContain('vat_number');
+    expect(exec.calls[0].sql).toContain('tax_code');
     expect(exec.calls[0].params).toContain('New'); // name
     expect(exec.calls[0].params).toContain('c-1'); // where id
     expect(exec.calls[0].params).toContain('X'); // contactName
-    expect(exec.calls[0].params).toContain(true); // contactNameProvided / sectorProvided
+    expect(exec.calls[0].params).toContain('IT99999'); // vatNumber
+    expect(exec.calls[0].params).toContain(true); // contactNameProvided / sectorProvided / vatNumberProvided
     expect(exec.calls[0].params).toContain('tech');
   });
 
@@ -379,6 +420,10 @@ describe('update', () => {
       atecoCode: null,
       website: null,
       fiscalCode: null,
+      vatNumber: null,
+      vatNumberProvided: false,
+      taxCode: null,
+      taxCodeProvided: false,
       contactName: null,
       contactNameProvided: false,
       email: null,
@@ -419,6 +464,10 @@ describe('update', () => {
         atecoCode: null,
         website: null,
         fiscalCode: null,
+        vatNumber: null,
+        vatNumberProvided: false,
+        taxCode: null,
+        taxCodeProvided: false,
         contactName: null,
         contactNameProvided: false,
         email: null,
