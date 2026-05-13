@@ -26,7 +26,7 @@ import {
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -119,27 +119,17 @@ const userIdsSchema = {
   required: ['userIds'],
 } as const;
 
-const canAccessProject = (
-  request: FastifyRequest,
-  projectId: string,
-  allScopePermission = 'projects.manage_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
-};
+// Pass forwarding arrows rather than direct references so test `mock.module` replacements
+// of `userAssignmentsRepo.*` resolve at call time, not module-load time.
+const canAccessProject = makeAccessChecker(
+  (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
+  'projects.manage_all.view',
+);
 
-const canAccessTask = (
-  request: FastifyRequest,
-  taskId: string,
-  allScopePermission = 'projects.tasks_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isTaskAssignedToUser(userId, taskId);
-};
+const canAccessTask = makeAccessChecker(
+  (userId, taskId) => userAssignmentsRepo.isTaskAssignedToUser(userId, taskId),
+  'projects.tasks_all.view',
+);
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks

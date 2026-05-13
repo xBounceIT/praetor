@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as clientsRepo from '../../repositories/clientsRepo.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
@@ -453,5 +454,38 @@ describe('deleteById', () => {
   test('returns null when no row deleted', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientsRepo.deleteById('c-x', testDb)).toBeNull();
+  });
+});
+
+describe('classifyUniqueViolation', () => {
+  test('returns "fiscal_code" for idx_clients_fiscal_code_unique', () => {
+    expect(
+      clientsRepo.classifyUniqueViolation(makeDbError('23505', 'idx_clients_fiscal_code_unique')),
+    ).toBe('fiscal_code');
+  });
+
+  test('returns "client_code" for idx_clients_client_code_unique', () => {
+    expect(
+      clientsRepo.classifyUniqueViolation(makeDbError('23505', 'idx_clients_client_code_unique')),
+    ).toBe('client_code');
+  });
+
+  test('falls back to detail-text match when constraint name is missing', () => {
+    const err = makeDbError('23505');
+    err.detail = 'Key (client_code)=(AC-1) already exists.';
+    expect(clientsRepo.classifyUniqueViolation(err)).toBe('client_code');
+  });
+
+  test('catches all other 23505 violations as "fiscal_code" (legacy fallback)', () => {
+    expect(clientsRepo.classifyUniqueViolation(makeDbError('23505', 'some_other_unique'))).toBe(
+      'fiscal_code',
+    );
+  });
+
+  test('returns null when the error is not a unique violation', () => {
+    expect(clientsRepo.classifyUniqueViolation(makeDbError('23503'))).toBeNull();
+    expect(clientsRepo.classifyUniqueViolation(new Error('boom'))).toBeNull();
+    expect(clientsRepo.classifyUniqueViolation(null)).toBeNull();
+    expect(clientsRepo.classifyUniqueViolation(undefined)).toBeNull();
   });
 });

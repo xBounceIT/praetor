@@ -11,9 +11,9 @@ import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -307,15 +307,18 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
-const canAccessClient = (
-  request: FastifyRequest,
-  clientId: string,
-  allScopePermission = 'crm.clients_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
+// Pass a forwarding arrow rather than a direct reference so test `mock.module` replacements
+// of `userAssignmentsRepo.*` resolve at call time, not module-load time.
+const canAccessClient = makeAccessChecker(
+  (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
+  'crm.clients_all.view',
+);
+
+const handleClientUniqueViolation = (err: unknown, reply: FastifyReply): FastifyReply | null => {
+  const kind = clientsRepo.classifyUniqueViolation(err);
+  if (kind === 'client_code') return badRequest(reply, 'Client ID already exists');
+  if (kind === 'fiscal_code') return badRequest(reply, 'Fiscal code already exists');
+  return null;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -571,19 +574,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(client);
       } catch (err) {
-        const dup = getUniqueViolation(err);
-        if (dup) {
-          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
-            return badRequest(reply, 'Fiscal code already exists');
-          }
-          if (dup.constraint === 'idx_clients_client_code_unique') {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          if (dup.detail?.includes('client_code')) {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          return badRequest(reply, 'Fiscal code already exists');
-        }
+        const handled = handleClientUniqueViolation(err, reply);
+        if (handled) return handled;
         throw err;
       }
     },
@@ -821,19 +813,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return client;
       } catch (err) {
-        const dup = getUniqueViolation(err);
-        if (dup) {
-          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
-            return badRequest(reply, 'Fiscal code already exists');
-          }
-          if (dup.constraint === 'idx_clients_client_code_unique') {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          if (dup.detail?.includes('client_code')) {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          return badRequest(reply, 'Fiscal code already exists');
-        }
+        const handled = handleClientUniqueViolation(err, reply);
+        if (handled) return handled;
         throw err;
       }
     },

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import {
   ADMIN_BASE_PERMISSIONS,
   ADMINISTRATION_PERMISSIONS,
@@ -12,6 +12,7 @@ import {
   hasScopedActionPermission,
   isPermissionKnown,
   isTopManagerOnlyPermission,
+  makeAccessChecker,
   normalizePermission,
   PERMISSION_DEFINITIONS,
   requestHasPermission,
@@ -226,6 +227,76 @@ describe('hasPermission', () => {
 
   test('returns false for empty array', () => {
     expect(hasPermission([], 'crm.clients.view')).toBe(false);
+  });
+});
+
+describe('makeAccessChecker', () => {
+  const ENTITY_ID = 'entity-1';
+  const DEFAULT_SCOPE = 'crm.clients_all.view';
+
+  test('short-circuits true when the request has the default *_all scope permission', async () => {
+    const repoFn = mock(async () => false);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { id: 'u1', permissions: [DEFAULT_SCOPE] } };
+    expect(await canAccess(request, ENTITY_ID)).toBe(true);
+    expect(repoFn).not.toHaveBeenCalled();
+  });
+
+  test('short-circuits true when the request has a caller-supplied scope override', async () => {
+    const repoFn = mock(async () => false);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { id: 'u1', permissions: ['crm.clients_all.delete'] } };
+    // Caller asked us to gate on the *.delete variant rather than the default *.view.
+    expect(await canAccess(request, ENTITY_ID, 'crm.clients_all.delete')).toBe(true);
+    expect(repoFn).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the repo lookup when the request lacks the *_all scope permission', async () => {
+    const repoFn = mock(async () => true);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { id: 'u1', permissions: ['crm.clients.view'] } };
+    expect(await canAccess(request, ENTITY_ID)).toBe(true);
+    expect(repoFn).toHaveBeenCalledTimes(1);
+    expect(repoFn).toHaveBeenCalledWith('u1', ENTITY_ID);
+  });
+
+  test('returns the repo verdict — false when the user is not assigned to the entity', async () => {
+    const repoFn = mock(async () => false);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { id: 'u1', permissions: ['crm.clients.view'] } };
+    expect(await canAccess(request, ENTITY_ID)).toBe(false);
+    expect(repoFn).toHaveBeenCalledWith('u1', ENTITY_ID);
+  });
+
+  test('returns false without hitting the repo when the request has no user', async () => {
+    const repoFn = mock(async () => true);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    expect(await canAccess({}, ENTITY_ID)).toBe(false);
+    expect(repoFn).not.toHaveBeenCalled();
+  });
+
+  test('returns false without hitting the repo when the user has no id', async () => {
+    const repoFn = mock(async () => true);
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { permissions: ['crm.clients.view'] } };
+    expect(await canAccess(request, ENTITY_ID)).toBe(false);
+    expect(repoFn).not.toHaveBeenCalled();
+  });
+
+  test('propagates repo errors to the caller', async () => {
+    const repoFn = mock(async () => {
+      throw new Error('repo boom');
+    });
+    const canAccess = makeAccessChecker(repoFn, DEFAULT_SCOPE);
+
+    const request = { user: { id: 'u1', permissions: ['crm.clients.view'] } };
+    await expect(canAccess(request, ENTITY_ID)).rejects.toThrow('repo boom');
   });
 });
 

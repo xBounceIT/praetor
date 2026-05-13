@@ -1,6 +1,7 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { clients } from '../db/schema/clients.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export type ClientContact = {
@@ -40,6 +41,19 @@ export type Client = {
   vatNumber: string | null;
   taxCode: string | null;
   createdAt: number | undefined;
+};
+
+// Classify a thrown error from a clients insert/update as a known unique-constraint violation
+// so callers can surface a domain-level message without coupling to raw Postgres index names.
+export type ClientUniqueViolationKind = 'fiscal_code' | 'client_code';
+
+export const classifyUniqueViolation = (err: unknown): ClientUniqueViolationKind | null => {
+  const dup = getUniqueViolation(err);
+  if (!dup) return null;
+  if (dup.constraint === 'idx_clients_client_code_unique') return 'client_code';
+  if (dup.constraint === 'idx_clients_fiscal_code_unique') return 'fiscal_code';
+  if (dup.detail?.includes('client_code')) return 'client_code';
+  return 'fiscal_code';
 };
 
 const parseContactsFromDb = (value: unknown): ClientContact[] => {

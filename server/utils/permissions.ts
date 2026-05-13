@@ -266,3 +266,28 @@ export const requestHasPermission = (
   request: { user?: { permissions?: string[] } },
   permission: Permission | string,
 ) => !!request.user?.permissions?.includes(permission);
+
+// Duck-typed shape the access checker reads off the Fastify request. Kept local so this module
+// doesn't pull in `fastify` and create an import cycle.
+type RequestWithUser = { user?: { id?: string; permissions?: string[] } };
+
+type AssignmentCheck = (userId: string, entityId: string) => Promise<boolean>;
+
+// Build a request-scoped access checker that grants access either via the wide "*_all" scope
+// permission or via an explicit per-entity assignment lookup. Lets routes collapse the
+// "scope-permission OR repo lookup" pattern to a single line.
+export const makeAccessChecker = (
+  repoFn: AssignmentCheck,
+  defaultAllScopePermission: Permission | string,
+) => {
+  return (
+    request: RequestWithUser,
+    entityId: string,
+    allScopePermission: Permission | string = defaultAllScopePermission,
+  ): Promise<boolean> => {
+    if (requestHasPermission(request, allScopePermission)) return Promise.resolve(true);
+    const userId = request.user?.id;
+    if (!userId) return Promise.resolve(false);
+    return repoFn(userId, entityId);
+  };
+};
