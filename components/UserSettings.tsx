@@ -80,7 +80,8 @@ const THEME_OPTION_META: Record<
     swatchVariant: 'default',
   },
   dark: {
-    swatchClassName: 'bg-zinc-900 shadow-sm flex items-center justify-center text-white',
+    swatchClassName:
+      'bg-zinc-900 border border-zinc-700 shadow-sm flex items-center justify-center text-white',
     Icon: Moon,
     swatchVariant: 'default',
   },
