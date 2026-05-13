@@ -5,6 +5,7 @@ declare module 'fastify' {
     auth?: {
       userId: string;
       sessionStart?: number;
+      sessionVersion?: number;
       source?: 'session' | 'personalAccessToken';
     };
     user?: {

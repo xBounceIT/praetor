@@ -72,6 +72,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const SETTINGS_WITH_KEYS = {

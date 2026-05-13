@@ -126,6 +126,8 @@ export function useAuth(opts: UseAuthOptions = {}) {
   );
 
   const logout = useCallback((reason?: 'inactivity') => {
+    // Best-effort: clear local state regardless of server reachability.
+    api.auth.logout().catch(() => {});
     setAuthToken(null);
     setCurrentUser(null);
     const finalReason = reason ?? null;

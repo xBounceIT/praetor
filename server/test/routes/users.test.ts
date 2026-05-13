@@ -208,6 +208,7 @@ const ADMIN_USER = {
   role: 'admin',
   avatarInitials: 'AA',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const MANAGER_USER = {
@@ -217,6 +218,7 @@ const MANAGER_USER = {
   role: 'manager',
   avatarInitials: 'MM',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const REGULAR_USER = {
@@ -226,6 +228,7 @@ const REGULAR_USER = {
   role: 'user',
   avatarInitials: 'UU',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 // Permissions: cover everything users.ts checks for (admin-equivalent)

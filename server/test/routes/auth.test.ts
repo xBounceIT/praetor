@@ -38,6 +38,7 @@ const markPersonalAccessTokenUsedMock = mock();
 // Auth route deps
 const findLoginUserByUsernameMock = mock();
 const findLoginUserByIdMock = mock();
+const bumpSessionVersionMock = mock();
 const listAvailableRolesForUserMock = mock();
 const logAuditMock = mock(async () => undefined);
 
@@ -57,6 +58,7 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     findLoginUserByUsername: findLoginUserByUsernameMock,
     findLoginUserById: findLoginUserByIdMock,
+    bumpSessionVersion: bumpSessionVersionMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -114,6 +116,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const LOGIN_USER = {
@@ -139,6 +142,7 @@ const allMocks = [
   markPersonalAccessTokenUsedMock,
   findLoginUserByUsernameMock,
   findLoginUserByIdMock,
+  bumpSessionVersionMock,
   listAvailableRolesForUserMock,
   logAuditMock,
   bcryptCompareMock,
@@ -166,6 +170,7 @@ beforeEach(async () => {
     lastUsedAt: null,
   });
   markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
+  bumpSessionVersionMock.mockResolvedValue(undefined);
   listAvailableRolesForUserMock.mockResolvedValue(HAPPY_ROLES);
   logAuditMock.mockImplementation(async () => undefined);
 
@@ -691,5 +696,62 @@ describe('POST /api/auth/switch-role', () => {
       payload: { roleId: 'admin' },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('POST /api/auth/logout', () => {
+  test('401 when no token is provided', async () => {
+    const res = await testApp.inject({ method: 'POST', url: '/api/auth/logout' });
+    expect(res.statusCode).toBe(401);
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+  });
+
+  test('204 happy path: bumps session_version and audits user.logout', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: authHeader('u1'),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(bumpSessionVersionMock).toHaveBeenCalledTimes(1);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.logout',
+        entityType: 'user',
+        entityId: 'u1',
+      }),
+    );
+  });
+
+  test('subsequent request with the old token (stale sessionVersion) is rejected', async () => {
+    // First call bumps to v2 (mocked default). Simulate the DB now reflecting v2.
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, sessionVersion: 2 });
+    // The old token was signed with sessionVersion: 1.
+    const oldToken = signToken({ userId: 'u1', sessionVersion: 1 });
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { authorization: `Bearer ${oldToken}` },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Session revoked',
+      errorCode: 'session_revoked',
+    });
+  });
+
+  test('403 when called with a personal access token', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: { authorization: 'Bearer praetor_pat_valid-token' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Session authentication required' });
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
   });
 });

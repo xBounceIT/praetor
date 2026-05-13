@@ -215,6 +215,7 @@ export const resolveExternalIdentity = async (
           role: primaryRole,
           avatarInitials,
           isDisabled: false,
+          sessionVersion: 1,
           passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
           employeeType: 'app_user',
           authMethod: input.protocol,
@@ -266,6 +267,7 @@ export const resolveExternalIdentity = async (
       role: primaryRole,
       avatarInitials: user.avatarInitials,
       isDisabled: user.isDisabled,
+      sessionVersion: user.sessionVersion,
       wasCreated,
       wasBound,
     };

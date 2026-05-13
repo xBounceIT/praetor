@@ -94,6 +94,7 @@ const ADMIN_USER = {
   role: 'admin',
   avatarInitials: 'AA',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const MANAGER_USER = {
@@ -103,6 +104,7 @@ const MANAGER_USER = {
   role: 'manager',
   avatarInitials: 'MM',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const USER_USER = {
@@ -112,6 +114,7 @@ const USER_USER = {
   role: 'user',
   avatarInitials: 'UU',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 // Full admin permission set

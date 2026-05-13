@@ -7,6 +7,7 @@ const apiMocks = {
   authSwitchRole: mock(
     (_roleId: string): Promise<unknown> => Promise.resolve({ user: { id: 'u1' }, token: 't1' }),
   ),
+  authLogout: mock((): Promise<void> => Promise.resolve()),
   settingsGet: mock(
     (): Promise<unknown> => Promise.resolve({ fullName: '', email: '', language: 'auto' }),
   ),
@@ -27,6 +28,7 @@ mock.module('../../services/api', () => ({
     auth: {
       me: () => apiMocks.authMe(),
       switchRole: (roleId: string) => apiMocks.authSwitchRole(roleId),
+      logout: () => apiMocks.authLogout(),
     },
     settings: {
       get: () => apiMocks.settingsGet(),
@@ -48,6 +50,7 @@ describe('useAuth', () => {
     tokenStore.token = null;
     apiMocks.authMe.mockReset();
     apiMocks.authSwitchRole.mockReset();
+    apiMocks.authLogout.mockReset();
     apiMocks.settingsGet.mockReset();
     setAuthTokenMock.mockReset();
     getAuthTokenMock.mockReset();
@@ -57,6 +60,7 @@ describe('useAuth', () => {
     apiMocks.authSwitchRole.mockImplementation((_roleId: string) =>
       Promise.resolve({ user: { id: 'u2', name: 'switched' }, token: 'new-token' }),
     );
+    apiMocks.authLogout.mockImplementation(() => Promise.resolve());
     apiMocks.settingsGet.mockImplementation(() =>
       Promise.resolve({ fullName: 'F', email: 'e@e', language: 'auto' }),
     );

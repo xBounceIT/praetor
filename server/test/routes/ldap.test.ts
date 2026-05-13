@@ -90,6 +90,7 @@ const HAPPY_USER = {
   role: 'admin',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const BASE_CONFIG: realLdapRepo.LdapConfig = realLdapRepo.DEFAULT_CONFIG;

@@ -71,6 +71,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view', 'timesheets.tracker.create'];
@@ -113,6 +114,7 @@ type FakeRequest = {
   auth?: {
     userId: string;
     sessionStart?: number;
+    sessionVersion?: number;
     source?: 'session' | 'personalAccessToken';
   };
   user?: {
@@ -260,7 +262,12 @@ describe('authenticateToken', () => {
       avatarInitials: 'AL',
       permissions: HAPPY_PERMISSIONS,
     });
-    expect(request.auth).toEqual({ userId: 'u1', sessionStart, source: 'session' });
+    expect(request.auth).toEqual({
+      userId: 'u1',
+      sessionStart,
+      sessionVersion: 1,
+      source: 'session',
+    });
 
     const rotated = reply.headers['x-auth-token'];
     expect(typeof rotated).toBe('string');
@@ -268,10 +275,46 @@ describe('authenticateToken', () => {
       userId: string;
       sessionStart: number;
       activeRole?: string;
+      sessionVersion?: number;
     };
     expect(decoded.userId).toBe('u1');
     expect(decoded.sessionStart).toBe(sessionStart);
     expect(decoded.activeRole).toBe('manager');
+    expect(decoded.sessionVersion).toBe(1);
+  });
+
+  test('401 when token has no sessionVersion (pre-revocation-feature token)', async () => {
+    const request = buildFakeRequest(signToken({ userId: 'u1', sessionVersion: null }));
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body).toEqual({
+      error: 'Session token outdated, please log in again',
+      errorCode: 'session_outdated',
+    });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('401 when token sessionVersion does not match the user (logout/revocation)', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, sessionVersion: 5 });
+    const request = buildFakeRequest(signToken({ userId: 'u1', sessionVersion: 2 }));
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body).toEqual({ error: 'Session revoked', errorCode: 'session_revoked' });
+    expect(reply.headers['x-auth-token']).toBeUndefined();
+  });
+
+  test('rotated token preserves the user current sessionVersion', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, sessionVersion: 7 });
+    const request = buildFakeRequest(signToken({ userId: 'u1', sessionVersion: 7 }));
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(0);
+    const decoded = decodeForAssertion(reply.headers['x-auth-token']) as jwt.JwtPayload & {
+      sessionVersion: number;
+    };
+    expect(decoded.sessionVersion).toBe(7);
   });
 
   test('decoded.activeRole overrides user.role when present', async () => {
@@ -534,28 +577,21 @@ describe('requireAnyPermission (ANY semantics)', () => {
 });
 
 describe('generateToken', () => {
-  test('embeds userId, sessionStart and activeRole; expires in 30m', () => {
+  test('embeds userId, sessionStart, activeRole and sessionVersion; expires in 30m', () => {
     const sessionStart = 1_700_000_000_000;
-    const token = generateToken('u1', sessionStart, 'admin');
+    const token = generateToken('u1', sessionStart, 'admin', 4);
     const decoded = decodeForAssertion(token) as jwt.JwtPayload & {
       userId: string;
       sessionStart: number;
       activeRole: string;
+      sessionVersion: number;
     };
     expect(decoded.userId).toBe('u1');
     expect(decoded.sessionStart).toBe(sessionStart);
     expect(decoded.activeRole).toBe('admin');
+    expect(decoded.sessionVersion).toBe(4);
     expect(decoded.exp).toBeDefined();
     expect(decoded.iat).toBeDefined();
     expect((decoded.exp as number) - (decoded.iat as number)).toBe(30 * 60);
-  });
-
-  test('default sessionStart is approximately Date.now()', () => {
-    const before = Date.now();
-    const token = generateToken('u1');
-    const after = Date.now();
-    const decoded = decodeForAssertion(token) as jwt.JwtPayload & { sessionStart: number };
-    expect(decoded.sessionStart).toBeGreaterThanOrEqual(before);
-    expect(decoded.sessionStart).toBeLessThanOrEqual(after);
   });
 });

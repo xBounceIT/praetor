@@ -117,6 +117,7 @@ const HAPPY_USER = {
   role: 'user',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const HAPPY_SETTINGS = {
