@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
@@ -19,6 +20,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const projectsRepoSnap = { ...realProjectsRepo };
+const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
@@ -42,6 +44,9 @@ const clearNonTopManagerAssignmentsMock = mock();
 const addManualAssignmentsMock = mock();
 const ensureClientCascadeAssignmentsMock = mock();
 const removeClientCascadeForUsersIfUnusedMock = mock();
+
+// clientsOrdersRepo mocks
+const findOrderClientIdByIdMock = mock();
 
 // userAssignmentsRepo mocks
 const assignClientToUserMock = mock(async () => undefined);
@@ -88,6 +93,10 @@ beforeAll(async () => {
     ensureClientCascadeAssignments: ensureClientCascadeAssignmentsMock,
     removeClientCascadeForUsersIfUnused: removeClientCascadeForUsersIfUnusedMock,
   }));
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
+    ...clientsOrdersRepoSnap,
+    findClientIdById: findOrderClientIdByIdMock,
+  }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
     assignClientToUser: assignClientToUserMock,
@@ -115,6 +124,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -171,6 +181,7 @@ const allMocks = [
   addManualAssignmentsMock,
   ensureClientCascadeAssignmentsMock,
   removeClientCascadeForUsersIfUnusedMock,
+  findOrderClientIdByIdMock,
   assignClientToUserMock,
   assignProjectToUserMock,
   assignClientToTopManagersMock,
@@ -196,6 +207,9 @@ beforeEach(async () => {
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
+  // Default: order lookups return null (not in DB) so the consistency check is a no-op
+  // and the real FK violation surfaces from the repo path under test.
+  findOrderClientIdByIdMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -305,6 +319,38 @@ describe('POST /api/projects', () => {
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ color: '#3b82f6', orderId: null, description: null }),
     );
+  });
+
+  test('400: orderId belonging to a different client is rejected', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-other');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: 'co-foreign' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201: orderId belonging to the same client is allowed', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: 'co-same' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: 'co-same' }));
   });
 
   test('201: creates project with orderId omitted (orderId stored as null)', async () => {
@@ -535,8 +581,9 @@ describe('PUT /api/projects/:id', () => {
     );
   });
 
-  test('200: sets orderId when provided', async () => {
+  test('200: sets orderId when provided (consistent client)', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-9' });
 
     const res = await testApp.inject({
@@ -552,6 +599,24 @@ describe('PUT /api/projects/:id', () => {
       expect.objectContaining({ orderId: 'co-9' }),
       undefined,
     );
+  });
+
+  test('400: orderId belonging to a different client is rejected on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-other');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-foreign' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('200: clears orderId when null is sent', async () => {

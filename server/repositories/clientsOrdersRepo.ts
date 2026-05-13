@@ -94,6 +94,14 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
+export const findClientIdById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec.select({ clientId: sales.clientId }).from(sales).where(eq(sales.id, id));
+  return rows[0]?.clientId ?? null;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,

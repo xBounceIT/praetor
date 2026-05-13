@@ -6,6 +6,7 @@ import {
   requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import {
@@ -97,6 +98,7 @@ const projectUpdateBodySchema = {
 } as const;
 
 class PermissionError extends Error {}
+class OrderClientMismatchError extends Error {}
 
 const canAccessClient = (
   request: FastifyRequest,
@@ -215,6 +217,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const colorResult = validateHexColor(color, 'color');
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
         projectColor = colorResult.value;
+      }
+
+      if (orderId) {
+        const orderClientId = await clientsOrdersRepo.findClientIdById(orderId);
+        if (orderClientId !== null && orderClientId !== clientIdResult.value) {
+          return badRequest(reply, 'orderId does not belong to the specified clientId');
+        }
       }
 
       try {
@@ -405,6 +414,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
             : [];
 
+          const orderIdPatch = orderId === undefined ? undefined : orderId || null;
+          if (typeof orderIdPatch === 'string') {
+            const orderClientId = await clientsOrdersRepo.findClientIdById(orderIdPatch, tx);
+            if (orderClientId !== null && orderClientId !== requestedClientId) {
+              throw new OrderClientMismatchError(
+                'orderId does not belong to the specified clientId',
+              );
+            }
+          }
+
           const updated = await projectsRepo.update(
             idResult.value,
             {
@@ -413,7 +432,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               color: normalizedColor || undefined,
               description: description || undefined,
               isDisabled,
-              orderId: orderId === undefined ? undefined : orderId || null,
+              orderId: orderIdPatch,
               billingType: billingTypeResult.value ?? undefined,
               billingFrequency: billingFrequencyResult.value ?? undefined,
             },
@@ -454,6 +473,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         if (err instanceof NotFoundError) {
           return reply.code(404).send({ error: err.message });
+        }
+        if (err instanceof OrderClientMismatchError) {
+          return reply.code(400).send({ error: err.message });
         }
         if (err instanceof ForeignKeyError) {
           return reply.code(400).send({ error: err.message });
