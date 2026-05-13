@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { mcpTokens } from '../db/schema/mcpTokens.ts';
+import { getEncryptionKey } from '../utils/crypto.ts';
 
 export const MCP_TOKEN_PREFIX = 'praetor_mcp_';
 
@@ -19,17 +20,11 @@ export type ActiveMcpToken = {
   name: string;
 };
 
-const getHashKey = () => {
-  const key = process.env.ENCRYPTION_KEY;
-  if (!key) throw new Error('ENCRYPTION_KEY environment variable is required');
-  return crypto.createHash('sha256').update(key).digest();
-};
-
 export const generateRawToken = (): string =>
   `${MCP_TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
 
 export const hashToken = (rawToken: string): string =>
-  crypto.createHmac('sha256', getHashKey()).update(rawToken).digest('hex');
+  crypto.createHmac('sha256', getEncryptionKey()).update(rawToken).digest('hex');
 
 const displayPrefix = (rawToken: string): string => rawToken.slice(0, 24);
 
