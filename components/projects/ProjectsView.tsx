@@ -1370,18 +1370,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               header: t('projects:projects.tableHeaders.projectName'),
               accessorKey: 'name',
               cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                  <div className="size-2.5 rounded-full" style={{ backgroundColor: row.color }} />
-                  <span
-                    className={`text-sm font-bold ${
-                      row.isDisabled
-                        ? 'text-zinc-600 line-through decoration-zinc-300'
-                        : 'text-zinc-800'
-                    }`}
-                  >
-                    {row.name}
-                  </span>
-                </div>
+                <span
+                  className={`text-sm font-bold ${
+                    row.isDisabled
+                      ? 'text-zinc-600 line-through decoration-zinc-300'
+                      : 'text-zinc-800'
+                  }`}
+                >
+                  {row.name}
+                </span>
               ),
             },
             {
