@@ -450,6 +450,66 @@ describe('POST /api/clients', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Fiscal code is required' });
   });
 
+  test('201 POST with taxCode only populates fiscal_code shadow from taxCode', async () => {
+    // No vatNumber, no fiscalCode — resolveFiscalCode falls through to taxCode.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        clientCode: 'ACME-01',
+        taxCode: 'RSSMRO80A01H501Z',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const entry = createClientMock.mock.calls[0][0] as {
+      fiscalCode: string;
+      vatNumber: string | null;
+      taxCode: string | null;
+    };
+    expect(entry.fiscalCode).toBe('RSSMRO80A01H501Z');
+    expect(entry.vatNumber).toBeNull();
+    expect(entry.taxCode).toBe('RSSMRO80A01H501Z');
+  });
+
+  test('201 POST with all three identifiers uses vatNumber as the fiscal_code primary', async () => {
+    // vatNumber takes precedence in resolveFiscalCode; vat_number / tax_code are stored
+    // independently.
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        clientCode: 'ACME-01',
+        vatNumber: 'IT01234567890',
+        fiscalCode: 'IT99999999999',
+        taxCode: 'RSSMRO80A01H501Z',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const entry = createClientMock.mock.calls[0][0] as {
+      fiscalCode: string;
+      vatNumber: string | null;
+      taxCode: string | null;
+    };
+    // resolveFiscalCode = vatNumber || fiscalCode || taxCode → vatNumber wins.
+    expect(entry.fiscalCode).toBe('IT01234567890');
+    expect(entry.vatNumber).toBe('IT01234567890');
+    expect(entry.taxCode).toBe('RSSMRO80A01H501Z');
+  });
+
   test('400 duplicate fiscal code', async () => {
     findByFiscalCodeMock.mockResolvedValue(true);
     findByClientCodeMock.mockResolvedValue(false);
@@ -657,6 +717,59 @@ describe('PUT /api/clients/:id', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Fiscal code already exists' });
   });
 
+  test('200 taxCode-only PUT preserves fiscal_code shadow (does NOT clobber vat_number-derived value)', async () => {
+    // Regression for the issue where a taxCode-only PUT would set
+    // resolvedFiscalCode = taxCode, overwriting fiscal_code (which is the unique-index
+    // backing column) and allowing duplicate vatNumbers to slip through detection.
+    findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
+    updateClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+      payload: { taxCode: 'RSSMRO80A01H501Z' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findByFiscalCodeMock).not.toHaveBeenCalled();
+    expect(updateClientMock).toHaveBeenCalledTimes(1);
+    const patch = updateClientMock.mock.calls[0][1] as {
+      fiscalCode: string | null;
+      taxCode: string | null;
+      taxCodeProvided: boolean;
+      vatNumberProvided: boolean;
+    };
+    // fiscal_code must NOT be updated (null → repo's COALESCE keeps existing value)
+    expect(patch.fiscalCode).toBeNull();
+    expect(patch.taxCode).toBe('RSSMRO80A01H501Z');
+    expect(patch.taxCodeProvided).toBe(true);
+    expect(patch.vatNumberProvided).toBe(false);
+  });
+
+  test('200 vatNumber-only PUT updates fiscal_code shadow to vatNumber', async () => {
+    findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
+    findByFiscalCodeMock.mockResolvedValue(false);
+    updateClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+      payload: { vatNumber: 'IT99999999999' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Duplicate check ran against the resolved fiscal_code
+    expect(findByFiscalCodeMock).toHaveBeenCalledWith('IT99999999999', 'c-1');
+    const patch = updateClientMock.mock.calls[0][1] as {
+      fiscalCode: string | null;
+      vatNumberProvided: boolean;
+    };
+    expect(patch.fiscalCode).toBe('IT99999999999');
+    expect(patch.vatNumberProvided).toBe(true);
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'PUT',
@@ -767,6 +880,27 @@ describe('DELETE /api/clients/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(deleteClientByIdMock).not.toHaveBeenCalled();
+  });
+
+  // Migration 0033 changed the FK from CASCADE to RESTRICT on financial-doc tables. PG raises
+  // 23503 when any dependent invoice/quote/offer/sale references the client being deleted -
+  // the route catches it and surfaces 409 instead of letting the 500 bubble up.
+  test('409 when client has financial documents (FK RESTRICT)', async () => {
+    deleteClientByIdMock.mockRejectedValueOnce(
+      makeDbError('23503', 'invoices_client_id_clients_id_fk'),
+    );
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('financial documents');
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client.deleted' }),
+    );
   });
 });
 

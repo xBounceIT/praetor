@@ -41,6 +41,11 @@ export const clients = pgTable(
     numberOfEmployees: varchar('number_of_employees', { length: 120 }),
     revenue: varchar('revenue', { length: 120 }),
     fiscalCode: varchar('fiscal_code', { length: 50 }),
+    // Italian tax identifiers — semantically distinct, must not be conflated.
+    // vatNumber = Partita IVA (P.IVA, businesses); taxCode = Codice Fiscale (individuals).
+    // `fiscal_code` above is the legacy combined-field used as a fallback by old callers.
+    vatNumber: varchar('vat_number', { length: 50 }),
+    taxCode: varchar('tax_code', { length: 50 }),
     officeCountRange: varchar('office_count_range', { length: 120 }),
     contacts: jsonb('contacts').$type<StoredContact[]>().default(sql`'[]'::jsonb`),
     addressCountry: varchar('address_country', { length: 100 }),
@@ -54,6 +59,12 @@ export const clients = pgTable(
     fiscalCodeUnique: uniqueIndex('idx_clients_fiscal_code_unique')
       .on(sql`LOWER(${table.fiscalCode})`)
       .where(sql`${table.fiscalCode} IS NOT NULL AND ${table.fiscalCode} <> ''`),
+    vatNumberUnique: uniqueIndex('idx_clients_vat_number_unique')
+      .on(sql`LOWER(${table.vatNumber})`)
+      .where(sql`${table.vatNumber} IS NOT NULL AND ${table.vatNumber} <> ''`),
+    taxCodeUnique: uniqueIndex('idx_clients_tax_code_unique')
+      .on(sql`LOWER(${table.taxCode})`)
+      .where(sql`${table.taxCode} IS NOT NULL AND ${table.taxCode} <> ''`),
     clientCodeUnique: uniqueIndex('idx_clients_client_code_unique')
       .on(table.clientCode)
       .where(sql`${table.clientCode} IS NOT NULL AND ${table.clientCode} <> ''`),

@@ -11,10 +11,12 @@ import {
   Moon,
   Palette,
   RefreshCw,
+  Save,
   Shield,
   Sun,
   SunMoon,
   Trash2,
+  User,
 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -511,90 +513,74 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       </div>
 
       {activeTab === 'profile' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-left-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-user text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('userProfile.title')}</h3>
-          </div>
+        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-left-4 duration-300">
+          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <User aria-hidden="true" className="size-4 text-praetor" />
+              {t('userProfile.title')}
+            </CardTitle>
+            <CardDescription>{t('userProfile.description')}</CardDescription>
+          </CardHeader>
           <form onSubmit={handleSave}>
-            <div className="p-6 space-y-6">
+            <CardContent className="space-y-6 p-6">
               {!isLocalAuth && (
                 <div
                   role="status"
                   aria-live="polite"
-                  className="flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm font-medium text-zinc-700"
+                  className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
                 >
                   <Lock aria-hidden="true" className="size-4" />
                   {t('userProfile.lockedBanner', { provider: identityProviderLabel })}
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('userProfile.fullName')}
-                  </label>
-                  <input
+                <Field>
+                  <FieldLabel htmlFor="profile-full-name">{t('userProfile.fullName')}</FieldLabel>
+                  <Input
+                    id="profile-full-name"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     disabled={!isLocalAuth}
                     readOnly={!isLocalAuth}
                     aria-readonly={!isLocalAuth}
-                    className={cn(
-                      'w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold',
-                      !isLocalAuth && 'cursor-not-allowed opacity-60',
-                    )}
+                    required={isLocalAuth}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('userProfile.email')}
-                  </label>
-                  <input
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="profile-email">{t('userProfile.email')}</FieldLabel>
+                  <Input
+                    id="profile-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={!isLocalAuth}
                     readOnly={!isLocalAuth}
                     aria-readonly={!isLocalAuth}
-                    className={cn(
-                      'w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold',
-                      !isLocalAuth && 'cursor-not-allowed opacity-60',
-                    )}
+                    required={isLocalAuth}
                   />
-                </div>
+                </Field>
               </div>
-            </div>
+            </CardContent>
             {isLocalAuth && (
-              <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSaving || !hasChanges}
-                  className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
-                    isSaved
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                      : isSaving || !hasChanges
-                        ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                        : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                  }`}
-                >
-                  {isSaving ? (
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  ) : isSaved ? (
-                    <i className="fa-solid fa-check"></i>
-                  ) : (
-                    <i className="fa-solid fa-save"></i>
-                  )}
-                  {isSaving
-                    ? t('general.saving')
+              <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
+                {(() => {
+                  const { Icon, iconClass, label } = isSaving
+                    ? { Icon: Loader2, iconClass: 'animate-spin', label: t('general.saving') }
                     : isSaved
-                      ? t('general.changesSaved')
-                      : t('general.saveChanges')}
-                </button>
-              </div>
+                      ? { Icon: Check, iconClass: undefined, label: t('general.changesSaved') }
+                      : { Icon: Save, iconClass: undefined, label: t('general.saveChanges') };
+                  return (
+                    <Button type="submit" disabled={isSaving || !hasChanges}>
+                      <Icon aria-hidden="true" className={iconClass} />
+                      {label}
+                    </Button>
+                  );
+                })()}
+              </CardFooter>
             )}
           </form>
-        </section>
+        </Card>
       )}
 
       {activeTab === 'appearance' && (

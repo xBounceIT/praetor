@@ -11,9 +11,9 @@ import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -307,15 +307,21 @@ const buildPrimaryFieldsFromContacts = (contacts: ClientContact[]) => {
   };
 };
 
-const canAccessClient = (
-  request: FastifyRequest,
-  clientId: string,
-  allScopePermission = 'crm.clients_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
+const canAccessClient = makeAccessChecker(
+  (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
+  'crm.clients_all.view',
+);
+
+const CLIENT_UNIQUE_VIOLATION_MESSAGES: Record<clientsRepo.ClientUniqueViolationKind, string> = {
+  client_code: 'Client ID already exists',
+  fiscal_code: 'Fiscal code already exists',
+};
+
+const handleClientUniqueViolation = (err: unknown, reply: FastifyReply): boolean => {
+  const kind = clientsRepo.classifyUniqueViolation(err);
+  if (!kind) return false;
+  badRequest(reply, CLIENT_UNIQUE_VIOLATION_MESSAGES[kind]);
+  return true;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -544,6 +550,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               numberOfEmployees: numberOfEmployeesResult.value,
               revenue: revenueResult.value,
               fiscalCode: resolvedFiscalCode,
+              vatNumber: vatNumberResult.value,
+              taxCode: taxCodeResult.value,
               officeCountRange: officeCountRangeResult.value,
             },
             tx,
@@ -571,19 +579,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(client);
       } catch (err) {
-        const dup = getUniqueViolation(err);
-        if (dup) {
-          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
-            return badRequest(reply, 'Fiscal code already exists');
-          }
-          if (dup.constraint === 'idx_clients_client_code_unique') {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          if (dup.detail?.includes('client_code')) {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          return badRequest(reply, 'Fiscal code already exists');
-        }
+        if (handleClientUniqueViolation(err, reply)) return reply;
         throw err;
       }
     },
@@ -676,13 +672,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCodeValue = taxCodeResult.value;
       }
 
-      const hasFiscalUpdate = hasVatNumber || hasFiscalCode || hasTaxCode;
+      // `fiscal_code` is the legacy shadow column backing `idx_clients_fiscal_code_unique` and
+      // `findByFiscalCode` duplicate detection. It must follow the primary identifier
+      // (vatNumber, or fiscalCode for legacy callers), but a taxCode-only PUT must NOT
+      // overwrite it — otherwise updating taxCode could clobber a vat_number-derived
+      // fiscal_code and let duplicate vatNumbers slip past the uniqueness check.
+      const hasPrimaryIdentifierUpdate = hasVatNumber || hasFiscalCode;
       let resolvedFiscalCode: string | null = null;
-      if (hasFiscalUpdate) {
+      if (hasPrimaryIdentifierUpdate) {
         resolvedFiscalCode = resolveFiscalCode({
           vatNumber: vatNumberValue,
           fiscalCode: fiscalCodeValue,
-          taxCode: taxCodeValue,
+          taxCode: null,
         });
         if (!resolvedFiscalCode) {
           return badRequest(reply, 'Fiscal code is required');
@@ -757,7 +758,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description: opt.description ?? null,
           atecoCode: opt.atecoCode ?? null,
           website: opt.website ?? null,
-          fiscalCode: hasFiscalUpdate ? resolvedFiscalCode : null,
+          fiscalCode: hasPrimaryIdentifierUpdate ? resolvedFiscalCode : null,
+          vatNumber: vatNumberValue,
+          vatNumberProvided: hasVatNumber,
+          taxCode: taxCodeValue,
+          taxCodeProvided: hasTaxCode,
           contactName: finalContactName,
           contactNameProvided: shouldUpdateContactName,
           email: finalEmail,
@@ -800,7 +805,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           hasSector ? 'sector' : null,
           hasNumberOfEmployees ? 'numberOfEmployees' : null,
           hasRevenue ? 'revenue' : null,
-          hasFiscalUpdate ? 'fiscalCode' : null,
+          hasVatNumber || hasFiscalCode || hasTaxCode ? 'fiscalCode' : null,
           hasOfficeCountRange ? 'officeCountRange' : null,
         ].filter((field): field is string => field !== null);
 
@@ -821,19 +826,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return client;
       } catch (err) {
-        const dup = getUniqueViolation(err);
-        if (dup) {
-          if (dup.constraint === 'idx_clients_fiscal_code_unique') {
-            return badRequest(reply, 'Fiscal code already exists');
-          }
-          if (dup.constraint === 'idx_clients_client_code_unique') {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          if (dup.detail?.includes('client_code')) {
-            return badRequest(reply, 'Client ID already exists');
-          }
-          return badRequest(reply, 'Fiscal code already exists');
-        }
+        if (handleClientUniqueViolation(err, reply)) return reply;
         throw err;
       }
     },
@@ -862,7 +855,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      const deleted = await clientsRepo.deleteById(idResult.value);
+      let deleted: Awaited<ReturnType<typeof clientsRepo.deleteById>>;
+      try {
+        deleted = await clientsRepo.deleteById(idResult.value);
+      } catch (err) {
+        // Financial-doc tables (invoices, quotes, customer_offers, sales) now reference
+        // clients with ON DELETE RESTRICT instead of CASCADE - deleting a client with any
+        // such document errors at the FK layer. Translate to a 409 so the UI can surface
+        // a clear "client has financial documents" message instead of leaking a 500.
+        if (getForeignKeyViolation(err)) {
+          return reply.code(409).send({
+            error:
+              'Cannot delete client because it has financial documents (invoices, quotes, offers, or sales). Remove them first.',
+          });
+        }
+        throw err;
+      }
       if (!deleted) {
         return reply.code(404).send({ error: 'Client not found' });
       }

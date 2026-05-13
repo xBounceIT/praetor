@@ -6,11 +6,16 @@ import { users } from './users.ts';
 
 // Versioned envelope so future schema changes on supplier_quotes/supplier_quote_items can
 // normalize old snapshots on read instead of being trapped by a frozen JSONB shape. Bump
-// `schemaVersion` when the underlying domain types change in a non-additive way. `linkedOrderId`
-// is omitted because it's derived from a join, not stored on the row.
+// `schemaVersion` when the underlying domain types change in a non-additive way.
+//
+// `linkedOrderId` is derived (subquery against supplier_sales.linked_quote_id) rather than
+// stored on the supplier_quote row, but we still record it in the snapshot so the historical
+// record is complete (e.g. for audits and forward-migration tools). Older snapshots predate
+// this field and may have it as `undefined`; readers must tolerate both `undefined` and
+// `string | null`.
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'linkedOrderId'>;
+  quote: Omit<SupplierQuote, 'linkedOrderId'> & { linkedOrderId?: string | null };
   items: SupplierQuoteItem[];
 }
 

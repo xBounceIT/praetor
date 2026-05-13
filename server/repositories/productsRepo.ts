@@ -1,5 +1,5 @@
 import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { productCategories } from '../db/schema/productCategories.ts';
 import { productSubcategories } from '../db/schema/productSubcategories.ts';
 import { products } from '../db/schema/products.ts';
@@ -413,32 +413,39 @@ export const updateProductTypeFields = async (
   return rows[0] ? mapProductTypeRow(rows[0]) : null;
 };
 
-export const propagateProductTypeName = async (
+// Both propagate fns issue TWO updates that must be atomic: if the second update fails after
+// the first commits, products and product_categories drift out of sync (a category points at
+// a type/costUnit no row in products still uses, or vice versa). `runAtomically` wraps a
+// standalone call in `withDbTransaction` while reusing a caller-supplied `exec` so we don't
+// open a nested transaction.
+export const propagateProductTypeName = (
   oldName: string,
   newName: string,
   exec: DbExecutor = db,
-): Promise<void> => {
-  await exec.update(products).set({ type: newName }).where(eq(products.type, oldName));
-  await exec
-    .update(productCategories)
-    .set({ type: newName })
-    .where(eq(productCategories.type, oldName));
-};
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
+    await tx.update(products).set({ type: newName }).where(eq(products.type, oldName));
+    await tx
+      .update(productCategories)
+      .set({ type: newName })
+      .where(eq(productCategories.type, oldName));
+  });
 
-export const propagateProductTypeCostUnit = async (
+export const propagateProductTypeCostUnit = (
   typeName: string,
   costUnit: CostUnit,
   exec: DbExecutor = db,
-): Promise<void> => {
-  await exec
-    .update(products)
-    .set({ costUnit })
-    .where(and(eq(products.type, typeName), isNull(products.supplierId)));
-  await exec
-    .update(productCategories)
-    .set({ costUnit })
-    .where(eq(productCategories.type, typeName));
-};
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
+    await tx
+      .update(products)
+      .set({ costUnit })
+      .where(and(eq(products.type, typeName), isNull(products.supplierId)));
+    await tx
+      .update(productCategories)
+      .set({ costUnit })
+      .where(eq(productCategories.type, typeName));
+  });
 
 export const countProductsForType = async (
   typeName: string,

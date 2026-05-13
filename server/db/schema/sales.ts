@@ -26,9 +26,11 @@ export const sales = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+    // RESTRICT (not CASCADE): deleting a client must not silently destroy orders/sales
+    // (financial documents). Callers must remove sales explicitly before deleting the client.
     clientId: varchar('client_id', { length: 50 })
       .notNull()
-      .references(() => clients.id, { onDelete: 'cascade' }),
+      .references(() => clients.id, { onDelete: 'restrict' }),
     clientName: varchar('client_name', { length: 255 }).notNull(),
     paymentTerms: varchar('payment_terms', { length: 20 }).notNull().default('immediate'),
     discount: numeric('discount', { precision: 15, scale: 2 }).notNull().default('0'),

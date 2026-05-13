@@ -232,6 +232,27 @@
       "when": 1778634334384,
       "tag": "0032_add_project_lifecycle_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778687060719,
+      "tag": "0033_restrict_financial_doc_client_supplier_fks",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1778701695175,
+      "tag": "0034_add_client_vat_and_tax_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1778702800389,
+      "tag": "0035_add_invoice_tax_fields",
+      "breakpoints": true
     }
   ]
 }

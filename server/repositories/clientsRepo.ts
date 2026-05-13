@@ -1,6 +1,7 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { clients } from '../db/schema/clients.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export type ClientContact = {
@@ -40,6 +41,18 @@ export type Client = {
   vatNumber: string | null;
   taxCode: string | null;
   createdAt: number | undefined;
+};
+
+export type ClientUniqueViolationKind = 'fiscal_code' | 'client_code';
+
+// Decouples callers from raw Postgres index names.
+export const classifyUniqueViolation = (err: unknown): ClientUniqueViolationKind | null => {
+  const dup = getUniqueViolation(err);
+  if (!dup) return null;
+  if (dup.constraint === 'idx_clients_client_code_unique') return 'client_code';
+  if (dup.constraint === 'idx_clients_fiscal_code_unique') return 'fiscal_code';
+  if (dup.detail?.includes('client_code')) return 'client_code';
+  return 'fiscal_code';
 };
 
 const parseContactsFromDb = (value: unknown): ClientContact[] => {
@@ -110,6 +123,12 @@ const parseCreatedAt = (value: unknown): number | undefined => {
 
 export const mapClientRow = (c: Record<string, unknown>): Client => {
   const fiscalCode = stringOrNull(c.fiscal_code);
+  // Read independent columns; do NOT fall back to fiscal_code (the old behavior produced
+  // identical vatNumber/taxCode/fiscalCode for every client). Migration 0033 backfilled
+  // vat_number from fiscal_code for company rows and tax_code from fiscal_code for
+  // individual rows.
+  const vatNumber = stringOrNull(c.vat_number);
+  const taxCode = stringOrNull(c.tax_code);
   const createdAt = parseCreatedAt(c.created_at);
   const contacts = parseContactsFromDb(c.contacts);
   const primary = contacts[0] ?? null;
@@ -170,8 +189,8 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
         : null,
       undefined,
     ),
-    vatNumber: fiscalCode,
-    taxCode: fiscalCode,
+    vatNumber,
+    taxCode,
     createdAt,
   };
 };
@@ -225,7 +244,8 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
         c.address_country, c.address_state, c.address_cap, c.address_province,
         c.address_civic_number, c.address_line,
         c.ateco_code, c.website, c.sector, c.number_of_employees,
-        c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
+        c.revenue, c.fiscal_code, c.vat_number, c.tax_code,
+        c.office_count_range, c.created_at,
         NULL::numeric as total_sent_quotes,
         NULL::numeric as total_accepted_orders
       FROM clients c
@@ -321,6 +341,8 @@ export type NewClient = {
   numberOfEmployees: string | null;
   revenue: string | null;
   fiscalCode: string;
+  vatNumber: string | null;
+  taxCode: string | null;
   officeCountRange: string | null;
 };
 
@@ -351,6 +373,8 @@ export const create = async (input: NewClient, exec: DbExecutor = db): Promise<C
       numberOfEmployees: input.numberOfEmployees,
       revenue: input.revenue,
       fiscalCode: input.fiscalCode,
+      vatNumber: input.vatNumber,
+      taxCode: input.taxCode,
       officeCountRange: input.officeCountRange,
     })
     .returning();
@@ -376,6 +400,8 @@ export const create = async (input: NewClient, exec: DbExecutor = db): Promise<C
     number_of_employees: row.numberOfEmployees,
     revenue: row.revenue,
     fiscal_code: row.fiscalCode,
+    vat_number: row.vatNumber,
+    tax_code: row.taxCode,
     office_count_range: row.officeCountRange,
     contacts: row.contacts,
     address_country: row.addressCountry,
@@ -406,6 +432,10 @@ export type ClientUpdate = {
   website: string | null;
   fiscalCode: string | null;
   // CASE WHEN fields (set when *Provided is true)
+  vatNumber: string | null;
+  vatNumberProvided: boolean;
+  taxCode: string | null;
+  taxCodeProvided: boolean;
   contactName: string | null;
   contactNameProvided: boolean;
   email: string | null;
@@ -456,6 +486,8 @@ export const update = async (
         number_of_employees = CASE WHEN ${patch.numberOfEmployeesProvided} THEN ${patch.numberOfEmployees} ELSE number_of_employees END,
         revenue = CASE WHEN ${patch.revenueProvided} THEN ${patch.revenue} ELSE revenue END,
         fiscal_code = COALESCE(${patch.fiscalCode}, fiscal_code),
+        vat_number = CASE WHEN ${patch.vatNumberProvided} THEN ${patch.vatNumber} ELSE vat_number END,
+        tax_code = CASE WHEN ${patch.taxCodeProvided} THEN ${patch.taxCode} ELSE tax_code END,
         office_count_range = CASE WHEN ${patch.officeCountRangeProvided} THEN ${patch.officeCountRange} ELSE office_count_range END
       WHERE id = ${id}
       RETURNING *`,

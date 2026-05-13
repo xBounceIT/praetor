@@ -294,17 +294,29 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   dailyLimit: Number(s.dailyLimit || 0),
 });
 
+// Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).
+// The previous `=== 'hours' ? 'hours' : 'unit'` pattern silently coerced every non-'hours'
+// value to 'unit', so any future addition (e.g. 'days', 'kg') would be corrupted.
+const isValidInvoiceUnit = (value: unknown): value is InvoiceItem['unitOfMeasure'] =>
+  value === 'unit' || value === 'hours';
+
+const normalizeInvoiceUnitOfMeasure = (value: unknown): InvoiceItem['unitOfMeasure'] =>
+  isValidInvoiceUnit(value) ? value : 'unit';
+
 export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   ...item,
-  unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
+  unitOfMeasure: normalizeInvoiceUnitOfMeasure(item.unitOfMeasure),
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
+  // Default 0 keeps legacy items (pre-tax feature) rendering with no VAT.
+  taxRate: Number(item.taxRate || 0),
 });
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({
   ...i,
   subtotal: Number(i.subtotal ?? 0),
+  taxTotal: Number(i.taxTotal ?? 0),
   total: Number(i.total ?? 0),
   amountPaid: Number(i.amountPaid ?? 0),
   items: (i.items || []).map(normalizeInvoiceItem),

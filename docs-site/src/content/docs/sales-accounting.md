@@ -23,4 +23,8 @@ Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di c
 
 Le fatture clienti e fornitori devono riflettere ordini e consegne effettive. Controlla imponibili, IVA, totale e riferimenti al documento collegato.
 
+### IVA per riga
+
+Ogni riga della fattura cliente ha la propria aliquota IVA in percentuale. Il valore predefinito per le nuove righe è 22% (aliquota ordinaria italiana), ma puoi modificarla per riflettere aliquote ridotte (10%, 5%, 4%) o le righe esenti (0%). Il pannello di riepilogo mostra il subtotale (imponibile), l'IVA totale e il totale generale (imponibile + IVA). Le fatture precedenti alla migrazione vengono caricate con aliquota IVA pari a 0%, mantenendo invariato il loro totale.
+
 Se un documento deriva da un ordine o da un'offerta, usa il collegamento automatico per preservare la tracciabilità.

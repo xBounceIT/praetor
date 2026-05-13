@@ -27,7 +27,7 @@ import {
 } from '../utils/billing.ts';
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -118,27 +118,15 @@ class OrderClientMismatchError extends Error {}
 class OfferClientMismatchError extends Error {}
 class DateRangeError extends Error {}
 
-const canAccessClient = (
-  request: FastifyRequest,
-  clientId: string,
-  allScopePermission = 'crm.clients_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isClientAssignedToUser(userId, clientId);
-};
+const canAccessClient = makeAccessChecker(
+  (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
+  'crm.clients_all.view',
+);
 
-const canAccessProject = (
-  request: FastifyRequest,
-  projectId: string,
-  allScopePermission = 'projects.manage_all.view',
-) => {
-  if (hasPermission(request, allScopePermission)) return Promise.resolve(true);
-  const userId = request.user?.id;
-  if (!userId) return Promise.resolve(false);
-  return userAssignmentsRepo.isProjectAssignedToUser(userId, projectId);
-};
+const canAccessProject = makeAccessChecker(
+  (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
+  'projects.manage_all.view',
+);
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects

@@ -75,6 +75,8 @@
     "totalDiscount": "Total Discount",
     "tax": "Tax",
     "vat": "VAT",
+    "taxRate": "VAT %",
+    "taxTotal": "VAT total",
     "total": "Total",
     "balanceDue": "To pay",
     "balance": "To pay",

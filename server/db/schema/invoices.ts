@@ -23,14 +23,18 @@ export const invoices = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+    // RESTRICT (not CASCADE): deleting a client must not silently destroy invoices. The
+    // delete route surfaces a 409 with a "client has financial documents" message when
+    // dependent invoices exist; callers must explicitly clean those up first.
     clientId: varchar('client_id', { length: 50 })
       .notNull()
-      .references(() => clients.id, { onDelete: 'cascade' }),
+      .references(() => clients.id, { onDelete: 'restrict' }),
     clientName: varchar('client_name', { length: 255 }).notNull(),
     issueDate: date('issue_date', { mode: 'string' }).notNull(),
     dueDate: date('due_date', { mode: 'string' }).notNull(),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
+    taxTotal: numeric('tax_total', { precision: 12, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
     amountPaid: numeric('amount_paid', { precision: 12, scale: 2 }).notNull().default('0'),
     notes: text('notes'),
@@ -63,6 +67,7 @@ export const invoiceItems = pgTable(
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
+    taxRate: numeric('tax_rate', { precision: 5, scale: 2 }).notNull().default('0'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index('idx_invoice_items_invoice_id').on(table.invoiceId)],

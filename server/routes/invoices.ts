@@ -41,6 +41,7 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    taxRate: { type: 'number' },
   },
   required: [
     'id',
@@ -50,6 +51,7 @@ const invoiceItemSchema = {
     'quantity',
     'unitPrice',
     'discount',
+    'taxRate',
   ],
 } as const;
 
@@ -64,6 +66,7 @@ const invoiceSchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     subtotal: { type: 'number' },
+    taxTotal: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: ['string', 'null'] },
@@ -79,6 +82,7 @@ const invoiceSchema = {
     'dueDate',
     'status',
     'subtotal',
+    'taxTotal',
     'total',
     'amountPaid',
     'createdAt',
@@ -96,6 +100,7 @@ const invoiceItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    taxRate: { type: 'number' },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -140,6 +145,7 @@ type NormalizedInvoiceItemInput = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  taxRate: number;
 };
 
 const generateInvoiceItemId = () => generateItemId('inv-item-');
@@ -205,6 +211,18 @@ const validateAndNormalizeItems = (
       return null;
     }
 
+    const taxRateResult = optionalLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
+    if (!taxRateResult.ok) {
+      badRequest(reply, taxRateResult.message);
+      return null;
+    }
+    // Cap matches the numeric(5,2) DB column (max 999.99); a 100% upper bound is the
+    // sensible business cap for VAT rates.
+    if (taxRateResult.value !== null && taxRateResult.value > 100) {
+      badRequest(reply, `items[${i}].taxRate must be at most 100`);
+      return null;
+    }
+
     normalizedItems.push({
       productId: productIdResult.value || null,
       description: descriptionResult.value,
@@ -212,6 +230,7 @@ const validateAndNormalizeItems = (
       quantity: roundCurrency(quantityResult.value),
       unitPrice: roundCurrency(unitPriceResult.value),
       discount: roundCurrency(discountResult.value || 0),
+      taxRate: roundCurrency(taxRateResult.value || 0),
     });
   }
 
@@ -227,6 +246,7 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     discount: item.discount,
+    taxRate: item.taxRate,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -317,8 +337,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = validateAndNormalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const { subtotal: computedSubtotal, total: computedTotal } =
-        computeInvoiceTotals(normalizedItems);
+      const {
+        subtotal: computedSubtotal,
+        taxTotal: computedTaxTotal,
+        total: computedTotal,
+      } = computeInvoiceTotals(normalizedItems);
 
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
@@ -345,6 +368,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               dueDate: dueDateResult.value,
               status: (status as string) || 'draft',
               subtotal: computedSubtotal,
+              taxTotal: computedTaxTotal,
               total: computedTotal,
               amountPaid: amountPaidValue,
               notes: (notes as string | null | undefined) ?? null,
@@ -505,6 +529,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItemsForUpdate) return;
         const computed = computeInvoiceTotals(normalizedItemsForUpdate);
         patch.subtotal = computed.subtotal;
+        patch.taxTotal = computed.taxTotal;
         patch.total = computed.total;
       }
 

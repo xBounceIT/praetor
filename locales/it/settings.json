@@ -2,7 +2,8 @@
   "title": "Impostazioni",
   "subtitle": "Gestisci le tue preferenze personali",
   "userProfile": {
-    "title": "Profilo Utente",
+    "title": "Profilo",
+    "description": "Aggiorna nome e indirizzo email.",
     "fullName": "Nome Completo",
     "email": "Indirizzo Email",
     "updateProfile": "Aggiorna Profilo",
@@ -63,7 +64,7 @@
     "saml": "SAML"
   },
   "mcp": {
-    "title": "Token MCP",
+    "title": "MCP",
     "description": "Crea token per consentire agli agenti AI di accedere a Praetor tramite il protocollo MCP.",
     "urlLabel": "URL server MCP",
     "urlDescription": "Usa questo endpoint Streamable HTTP quando aggiungi Praetor a un client MCP esterno.",
