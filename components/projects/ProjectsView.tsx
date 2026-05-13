@@ -88,6 +88,15 @@ const billingFrequencyOptions = [
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
 
+// Inline marker for required-field labels. Uses the shadcn `text-destructive` token so the
+// asterisk follows the user's theme. `aria-hidden` because the asterisk is purely visual —
+// screen readers get the requirement signal from the input's `aria-required`/`required` attr.
+const RequiredMark = () => (
+  <span className="text-destructive" aria-hidden="true">
+    *
+  </span>
+);
+
 export type AddProjectFormInput = {
   name: string;
   clientId: string;
@@ -803,7 +812,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     : selectedOrder;
 
   const offerOptions = offers
-    .filter((o) => o.status === 'accepted')
+    // Hide drafts (incomplete) and denied (no longer relevant). Show 'sent' and 'accepted' so a
+    // project can be linked to an offer that's still under negotiation as well as a won one.
+    .filter((o) => o.status === 'sent' || o.status === 'accepted')
     .map((o) => ({
       id: o.id,
       name: `${o.clientName} - ${o.id}`,
@@ -1056,7 +1067,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             setClientId(val as string);
                             if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
                           }}
-                          label={t('projects:projects.client')}
+                          label={
+                            <>
+                              {t('projects:projects.client')} <RequiredMark />
+                            </>
+                          }
                           placeholder={t('projects:projects.selectClient')}
                           searchable={true}
                           buttonClassName="h-9"
@@ -1065,11 +1080,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       </div>
                       <Field data-invalid={Boolean(errors.name)}>
                         <FieldLabel htmlFor="project-name">
-                          {t('projects:projects.name')}
+                          {t('projects:projects.name')} <RequiredMark />
                         </FieldLabel>
                         <Input
                           id="project-name"
                           type="text"
+                          required
                           value={name}
                           aria-invalid={Boolean(errors.name)}
                           onChange={(e) => {
@@ -1114,7 +1130,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             setClientId(val as string);
                             if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
                           }}
-                          label={t('projects:projects.client')}
+                          label={
+                            <>
+                              {t('projects:projects.client')} <RequiredMark />
+                            </>
+                          }
                           placeholder={t('projects:projects.selectClient')}
                           searchable={true}
                           disabled={Boolean(selectedOrder)}
@@ -1138,11 +1158,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       </div>
                       <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
                         <FieldLabel htmlFor="project-name">
-                          {t('projects:projects.name')}
+                          {t('projects:projects.name')} <RequiredMark />
                         </FieldLabel>
                         <Input
                           id="project-name"
                           type="text"
+                          required
                           value={name}
                           aria-invalid={Boolean(errors.name)}
                           onChange={(e) => {
@@ -1216,7 +1237,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           setOfferId(val as string);
                           if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
                         }}
-                        label={t('projects:projects.offerReference')}
+                        label={
+                          <>
+                            {t('projects:projects.offerReference')} <RequiredMark />
+                          </>
+                        }
                         placeholder={t('projects:projects.selectOffer')}
                         searchable={true}
                         buttonClassName="h-9"

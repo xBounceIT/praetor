@@ -1589,6 +1589,12 @@ const App: React.FC = () => {
                 () => api.clientsOrders.list(),
                 setClientsOrders,
               ),
+              listRequest(
+                'client offers',
+                canListClientOffers,
+                () => api.clientOffers.list(),
+                setClientOffers,
+              ),
             ]);
             break;
           }
