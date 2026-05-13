@@ -202,7 +202,7 @@ const Calendar: React.FC<CalendarProps> = ({
                   : isInRange
                     ? 'bg-muted text-foreground border-muted'
                     : isWeekendOrHoliday
-                      ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20'
+                      ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
                       : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
                         : isToday
@@ -254,7 +254,7 @@ const Calendar: React.FC<CalendarProps> = ({
       className={`w-full relative ${
         bare
           ? `p-0 ${isCompact ? 'h-full flex flex-col' : ''}`
-          : `bg-card rounded-lg border border-border shadow-sm ${isCompact ? 'p-3 h-full flex flex-col' : 'p-4'}`
+          : `bg-background rounded-lg border border-border shadow-sm ${isCompact ? 'p-3 h-full flex flex-col' : 'p-4'}`
       }`}
       ref={containerRef}
     >
