@@ -36,8 +36,7 @@ export interface ClientsInvoicesViewProps {
   currency: string;
 }
 
-// Italian VAT (IVA) default for newly-added invoice lines. Reduced rates (10/5/4/0) are
-// editable per row.
+// Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
 
 const getLineTaxable = (item: InvoiceItem) =>
@@ -857,14 +856,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                           }
                         : undefined
                     }
-                    taxRow={
-                      taxTotal > 0
-                        ? {
-                            label: t('accounting:clientsInvoices.taxTotal'),
-                            amount: taxTotal,
-                          }
-                        : undefined
-                    }
+                    taxRow={{
+                      label: t('accounting:clientsInvoices.taxTotal'),
+                      amount: taxTotal,
+                    }}
                     amountPaid={{
                       label: t('accounting:clientsInvoices.amountPaid'),
                       value: formData.amountPaid || 0,
