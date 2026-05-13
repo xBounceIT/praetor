@@ -83,7 +83,7 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     // Precedence resolution lives in a dedicated helper, used once at module top-level.
     expect(source).toContain('const resolveRevenueSource = (');
     expect(source).toContain("if (activitiesSum > 0) return 'activities';");
-    expect(source).toContain('resolveRevenueSource(activitiesRevenueSum, effectiveOrder)');
+    expect(source).toContain('resolveRevenueSource(activitiesRevenueSum, Boolean(effectiveOrder))');
     expect(source).toContain('calculatePricingTotals(');
     // Read-only when source is not manual
     expect(source).toContain("readOnly={revenueSource !== 'manual'}");

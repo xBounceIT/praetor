@@ -97,17 +97,13 @@ const RequiredMark = () => (
 
 type RevenueSource = 'activities' | 'order' | 'manual';
 type RevenueLike = { revenue?: number | string | null };
-type OrderForRevenue = Pick<ClientsOrder, 'items' | 'discount' | 'discountType'>;
 
 const sumActivityRevenue = (tasks: RevenueLike[]): number =>
   tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
 
-const resolveRevenueSource = (
-  activitiesSum: number,
-  order: OrderForRevenue | undefined,
-): RevenueSource => {
+const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
-  if (order) return 'order';
+  if (hasOrder) return 'order';
   return 'manual';
 };
 
@@ -868,14 +864,18 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       ).total
     : 0;
 
-  const revenueSource = resolveRevenueSource(activitiesRevenueSum, effectiveOrder);
-  const manualRevenue = revenue ? parseFloat(revenue) : 0;
-  const displayedRevenue =
-    revenueSource === 'activities'
-      ? activitiesRevenueSum
-      : revenueSource === 'order'
-        ? orderRevenue
-        : manualRevenue;
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(effectiveOrder));
+  const revenueBySource: Record<RevenueSource, number> = {
+    activities: activitiesRevenueSum,
+    order: orderRevenue,
+    manual: revenue ? parseFloat(revenue) : 0,
+  };
+  const revenueHintBySource: Record<RevenueSource, string> = {
+    activities: t('projects:projects.revenueFromActivities'),
+    order: t('projects:projects.revenueFromOrder'),
+    manual: t('projects:projects.revenueManualHint'),
+  };
+  const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
@@ -1296,11 +1296,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         onChange={(e) => setRevenue(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        {revenueSource === 'activities'
-                          ? t('projects:projects.revenueFromActivities')
-                          : revenueSource === 'order'
-                            ? t('projects:projects.revenueFromOrder')
-                            : t('projects:projects.revenueManualHint')}
+                        {revenueHintBySource[revenueSource]}
                       </p>
                     </Field>
                   </div>

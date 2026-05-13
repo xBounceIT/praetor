@@ -262,14 +262,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         projectColor = colorResult.value;
       }
 
-      if (orderId) {
-        const orderClientId = await clientsOrdersRepo.findClientIdById(orderId);
-        if (orderClientId !== null && orderClientId !== clientIdResult.value) {
-          return badRequest(reply, 'orderId does not belong to the specified clientId');
-        }
+      // The two FK lookups are independent — run them concurrently.
+      const [orderClientId, offerClientId] = await Promise.all([
+        orderId ? clientsOrdersRepo.findClientIdById(orderId) : Promise.resolve(null),
+        clientOffersRepo.findClientIdById(offerIdResult.value),
+      ]);
+      if (orderId && orderClientId !== null && orderClientId !== clientIdResult.value) {
+        return badRequest(reply, 'orderId does not belong to the specified clientId');
       }
-
-      const offerClientId = await clientOffersRepo.findClientIdById(offerIdResult.value);
       if (offerClientId !== null && offerClientId !== clientIdResult.value) {
         return badRequest(reply, 'offerId does not belong to the specified clientId');
       }

@@ -306,15 +306,11 @@ export const findDateRangeById = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{ startDate: string | null; endDate: string | null } | null> => {
-  const rows = await executeRows<{ start_date: string | null; end_date: string | null }>(
-    exec,
-    sql`SELECT p.start_date::text AS start_date, p.end_date::text AS end_date
-          FROM projects p
-         WHERE p.id = ${id}
-         LIMIT 1`,
-  );
-  if (rows.length === 0) return null;
-  return { startDate: rows[0].start_date, endDate: rows[0].end_date };
+  const rows = await exec
+    .select({ startDate: projects.startDate, endDate: projects.endDate })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
 };
 
 export const findBillingById = async (
