@@ -110,6 +110,12 @@ const parseCreatedAt = (value: unknown): number | undefined => {
 
 export const mapClientRow = (c: Record<string, unknown>): Client => {
   const fiscalCode = stringOrNull(c.fiscal_code);
+  // Read independent columns; do NOT fall back to fiscal_code (the old behavior produced
+  // identical vatNumber/taxCode/fiscalCode for every client). Migration 0033 backfilled
+  // vat_number from fiscal_code for company rows and tax_code from fiscal_code for
+  // individual rows.
+  const vatNumber = stringOrNull(c.vat_number);
+  const taxCode = stringOrNull(c.tax_code);
   const createdAt = parseCreatedAt(c.created_at);
   const contacts = parseContactsFromDb(c.contacts);
   const primary = contacts[0] ?? null;
@@ -170,8 +176,8 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
         : null,
       undefined,
     ),
-    vatNumber: fiscalCode,
-    taxCode: fiscalCode,
+    vatNumber,
+    taxCode,
     createdAt,
   };
 };
@@ -321,6 +327,8 @@ export type NewClient = {
   numberOfEmployees: string | null;
   revenue: string | null;
   fiscalCode: string;
+  vatNumber: string | null;
+  taxCode: string | null;
   officeCountRange: string | null;
 };
 
@@ -351,6 +359,8 @@ export const create = async (input: NewClient, exec: DbExecutor = db): Promise<C
       numberOfEmployees: input.numberOfEmployees,
       revenue: input.revenue,
       fiscalCode: input.fiscalCode,
+      vatNumber: input.vatNumber,
+      taxCode: input.taxCode,
       officeCountRange: input.officeCountRange,
     })
     .returning();
@@ -376,6 +386,8 @@ export const create = async (input: NewClient, exec: DbExecutor = db): Promise<C
     number_of_employees: row.numberOfEmployees,
     revenue: row.revenue,
     fiscal_code: row.fiscalCode,
+    vat_number: row.vatNumber,
+    tax_code: row.taxCode,
     office_count_range: row.officeCountRange,
     contacts: row.contacts,
     address_country: row.addressCountry,
@@ -406,6 +418,10 @@ export type ClientUpdate = {
   website: string | null;
   fiscalCode: string | null;
   // CASE WHEN fields (set when *Provided is true)
+  vatNumber: string | null;
+  vatNumberProvided: boolean;
+  taxCode: string | null;
+  taxCodeProvided: boolean;
   contactName: string | null;
   contactNameProvided: boolean;
   email: string | null;
@@ -456,6 +472,8 @@ export const update = async (
         number_of_employees = CASE WHEN ${patch.numberOfEmployeesProvided} THEN ${patch.numberOfEmployees} ELSE number_of_employees END,
         revenue = CASE WHEN ${patch.revenueProvided} THEN ${patch.revenue} ELSE revenue END,
         fiscal_code = COALESCE(${patch.fiscalCode}, fiscal_code),
+        vat_number = CASE WHEN ${patch.vatNumberProvided} THEN ${patch.vatNumber} ELSE vat_number END,
+        tax_code = CASE WHEN ${patch.taxCodeProvided} THEN ${patch.taxCode} ELSE tax_code END,
         office_count_range = CASE WHEN ${patch.officeCountRangeProvided} THEN ${patch.officeCountRange} ELSE office_count_range END
       WHERE id = ${id}
       RETURNING *`,
