@@ -145,6 +145,7 @@
     "monthTotal": "Totale mensile",
     "weekNoteLabel": "Nota settimanale",
     "weekNotePlaceholder": "Nota che si applica a tutta la settimana...",
+    "hideWeekend": "Nascondi i giorni del weekend",
     "days": {
       "mon": "Lun",
       "tue": "Mar",

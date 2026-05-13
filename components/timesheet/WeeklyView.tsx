@@ -1,6 +1,8 @@
+import { Eye, EyeOff } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -14,9 +16,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
+import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
 import Calendar from '../shared/Calendar';
+import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { useCatalogSelection } from './useCatalogSelection';
 import WeeklyEntryForm, { type WeeklyEntryFormErrors } from './WeeklyEntryForm';
@@ -157,6 +161,19 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [weekNote, setWeekNote] = useState('');
+  const [hideWeekend, setHideWeekend] = useState(false);
+
+  // Saturday and Sunday columns are hidden when `hideWeekend` is on so the
+  // weekday columns can claim the freed width. State + submit still operate
+  // on all seven days — hiding is purely a display concern, so a user who
+  // had weekend hours pending won't lose them by toggling visibility.
+  const visibleWeekDays = useMemo(
+    () =>
+      hideWeekend
+        ? weekDays.filter((day) => day.dayKey !== 'sat' && day.dayKey !== 'sun')
+        : weekDays,
+    [weekDays, hideWeekend],
+  );
 
   // Per-row, per-day edits the user has made since the last sync from props.
   const [pendingEdits, setPendingEdits] = useState<Record<string, DayMap>>({});
@@ -476,6 +493,45 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   const hasPendingEdits = Object.values(pendingEdits).some((row) => Object.keys(row).length > 0);
   const weeklyGoal = dailyGoal * 5;
 
+  const handleExportToCsv = () => {
+    const formatHours = (hours: number) => (hours > 0 ? hours.toFixed(2) : '');
+    const sumDayValues = (values: string[]) =>
+      values.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+
+    const headerRow = [
+      '',
+      ...visibleWeekDays.map((day) => `${t(`weekly.days.${day.dayKey}`)} ${day.dayNum}`),
+      t('weekly.total'),
+    ];
+    const rows: string[][] = [headerRow];
+
+    const formRowValues = visibleWeekDays.map((day) => {
+      const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
+      return formatHours(parseDuration(cell.duration));
+    });
+    const formRowTotal = sumDayValues(formRowValues);
+    if (formRowTotal > 0) {
+      rows.push([formLabel, ...formRowValues, formatHours(formRowTotal)]);
+    }
+
+    for (const row of entryRows) {
+      const dayValues = visibleWeekDays.map((day) => {
+        const cell = getCellValue(row.key, day.dateStr, row.baseDays);
+        return formatHours(parseDuration(cell.duration));
+      });
+      const rowTotal = sumDayValues(dayValues);
+      rows.push([row.label, ...dayValues, formatHours(rowTotal)]);
+    }
+
+    rows.push([
+      t('weekly.total'),
+      ...visibleWeekDays.map((day) => formatHours(dayTotals[day.dateStr] ?? 0)),
+      formatHours(weekTotal),
+    ]);
+
+    downloadCsv(rows, `weekly_timesheet_${getLocalDateString(currentWeekStart)}.csv`);
+  };
+
   return (
     <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
@@ -513,25 +569,71 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       </div>
 
       <div className="rounded-lg border border-border bg-background shadow-sm p-5">
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-4">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              {t('weekly.weekTotal')}
-            </span>
-            <span
-              className={cn(
-                'text-lg font-black transition-colors',
-                weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
-              )}
-            >
-              {weekTotal.toFixed(2)} h
-            </span>
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 mb-4">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.weekTotal')}
+              </span>
+              <span
+                className={cn(
+                  'text-lg font-black transition-colors',
+                  weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
+                )}
+              >
+                {weekTotal.toFixed(2)} h
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.monthTotal')}
+              </span>
+              <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
+            </div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              {t('weekly.monthTotal')}
-            </span>
-            <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
+
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant={hideWeekend ? 'secondary' : 'outline'}
+                    size="sm"
+                    aria-label={t('weekly.hideWeekend')}
+                    aria-pressed={hideWeekend}
+                    onClick={() => setHideWeekend((v) => !v)}
+                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                  >
+                    {hideWeekend ? (
+                      <EyeOff className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="size-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('weekly.hideWeekend')}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={t('common:table.exportToCsv')}
+                    onClick={handleExportToCsv}
+                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                  >
+                    <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
+                    <span>{t('common:table.export')}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('common:table.exportToCsv')}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -541,7 +643,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               <TableRow className="border-b border-border">
                 <TableHead className="px-4 py-3 min-w-56" />
 
-                {weekDays.map((day) => (
+                {visibleWeekDays.map((day) => (
                   <TableHead
                     key={day.dateStr}
                     className={cn(
@@ -596,7 +698,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{formLabel}</p>
                 </TableCell>
-                {weekDays.map((day) => {
+                {visibleWeekDays.map((day) => {
                   const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
                   return (
                     <TableCell
@@ -653,7 +755,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               {entryRows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={1 + weekDays.length}
+                    colSpan={1 + visibleWeekDays.length}
                     className="px-4 py-6 text-center text-xs text-muted-foreground"
                   >
                     {t('weekly.noRecentTasks')}
@@ -670,7 +772,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         {row.label}
                       </p>
                     </TableCell>
-                    {weekDays.map((day) => {
+                    {visibleWeekDays.map((day) => {
                       const cell = getCellValue(row.key, day.dateStr, row.baseDays);
                       return (
                         <TableCell
@@ -731,7 +833,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 <TableCell className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   {t('weekly.total')}
                 </TableCell>
-                {weekDays.map((day) => (
+                {visibleWeekDays.map((day) => (
                   <TableCell
                     key={day.dateStr}
                     className={cn(

@@ -145,6 +145,7 @@
     "monthTotal": "Month total",
     "weekNoteLabel": "Weekly Note",
     "weekNotePlaceholder": "Note that applies to the whole week...",
+    "hideWeekend": "Hide weekend days",
     "days": {
       "mon": "Mon",
       "tue": "Tue",
