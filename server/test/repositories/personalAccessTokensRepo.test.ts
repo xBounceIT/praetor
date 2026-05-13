@@ -59,7 +59,8 @@ describe('findByTokenHash', () => {
 
 describe('createForUserIfMissing', () => {
   test('inserts and reports created when no token exists', async () => {
-    exec.enqueue({ rows: [tokenRow] });
+    exec.enqueue({ rows: [] }); // initial SELECT: no existing row
+    exec.enqueue({ rows: [tokenRow] }); // INSERT returns the new row
 
     const result = await personalAccessTokensRepo.createForUserIfMissing(
       'user-1',
@@ -70,14 +71,14 @@ describe('createForUserIfMissing', () => {
 
     expect(result.created).toBe(true);
     expect(result.record.userId).toBe('user-1');
-    expect(exec.calls).toHaveLength(1);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict');
-    expect(exec.calls[0].sql.toLowerCase()).toContain('do nothing');
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('on conflict');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('do nothing');
   });
 
-  test('returns existing metadata without exposing the generated replacement token', async () => {
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [tokenRow] });
+  test('returns existing record without inserting when one already exists', async () => {
+    exec.enqueue({ rows: [tokenRow] }); // initial SELECT finds the existing row
 
     const result = await personalAccessTokensRepo.createForUserIfMissing(
       'user-1',
@@ -88,7 +89,26 @@ describe('createForUserIfMissing', () => {
 
     expect(result.created).toBe(false);
     expect(result.record.tokenHash).toBe('a'.repeat(64));
-    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
+  });
+
+  test('falls back to the winning row when a concurrent insert wins the race', async () => {
+    exec.enqueue({ rows: [] }); // initial SELECT: no row yet
+    exec.enqueue({ rows: [] }); // INSERT loses the ON CONFLICT race
+    exec.enqueue({ rows: [tokenRow] }); // re-SELECT returns the winner's row
+
+    const result = await personalAccessTokensRepo.createForUserIfMissing(
+      'user-1',
+      'b'.repeat(64),
+      'praetor_pat_newtoken',
+      testDb,
+    );
+
+    expect(result.created).toBe(false);
+    expect(result.record.tokenHash).toBe('a'.repeat(64));
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[1].sql.toLowerCase()).toContain('on conflict');
   });
 });
 

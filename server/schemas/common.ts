@@ -35,6 +35,7 @@ export const standardErrorResponses = {
   403: errorResponseSchema,
   404: errorResponseSchema,
   409: errorResponseSchema,
+  503: errorResponseSchema,
 } as const;
 
 export const standardRateLimitedErrorResponses = {

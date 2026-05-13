@@ -16,6 +16,9 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
+// hashPersonalAccessToken (HMAC-keyed) requires ENCRYPTION_KEY at call time.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
+
 // Snapshot real exports so afterAll can restore them. Snapshot must run BEFORE mock.module
 // fires (i.e., before beforeAll executes) - see comment in middleware/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
@@ -165,8 +168,10 @@ beforeEach(async () => {
     userId: 'u1',
     tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
     tokenPrefix: 'praetor_pat_valid',
-    createdAt: new Date('2026-05-11T08:00:00.000Z'),
-    updatedAt: new Date('2026-05-11T09:00:00.000Z'),
+    // Use "now" so the middleware's PAT idle-timeout check (30d default) never expires
+    // these fixtures as wall-clock time advances past the test's authorship date.
+    createdAt: new Date(),
+    updatedAt: new Date(),
     lastUsedAt: null,
   });
   markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
@@ -307,7 +312,7 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).toHaveBeenCalledTimes(1);
   });
 
-  test('401: LDAP user does not fall back to local password when LDAP fails', async () => {
+  test('503: LDAP user login returns ldap_unavailable when LDAP throws (regression #368)', async () => {
     findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockRejectedValue(new Error('LDAP server unreachable'));
     bcryptCompareMock.mockResolvedValue(true);
@@ -318,8 +323,30 @@ describe('POST /api/auth/login', () => {
       payload: { username: 'alice', password: 'secret' },
     });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Authentication service temporarily unavailable',
+      errorCode: 'ldap_unavailable',
+    });
     expect(bcryptCompareMock).not.toHaveBeenCalled();
+  });
+
+  test('503: unknown-user LDAP auto-provision returns ldap_unavailable when LDAP throws (regression #368)', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'ghost', password: 'whatever' },
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Authentication service temporarily unavailable',
+      errorCode: 'ldap_unavailable',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('401: SSO-only user cannot sign in with local password', async () => {

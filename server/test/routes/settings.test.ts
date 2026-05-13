@@ -15,6 +15,10 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 
+// hashPersonalAccessToken (HMAC-keyed, exercised via the settings routes) requires
+// ENCRYPTION_KEY at call time.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
+
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };

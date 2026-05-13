@@ -23,7 +23,9 @@ export const ldapConfig = pgTable(
     serverUrl: varchar('server_url', { length: 500 }).default('ldap://ldap.example.com:389'),
     baseDn: varchar('base_dn', { length: 500 }).default('dc=example,dc=com'),
     bindDn: varchar('bind_dn', { length: 500 }).default('cn=read-only-admin,dc=example,dc=com'),
-    bindPassword: varchar('bind_password', { length: 255 }).default(''),
+    // `text` (not `varchar(255)`) so AES-GCM ciphertext for a long bind password fits.
+    // Matches the column type used by SSO encrypted fields (clientSecret, privateKey).
+    bindPassword: text('bind_password').default(''),
     userFilter: varchar('user_filter', { length: 255 }).default('(uid={0})'),
     groupBaseDn: varchar('group_base_dn', { length: 500 }).default('ou=groups,dc=example,dc=com'),
     groupFilter: varchar('group_filter', { length: 255 }).default('(member={0})'),

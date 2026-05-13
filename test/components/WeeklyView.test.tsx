@@ -32,6 +32,7 @@ const baseProps = {
     ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
   onAddBulkEntries: async () => {},
   onUpdateEntry: () => {},
+  onDeleteEntry: () => {},
   viewingUserId: 'u-1',
   selectedDate: todayDateOnly(),
   onSelectedDateChange: () => {},

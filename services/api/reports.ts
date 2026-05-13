@@ -59,13 +59,6 @@ const parseReportStream = async (
   response: Response,
   handlers: ReportChatStreamHandlers = {},
 ): Promise<ReportChatStreamDoneEvent> => {
-  if (!response.ok) {
-    const jsonError = await response.json().catch(() => null);
-    const message =
-      typeof jsonError?.error === 'string' ? jsonError.error : `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-
   if (!response.body) {
     throw new Error('Streaming response body is missing');
   }
