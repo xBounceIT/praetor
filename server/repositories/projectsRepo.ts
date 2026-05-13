@@ -214,6 +214,7 @@ export type ProjectUpdate = {
   color?: string | null;
   description?: string | null;
   isDisabled?: boolean;
+  orderId?: string | null;
   billingType?: StoredBillingType | null;
   billingFrequency?: BillingFrequency | null;
 };
@@ -229,6 +230,7 @@ export const update = async (
   if (patch.color !== undefined) set.color = patch.color;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
+  if (patch.orderId !== undefined) set.orderId = patch.orderId;
   if (patch.billingType !== undefined) {
     const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
     set.billingType = nextBillingType;
@@ -252,7 +254,11 @@ export const update = async (
     const rows = await exec.update(projects).set(set).where(eq(projects.id, id)).returning();
     return rows[0] ? ((await findById(id, exec)) ?? mapRow(rows[0])) : null;
   } catch (err) {
-    if (getForeignKeyViolation(err)) throw new ForeignKeyError('Client');
+    const fk = getForeignKeyViolation(err);
+    if (fk) {
+      if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      throw new ForeignKeyError('Client');
+    }
     throw err;
   }
 };

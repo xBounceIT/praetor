@@ -90,6 +90,7 @@ const projectUpdateBodySchema = {
     description: { type: 'string' },
     color: { type: 'string' },
     isDisabled: { type: 'boolean' },
+    orderId: { type: ['string', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
@@ -342,11 +343,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description?: string;
         color?: string;
         isDisabled?: boolean;
+        orderId?: string | null;
         billingType?: string;
         billingFrequency?: string;
       };
-      const { name, clientId, description, color, isDisabled, billingType, billingFrequency } =
-        body;
+      const {
+        name,
+        clientId,
+        description,
+        color,
+        isDisabled,
+        orderId,
+        billingType,
+        billingFrequency,
+      } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.update'))) {
@@ -403,6 +413,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               color: normalizedColor || undefined,
               description: description || undefined,
               isDisabled,
+              orderId: orderId === undefined ? undefined : orderId || null,
               billingType: billingTypeResult.value ?? undefined,
               billingFrequency: billingFrequencyResult.value ?? undefined,
             },

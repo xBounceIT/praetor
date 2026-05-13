@@ -307,6 +307,20 @@ describe('POST /api/projects', () => {
     );
   });
 
+  test('201: creates project with orderId omitted (orderId stored as null)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Orderless', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
+  });
+
   test('400: missing name', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -519,6 +533,77 @@ describe('PUT /api/projects/:id', () => {
       'c-old',
       undefined,
     );
+  });
+
+  test('200: sets orderId when provided', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-9' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: 'co-9' }),
+      undefined,
+    );
+  });
+
+  test('200: clears orderId when null is sent', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: null }),
+      undefined,
+    );
+  });
+
+  test('200: leaves orderId unchanged when not provided', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateArgs = updateMock.mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined;
+    expect(updateArgs?.orderId).toBeUndefined();
+  });
+
+  test('400: ForeignKeyError(Linked order) on bad orderId mapped to 400', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockImplementation(async () => {
+      throw new ForeignKeyError('Linked order');
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Linked order not found' });
   });
 
   test('200: isDisabled=true alone audits as project.disabled', async () => {

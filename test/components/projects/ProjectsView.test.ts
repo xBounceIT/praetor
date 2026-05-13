@@ -24,3 +24,39 @@ describe('ProjectsView mixed billing edit behavior', () => {
     expect(source.match(/setProjectBillingChanged\(true\)/g) ?? []).toHaveLength(2);
   });
 });
+
+describe('ProjectsView optional order on create (#319)', () => {
+  test('create form does not require orderId — only name + clientId are validated', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).not.toContain('orderRequired');
+    expect(source).toContain(
+      "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
+    );
+  });
+
+  test('onAddProject signature exposes clientId and an optional orderId', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      'onAddProject: (\n    name: string,\n    clientId: string,\n    orderId: string | undefined,',
+    );
+    expect(source).toContain(
+      'onAddProject(\n        name,\n        clientId,\n        orderId || undefined,',
+    );
+  });
+
+  test('order selector auto-fills client from the selected order', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain('const nextOrder = orders.find((o) => o.id === nextOrderId);');
+    expect(source).toContain('setClientId(nextOrder.clientId);');
+    expect(source).toContain('disabled={Boolean(selectedOrder)}');
+  });
+});

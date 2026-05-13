@@ -61,25 +61,44 @@ describe('makeProjectHandlers', () => {
     });
   });
 
-  test('add creates project from order', async () => {
+  test('add creates project with provided client and order', async () => {
     apiMocks.projectsCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'proj-new', ...(data as object) }),
     );
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [{ id: 'order-1', clientId: 'client-A' } as never],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add('Project Alpha', 'order-1');
+    await handlers.add('Project Alpha', 'client-A', 'order-1');
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.name).toBe('Project Alpha');
     expect(callArg.clientId).toBe('client-A');
     expect(callArg.orderId).toBe('order-1');
+    expect(projects.get()).toHaveLength(1);
+  });
+
+  test('add creates project without orderId when none provided', async () => {
+    apiMocks.projectsCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'proj-new', ...(data as object) }),
+    );
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      projects: projects.get() as never,
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    await handlers.add('Project Beta', 'client-B', undefined);
+    expect(apiMocks.projectsCreate).toHaveBeenCalled();
+    const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.clientId).toBe('client-B');
+    expect(callArg.orderId).toBeUndefined();
     expect(projects.get()).toHaveLength(1);
   });
 
@@ -93,13 +112,12 @@ describe('makeProjectHandlers', () => {
     const tasks = makeStubSetter<TaskLike>([]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [{ id: 'order-1', clientId: 'c1' } as never],
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add('Project', 'order-1', undefined, [
+    await handlers.add('Project', 'c1', 'order-1', undefined, [
       { name: 'task-A' },
       { name: 'task-B' },
     ] as never);
@@ -108,11 +126,10 @@ describe('makeProjectHandlers', () => {
     expect(tasks.get()).toHaveLength(2);
   });
 
-  test('add with unknown order surfaces error to user', async () => {
+  test('add surfaces error when clientId is missing', async () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -124,11 +141,11 @@ describe('makeProjectHandlers', () => {
     const alertMock = mock((_msg?: string) => {});
     globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
-      await handlers.add('P', 'unknown-order');
+      await handlers.add('P', '', undefined);
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
       expect(alertMock).toHaveBeenCalledTimes(1);
-      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('Order not found');
+      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('Client is required');
     } finally {
       console.error = originalError;
       globalThis.alert = originalAlert;
@@ -140,7 +157,6 @@ describe('makeProjectHandlers', () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [{ id: 'order-1', clientId: 'c1' } as never],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -152,7 +168,7 @@ describe('makeProjectHandlers', () => {
     const alertMock = mock((_msg?: string) => {});
     globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
-      await handlers.add('P', 'order-1');
+      await handlers.add('P', 'c1', 'order-1');
       expect(projects.get()).toEqual([]);
       expect(alertMock).toHaveBeenCalledTimes(1);
       expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');
@@ -169,7 +185,6 @@ describe('makeProjectHandlers', () => {
     const tasks = makeStubSetter<TaskLike>([{ id: 't1', projectId: 'p1' }]);
     const handlers = makeProjectHandlers({
       projects: [],
-      clientsOrders: [],
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -189,7 +204,6 @@ describe('makeProjectHandlers', () => {
     ]);
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [],
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -217,7 +231,6 @@ describe('makeProjectHandlers', () => {
 
     const handlers = makeProjectHandlers({
       projects: projects.get() as never,
-      clientsOrders: [],
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,

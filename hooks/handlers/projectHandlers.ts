@@ -4,7 +4,6 @@ import { COLORS } from '../../constants';
 import api from '../../services/api';
 import type {
   BillingFrequency,
-  ClientsOrder,
   Project,
   ProjectTask,
   StoredBillingType,
@@ -13,27 +12,25 @@ import type {
 
 export type ProjectHandlersDeps = {
   projects: Project[];
-  clientsOrders: ClientsOrder[];
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
-  const { projects, clientsOrders, setProjects, setProjectTasks, setEntries } = deps;
+  const { projects, setProjects, setProjectTasks, setEntries } = deps;
 
   const add = async (
     name: string,
-    orderId: string,
+    clientId: string,
+    orderId: string | undefined,
     description?: string,
     draftTasks?: DraftTaskInput[],
     billingType?: StoredBillingType,
     billingFrequency?: BillingFrequency,
   ) => {
     try {
-      const order = clientsOrders.find((o) => o.id === orderId);
-      if (!order) throw new Error('Order not found');
-      const clientId = order.clientId;
+      if (!clientId) throw new Error('Client is required');
 
       const usedColors = projects.map((p) => p.color);
       const availableColors = COLORS.filter((c) => !usedColors.includes(c));

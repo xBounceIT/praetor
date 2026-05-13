@@ -288,6 +288,50 @@ describe('update', () => {
     exec.enqueue({ rows: [] });
     expect(await projectsRepo.update('p-x', { name: 'X' }, testDb)).toBeNull();
   });
+
+  test('sets orderId when provided', async () => {
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 7: 'co-9' })] });
+    exec.enqueue({ rows: [{ ...rawProjectRow, order_id: 'co-9' }] });
+    await projectsRepo.update('p-1', { orderId: 'co-9' }, testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"order_id" = $1');
+    expect(exec.calls[0].params).toContain('co-9');
+  });
+
+  test('clears orderId when null', async () => {
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
+    await projectsRepo.update('p-1', { orderId: null }, testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"order_id" = $1');
+    expect(exec.calls[0].params).toContain(null);
+  });
+
+  test('FK violation on projects_order_id_fkey throws ForeignKeyError("Linked order")', async () => {
+    exec.enqueue(() => {
+      throw makeDbError('23503', 'projects_order_id_fkey');
+    });
+    let thrown: unknown;
+    try {
+      await projectsRepo.update('p-1', { orderId: 'co-bad' }, testDb);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(ForeignKeyError);
+    expect((thrown as ForeignKeyError).target).toBe('Linked order');
+  });
+
+  test('FK violation on client constraint still throws ForeignKeyError("Client")', async () => {
+    exec.enqueue(() => {
+      throw makeDbError('23503', 'projects_client_id_fkey');
+    });
+    let thrown: unknown;
+    try {
+      await projectsRepo.update('p-1', { clientId: 'c-bad' }, testDb);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(ForeignKeyError);
+    expect((thrown as ForeignKeyError).target).toBe('Client');
+  });
 });
 
 describe('deleteById', () => {
