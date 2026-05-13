@@ -9,6 +9,7 @@ import {
   Lock,
   type LucideIcon,
   Moon,
+  Palette,
   RefreshCw,
   Shield,
   Sun,
@@ -67,45 +68,34 @@ type ThemeSwatchVariant = 'default' | 'praetor';
 const THEME_OPTION_META: Record<
   Theme,
   {
-    activeClassName: string;
-    inactiveClassName: string;
     swatchClassName: string;
     Icon?: LucideIcon;
     swatchVariant: ThemeSwatchVariant;
   }
 > = {
   light: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
       'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
     Icon: Sun,
     swatchVariant: 'default',
   },
   dark: {
-    activeClassName: 'border-secondary bg-secondary',
-    inactiveClassName: 'border-zinc-100 hover:border-secondary',
-    swatchClassName: 'bg-zinc-900 shadow-sm flex items-center justify-center text-white',
+    swatchClassName:
+      'bg-zinc-900 border border-zinc-700 shadow-sm flex items-center justify-center text-white',
     Icon: Moon,
     swatchVariant: 'default',
   },
   zebra: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
       'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
     Icon: Contrast,
     swatchVariant: 'default',
   },
   praetor: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName: 'bg-white border border-zinc-200 shadow-sm flex items-center justify-center',
     swatchVariant: 'praetor',
   },
   auto: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
     swatchClassName:
       'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
     Icon: SunMoon,
@@ -563,51 +553,67 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'appearance' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-palette text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <Palette aria-hidden="true" className="size-4 text-praetor" />
+              {t('appearance.title')}
+            </CardTitle>
+            <CardDescription>{t('appearance.description')}</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {THEMES.map((theme) => {
                 const isSelected = currentTheme === theme;
                 const option = THEME_OPTION_META[theme];
 
                 return (
-                  <button
+                  <Card
                     key={theme}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
                     onClick={() => handleThemeChange(theme)}
-                    className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${
-                      isSelected ? option.activeClassName : option.inactiveClassName
-                    }`}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleThemeChange(theme);
+                      }
+                    }}
+                    className={cn(
+                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isSelected && 'border-primary ring-2 ring-primary/40',
+                    )}
                   >
-                    <div className="relative size-10 shrink-0">
+                    <div className="relative shrink-0">
                       <div
-                        className={`size-10 overflow-hidden rounded-full ${option.swatchClassName}`}
+                        className={cn(
+                          'size-10 overflow-hidden rounded-full',
+                          option.swatchClassName,
+                        )}
                       >
                         {renderThemeSwatchContent(option)}
                       </div>
                       {isSelected && (
-                        <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-secondary-foreground shadow-sm">
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
                           <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
                         </span>
                       )}
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-zinc-800 mb-1">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-foreground">
                         {t(`appearance.${theme}.name`)}
                       </h4>
-                      <p className="text-xs text-zinc-500 leading-relaxed">
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         {t(`appearance.${theme}.description`)}
                       </p>
                     </div>
-                  </button>
+                  </Card>
                 );
               })}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'language' && (
