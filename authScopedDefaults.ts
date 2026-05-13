@@ -6,19 +6,20 @@ export type GeneralSettingsState = Required<GeneralSettings>;
 
 // Defaults are shared module-level references reused by every reset; an
 // in-place mutation by any consumer would silently re-introduce the leak
-// these constants exist to prevent. Freeze recursively so dev-mode catches
-// the mistake.
-const deepFreeze = <T>(value: T): T => {
+// these constants exist to prevent. Freeze recursively (Object.isFrozen
+// guards against cycles) and return Readonly so the compiler flags writes
+// before runtime does.
+const deepFreeze = <T>(value: T): Readonly<T> => {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
-    for (const key of Object.keys(value) as (keyof T)[]) {
-      deepFreeze(value[key]);
+    for (const child of Object.values(value)) {
+      deepFreeze(child);
     }
   }
   return value;
 };
 
-export const INITIAL_LDAP_CONFIG: LdapConfig = deepFreeze({
+export const INITIAL_LDAP_CONFIG = deepFreeze<LdapConfig>({
   enabled: false,
   serverUrl: 'ldap://ldap.example.com:389',
   baseDn: 'dc=example,dc=com',
@@ -32,7 +33,7 @@ export const INITIAL_LDAP_CONFIG: LdapConfig = deepFreeze({
   autoProvisionAll: false,
 });
 
-export const INITIAL_GENERAL_SETTINGS: GeneralSettingsState = deepFreeze({
+export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   currency: '€',
   dailyLimit: 8,
   startOfWeek: 'Monday',
@@ -47,7 +48,7 @@ export const INITIAL_GENERAL_SETTINGS: GeneralSettingsState = deepFreeze({
   defaultLocation: 'remote',
 });
 
-export const INITIAL_EMAIL_CONFIG: EmailConfig = deepFreeze({
+export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({
   enabled: false,
   smtpHost: '',
   smtpPort: 587,
