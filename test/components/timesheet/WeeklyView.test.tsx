@@ -80,7 +80,12 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
     });
   });
 
-  test('does not relabel an existing out-of-scope entry to the first available catalog item', async () => {
+  test('drops an out-of-scope entry from the recent-task rows', async () => {
+    // The viewing user has an entry referencing alpha catalog items, but only
+    // the beta catalog is currently in scope. The alpha entry must NOT become
+    // a recent-task row — it would be silently relabelled to the wrong
+    // catalog refs. The form row may still default to the first beta entry
+    // because the form is the user's working scratchpad, not historical data.
     const entries: TimeEntry[] = [
       {
         id: 'entry-alpha',
@@ -115,9 +120,54 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
     );
 
     await waitFor(() => {
-      expect(document.body).not.toHaveTextContent('Beta Client');
-      expect(document.body).not.toHaveTextContent('Beta Project');
-      expect(document.body).not.toHaveTextContent('Beta Task');
+      expect(document.body).not.toHaveTextContent('Alpha Client');
+      expect(document.body).not.toHaveTextContent('Alpha Project');
+      expect(document.body).not.toHaveTextContent('Alpha Task');
+    });
+  });
+
+  test('builds recent-task rows from the viewing user’s past entries', async () => {
+    const today = todayDateOnly();
+    const entries: TimeEntry[] = [
+      {
+        id: 'entry-1',
+        userId: 'user-a',
+        date: today,
+        clientId: 'client-alpha',
+        clientName: 'Alpha Client',
+        projectId: 'project-alpha',
+        projectName: 'Alpha Project',
+        task: 'Alpha Task',
+        duration: 3.5,
+        hourlyCost: 0,
+        createdAt: 1700000000,
+        location: 'remote',
+      },
+    ];
+
+    render(
+      <WeeklyView
+        entries={entries}
+        {...alphaCatalog}
+        onAddBulkEntries={mock(async () => {})}
+        onDeleteEntry={mock(() => {})}
+        onUpdateEntry={mock(() => {})}
+        viewingUserId="user-a"
+        availableUsers={availableUsers}
+        onViewUserChange={mock(() => {})}
+        startOfWeek="Monday"
+        treatSaturdayAsHoliday={false}
+        allowWeekendSelection
+      />,
+    );
+
+    // The form row auto-selects Alpha Task, so the entry's combination is
+    // collapsed into the form row (deduplication). The pre-filled duration
+    // (3.5h) for today still appears in the grid.
+    await waitFor(() => {
+      const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
+      const has3point5 = Array.from(inputs).some((input) => input.value === '3.5');
+      expect(has3point5 || document.body.textContent?.includes('3.5')).toBe(true);
     });
   });
 });

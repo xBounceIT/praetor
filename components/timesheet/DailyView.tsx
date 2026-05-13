@@ -15,6 +15,8 @@ import { Button } from '../ui/button';
 import { Field, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Separator } from '../ui/separator';
+import EntryCatalogSelector from './EntryCatalogSelector';
+import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection';
 
 export interface DailyViewProps {
   clients: Client[];
@@ -58,17 +60,11 @@ const DailyView: React.FC<DailyViewProps> = ({
   currency,
 }) => {
   const { t } = useTranslation('timesheets');
+  const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
 
-  // Manual fields
   const [date, setDate] = useState(selectedDate || getLocalDateString());
-  const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id || '');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [selectedTaskName, setSelectedTaskName] = useState('');
-  const [selectedTaskId, setSelectedTaskId] = useState('');
-  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
-  const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
   const [errors, setErrors] = useState<{
     clientId?: string;
     projectId?: string;
@@ -76,15 +72,20 @@ const DailyView: React.FC<DailyViewProps> = ({
     recurrenceEndDate?: string;
   }>({});
 
-  // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
   const [recurrencePattern, setRecurrencePattern] = useState<
     'daily' | 'weekly' | 'monthly' | string
   >('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [isCustomRepeatModalOpen, setIsCustomRepeatModalOpen] = useState(false);
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
 
-  const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const selection = useCatalogSelection({
+    clients,
+    projects,
+    projectTasks,
+    defaultLocation,
+  });
 
   const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
@@ -94,7 +95,6 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const hasValidDuration = parseFloat(duration) > 0;
 
-  // Sync internal date when calendar selection changes
   useEffect(() => {
     if (selectedDate && selectedDate !== date) {
       setDate(selectedDate);
@@ -102,65 +102,9 @@ const DailyView: React.FC<DailyViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, date]);
 
-  // Keep client selection valid when RBAC-scoped catalogs change.
-  useEffect(() => {
-    if (clients.length === 0) {
-      if (selectedClientId !== '') setSelectedClientId('');
-      return;
-    }
-
-    if (!clients.some((client) => client.id === selectedClientId)) {
-      setSelectedClientId(clients[0].id);
-    }
-  }, [clients, selectedClientId]);
-
-  // Filter projects when client changes
-  const filteredProjects = useMemo(
-    () => projects.filter((p) => p.clientId === selectedClientId),
-    [projects, selectedClientId],
-  );
-  const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
-
-  // Filter tasks when project changes
-  const filteredTasks = useMemo(
-    () => projectTasks.filter((t) => t.projectId === selectedProjectId),
-    [projectTasks, selectedProjectId],
-  );
-  const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
-  const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
-
-  // Keep project/task selections valid when the selected client or scoped catalogs change.
-  useEffect(() => {
-    if (filteredProjects.length === 0) {
-      if (selectedProjectId !== '') {
-        setSelectedProjectId('');
-      }
-      return;
-    }
-
-    if (!filteredProjects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId(firstFilteredProjectId);
-    }
-  }, [filteredProjects, firstFilteredProjectId, selectedProjectId]);
-
-  useEffect(() => {
-    if (filteredTasks.length === 0) {
-      setSelectedTaskId('');
-      setSelectedTaskName('');
-      return;
-    }
-
-    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskName(firstFilteredTaskName);
-      setSelectedTaskId(firstFilteredTaskId);
-    }
-  }, [filteredTasks, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
-
-  useEffect(() => {
-    if (selectedClientId === '') {
-      setSelectedProjectId('');
-    }
-  }, [selectedClientId]);
+  const clearTaskError = () => {
+    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,14 +113,12 @@ const DailyView: React.FC<DailyViewProps> = ({
     const newErrors: typeof errors = {};
     const durationVal = parseFloat(duration);
 
-    // Validate client/project/task
-    if (!selectedClientId) newErrors.clientId = t('entry.clientRequired');
-    if (!selectedProjectId) newErrors.projectId = t('entry.projectRequired');
-    if (!selectedTaskName || (!selectedTaskId && !selectedTaskName)) {
+    if (!selection.clientId) newErrors.clientId = t('entry.clientRequired');
+    if (!selection.projectId) newErrors.projectId = t('entry.projectRequired');
+    if (!selection.taskName) {
       newErrors.task = t('entry.taskRequired');
     }
 
-    // Validate recurrence date if enabled
     if (makeRecurring && recurrenceEndDate && date && recurrenceEndDate < date) {
       newErrors.recurrenceEndDate = t('entry.endDateAfterStart');
     }
@@ -186,25 +128,24 @@ const DailyView: React.FC<DailyViewProps> = ({
       return;
     }
 
-    const project = projects.find((p) => p.id === selectedProjectId);
-    const client = clients.find((c) => c.id === selectedClientId);
+    const project = projects.find((p) => p.id === selection.projectId);
+    const client = clients.find((c) => c.id === selection.clientId);
 
     onAdd({
       date,
-      clientId: selectedClientId,
+      clientId: selection.clientId,
       clientName: client?.name || 'Unknown Client',
-      projectId: selectedProjectId,
+      projectId: selection.projectId,
       projectName: project?.name || 'General',
-      task: selectedTaskName,
+      task: selection.taskName,
       notes,
       duration: durationVal,
-      location,
+      location: selection.location,
     });
 
-    // Handle recursion if checked
-    if (makeRecurring && onMakeRecurring && selectedTaskId) {
+    if (makeRecurring && onMakeRecurring && selection.taskId) {
       onMakeRecurring(
-        selectedTaskId,
+        selection.taskId,
         recurrencePattern,
         date,
         recurrenceEndDate || undefined,
@@ -212,10 +153,9 @@ const DailyView: React.FC<DailyViewProps> = ({
       );
     }
 
-    // Reset form
     setDuration('');
     setNotes('');
-    setLocation(defaultLocation);
+    selection.resetLocation();
     setMakeRecurring(false);
     setRecurrenceEndDate('');
     setRecurrencePattern('weekly');
@@ -230,19 +170,6 @@ const DailyView: React.FC<DailyViewProps> = ({
     }
   };
 
-  const handleTaskChange = (taskId: string) => {
-    if (taskId === 'custom') {
-      setIsAddTaskModalOpen(true);
-      return;
-    }
-    const task = filteredTasks.find((t) => t.id === taskId);
-    if (task) {
-      setSelectedTaskName(task.name);
-      setSelectedTaskId(task.id);
-    }
-    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
-  };
-
   const handleAddCustomTaskSubmit = async (
     taskName: string,
     taskProjectId: string,
@@ -253,14 +180,13 @@ const DailyView: React.FC<DailyViewProps> = ({
     // If `onAddCustomTask` rejects, the throw propagates to TaskFormModal's submit handler,
     // which keeps the modal open and resets `isSubmitting` via its `finally`. No silent failure.
     const created = await onAddCustomTask(taskName, taskProjectId, undefined, description, details);
-    setSelectedTaskId(created.id);
-    setSelectedTaskName(created.name);
-    // Clear any pending recurrence state from a previously-selected task so the new task
-    // starts with a clean slate.
+    // The fresh task may not be in `filteredTasks` yet (parent re-render hasn't flowed back),
+    // so pass the name explicitly so the hook doesn't fall back to a stale lookup.
+    selection.setTask(created.id, created.name);
     setMakeRecurring(false);
     setRecurrenceEndDate('');
     setRecurrencePattern('weekly');
-    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+    clearTaskError();
     return created;
   };
 
@@ -270,17 +196,9 @@ const DailyView: React.FC<DailyViewProps> = ({
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
 
-  const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
-  const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));
-  const taskOptions = useMemo(() => {
-    const opts = filteredTasks.map((t) => ({ id: t.id, name: t.name }));
-    // Only offer "+ Custom Task..." when a project is selected — the modal locks the project to
-    // the current selection, so an empty project would render a stuck, unsubmittable form.
-    if (canCreateCustomTask && selectedProjectId !== '') {
-      opts.push({ id: 'custom', name: t('entry.customTask') });
-    }
-    return opts;
-  }, [filteredTasks, canCreateCustomTask, selectedProjectId, t]);
+  // The "+ Custom Task..." option is only useful when a project is selected,
+  // since the modal locks the project to the current selection.
+  const allowCustomTask = canCreateCustomTask && selection.projectId !== '';
 
   return (
     <div className="rounded-lg border border-border bg-background shadow-sm p-5">
@@ -314,93 +232,52 @@ const DailyView: React.FC<DailyViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px] gap-4 items-start">
-          <div className="min-w-0">
-            <SelectControl
-              label={t('entry.client')}
-              options={clientOptions}
-              value={selectedClientId}
-              onChange={(val) => {
-                setSelectedClientId(val as string);
-                if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-              }}
-              searchable={true}
-              className={errors.clientId ? 'border-destructive' : ''}
-            />
-            {errors.clientId && (
-              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <SelectControl
-              label={t('entry.project')}
-              options={projectOptions}
-              value={selectedProjectId}
-              onChange={(val) => {
-                setSelectedProjectId(val as string);
-                if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
-              }}
-              placeholder={
-                filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')
-              }
-              searchable={true}
-              className={errors.projectId ? 'border-destructive' : ''}
-            />
-            {errors.projectId && (
-              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <SelectControl
-              label={t('entry.task')}
-              options={taskOptions}
-              value={selectedTaskId}
-              onChange={(val) => handleTaskChange(val as string)}
-              placeholder={
-                filteredTasks.length === 0 && !canCreateCustomTask
-                  ? t('entry.noTasks')
-                  : t('entry.selectTask')
-              }
-              searchable={true}
-              className={errors.task ? 'border-destructive' : ''}
-            />
-            {errors.task && (
-              <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <SelectControl
-              label={t('entry.location')}
-              options={[
-                { id: 'office', name: t('entry.locationTypes.office') },
-                { id: 'customer_premise', name: t('entry.locationTypes.customerPremise') },
-                { id: 'remote', name: t('entry.locationTypes.remote') },
-                { id: 'transfer', name: t('entry.locationTypes.transfer') },
-              ]}
-              value={location}
-              onChange={(val) => setLocation(val as TimeEntryLocation)}
-            />
-          </div>
-
-          <Field className="min-w-0">
-            <FieldLabel htmlFor="daily-entry-hours">
-              {t('entry.hours')} <span className="text-destructive">*</span>
-            </FieldLabel>
-            <Input
-              id="daily-entry-hours"
-              type="text"
-              inputMode="decimal"
-              pattern="^[0-9]*([.,][0-9]*)?$"
-              value={duration}
-              onChange={handleDurationInputChange}
-              placeholder="0.0"
-              className="h-9 min-h-9 max-h-9 rounded-lg py-2"
-            />
-          </Field>
-        </div>
+        <EntryCatalogSelector
+          clients={clients}
+          filteredProjects={selection.filteredProjects}
+          filteredTasks={selection.filteredTasks}
+          selectedClientId={selection.clientId}
+          selectedProjectId={selection.projectId}
+          selectedTaskId={selection.taskId}
+          location={selection.location}
+          onClientChange={(id) => {
+            selection.setClient(id);
+            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+          }}
+          onProjectChange={(id) => {
+            selection.setProject(id);
+            if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
+          }}
+          onTaskChange={(taskId) => {
+            if (taskId === CUSTOM_TASK_SENTINEL) {
+              setIsAddTaskModalOpen(true);
+              return;
+            }
+            selection.setTask(taskId);
+            clearTaskError();
+          }}
+          onLocationChange={selection.setLocation}
+          allowCustomTask={allowCustomTask}
+          errors={errors}
+          className="xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px]"
+          extraTrailing={
+            <Field className="min-w-0">
+              <FieldLabel htmlFor="daily-entry-hours">
+                {t('entry.hours')} <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Input
+                id="daily-entry-hours"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]*([.,][0-9]*)?$"
+                value={duration}
+                onChange={handleDurationInputChange}
+                placeholder="0.0"
+                className="h-9 min-h-9 max-h-9 rounded-lg py-2"
+              />
+            </Field>
+          }
+        />
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
           <Field className="min-w-0">
@@ -422,7 +299,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </div>
         </div>
 
-        {selectedTaskId && (
+        {selection.taskId && (
           <div
             className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-muted/40 border-border' : 'bg-transparent border-transparent'}`}
           >
@@ -504,7 +381,7 @@ const DailyView: React.FC<DailyViewProps> = ({
         canDelete={false}
         onAdd={handleAddCustomTaskSubmit}
         onUpdate={() => {}}
-        initialProjectId={selectedProjectId}
+        initialProjectId={selection.projectId}
         projectLocked={true}
       />
     </div>

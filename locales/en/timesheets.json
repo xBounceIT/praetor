@@ -138,6 +138,11 @@
     "deleteRow": "Delete row",
     "selectProject": "Select project...",
     "selectTask": "Select task...",
+    "newEntry": "New entry",
+    "recentTask": "Recent",
+    "noRecentTasks": "No recent tasks yet — pick a client and project above to log time.",
+    "weekTotal": "Week total",
+    "monthTotal": "Month total",
     "days": {
       "mon": "Mon",
       "tue": "Tue",
