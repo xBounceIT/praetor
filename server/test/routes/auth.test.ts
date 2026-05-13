@@ -302,7 +302,7 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).toHaveBeenCalledTimes(1);
   });
 
-  test('401: LDAP user does not fall back to local password when LDAP fails', async () => {
+  test('503: LDAP user login returns ldap_unavailable when LDAP throws (regression #368)', async () => {
     findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockRejectedValue(new Error('LDAP server unreachable'));
     bcryptCompareMock.mockResolvedValue(true);
@@ -313,8 +313,30 @@ describe('POST /api/auth/login', () => {
       payload: { username: 'alice', password: 'secret' },
     });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Authentication service temporarily unavailable',
+      errorCode: 'ldap_unavailable',
+    });
     expect(bcryptCompareMock).not.toHaveBeenCalled();
+  });
+
+  test('503: unknown-user LDAP auto-provision returns ldap_unavailable when LDAP throws (regression #368)', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    ldapAuthenticateAndProvisionMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'ghost', password: 'whatever' },
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Authentication service temporarily unavailable',
+      errorCode: 'ldap_unavailable',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('401: SSO-only user cannot sign in with local password', async () => {
