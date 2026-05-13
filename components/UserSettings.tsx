@@ -637,7 +637,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       }
                     }}
                     className={cn(
-                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'flex-row items-start gap-3 p-4 border-border cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       active && 'border-primary ring-2 ring-primary/40',
                     )}
                   >
