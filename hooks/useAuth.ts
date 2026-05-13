@@ -44,10 +44,13 @@ export function useAuth(opts: UseAuthOptions = {}) {
   const onLoginRef = useRef(opts.onLogin);
   const onLogoutRef = useRef(opts.onLogout);
   const retryDelaysRef = useRef(opts.retryDelaysMs ?? AUTH_CHECK_RETRY_DELAYS_MS);
+  // Tie the ref-sync effect to the callback identities so we don't burn a
+  // commit re-running it after every parent render. Consumers that pass stable
+  // (memoized) callbacks now pay this cost zero extra times.
   useEffect(() => {
     onLoginRef.current = opts.onLogin;
     onLogoutRef.current = opts.onLogout;
-  });
+  }, [opts.onLogin, opts.onLogout]);
 
   const loadUserSettings = useCallback(async () => {
     try {

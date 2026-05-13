@@ -316,6 +316,36 @@ describe('useAuth', () => {
     expect(result.current.logoutReason).toBeNull();
   });
 
+  test('callback ref-sync effect only re-runs when callback identity changes', async () => {
+    // Snapshot the latest callback identity captured by the ref. The effect is
+    // what updates the ref, so the ref's value tells us whether the effect ran.
+    const onLoginA = mock((_u: unknown) => {});
+    const onLoginB = mock((_u: unknown) => {});
+
+    const { result, rerender } = renderHook(
+      ({ onLogin }: { onLogin: typeof onLoginA }) => useAuth({ onLogin }),
+      { initialProps: { onLogin: onLoginA } },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // Re-render with the SAME callback identity. Without the deps array, the
+    // effect would fire anyway; with [onLogin, onLogout] it should be a no-op.
+    rerender({ onLogin: onLoginA });
+    await act(async () => {
+      await result.current.login({ id: 'check-a' } as never, 'tok-a');
+    });
+    expect(onLoginA).toHaveBeenLastCalledWith({ id: 'check-a' });
+    expect(onLoginB).not.toHaveBeenCalled();
+
+    // Now swap to a different callback identity - the effect MUST run and
+    // update the ref so login fires the new callback.
+    rerender({ onLogin: onLoginB });
+    await act(async () => {
+      await result.current.login({ id: 'check-b' } as never, 'tok-b');
+    });
+    expect(onLoginB).toHaveBeenLastCalledWith({ id: 'check-b' });
+  });
+
   test('switchRole calls api and applies returned user/token via login', async () => {
     const onLogin = mock((_u: unknown) => {});
     apiMocks.authSwitchRole.mockImplementation((_roleId: string) =>
