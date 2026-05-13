@@ -11,6 +11,7 @@ import {
 } from '../utils/billing.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
+import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
@@ -34,12 +35,6 @@ export type Project = {
   billingFrequency: BillingFrequency;
 };
 
-const parseRevenue = (v: string | number | null | undefined): number | null => {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
 const mapRow = (row: typeof projects.$inferSelect): Project => ({
   id: row.id,
   name: row.name,
@@ -54,7 +49,7 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   offerId: row.offerId,
   startDate: row.startDate ?? null,
   endDate: row.endDate ?? null,
-  revenue: parseRevenue(row.revenue),
+  revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
 });
@@ -100,7 +95,7 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   offerId: row.offer_id,
   startDate: row.start_date,
   endDate: row.end_date,
-  revenue: parseRevenue(row.revenue),
+  revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billing_type ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
 });
@@ -221,10 +216,7 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         offerId: project.offerId ?? null,
         startDate: project.startDate ?? null,
         endDate: project.endDate ?? null,
-        revenue:
-          project.revenue === null || project.revenue === undefined
-            ? null
-            : String(project.revenue),
+        revenue: numericForDb(project.revenue),
         billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
         billingFrequency: normalizeBillingFrequency(
           project.billingType ?? DEFAULT_BILLING_TYPE,
@@ -275,7 +267,7 @@ export const update = async (
   if (patch.startDate !== undefined) set.startDate = patch.startDate;
   if (patch.endDate !== undefined) set.endDate = patch.endDate;
   if (patch.revenue !== undefined) {
-    set.revenue = patch.revenue === null ? null : String(patch.revenue);
+    set.revenue = numericForDb(patch.revenue);
   }
   if (patch.billingType !== undefined) {
     const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
@@ -308,6 +300,21 @@ export const update = async (
     }
     throw err;
   }
+};
+
+export const findDateRangeById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ startDate: string | null; endDate: string | null } | null> => {
+  const rows = await executeRows<{ start_date: string | null; end_date: string | null }>(
+    exec,
+    sql`SELECT p.start_date::text AS start_date, p.end_date::text AS end_date
+          FROM projects p
+         WHERE p.id = ${id}
+         LIMIT 1`,
+  );
+  if (rows.length === 0) return null;
+  return { startDate: rows[0].start_date, endDate: rows[0].end_date };
 };
 
 export const findBillingById = async (

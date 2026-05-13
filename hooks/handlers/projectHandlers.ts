@@ -1,14 +1,8 @@
 import type React from 'react';
-import type { DraftTaskInput } from '../../components/projects/ProjectsView';
+import type { AddProjectFormInput } from '../../components/projects/ProjectsView';
 import { COLORS } from '../../constants';
 import api from '../../services/api';
-import type {
-  BillingFrequency,
-  Project,
-  ProjectTask,
-  StoredBillingType,
-  TimeEntry,
-} from '../../types';
+import type { Project, ProjectTask, TimeEntry } from '../../types';
 
 export type ProjectHandlersDeps = {
   projects: Project[];
@@ -17,19 +11,8 @@ export type ProjectHandlersDeps = {
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
 };
 
-export type AddProjectInput = {
-  name: string;
-  clientId: string;
-  offerId: string;
-  orderId?: string;
-  description?: string;
-  draftTasks?: DraftTaskInput[];
-  billingType?: StoredBillingType;
-  billingFrequency?: BillingFrequency;
-  startDate?: string | null;
-  endDate?: string | null;
-  revenue?: number | null;
-};
+// Re-export so callers don't need to know which module defines the form's submit shape.
+export type AddProjectInput = AddProjectFormInput;
 
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
   const { projects, setProjects, setProjectTasks, setEntries } = deps;

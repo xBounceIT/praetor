@@ -38,6 +38,7 @@ const listForUserMock = mock();
 const createMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
+const findDateRangeByIdMock = mock();
 const deleteByIdMock = mock();
 const lockClientIdByIdMock = mock();
 const lockNameAndClientByIdMock = mock();
@@ -90,6 +91,7 @@ beforeAll(async () => {
     create: createMock,
     update: updateMock,
     findById: findByIdMock,
+    findDateRangeById: findDateRangeByIdMock,
     deleteById: deleteByIdMock,
     lockClientIdById: lockClientIdByIdMock,
     lockNameAndClientById: lockNameAndClientByIdMock,
@@ -189,6 +191,7 @@ const allMocks = [
   createMock,
   updateMock,
   findByIdMock,
+  findDateRangeByIdMock,
   deleteByIdMock,
   lockClientIdByIdMock,
   lockNameAndClientByIdMock,
@@ -977,7 +980,7 @@ describe('PUT /api/projects/:id', () => {
 
   test('200: patches offerId, startDate, endDate, revenue', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
-    findByIdMock.mockResolvedValue({ ...SAMPLE_PROJECT, startDate: null, endDate: null });
+    findDateRangeByIdMock.mockResolvedValue({ startDate: null, endDate: null });
     updateMock.mockResolvedValue({
       ...SAMPLE_PROJECT,
       offerId: 'of-2',
@@ -1032,7 +1035,7 @@ describe('PUT /api/projects/:id', () => {
 
   test('400: startDate after endDate', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
-    findByIdMock.mockResolvedValue({ ...SAMPLE_PROJECT, startDate: null, endDate: null });
+    findDateRangeByIdMock.mockResolvedValue({ startDate: null, endDate: null });
 
     const res = await testApp.inject({
       method: 'PUT',

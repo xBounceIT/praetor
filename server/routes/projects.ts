@@ -34,6 +34,7 @@ import {
   ensureArrayOfStrings,
   optionalDateString,
   optionalEnum,
+  optionalNonEmptyString,
   optionalNonNegativeNumber,
   requireNonEmptyString,
   validateHexColor,
@@ -115,6 +116,7 @@ const projectUpdateBodySchema = {
 class PermissionError extends Error {}
 class OrderClientMismatchError extends Error {}
 class OfferClientMismatchError extends Error {}
+class DateRangeError extends Error {}
 
 const canAccessClient = (
   request: FastifyRequest,
@@ -441,60 +443,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
 
-      let offerIdPatch: { provided: boolean; value: string | null } = {
-        provided: false,
-        value: null,
+      // Parse each optional patch field into a `{provided, value}` tuple so we can distinguish
+      // "absent from body" (skip) from "explicitly null" (clear) in the repo call below.
+      const parsePatch = <T>(
+        key: 'offerId' | 'startDate' | 'endDate' | 'revenue',
+        parse: (raw: unknown) => { ok: true; value: T | null } | { ok: false; message: string },
+      ): { provided: true; value: T | null } | { provided: false } | { error: string } => {
+        if (!Object.hasOwn(body, key)) return { provided: false };
+        const r = parse((body as Record<string, unknown>)[key]);
+        return r.ok ? { provided: true, value: r.value } : { error: r.message };
       };
-      if (Object.hasOwn(body, 'offerId')) {
-        if (body.offerId === null || body.offerId === '') {
-          offerIdPatch = { provided: true, value: null };
-        } else {
-          const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
-          if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
-          offerIdPatch = { provided: true, value: offerIdResult.value };
-        }
-      }
 
-      let startDatePatch: { provided: boolean; value: string | null } = {
-        provided: false,
-        value: null,
-      };
-      if (Object.hasOwn(body, 'startDate')) {
-        const r = optionalDateString(body.startDate, 'startDate');
-        if (!r.ok) return badRequest(reply, r.message);
-        startDatePatch = { provided: true, value: r.value };
-      }
+      const offerIdPatch = parsePatch<string>('offerId', (v) =>
+        optionalNonEmptyString(v, 'offerId'),
+      );
+      if ('error' in offerIdPatch) return badRequest(reply, offerIdPatch.error);
 
-      let endDatePatch: { provided: boolean; value: string | null } = {
-        provided: false,
-        value: null,
-      };
-      if (Object.hasOwn(body, 'endDate')) {
-        const r = optionalDateString(body.endDate, 'endDate');
-        if (!r.ok) return badRequest(reply, r.message);
-        endDatePatch = { provided: true, value: r.value };
-      }
+      const startDatePatch = parsePatch<string>('startDate', (v) =>
+        optionalDateString(v, 'startDate'),
+      );
+      if ('error' in startDatePatch) return badRequest(reply, startDatePatch.error);
 
-      if (startDatePatch.provided || endDatePatch.provided) {
-        const existing = await projectsRepo.findById(idResult.value);
-        const nextStart = startDatePatch.provided
-          ? startDatePatch.value
-          : (existing?.startDate ?? null);
-        const nextEnd = endDatePatch.provided ? endDatePatch.value : (existing?.endDate ?? null);
-        if (nextStart && nextEnd && nextStart > nextEnd) {
-          return badRequest(reply, 'startDate must be on or before endDate');
-        }
-      }
+      const endDatePatch = parsePatch<string>('endDate', (v) => optionalDateString(v, 'endDate'));
+      if ('error' in endDatePatch) return badRequest(reply, endDatePatch.error);
 
-      let revenuePatch: { provided: boolean; value: number | null } = {
-        provided: false,
-        value: null,
-      };
-      if (Object.hasOwn(body, 'revenue')) {
-        const r = optionalNonNegativeNumber(body.revenue, 'revenue');
-        if (!r.ok) return badRequest(reply, r.message);
-        revenuePatch = { provided: true, value: r.value };
-      }
+      const revenuePatch = parsePatch<number>('revenue', (v) =>
+        optionalNonNegativeNumber(v, 'revenue'),
+      );
+      if ('error' in revenuePatch) return badRequest(reply, revenuePatch.error);
 
       let updatedProject: {
         updated: projectsRepo.Project;
@@ -507,6 +483,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const previousClientId = await projectsRepo.lockClientIdById(idResult.value, tx);
           if (previousClientId === null) {
             throw new NotFoundError('Project');
+          }
+
+          // Validate the final date range against the locked row so a concurrent writer can't
+          // sneak past us. The DB CHECK constraint is still the ultimate guard.
+          if (startDatePatch.provided || endDatePatch.provided) {
+            const existing = await projectsRepo.findDateRangeById(idResult.value, tx);
+            const nextStart = startDatePatch.provided
+              ? startDatePatch.value
+              : (existing?.startDate ?? null);
+            const nextEnd = endDatePatch.provided
+              ? endDatePatch.value
+              : (existing?.endDate ?? null);
+            if (nextStart && nextEnd && nextStart > nextEnd) {
+              throw new DateRangeError('startDate must be on or before endDate');
+            }
           }
 
           const requestedClientId =
@@ -533,9 +524,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
           }
 
-          // Same cross-check for offers: when the offer is changed or set, verify it belongs
-          // to the (requested or unchanged) project client. Skipped when the patch clears the
-          // offer (value === null) — no inconsistency possible.
           if (offerIdPatch.provided && offerIdPatch.value !== null) {
             const offerClientId = await clientOffersRepo.findClientIdById(offerIdPatch.value, tx);
             if (offerClientId !== null && offerClientId !== requestedClientId) {
@@ -603,6 +591,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(400).send({ error: err.message });
         }
         if (err instanceof OfferClientMismatchError) {
+          return reply.code(400).send({ error: err.message });
+        }
+        if (err instanceof DateRangeError) {
           return reply.code(400).send({ error: err.message });
         }
         if (err instanceof ForeignKeyError) {

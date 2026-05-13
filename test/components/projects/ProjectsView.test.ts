@@ -80,14 +80,17 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
 
-    expect(source).toContain(
-      "activitiesRevenueSum > 0 ? 'activities' : effectiveOrder ? 'order' : 'manual'",
-    );
+    // Precedence resolution lives in a dedicated helper, used once at module top-level.
+    expect(source).toContain('const resolveRevenueSource = (');
+    expect(source).toContain("if (activitiesSum > 0) return 'activities';");
+    expect(source).toContain('resolveRevenueSource(activitiesRevenueSum, effectiveOrder)');
     expect(source).toContain('calculatePricingTotals(');
     // Read-only when source is not manual
     expect(source).toContain("readOnly={revenueSource !== 'manual'}");
-    // Submit path persists null when not manual
-    expect(source).toContain("submitSource === 'manual' && revenue ? parseFloat(revenue) : null");
+    // Submit reuses the render-scope `persistedRevenue` (no duplicate computation)
+    expect(source).toContain(
+      "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;",
+    );
   });
 
   test('requires offer reference and validates date range on submit', async () => {
@@ -124,46 +127,35 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
   });
 
   test('changing the order, offer, or client clears any link that no longer matches', async () => {
-    // Symmetric cascading reset so the user can never reach the server-side cross-check via
-    // a stale (clientId, orderId, offerId) tuple. Each handler clears the OTHER two links if
-    // they belonged to a different client.
-    const source = await Bun.file(
-      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
-    ).text();
-
-    // Direct client picker (edit + create modes) goes through applyClientChange which clears
-    // both stale order and stale offer.
-    expect(source).toContain('const applyClientChange = (nextClientId: string)');
-    expect(source).toMatch(/applyClientChange[\s\S]*currentOffer\.clientId !== nextClientId/);
-    expect(source).toMatch(/applyClientChange[\s\S]*currentOrder\.clientId !== nextClientId/);
-
-    // Order picker clears stale offer inline (it sets the order itself, so applyClientChange
-    // can't be reused — its closure would re-clear the order via batched state).
-    expect(source).toMatch(
-      /setOrderId\(nextOrderId\)[\s\S]*currentOffer\.clientId !== nextOrder\.clientId[\s\S]*setOfferId\(''\)/,
-    );
-
-    // Offer picker clears stale order inline (same reasoning).
-    expect(source).toMatch(
-      /setOfferId\(nextOfferId\)[\s\S]*currentOrder\.clientId !== nextOffer\.clientId[\s\S]*setOrderId\(''\)/,
-    );
-  });
-
-  test('edit-mode revenue uses editingProject.orderId, not the empty create-form orderId', async () => {
-    // Regression for the order-derived branch silently falling back to "manual" on edit:
-    // the form's `orderId` state is empty in openEditModal (no order selector is shown in the
-    // edit modal — only a read-only linked-order chip), so we must resolve the effective order
-    // from `editingProject.orderId` when in edit mode.
+    // Symmetric cascading reset via the shared `clearStaleClientLinks` helper so the user
+    // can never reach the server-side cross-check via a stale tuple. Each handler calls the
+    // helper with a `keep` flag for the link it just set itself.
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
 
     expect(source).toContain(
-      'editingProject?.orderId\n    ? orders.find((o) => o.id === editingProject.orderId)',
+      "const clearStaleClientLinks = (nextClientId: string, keep: 'order' | 'offer' | null)",
     );
-    // handleSubmit path mirrors the same resolution
+    expect(source).toContain('clearStaleClientLinks(nextClientId, null)');
+    expect(source).toMatch(/setOrderId\(nextOrderId\)[\s\S]*clearStaleClientLinks\([^)]*'order'/);
+    expect(source).toMatch(/setOfferId\(nextOfferId\)[\s\S]*clearStaleClientLinks\([^)]*'offer'/);
+  });
+
+  test('edit-mode revenue resolves the effective order from editingProject.orderId', async () => {
+    // Regression for the order-derived branch silently falling back to "manual" on edit:
+    // the form's `orderId` state is empty in openEditModal (no order selector is shown there —
+    // only a read-only linked-order chip), so the resolution must come from editingProject.
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
     expect(source).toMatch(
-      /const submitOrder = editingProject\?\.orderId\s*\?\s*orders\.find\(\(o\) => o\.id === editingProject\.orderId\)/,
+      /const effectiveOrder = editingProject\?\.orderId\s*\?\s*orders\.find\(\(o\) => o\.id === editingProject\.orderId\)/,
     );
+    // handleSubmit reuses the render-scope `revenueSource`/`persistedRevenue` so no duplicate
+    // resolution exists in the submit path.
+    expect(source).not.toContain('const submitOrder ');
+    expect(source).not.toContain('submitSource');
   });
 });

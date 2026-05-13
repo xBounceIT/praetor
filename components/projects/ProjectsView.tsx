@@ -88,14 +88,28 @@ const billingFrequencyOptions = [
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
 
-// Inline marker for required-field labels. Uses the shadcn `text-destructive` token so the
-// asterisk follows the user's theme. `aria-hidden` because the asterisk is purely visual —
-// screen readers get the requirement signal from the input's `aria-required`/`required` attr.
+// `aria-hidden` — screen readers get the requirement signal from the input's `required` attr.
 const RequiredMark = () => (
   <span className="text-destructive" aria-hidden="true">
     *
   </span>
 );
+
+type RevenueSource = 'activities' | 'order' | 'manual';
+type RevenueLike = { revenue?: number | string | null };
+type OrderForRevenue = Pick<ClientsOrder, 'items' | 'discount' | 'discountType'>;
+
+const sumActivityRevenue = (tasks: RevenueLike[]): number =>
+  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+
+const resolveRevenueSource = (
+  activitiesSum: number,
+  order: OrderForRevenue | undefined,
+): RevenueSource => {
+  if (activitiesSum > 0) return 'activities';
+  if (order) return 'order';
+  return 'manual';
+};
 
 export type AddProjectFormInput = {
   name: string;
@@ -372,29 +386,32 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectBillingChanged(false);
   };
 
-  // Change the project's client and reset any currently-bound order/offer that belonged to a
-  // different client. Keeps the (clientId, orderId, offerId) triple consistent in the form so
-  // the user never reaches the server-side cross-check via a stale selection.
-  //
-  // Use this from the direct client picker. The order picker has its own inline logic — it sets
-  // the new order explicitly, so it must only clear a stale offer (not the order it just set).
-  const applyClientChange = (nextClientId: string) => {
-    setClientId(nextClientId);
-    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-    if (offerId) {
-      const currentOffer = offers.find((o) => o.id === offerId);
-      if (!currentOffer || currentOffer.clientId !== nextClientId) {
+  // Reset a currently-bound order/offer if it no longer matches `nextClientId`. The
+  // `keep` flag lets the order/offer pickers skip the link they just set themselves — a
+  // direct setX(...) call followed by this helper would otherwise race with React's
+  // batched updates and re-clear the value via the still-old closure.
+  const clearStaleClientLinks = (nextClientId: string, keep: 'order' | 'offer' | null) => {
+    if (keep !== 'offer' && offerId) {
+      const current = offers.find((o) => o.id === offerId);
+      if (!current || current.clientId !== nextClientId) {
         setOfferId('');
         if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
       }
     }
-    if (orderId) {
-      const currentOrder = orders.find((o) => o.id === orderId);
-      if (!currentOrder || currentOrder.clientId !== nextClientId) {
+    if (keep !== 'order' && orderId) {
+      const current = orders.find((o) => o.id === orderId);
+      if (!current || current.clientId !== nextClientId) {
         setOrderId('');
         if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
       }
     }
+  };
+
+  // Direct client picker: change the client and clear both stale order and stale offer.
+  const applyClientChange = (nextClientId: string) => {
+    setClientId(nextClientId);
+    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+    clearStaleClientLinks(nextClientId, null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -418,17 +435,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       setErrors(newErrors);
       return;
     }
-
-    const submitActivitySum = (editingProject ? editingProjectTasks : draftTasks).reduce(
-      (sum, t) => sum + (Number(t.revenue) || 0),
-      0,
-    );
-    const submitOrder = editingProject?.orderId
-      ? orders.find((o) => o.id === editingProject.orderId)
-      : orders.find((o) => o.id === orderId);
-    const submitSource: 'activities' | 'order' | 'manual' =
-      submitActivitySum > 0 ? 'activities' : submitOrder ? 'order' : 'manual';
-    const persistedRevenue = submitSource === 'manual' && revenue ? parseFloat(revenue) : null;
 
     if (editingProject) {
       const updates: Partial<Project> = {
@@ -829,26 +835,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
-  // The edit modal keeps the form's `orderId` empty (the order selector is only shown in create
-  // mode); the existing project's link lives on `editingProject.orderId`. Resolve the effective
-  // order so the order-derived revenue branch works in both modes.
+  // The edit modal has no order selector — only a read-only chip — so the existing link lives
+  // on `editingProject.orderId` and we resolve from there for both render and submit.
   const effectiveOrder = editingProject?.orderId
     ? orders.find((o) => o.id === editingProject.orderId)
     : selectedOrder;
 
+  // Hide drafts/denied. Filter to the current client so the user can't pick an offer for a
+  // different client than the project (the server enforces the same invariant).
   const offerOptions = offers
-    // Hide drafts (incomplete) and denied (no longer relevant). Show 'sent' and 'accepted' so a
-    // project can be linked to an offer that's still under negotiation as well as a won one.
     .filter((o) => o.status === 'sent' || o.status === 'accepted')
-    // Also filter to the currently-selected client. Prevents picking an offer for client X while
-    // the project is being assigned to client Y; the server enforces the same invariant.
     .filter((o) => !clientId || o.clientId === clientId)
-    .map((o) => ({
-      id: o.id,
-      name: `${o.clientName} - ${o.id}`,
-    }));
-  // If the currently-bound offer would be filtered out (different client, or status now not
-  // in the visible set), surface it anyway so the user sees what's selected and can act on it.
+    .map((o) => ({ id: o.id, name: `${o.clientName} - ${o.id}` }));
+  // Surface a bound-but-filtered-out offer so the user can see and resolve the mismatch.
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
@@ -856,30 +855,28 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   }
 
-  const activitiesRevenueSum = (editingProject ? editingProjectTasks : draftTasks).reduce(
-    (sum, t) => sum + (Number(t.revenue) || 0),
-    0,
+  const activitiesRevenueSum = sumActivityRevenue(
+    editingProject ? editingProjectTasks : draftTasks,
   );
 
   const orderRevenue = effectiveOrder
     ? calculatePricingTotals(
         effectiveOrder.items,
-        Number(effectiveOrder.discount || 0),
+        effectiveOrder.discount,
         'hours',
         effectiveOrder.discountType,
       ).total
     : 0;
 
-  const revenueSource: 'activities' | 'order' | 'manual' =
-    activitiesRevenueSum > 0 ? 'activities' : effectiveOrder ? 'order' : 'manual';
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum, effectiveOrder);
+  const manualRevenue = revenue ? parseFloat(revenue) : 0;
   const displayedRevenue =
     revenueSource === 'activities'
       ? activitiesRevenueSum
       : revenueSource === 'order'
         ? orderRevenue
-        : revenue
-          ? parseFloat(revenue)
-          : 0;
+        : manualRevenue;
+  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
@@ -1141,16 +1138,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             if (!nextOrder) return;
                             setClientId(nextOrder.clientId);
                             if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                            // The order was just set explicitly — only clear a stale offer here,
-                            // not the order itself (applyClientChange would because state updates
-                            // are batched and the orderId closure still holds the old value).
-                            if (offerId) {
-                              const currentOffer = offers.find((o) => o.id === offerId);
-                              if (!currentOffer || currentOffer.clientId !== nextOrder.clientId) {
-                                setOfferId('');
-                                if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                              }
-                            }
+                            clearStaleClientLinks(nextOrder.clientId, 'order');
                           }}
                           label={t('projects:projects.orderOptionalLabel')}
                           placeholder={t('projects:projects.selectOrder')}
@@ -1274,24 +1262,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           const nextOfferId = val as string;
                           setOfferId(nextOfferId);
                           if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                          // Auto-fill the client from the chosen offer — mirrors the order
-                          // selector's behavior so the offer/client pair stays consistent.
                           const nextOffer = offers.find((o) => o.id === nextOfferId);
                           if (!nextOffer) return;
                           if (nextOffer.clientId !== clientId) {
                             setClientId(nextOffer.clientId);
                             if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
                           }
-                          // Mirror of the order picker's cleanup: clear a stale order that
-                          // belonged to the previous client. The offer was just set explicitly,
-                          // so don't clear it.
-                          if (orderId) {
-                            const currentOrder = orders.find((o) => o.id === orderId);
-                            if (!currentOrder || currentOrder.clientId !== nextOffer.clientId) {
-                              setOrderId('');
-                              if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
-                            }
-                          }
+                          clearStaleClientLinks(nextOffer.clientId, 'offer');
                         }}
                         label={
                           <>
