@@ -678,13 +678,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCodeValue = taxCodeResult.value;
       }
 
-      const hasFiscalUpdate = hasVatNumber || hasFiscalCode || hasTaxCode;
+      // `fiscal_code` is the legacy shadow column backing `idx_clients_fiscal_code_unique` and
+      // `findByFiscalCode` duplicate detection. It must follow the primary identifier
+      // (vatNumber, or fiscalCode for legacy callers), but a taxCode-only PUT must NOT
+      // overwrite it — otherwise updating taxCode could clobber a vat_number-derived
+      // fiscal_code and let duplicate vatNumbers slip past the uniqueness check.
+      const hasPrimaryIdentifierUpdate = hasVatNumber || hasFiscalCode;
       let resolvedFiscalCode: string | null = null;
-      if (hasFiscalUpdate) {
+      if (hasPrimaryIdentifierUpdate) {
         resolvedFiscalCode = resolveFiscalCode({
           vatNumber: vatNumberValue,
           fiscalCode: fiscalCodeValue,
-          taxCode: taxCodeValue,
+          taxCode: null,
         });
         if (!resolvedFiscalCode) {
           return badRequest(reply, 'Fiscal code is required');
@@ -759,7 +764,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description: opt.description ?? null,
           atecoCode: opt.atecoCode ?? null,
           website: opt.website ?? null,
-          fiscalCode: hasFiscalUpdate ? resolvedFiscalCode : null,
+          fiscalCode: hasPrimaryIdentifierUpdate ? resolvedFiscalCode : null,
           vatNumber: vatNumberValue,
           vatNumberProvided: hasVatNumber,
           taxCode: taxCodeValue,
@@ -806,7 +811,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           hasSector ? 'sector' : null,
           hasNumberOfEmployees ? 'numberOfEmployees' : null,
           hasRevenue ? 'revenue' : null,
-          hasFiscalUpdate ? 'fiscalCode' : null,
+          hasVatNumber || hasFiscalCode || hasTaxCode ? 'fiscalCode' : null,
           hasOfficeCountRange ? 'officeCountRange' : null,
         ].filter((field): field is string => field !== null);
 

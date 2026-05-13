@@ -34,7 +34,7 @@ const baseRow = {
   number_of_employees: '10-50',
   revenue: '1M-5M',
   fiscal_code: 'IT12345',
-  vat_number: 'IT12345VAT',
+  vat_number: 'IT01234567890',
   tax_code: 'RSSMRO80A01H501Z',
   office_count_range: '1',
   total_sent_quotes: '500',
@@ -67,7 +67,7 @@ const POSITIONAL_CLIENT_ROW: readonly unknown[] = [
   '10-50',
   '1M-5M',
   'IT12345',
-  'IT12345VAT', // vat_number
+  'IT01234567890', // vat_number
   'RSSMRO80A01H501Z', // tax_code
   '1',
   [{ fullName: 'Alice', email: 'a@x.com', phone: '555', role: 'CEO' }],
@@ -128,7 +128,7 @@ describe('mapClientRow', () => {
   test('sources vatNumber and taxCode from their own columns, not from fiscal_code', () => {
     const result = clientsRepo.mapClientRow(baseRow);
     expect(result.fiscalCode).toBe('IT12345');
-    expect(result.vatNumber).toBe('IT12345VAT');
+    expect(result.vatNumber).toBe('IT01234567890');
     expect(result.taxCode).toBe('RSSMRO80A01H501Z');
   });
 
@@ -313,7 +313,7 @@ describe('create', () => {
         numberOfEmployees: null,
         revenue: null,
         fiscalCode: 'IT12345',
-        vatNumber: 'IT12345VAT',
+        vatNumber: 'IT01234567890',
         taxCode: 'RSSMRO80A01H501Z',
         officeCountRange: null,
       },
@@ -323,12 +323,12 @@ describe('create', () => {
     expect(exec.calls[0].params).toContain('c-1');
     expect(exec.calls[0].params).toContain(false);
     expect(exec.calls[0].params).toContain('IT12345');
-    expect(exec.calls[0].params).toContain('IT12345VAT');
+    expect(exec.calls[0].params).toContain('IT01234567890');
     expect(exec.calls[0].params).toContain('RSSMRO80A01H501Z');
     // Drizzle's jsonb encoder serializes JS arrays to JSON strings before passing to pg.
     expect(exec.calls[0].params).toContain('[{"fullName":"Alice"}]');
     expect(result.id).toBe('c-1');
-    expect(result.vatNumber).toBe('IT12345VAT');
+    expect(result.vatNumber).toBe('IT01234567890');
     expect(result.taxCode).toBe('RSSMRO80A01H501Z');
   });
 });

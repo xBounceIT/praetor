@@ -59,6 +59,12 @@ export const clients = pgTable(
     fiscalCodeUnique: uniqueIndex('idx_clients_fiscal_code_unique')
       .on(sql`LOWER(${table.fiscalCode})`)
       .where(sql`${table.fiscalCode} IS NOT NULL AND ${table.fiscalCode} <> ''`),
+    vatNumberUnique: uniqueIndex('idx_clients_vat_number_unique')
+      .on(sql`LOWER(${table.vatNumber})`)
+      .where(sql`${table.vatNumber} IS NOT NULL AND ${table.vatNumber} <> ''`),
+    taxCodeUnique: uniqueIndex('idx_clients_tax_code_unique')
+      .on(sql`LOWER(${table.taxCode})`)
+      .where(sql`${table.taxCode} IS NOT NULL AND ${table.taxCode} <> ''`),
     clientCodeUnique: uniqueIndex('idx_clients_client_code_unique')
       .on(table.clientCode)
       .where(sql`${table.clientCode} IS NOT NULL AND ${table.clientCode} <> ''`),
