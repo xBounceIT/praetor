@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import {
   authenticateToken,
   generateToken,
@@ -165,6 +165,40 @@ describe('authenticateToken', () => {
     await authenticateToken(request as never, reply as never);
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+  });
+
+  test('403 when token is signed with alg=none (algorithm-confusion attack)', async () => {
+    // Forge an unsigned token: jwt.sign with algorithm 'none' produces a token whose signature
+    // is empty. If the server accepts `alg: 'none'`, anyone can forge an authenticated request.
+    // The algorithm allowlist ({ algorithms: ['HS256'] }) must reject this token.
+    const forgedToken = jwt.sign(
+      { userId: 'u1', sessionStart: Date.now() },
+      // jsonwebtoken requires `null` as the secret when using alg=none.
+      null as unknown as string,
+      { algorithm: 'none' as jwt.Algorithm, expiresIn: '30m' },
+    );
+    const request = buildFakeRequest(forgedToken);
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when token uses a different HMAC algorithm than the verifier allows', async () => {
+    // A token signed with HS512 (still using our shared secret) must be rejected because
+    // the allowlist is HS256-only. This guards against future drift between sign/verify.
+    const TEST_JWT_SECRET = process.env.JWT_SECRET || 'praetor-test-jwt-secret';
+    const wrongAlgToken = jwt.sign({ userId: 'u1', sessionStart: Date.now() }, TEST_JWT_SECRET, {
+      algorithm: 'HS512',
+      expiresIn: '30m',
+    });
+    const request = buildFakeRequest(wrongAlgToken);
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
   });
 
   test('403 when token is idle-expired', async () => {
