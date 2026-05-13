@@ -16,7 +16,7 @@ import { installI18nMock } from '../helpers/i18n';
 installI18nMock();
 
 const csvModule = await import('../../utils/csv');
-const downloadCsvSpy = spyOn(csvModule, 'downloadCsv').mockImplementation(() => {});
+const downloadCsvSpy = spyOn(csvModule, 'downloadCsv').mockImplementation(() => () => {});
 
 const clipboardModule = await import('../../utils/clipboard');
 const writeClipboardSpy = spyOn(clipboardModule, 'writeTextToClipboard').mockResolvedValue(true);

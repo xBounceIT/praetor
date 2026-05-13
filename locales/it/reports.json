@@ -12,6 +12,7 @@
     "noPermissionToSend": "Non hai i permessi per usare AI Reporting.",
     "disabledByAdmin": "AI Reporting e' disabilitato dall'amministrazione.",
     "disabledTitle": "AI Reporting disabilitato",
+    "settingsFailedToLoad": "Impossibile caricare le impostazioni AI Reporting.",
     "disabledBody": "Questa funzionalita' e' stata disabilitata dall'amministrazione. Contatta un admin per abilitarla in Amministrazione Generale.",
     "aiWarning": "L'AI puo' commettere errori. Verifica le informazioni importanti.",
     "footerHint": "Invio per inviare, Shift+Invio per andare a capo.",

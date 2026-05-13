@@ -3,6 +3,12 @@ import type { DiscountType } from '../../types';
 import SelectControl from './SelectControl';
 import ValidatedNumberInput from './ValidatedNumberInput';
 
+// Guard against NaN / Infinity / undefined leaking from caller-supplied totals
+// — `Number.prototype.toFixed` on a non-finite number returns "NaN" which then
+// renders as literal "NaN" in the UI; explicit fallback keeps totals readable.
+const formatAmount = (value: number | undefined | null): string =>
+  Number.isFinite(value) ? (value as number).toFixed(2) : '0.00';
+
 export interface CostSummaryPanelProps {
   currency: string;
   subtotal: number;
@@ -84,14 +90,14 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
         <div className="flex justify-between">
           <span className="text-sm font-medium text-muted-foreground">{subtotalLabel}</span>
           <span className="text-sm font-semibold text-foreground">
-            {subtotal.toFixed(2)} {currency}
+            {formatAmount(subtotal)} {currency}
           </span>
         </div>
         {discountRow && discountRow.amount > 0 && (
           <div className="flex justify-between">
             <span className="text-sm font-medium text-muted-foreground">{discountRow.label}</span>
             <span className="text-sm font-semibold text-amber-600">
-              -{discountRow.amount.toFixed(2)} {currency}
+              -{formatAmount(discountRow.amount)} {currency}
             </span>
           </div>
         )}
@@ -99,7 +105,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
           <div className="flex justify-between">
             <span className="text-sm font-medium text-emerald-600">{margin.label}</span>
             <span className="text-sm font-semibold text-emerald-600">
-              {margin.amount.toFixed(2)} {currency}
+              {formatAmount(margin.amount)} {currency}
             </span>
           </div>
         )}
@@ -108,7 +114,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
             {totalLabel}
           </span>
           <span className="text-lg font-semibold text-primary">
-            {total.toFixed(2)}{' '}
+            {formatAmount(total)}{' '}
             <span className="text-sm font-medium text-muted-foreground">{currency}</span>
           </span>
         </div>
@@ -130,7 +136,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
           <div className="flex justify-between text-sm">
             <span className="font-medium text-muted-foreground">{balanceDue.label}</span>
             <span className={`font-semibold ${balanceDue.colorClass || 'text-destructive'}`}>
-              {balanceDue.amount.toFixed(2)} {currency}
+              {formatAmount(balanceDue.amount)} {currency}
             </span>
           </div>
         )}

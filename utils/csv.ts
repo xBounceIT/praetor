@@ -22,9 +22,33 @@ export const downloadCsv = (rows: string[][], filename: string) => {
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
-  link.click();
-  setTimeout(() => {
-    document.body.removeChild(link);
+
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let disposed = false;
+  const cleanup = () => {
+    // Idempotent: a caller-driven cancel after the timer has already fired
+    // should not double-revoke the object URL or attempt removeChild twice.
+    if (disposed) return;
+    disposed = true;
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    if (link.parentNode) link.parentNode.removeChild(link);
     URL.revokeObjectURL(url);
-  }, 0);
+  };
+
+  try {
+    link.click();
+  } catch (err) {
+    cleanup();
+    throw err;
+  }
+
+  // Deferred cleanup so the browser has a tick to start the download before the
+  // anchor + object URL go away. The returned canceller lets callers tear down
+  // immediately (tests, unmount paths).
+  timeoutId = setTimeout(cleanup, 0);
+
+  return cleanup;
 };

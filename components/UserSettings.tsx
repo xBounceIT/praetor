@@ -276,6 +276,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Prevent double-submission when the user mashes Enter / clicks Save twice
+    // in quick succession — `onUpdate` is async and a second call would race.
+    if (isSaving) return;
     setIsSaving(true);
     try {
       await onUpdate({
