@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { waitFor } from '@testing-library/react';
+import { fireEvent, waitFor } from '@testing-library/react';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -42,6 +42,7 @@ const sharedProps = {
     ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
   onAddBulkEntries: async () => {},
   onUpdateEntry: () => {},
+  onDeleteEntry: () => {},
   viewingUserId: 'user-a',
   selectedDate: todayDateOnly(),
   onSelectedDateChange: () => {},
@@ -110,6 +111,146 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
       const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
       const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
       expect(prefilled).toBe(true);
+    });
+  });
+});
+
+// Catalog with two distinct (client, project, task) combos. The catalog
+// selection auto-picks the first combo for the form row, so any entry that
+// uses the *second* combo stays in the entryRows section — exactly the place
+// where the bug manifested before the fix.
+const twoComboCatalog = {
+  clients: [
+    { id: 'client-a', name: 'Client A' },
+    { id: 'client-b', name: 'Client B' },
+  ] satisfies Client[],
+  projects: [
+    { id: 'project-a', name: 'Project A', clientId: 'client-a', color: '#111111' },
+    { id: 'project-b', name: 'Project B', clientId: 'client-b', color: '#222222' },
+  ] satisfies Project[],
+  projectTasks: [
+    { id: 'task-a', name: 'Task A', projectId: 'project-a' },
+    { id: 'task-b', name: 'Task B', projectId: 'project-b' },
+  ] satisfies ProjectTask[],
+};
+
+const entryBOn = (date: string): TimeEntry => ({
+  id: 'entry-b',
+  userId: 'user-a',
+  date,
+  clientId: 'client-b',
+  clientName: 'Client B',
+  projectId: 'project-b',
+  projectName: 'Project B',
+  task: 'Task B',
+  duration: 3.5,
+  hourlyCost: 0,
+  createdAt: 1700000000,
+  location: 'remote',
+});
+
+const findDurationInputWithValue = (value: string): HTMLInputElement | undefined => {
+  const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
+  return Array.from(inputs).find((input) => input.value === value);
+};
+
+const clickSubmit = () => {
+  const buttons = document.body.querySelectorAll('button');
+  const submit = Array.from(buttons).find((b) => b.textContent?.includes('weekly.submitTime'));
+  if (!submit) throw new Error('submit button not found');
+  fireEvent.click(submit);
+  return submit as HTMLButtonElement;
+};
+
+describe('<WeeklyView /> submit mutations', () => {
+  test('clearing an existing entry calls onDeleteEntry and not onUpdateEntry', async () => {
+    // Regression for issue #364 bug 1: prior to the fix, setting duration to 0
+    // on an existing entry hit `continue` without calling onUpdateEntry OR
+    // onDeleteEntry, so the cell looked cleared in the UI but the entry
+    // survived on refresh.
+    const today = todayDateOnly();
+    const updateCalls: Array<{ id: string; updates: unknown }> = [];
+    const deleteCalls: string[] = [];
+
+    render(
+      <WeeklyView
+        entries={[entryBOn(today)]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onUpdateEntry={(id, updates) => {
+          updateCalls.push({ id, updates });
+        }}
+        onDeleteEntry={(id) => {
+          deleteCalls.push(id);
+        }}
+      />,
+    );
+
+    const durationInput = await waitFor(() => {
+      const input = findDurationInputWithValue('3.5');
+      if (!input) throw new Error('pre-filled 3.5 input not found');
+      return input;
+    });
+
+    fireEvent.focus(durationInput);
+    fireEvent.change(durationInput, { target: { value: '' } });
+    fireEvent.blur(durationInput);
+
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual(['entry-b']);
+    });
+    expect(updateCalls).toEqual([]);
+  });
+
+  test('handleSubmit awaits onUpdateEntry before flashing success', async () => {
+    // Regression for issue #364 bug 2: onUpdateEntry was previously invoked
+    // without await, so setShowSuccess(true) fired before the PATCH resolved.
+    // We expose this by holding the update promise pending and asserting the
+    // success state has not been reached.
+    const today = todayDateOnly();
+    let resolveUpdate: () => void = () => {
+      throw new Error('updatePromise executor did not assign resolve');
+    };
+    const updatePromise = new Promise<void>((resolve) => {
+      resolveUpdate = resolve;
+    });
+
+    render(
+      <WeeklyView
+        entries={[entryBOn(today)]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onUpdateEntry={() => updatePromise}
+      />,
+    );
+
+    const durationInput = await waitFor(() => {
+      const input = findDurationInputWithValue('3.5');
+      if (!input) throw new Error('pre-filled 3.5 input not found');
+      return input;
+    });
+
+    fireEvent.focus(durationInput);
+    fireEvent.change(durationInput, { target: { value: '5' } });
+    fireEvent.blur(durationInput);
+
+    const submit = clickSubmit();
+
+    // While the update is pending: button disabled and still labelled with
+    // `weekly.submitTime` (not the `weekly.success` flash).
+    expect(submit.hasAttribute('disabled')).toBe(true);
+    expect(submit.textContent).toContain('weekly.submitTime');
+    expect(submit.textContent).not.toContain('weekly.success');
+
+    resolveUpdate();
+
+    await waitFor(() => {
+      const refreshed = Array.from(document.body.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('weekly.success'),
+      );
+      expect(refreshed).toBeTruthy();
     });
   });
 });

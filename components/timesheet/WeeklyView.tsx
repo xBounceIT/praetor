@@ -43,7 +43,8 @@ export interface WeeklyViewProps {
     >,
   ) => Promise<ProjectTask>;
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
-  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
+  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void | Promise<void>;
+  onDeleteEntry: (id: string) => void | Promise<void>;
   viewingUserId: string;
   selectedDate: string;
   onSelectedDateChange: (date: string) => void;
@@ -88,6 +89,20 @@ const parseDuration = (raw: string): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+type EditClassification = 'add' | 'update' | 'delete' | 'noop';
+
+const classifyEdit = (base: DayCell | undefined, edit: DayCell): EditClassification => {
+  const newDuration = parseDuration(edit.duration);
+  const baseDuration = base ? parseDuration(base.duration) : 0;
+  const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
+  if (base?.entryId) {
+    if (newDuration === 0) return 'delete';
+    if (newDuration !== baseDuration || noteChanged) return 'update';
+    return 'noop';
+  }
+  return newDuration > 0 ? 'add' : 'noop';
+};
+
 const WeeklyView: React.FC<WeeklyViewProps> = ({
   entries,
   clients,
@@ -98,6 +113,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   onAddCustomTask,
   onAddBulkEntries,
   onUpdateEntry,
+  onDeleteEntry,
   viewingUserId,
   selectedDate,
   onSelectedDateChange,
@@ -366,6 +382,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     const newErrors: WeeklyEntryFormErrors = {};
     const formEdits = pendingEdits[FORM_ROW_KEY] ?? {};
     const hasFormHours = Object.values(formEdits).some((cell) => parseDuration(cell.duration) > 0);
+    const hasFormChanges = Object.entries(formEdits).some(
+      ([dateStr, cell]) => classifyEdit(formRowBaseDays[dateStr], cell) !== 'noop',
+    );
 
     if (hasFormHours) {
       if (!selection.clientId) newErrors.clientId = t('common:validation.clientRequired');
@@ -387,6 +406,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     }
 
     const entriesToAdd: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[] = [];
+    const entriesToUpdate: Array<{ id: string; updates: Partial<TimeEntry> }> = [];
+    const entriesToDelete: string[] = [];
 
     const submitRow = (
       rowKey: string,
@@ -405,14 +426,17 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         const base = meta.baseDays[day.dateStr];
         const edit = rowEdits[day.dateStr];
         if (!edit) continue;
-        const newDuration = parseDuration(edit.duration);
-        const baseDuration = base ? parseDuration(base.duration) : 0;
-        const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
-        if (base?.entryId) {
-          if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) {
-            // `edit.note` directly so a user can clear a previously-set note.
-            onUpdateEntry(base.entryId, {
-              duration: newDuration,
+        const action = classifyEdit(base, edit);
+        if (action === 'noop') continue;
+        if (action === 'delete' && base?.entryId) {
+          entriesToDelete.push(base.entryId);
+          continue;
+        }
+        if (action === 'update' && base?.entryId) {
+          entriesToUpdate.push({
+            id: base.entryId,
+            updates: {
+              duration: parseDuration(edit.duration),
               notes: edit.note,
               task: meta.taskName,
               projectId: meta.projectId,
@@ -420,28 +444,26 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               clientName: client?.name || 'Unknown',
               projectName: project?.name || 'General',
               location: meta.location,
-            });
-          }
+            },
+          });
           continue;
         }
-        if (newDuration > 0) {
-          entriesToAdd.push({
-            date: day.dateStr,
-            clientId: meta.clientId,
-            clientName: client?.name || 'Unknown',
-            projectId: meta.projectId,
-            projectName: project?.name || 'General',
-            task: meta.taskName,
-            duration: newDuration,
-            notes: edit.note || weekNote,
-            hourlyCost: 0,
-            location: meta.location,
-          });
-        }
+        entriesToAdd.push({
+          date: day.dateStr,
+          clientId: meta.clientId,
+          clientName: client?.name || 'Unknown',
+          projectId: meta.projectId,
+          projectName: project?.name || 'General',
+          task: meta.taskName,
+          duration: parseDuration(edit.duration),
+          notes: edit.note || weekNote,
+          hourlyCost: 0,
+          location: meta.location,
+        });
       }
     };
 
-    if (hasFormHours) {
+    if (hasFormChanges) {
       submitRow(FORM_ROW_KEY, {
         clientId: selection.clientId,
         projectId: selection.projectId,
@@ -462,9 +484,15 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     }
 
     try {
-      if (entriesToAdd.length > 0) {
-        await onAddBulkEntries(entriesToAdd);
+      const pending: Promise<void>[] = [];
+      if (entriesToAdd.length > 0) pending.push(onAddBulkEntries(entriesToAdd));
+      for (const { id, updates } of entriesToUpdate) {
+        pending.push(Promise.resolve(onUpdateEntry(id, updates)));
       }
+      for (const id of entriesToDelete) {
+        pending.push(Promise.resolve(onDeleteEntry(id)));
+      }
+      await Promise.all(pending);
       setPendingEdits({});
       setWeekNote('');
       setShowSuccess(true);
@@ -548,29 +576,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     );
   };
 
-  // True when at least one pending edit would actually change state on
-  // submit — i.e. a non-zero new value on a fresh cell, or an existing entry
-  // whose duration / note differs from its baseline. Mirrors submitRow's
-  // gating so the button stays disabled when the user types a value and then
-  // clears it (net zero change).
   const hasPendingEdits = useMemo(() => {
     const rowHasChange = (rowKey: string, baseDays: DayMap) => {
       const edits = pendingEdits[rowKey];
       if (!edits) return false;
-      for (const [dateStr, edit] of Object.entries(edits)) {
-        const base = baseDays[dateStr];
-        const newDuration = parseDuration(edit.duration);
-        const baseDuration = base ? parseDuration(base.duration) : 0;
-        const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
-        if (base?.entryId) {
-          if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) return true;
-        } else if (newDuration > 0) {
-          return true;
-        }
-      }
-      return false;
+      return Object.entries(edits).some(
+        ([dateStr, edit]) => classifyEdit(baseDays[dateStr], edit) !== 'noop',
+      );
     };
-
     if (rowHasChange(FORM_ROW_KEY, formRowBaseDays)) return true;
     return entryRows.some((row) => rowHasChange(row.key, row.baseDays));
   }, [pendingEdits, formRowBaseDays, entryRows]);
