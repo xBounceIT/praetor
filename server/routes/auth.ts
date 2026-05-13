@@ -62,6 +62,11 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
+const LDAP_UNAVAILABLE_BODY = {
+  error: 'Authentication service temporarily unavailable',
+  errorCode: 'ldap_unavailable',
+} as const;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
   fastify.post(
@@ -109,11 +114,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ldapAutoProvisioned = !!provision.created;
           }
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          fastify.log.warn(
-            { username: usernameResult.value, errorMessage },
+          fastify.log.error(
+            { err, username: usernameResult.value },
             'LDAP auto-provision attempt failed',
           );
+          return reply.code(503).send(LDAP_UNAVAILABLE_BODY);
         }
         if (!user) {
           return reply.code(401).send({ error: 'Invalid username or password' });
@@ -141,11 +146,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ldapMatchedRoleIds = ldapAuthResult.matchedRoleIds;
           ldapGroups = ldapAuthResult.groups;
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          fastify.log.warn(
-            { username: usernameResult.value, errorMessage },
-            'LDAP auth attempt failed',
-          );
+          fastify.log.error({ err, username: usernameResult.value }, 'LDAP auth attempt failed');
+          return reply.code(503).send(LDAP_UNAVAILABLE_BODY);
         }
       }
 

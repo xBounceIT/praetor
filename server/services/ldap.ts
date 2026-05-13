@@ -203,7 +203,8 @@ class LDAPService {
         return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
 
-      // Bind with service account first to find the user's DN
+      // Bind with service account first to find the user's DN. A failure here is a system
+      // problem (bad service creds, network), not a user-credential issue — propagate.
       await new Promise<void>((resolve, reject) => {
         ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
           if (err) reject(err);
@@ -219,20 +220,30 @@ class LDAPService {
       const userDn = userEntry.dn;
       const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
 
+      // Re-bind as the user to verify the supplied password before doing any further
+      // (potentially N+1) work. A failure here means wrong credentials — return
+      // `authenticated: false` and let the caller surface 401. We do NOT widen this to
+      // swallow other errors above: an LDAP outage must propagate so the route can
+      // return 503 instead of misreporting "Invalid username or password".
+      try {
+        await new Promise<void>((resolve, reject) => {
+          ldapClient.bind(userDn, password, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      } catch (err) {
+        logger.warn(
+          { err: serializeError(err), username },
+          'LDAP user bind failed (treated as invalid credentials)',
+        );
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
+      }
+
       // Search groups under both the canonical and typed identifiers so configs whose
       // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
       // (email/UPN) that userFilter accepted.
       const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username]);
-
-      // Try to bind as the user
-      // We need a new client for this to verify credentials safely without messing up the service connection state
-      // or we can just re-bind. Re-binding on the same client is standard.
-      await new Promise<void>((resolve, reject) => {
-        ldapClient.bind(userDn, password, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
 
       return {
         authenticated: true,
@@ -242,9 +253,6 @@ class LDAPService {
         canonicalUsername,
         displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
       };
-    } catch (err) {
-      logger.error({ err: serializeError(err), username }, 'LDAP auth error');
-      return { authenticated: false, groups: [], matchedRoleIds: [] };
     } finally {
       if (client) {
         client.unbind((err) => {
@@ -584,12 +592,16 @@ class LDAPService {
             });
           });
 
-          res.on('error', (err: Error) => {
-            logger.error({ err: serializeError(err) }, 'LDAP search error');
-          });
+          // Reject (rather than swallow) so partial syncs fail loudly instead of being
+          // reported as success with a truncated count. The outer catch handles logging.
+          res.on('error', (err: Error) => reject(err));
 
-          res.on('end', () => {
-            resolve();
+          res.on('end', (result: { status: number }) => {
+            if (result.status !== 0) {
+              reject(new Error(`LDAP search failed status: ${result.status}`));
+            } else {
+              resolve();
+            }
           });
         });
       });

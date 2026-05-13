@@ -344,10 +344,9 @@ describe('authenticate', () => {
     expect(ok).toBe(false);
   });
 
-  test('returns false when service-account bind errors; unbind still called', async () => {
+  test('rejects when service-account bind errors; unbind still called', async () => {
     nextFixture = { bindResponses: [new Error('bad creds')] };
-    const ok = await ldapService.authenticate('alice', 'pw');
-    expect(ok).toBe(false);
+    await expect(ldapService.authenticate('alice', 'pw')).rejects.toThrow('bad creds');
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
@@ -434,6 +433,33 @@ describe('authenticate', () => {
     expect(result.authenticated).toBe(true);
     expect(result.groups).toEqual([]);
     expect(result.matchedRoleIds).toEqual([]);
+  });
+
+  test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [{ errorEvent: new Error('connection reset') }],
+    };
+    await expect(ldapService.authenticateWithProfile('alice', 'pw')).rejects.toThrow(
+      'connection reset',
+    );
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('skips findUserGroups when user-bind fails (regression: avoid N+1 on wrong password)', async () => {
+    nextFixture = {
+      bindResponses: [null, new Error('invalid credentials')],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+      ],
+    };
+    const result = await ldapService.authenticateWithProfile('alice', 'pw');
+    expect(result.authenticated).toBe(false);
+    // Only the user-lookup search runs; the group search must NOT have been issued.
+    expect(lastClientStats?.searchCalls).toHaveLength(1);
   });
 });
 
@@ -724,6 +750,32 @@ describe('syncUsers', () => {
     await expect(ldapService.syncUsers()).rejects.toThrow('bind failed in sync');
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
+
+  test('rejects when the search stream emits an error (no silent partial sync)', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice' } }],
+          errorEvent: new Error('search aborted by server'),
+          status: 0,
+        },
+      ],
+    };
+    await expect(ldapService.syncUsers()).rejects.toThrow('search aborted by server');
+    expect(lastClientStats?.unbindCalls).toBe(1);
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects when search end yields a non-zero status', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [{ entries: [], status: 1 }],
+    };
+    await expect(ldapService.syncUsers()).rejects.toThrow('LDAP search failed status: 1');
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
 });
 
 describe('lookupUserGroups', () => {
@@ -806,11 +858,25 @@ describe('lookupUserGroups', () => {
 });
 
 describe('authenticateAndProvision', () => {
-  test('returns { authenticated: false } when LDAP rejects credentials', async () => {
-    // service-account bind fails → authenticateWithProfile returns false
-    nextFixture = { bindResponses: [new Error('bad creds')] };
+  test('returns { authenticated: false } when LDAP rejects user credentials', async () => {
+    // user-bind fails → authenticateWithProfile returns { authenticated: false } (wrong password)
+    nextFixture = {
+      bindResponses: [null, new Error('invalid credentials')],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+      ],
+    };
     const result = await ldapService.authenticateAndProvision('alice', 'pw');
     expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects when LDAP service-account bind fails (system error, not wrong password)', async () => {
+    nextFixture = { bindResponses: [new Error('bad creds')] };
+    await expect(ldapService.authenticateAndProvision('alice', 'pw')).rejects.toThrow('bad creds');
     expect(createUserMock).not.toHaveBeenCalled();
   });
 
