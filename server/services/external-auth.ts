@@ -109,7 +109,7 @@ const writeExternalRoleIds = async (userId: string, roleIds: string[]): Promise<
   });
 };
 
-export const applyExternalRoleIdsForUser = async (
+const applyExternalRoleIdsForUser = async (
   userId: string,
   roleIds: string[],
 ): Promise<string[]> => {
