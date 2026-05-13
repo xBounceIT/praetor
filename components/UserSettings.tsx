@@ -2,7 +2,9 @@ import {
   AlertCircle,
   Check,
   Contrast,
+  Globe,
   KeyRound,
+  Languages,
   Loader2,
   Lock,
   type LucideIcon,
@@ -41,6 +43,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
@@ -146,6 +149,32 @@ const McpIcon = ({ className }: { className?: string }) => (
     <path d={siModelcontextprotocol.path} />
   </svg>
 );
+
+const LANGUAGE_OPTIONS: ReadonlyArray<{
+  value: LanguagePreference;
+  icon: React.ReactNode;
+  titleKey: string;
+  descriptionKey: string;
+}> = [
+  {
+    value: 'auto',
+    icon: <Globe aria-hidden="true" className="size-5" />,
+    titleKey: 'language.auto',
+    descriptionKey: 'language.autoDesc',
+  },
+  {
+    value: 'en',
+    icon: <span aria-hidden="true" className="fi fi-gb text-xl" />,
+    titleKey: 'language.english',
+    descriptionKey: 'language.englishDesc',
+  },
+  {
+    value: 'it',
+    icon: <span aria-hidden="true" className="fi fi-it text-xl" />,
+    titleKey: 'language.italian',
+    descriptionKey: 'language.italianDesc',
+  },
+];
 
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
@@ -274,12 +303,17 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   };
 
   const handleLanguageChange = async (lang: LanguagePreference) => {
+    if (lang === language) return;
+    const previousLang = language;
     applyLanguagePreference(lang);
     setLanguage(lang);
     try {
       await onUpdate({ fullName, email, language: lang });
     } catch (err) {
       console.error('Failed to update language:', err);
+      // Roll the optimistic update back so the user can retry the same option.
+      applyLanguagePreference(previousLang);
+      setLanguage(previousLang);
     }
   };
 
@@ -577,79 +611,56 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'language' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-language text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('language.title')}</h3>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <button
-                onClick={() => handleLanguageChange('auto')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'auto' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <i
-                    className={`fa-solid fa-globe text-xl ${language === 'auto' ? 'text-praetor' : 'text-zinc-400'}`}
-                  ></i>
-                  {language === 'auto' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
+        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <Languages aria-hidden="true" className="size-4 text-praetor" />
+              {t('language.title')}
+            </CardTitle>
+            <CardDescription>{t('language.description')}</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {LANGUAGE_OPTIONS.map((option) => {
+                const active = language === option.value;
+                return (
+                  <Card
+                    key={option.value}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={active}
+                    onClick={() => handleLanguageChange(option.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleLanguageChange(option.value);
+                      }
+                    }}
+                    className={cn(
+                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      active && 'border-primary ring-2 ring-primary/40',
+                    )}
+                  >
+                    <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      {option.icon}
+                      {active && (
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
+                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.auto')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">{t('language.autoDesc')}</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleLanguageChange('en')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'en' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span
-                    className={`fi fi-gb text-xl ${language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
-                  ></span>
-                  {language === 'en' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-foreground">{t(option.titleKey)}</h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {t(option.descriptionKey)}
+                      </p>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.english')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('language.englishDesc')}
-                  </p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleLanguageChange('it')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'it' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span
-                    className={`fi fi-it text-xl ${language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
-                  ></span>
-                  {language === 'it' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.italian')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('language.italianDesc')}
-                  </p>
-                </div>
-              </button>
+                  </Card>
+                );
+              })}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'security' && (

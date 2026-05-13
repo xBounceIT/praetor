@@ -11,6 +11,18 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+
+  /* Tailwind v4 dropped the v3 `* { border-color: ... }` reset, so a bare
+     `border` utility falls back to currentColor and renders as bright text in
+     dark themes. Restore the shadcn-recommended default so themed components
+     don't have to mitigate it on every primitive. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, currentColor);
+  }
 }
 
 @theme {
