@@ -443,6 +443,26 @@ describe('replaceUserRoles', () => {
     expect(exec.calls).toHaveLength(1);
     expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
   });
+
+  // Regression: DELETE + INSERT must run through the same executor so the caller's
+  // `withDbTransaction` rolls both back together. If the INSERT throws and the DELETE
+  // already committed on a non-transactional connection, the user loses every role.
+  test('routes the DELETE and the failing INSERT through the same exec (atomic when caller wraps)', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    exec.enqueue(() => {
+      throw new Error('insert or update on table "user_roles" violates foreign key constraint');
+    });
+
+    // Drizzle wraps the underlying error with "Failed query: <sql>" — assert on the
+    // SQL fragment so this still works through that wrapping.
+    await expect(usersRepo.replaceUserRoles('user-1', ['ghost-role'], testDb)).rejects.toThrow(
+      /INSERT INTO user_roles/,
+    );
+
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain('DELETE FROM user_roles');
+    expect(exec.calls[1].sql).toContain('INSERT INTO user_roles');
+  });
 });
 
 describe('getUserRoleIds', () => {

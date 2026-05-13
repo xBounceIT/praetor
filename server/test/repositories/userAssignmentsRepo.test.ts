@@ -281,3 +281,33 @@ describe('replaceUserTasks', () => {
     expect(exec.calls[1].params).toEqual(['user-1', 't1', 'manual']);
   });
 });
+
+// Regression: every `replaceUser<Kind>` is a DELETE-then-INSERT pair. Both statements
+// must flow through the executor the caller passed in, so when the caller wraps the
+// call in `withDbTransaction(async (tx) => ...)` an INSERT failure (e.g. an invalid id
+// causing an FK violation) rolls back the DELETE and the user keeps every prior
+// assignment.
+describe.each([
+  ['replaceUserClients', 'user_clients', replaceUserClients],
+  ['replaceUserProjects', 'user_projects', replaceUserProjects],
+  ['replaceUserTasks', 'user_tasks', replaceUserTasks],
+] as const)('%s INSERT-failure atomicity', (_label, table, fn) => {
+  test('routes DELETE and the failing INSERT through the same exec (rolls back when wrapped)', async () => {
+    exec.enqueue({ rows: [], rowCount: 4 });
+    exec.enqueue(() => {
+      throw new Error(`insert or update on table "${table}" violates foreign key constraint`);
+    });
+
+    // Drizzle wraps the underlying error with "Failed query: <sql>" — assert on the
+    // SQL fragment so this still works through that wrapping.
+    await expect(fn('user-1', ['ghost-id'], 'manual', testDb)).rejects.toThrow(
+      new RegExp(`INSERT INTO "${table}"`),
+    );
+
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql).toContain(table);
+    expect(exec.calls[0].sql).toContain('DELETE FROM');
+    expect(exec.calls[1].sql).toContain(table);
+    expect(exec.calls[1].sql).toContain('INSERT INTO');
+  });
+});
