@@ -15,6 +15,7 @@ import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
 import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+import { buildFrontendUrl } from '../utils/frontend-url.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { resolveExternalIdentity } from './external-auth.ts';
@@ -129,16 +130,7 @@ const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, baseUrl: stri
 const buildSamlMetadataUrl = (slug: string, baseUrl: string): string =>
   buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, baseUrl);
 
-// Use the same encoding pathway (URLSearchParams) in both branches so the encoded query
-// string is byte-identical regardless of whether FRONTEND_URL is configured. Building a
-// relative URL via `URL` with a synthetic base keeps the same `application/x-www-form-urlencoded`
-// encoding rules in play even when we only return a path.
-const buildFrontendTicketUrl = (ticket: string): string => {
-  const configured = process.env.FRONTEND_URL?.trim();
-  const url = configured ? new URL(configured) : new URL('/', 'http://localhost');
-  url.searchParams.set('sso_ticket', ticket);
-  return configured ? url.href : `${url.pathname}${url.search}${url.hash}`;
-};
+const buildFrontendTicketUrl = (ticket: string): string => buildFrontendUrl('sso_ticket', ticket);
 
 const prepareProviderValues = (
   input: SsoProviderInput,
@@ -254,21 +246,30 @@ const xmlText = (node: unknown): string => {
   return '';
 };
 
-const collectDescendants = (root: unknown, name: string, acc: unknown[] = []): unknown[] => {
-  if (Array.isArray(root)) {
-    for (const item of root) collectDescendants(item, name, acc);
-    return acc;
-  }
-  if (!isXmlObject(root)) return acc;
-  for (const [key, value] of Object.entries(root)) {
-    if (key === name) {
-      if (Array.isArray(value)) acc.push(...value);
-      else acc.push(value);
+// Single-pass DFS collecting every named element we care about for SAML metadata. One walk
+// over the parsed tree is enough — `parseSamlMetadata` previously traversed three times.
+const collectDescendantsByName = (
+  root: unknown,
+  names: readonly string[],
+): Record<string, unknown[]> => {
+  const result: Record<string, unknown[]> = Object.fromEntries(names.map((n) => [n, []]));
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
     }
-    if (key.startsWith('@_') || key === '#text' || key === '#cdata') continue;
-    collectDescendants(value, name, acc);
-  }
-  return acc;
+    if (!isXmlObject(node)) return;
+    for (const [key, value] of Object.entries(node)) {
+      if (key in result) {
+        if (Array.isArray(value)) result[key].push(...value);
+        else result[key].push(value);
+      }
+      if (key.startsWith('@_') || key === '#text' || key === '#cdata') continue;
+      walk(value);
+    }
+  };
+  walk(root);
+  return result;
 };
 
 const parseSamlMetadata = (xml: string) => {
@@ -279,17 +280,20 @@ const parseSamlMetadata = (xml: string) => {
     return { idpIssuer: '', entryPoint: '', idpCert: '' };
   }
 
-  const entityDescriptors = collectDescendants(parsed, 'EntityDescriptor');
-  const entityDescriptor = entityDescriptors[0];
-  const idpIssuer = xmlAttr(entityDescriptor, 'entityID');
+  const found = collectDescendantsByName(parsed, [
+    'EntityDescriptor',
+    'SingleSignOnService',
+    'X509Certificate',
+  ]);
 
-  const ssoServices = collectDescendants(parsed, 'SingleSignOnService');
+  const idpIssuer = xmlAttr(found.EntityDescriptor[0], 'entityID');
+
   const redirectService =
-    ssoServices.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ?? ssoServices[0];
+    found.SingleSignOnService.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ??
+    found.SingleSignOnService[0];
   const entryPoint = redirectService ? xmlAttr(redirectService, 'Location') : '';
 
-  const certNodes = collectDescendants(parsed, 'X509Certificate');
-  const rawCert = certNodes.length > 0 ? xmlText(certNodes[0]) : '';
+  const rawCert = found.X509Certificate.length > 0 ? xmlText(found.X509Certificate[0]) : '';
   const idpCert = rawCert ? normalizeCertificate(rawCert) : '';
 
   return { idpIssuer, entryPoint, idpCert };
