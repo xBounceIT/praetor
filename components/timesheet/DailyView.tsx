@@ -8,7 +8,7 @@ import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
 import { Button } from '../ui/button';
-import { Field, FieldError, FieldLabel } from '../ui/field';
+import { Field, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Separator } from '../ui/separator';
 
@@ -55,7 +55,6 @@ const DailyView: React.FC<DailyViewProps> = ({
   const [duration, setDuration] = useState('');
   const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
   const [errors, setErrors] = useState<{
-    hours?: string;
     clientId?: string;
     projectId?: string;
     task?: string;
@@ -70,18 +69,15 @@ const DailyView: React.FC<DailyViewProps> = ({
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [isCustomRepeatModalOpen, setIsCustomRepeatModalOpen] = useState(false);
 
-  const handleDurationChange = (value: string) => {
-    setDuration(value);
-    if (errors.hours) setErrors((prev) => ({ ...prev, hours: '' }));
-  };
-
   const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
 
   const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
     if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
-    handleDurationChange(rawValue.replace(',', '.'));
+    setDuration(rawValue.replace(',', '.'));
   };
+
+  const hasValidDuration = parseFloat(duration) > 0;
 
   // Sync internal date when calendar selection changes
   useEffect(() => {
@@ -191,12 +187,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     setErrors({});
 
     const newErrors: typeof errors = {};
-
-    // Validate duration
     const durationVal = parseFloat(duration);
-    if (!duration || Number.isNaN(durationVal) || durationVal <= 0) {
-      newErrors.hours = t('entry.hoursRequired');
-    }
 
     // Validate client/project/task
     if (!selectedClientId) newErrors.clientId = t('entry.clientRequired');
@@ -315,7 +306,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(110px,0.7fr)] gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px] gap-4 items-start">
           <div className="min-w-0">
             <SelectControl
               label={t('entry.client')}
@@ -399,7 +390,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <Field className="min-w-0" data-invalid={!!errors.hours}>
+          <Field className="min-w-0">
             <FieldLabel htmlFor="daily-entry-hours">
               {t('entry.hours')} <span className="text-destructive">*</span>
             </FieldLabel>
@@ -411,10 +402,8 @@ const DailyView: React.FC<DailyViewProps> = ({
               value={duration}
               onChange={handleDurationInputChange}
               placeholder="0.0"
-              aria-invalid={!!errors.hours}
               className="h-9 min-h-9 max-h-9 rounded-lg py-2"
             />
-            <FieldError>{errors.hours}</FieldError>
           </Field>
         </div>
 
@@ -432,7 +421,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </Field>
 
           <div className="min-w-0 flex items-end">
-            <Button type="submit" className="h-10 w-full rounded-lg">
+            <Button type="submit" disabled={!hasValidDuration} className="h-10 w-full rounded-lg">
               {t('entry.logTime')}
             </Button>
           </div>
