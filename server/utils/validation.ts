@@ -301,7 +301,12 @@ export function optionalBoolean(value: unknown): boolean | null {
 }
 
 /**
- * Validate a date string in YYYY-MM-DD format
+ * Validate a date string in YYYY-MM-DD format.
+ *
+ * Note: `new Date(...)` silently rolls overflowed components forward — e.g. '2023-02-29'
+ * becomes Mar 1, '2024-04-31' becomes May 1 — instead of returning an invalid date. We
+ * round-trip through `toISOString().slice(0, 10)` to reject any input whose normalized
+ * form doesn't match the original string.
  */
 export function parseDateString(
   value: unknown,
@@ -317,6 +322,10 @@ export function parseDateString(
   }
   const date = new Date(result.value);
   if (Number.isNaN(date.getTime())) {
+    return { ok: false, message: `${fieldName} must be a valid date` };
+  }
+  // Reject impossible dates that JS silently rolls over (e.g. Feb 29 in a non-leap year).
+  if (date.toISOString().slice(0, 10) !== result.value) {
     return { ok: false, message: `${fieldName} must be a valid date` };
   }
   return result;
