@@ -6,6 +6,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
+import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -14,17 +15,15 @@ import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/valida
 const TLS_CA_MAX_LENGTH = 65536;
 const PEM_BLOCK_REGEX = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
 
-// Sentinel returned in place of the stored bindPassword on GET /config so the
-// secret never leaves the server. The UI round-trips this sentinel back on save
-// when the operator did not edit the field, and PUT /config drops it from the
-// patch so the existing column value is preserved.
+// bindPassword is masked on GET so the secret never leaves the server, and PUT
+// treats the same sentinel as "no change" so a round-tripped form save preserves
+// the stored value. The sentinel matches the repo-wide MASKED_SECRET convention
+// already used by smtpPassword, clientSecret, privateKey, and API keys.
 // (tlsCaCertificate is a public CA certificate, not a private key, so it is
 // returned as-is.)
-const BIND_PASSWORD_MASK = '***';
-
 const maskBindPassword = (config: ldapRepo.LdapConfig): ldapRepo.LdapConfig => ({
   ...config,
-  bindPassword: config.bindPassword ? BIND_PASSWORD_MASK : '',
+  bindPassword: config.bindPassword ? MASKED_SECRET : '',
 });
 
 // Returns the patch fragment to merge into ldapRepo.update():
@@ -208,13 +207,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings,
         autoProvisionAll,
       } = body;
-      // When the client round-trips the masking sentinel returned by GET /config, treat the
+      // When the client round-trips the MASKED_SECRET sentinel returned by GET /config, treat the
       // whole bindDn/bindPassword pair as "no change" so the stored secret is preserved. The
       // UI re-sends the existing bindDn alongside the masked password on every save; without
       // also clearing bindDn here, the paired-validation below would reject the request when
       // the operator intentionally avoided re-typing the secret. Operators who actually want
       // to rotate bindDn must also re-enter bindPassword (i.e. supply a non-mask value).
-      const isBindPasswordMasked = body.bindPassword === BIND_PASSWORD_MASK;
+      const isBindPasswordMasked = body.bindPassword === MASKED_SECRET;
       const bindDn = isBindPasswordMasked ? undefined : body.bindDn;
       const bindPassword = isBindPasswordMasked ? undefined : body.bindPassword;
       const enabledValue = parseBoolean(enabled);

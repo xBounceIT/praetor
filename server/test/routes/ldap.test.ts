@@ -8,6 +8,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
+import { MASKED_SECRET } from '../../utils/crypto.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -186,7 +187,7 @@ describe('GET /api/ldap/config', () => {
     expect(JSON.parse(response.body).tlsCaCertificate).toBe(validPemCert);
   });
 
-  test('masks a stored bindPassword as "***" so the secret never leaves the server', async () => {
+  test('masks a stored bindPassword with MASKED_SECRET so the secret never leaves the server', async () => {
     ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, bindPassword: 'super-secret-bind-pw' });
     const response = await testApp.inject({
       method: 'GET',
@@ -195,7 +196,7 @@ describe('GET /api/ldap/config', () => {
     });
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body.bindPassword).toBe('***');
+    expect(body.bindPassword).toBe(MASKED_SECRET);
     expect(response.body).not.toContain('super-secret-bind-pw');
   });
 
@@ -245,11 +246,11 @@ describe('GET /api/ldap/config', () => {
 });
 
 describe('PUT /api/ldap/config - bindPassword masking', () => {
-  test('bindPassword="***" is dropped from the patch so the stored secret is preserved', async () => {
+  test('bindPassword=MASKED_SECRET is dropped from the patch so the stored secret is preserved', async () => {
     const response = await putConfig({
       enabled: false,
       bindDn: 'cn=admin,dc=example,dc=com',
-      bindPassword: '***',
+      bindPassword: MASKED_SECRET,
     });
     expect(response.statusCode).toBe(200);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
@@ -284,7 +285,7 @@ describe('PUT /api/ldap/config - bindPassword masking', () => {
     });
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body.bindPassword).toBe('***');
+    expect(body.bindPassword).toBe(MASKED_SECRET);
     expect(response.body).not.toContain('a-new-secret');
   });
 });
