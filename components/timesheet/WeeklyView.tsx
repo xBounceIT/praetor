@@ -589,7 +589,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody className="divide-y divide-border">
+            <TableBody>
               <TableRow className="bg-praetor/5 hover:bg-praetor/10">
                 <TableCell className="px-4 py-3 align-top whitespace-normal">
                   <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-1">
@@ -649,6 +649,17 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   );
                 })}
               </TableRow>
+            </TableBody>
+            <TableBody className="divide-y divide-border">
+              {/* Recent tasks section header */}
+              <TableRow className="bg-muted/30 hover:bg-muted/30 border-t-[3px] border-t-border">
+                <TableCell
+                  colSpan={1 + weekDays.length}
+                  className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
+                >
+                  {t('weekly.recentTasks')}
+                </TableCell>
+              </TableRow>
               {entryRows.length === 0 ? (
                 <TableRow>
                   <TableCell
@@ -661,10 +672,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               ) : (
                 entryRows.map((row) => (
                   <TableRow key={row.key} className="hover:bg-muted/30">
-                    <TableCell className="px-4 py-3 align-top whitespace-normal">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                        {t('weekly.recentTask')}
-                      </p>
+                    <TableCell className="px-4 py-3 align-middle whitespace-normal">
                       <p
                         className="text-xs font-semibold text-foreground line-clamp-2"
                         title={row.label}

@@ -139,7 +139,7 @@
     "selectProject": "Select project...",
     "selectTask": "Select task...",
     "newEntry": "New entry",
-    "recentTask": "Recent",
+    "recentTasks": "Recent tasks",
     "noRecentTasks": "No entries logged for this week yet.",
     "weekTotal": "Week total",
     "monthTotal": "Month total",
