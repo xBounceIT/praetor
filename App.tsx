@@ -19,6 +19,7 @@ import InternalListingView from './components/catalog/InternalListingView';
 import ApiDocsView from './components/docs/ApiDocsView';
 import DocsHubView from './components/docs/DocsHubView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
+import ErrorBoundary from './components/ErrorBoundary';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import Layout from './components/Layout';
@@ -612,7 +613,7 @@ const TrackerView: React.FC<{
   );
 };
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const { t: tApp } = useTranslation(['common', 'reports']);
   useLayoutEffect(() => {
     applyTheme(getTheme());
@@ -748,7 +749,7 @@ const App: React.FC = () => {
     [],
   );
 
-  const [activeView, setActiveView] = useState<View | '404'>(() => {
+  const [activeView, setActiveViewState] = useState<View | '404'>(() => {
     const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
     if (technicalDocsView) return technicalDocsView;
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
@@ -801,6 +802,34 @@ const App: React.FC = () => {
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
 
+  // Navigation-aware setter: clears any *FilterId state that isn't valid for
+  // the destination view, batched in the SAME commit as the view change.
+  // Combined with the latest-value refs below, this gives two defenses
+  // against stale filter IDs after async navigation: the setter clears
+  // synchronously on view change, and handler factories read filter IDs via
+  // refs so in-flight awaits still observe the latest value.
+  const activeViewRef = useRef<View | '404'>(activeView);
+  activeViewRef.current = activeView;
+  const setActiveView = useCallback<React.Dispatch<React.SetStateAction<View | '404'>>>((next) => {
+    const resolved =
+      typeof next === 'function'
+        ? (next as (prev: View | '404') => View | '404')(activeViewRef.current)
+        : next;
+    setActiveViewState(resolved);
+    if (resolved !== 'sales/client-quotes' && resolved !== 'sales/client-offers') {
+      setClientQuoteFilterId(null);
+    }
+    if (resolved !== 'sales/client-offers' && resolved !== 'accounting/clients-orders') {
+      setClientOfferFilterId(null);
+    }
+    if (resolved !== 'sales/supplier-quotes' && resolved !== 'accounting/supplier-orders') {
+      setSupplierQuoteFilterId(null);
+    }
+    if (resolved !== 'accounting/clients-orders') {
+      setClientsOrderFilterId(null);
+    }
+  }, []);
+
   // Latest-value refs for handler factories. The handlers read these BEFORE
   // and AFTER awaited API calls; getters backed by refs let the memoized
   // factories observe up-to-date state once promises resolve (a navigation can
@@ -811,6 +840,7 @@ const App: React.FC = () => {
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
   const projectsRef = useRef(projects);
+  const notificationsRef = useRef(notifications);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
@@ -820,6 +850,7 @@ const App: React.FC = () => {
   clientOfferFilterIdRef.current = clientOfferFilterId;
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
   projectsRef.current = projects;
+  notificationsRef.current = notifications;
 
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
@@ -910,7 +941,7 @@ const App: React.FC = () => {
         setSupplierQuoteFilterId,
         setActiveView,
       }),
-    [],
+    [setActiveView],
   );
 
   const quoteHandlers = useMemo(
@@ -930,7 +961,7 @@ const App: React.FC = () => {
         setActiveView,
         refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
       }),
-    [supplierQuoteHandlers.refreshSupplierQuoteFlow],
+    [supplierQuoteHandlers.refreshSupplierQuoteFlow, setActiveView],
   );
 
   const clientHandlers = useMemo(
@@ -979,7 +1010,7 @@ const App: React.FC = () => {
         setSupplierInvoices,
         setActiveView,
       }),
-    [],
+    [setActiveView],
   );
 
   const userHandlers = useMemo(
@@ -1049,7 +1080,7 @@ const App: React.FC = () => {
     if (currentUser && !isRouteAccessible && activeView !== '404') {
       React.startTransition(() => setActiveView('404'));
     }
-  }, [currentUser, isRouteAccessible, activeView]);
+  }, [currentUser, isRouteAccessible, activeView, setActiveView]);
 
   // Sync hash with activeView
   useEffect(() => {
@@ -1068,25 +1099,9 @@ const App: React.FC = () => {
     window.location.hash = '/' + activeView;
   }, [activeView, currentUser, isLoading]);
 
-  useEffect(() => {
-    if (
-      activeView !== 'sales/client-quotes' &&
-      activeView !== 'sales/client-offers' &&
-      clientQuoteFilterId
-    ) {
-      React.startTransition(() => setClientQuoteFilterId(null));
-    }
-    if (
-      activeView !== 'sales/supplier-quotes' &&
-      activeView !== 'accounting/supplier-orders' &&
-      supplierQuoteFilterId
-    ) {
-      React.startTransition(() => setSupplierQuoteFilterId(null));
-    }
-    if (activeView !== 'accounting/clients-orders' && clientsOrderFilterId) {
-      React.startTransition(() => setClientsOrderFilterId(null));
-    }
-  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId, clientsOrderFilterId]);
+  // Filter-id cleanup now happens inside `setActiveView` itself - any caller
+  // (navigation handlers, hash-change listener, Layout menu) goes through that
+  // wrapper, so the four *FilterId values can never outlive a view change.
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -1115,7 +1130,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS, currentUser]);
+  }, [activeView, VALID_VIEWS, currentUser, setActiveView]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -1123,12 +1138,6 @@ const App: React.FC = () => {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, [activeView, currentUser, viewingUserId]);
-
-  useEffect(() => {
-    if (activeView !== 'sales/client-offers' && activeView !== 'accounting/clients-orders') {
-      setClientOfferFilterId(null);
-    }
-  }, [activeView]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1403,13 +1412,39 @@ const App: React.FC = () => {
         switch (module) {
           case 'timesheets': {
             if (!canViewTimesheets) return;
+            // Merge incoming entries with existing state so an in-flight
+            // optimistic insert (handleAddEntry / handleAddBulkEntries) isn't
+            // dropped when the pager finally resolves. Preserve `prev`'s
+            // order: streamed continuation pages arrive older-than-prev (cursor
+            // is `<` on `created_at DESC`), so newer rows MUST stay on top —
+            // prepending page would reverse chunk order for any user with more
+            // than 500 entries. Server still wins on id collisions because
+            // matching prev rows are replaced with the page version in place.
+            const mergeById = (prev: TimeEntry[], page: TimeEntry[]): TimeEntry[] => {
+              const incoming = new Map(page.map((entry) => [entry.id, entry]));
+              const seen = new Set<string>();
+              const merged: TimeEntry[] = [];
+              for (const entry of prev) {
+                const replacement = incoming.get(entry.id);
+                if (replacement) {
+                  merged.push(replacement);
+                  seen.add(entry.id);
+                } else {
+                  merged.push(entry);
+                }
+              }
+              for (const entry of page) {
+                if (!seen.has(entry.id)) merged.push(entry);
+              }
+              return merged;
+            };
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
               while (cursor) {
                 if (entriesStreamTokenRef.current !== token) return;
                 try {
                   const page = await api.entries.listPage({ cursor, limit: 500 });
                   if (entriesStreamTokenRef.current !== token) return;
-                  setEntries((prev) => [...prev, ...page.entries]);
+                  setEntries((prev) => mergeById(prev, page.entries));
                   cursor = page.nextCursor;
                 } catch (err) {
                   console.error('Failed to stream remaining entries:', err);
@@ -1424,7 +1459,7 @@ const App: React.FC = () => {
                 load: () => api.entries.listPage({ limit: 500 }),
                 apply: (page) => {
                   const token = ++entriesStreamTokenRef.current;
-                  setEntries(page.entries);
+                  setEntries((prev) => mergeById(prev, page.entries));
                   // Signal that the initial page of entries is in state. The
                   // recurring-entries generator effect gates on this so it
                   // never runs against the empty-array initial state (which
@@ -1793,11 +1828,8 @@ const App: React.FC = () => {
       !currentUser ||
       !hasPermission(currentUser.permissions, buildPermission('notifications', 'view'))
     ) {
-      // Use queueMicrotask to avoid synchronous setState warning
-      queueMicrotask(() => {
-        setNotifications([]);
-        setUnreadNotificationCount(0);
-      });
+      setNotifications([]);
+      setUnreadNotificationCount(0);
       return;
     }
 
@@ -1838,21 +1870,24 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleDeleteNotification = useCallback(
-    async (id: string) => {
-      try {
-        const notification = notifications.find((n) => n.id === id);
-        await api.notifications.delete(id);
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-        if (notification && !notification.isRead) {
-          setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
-        }
-      } catch (err) {
-        console.error('Failed to delete notification:', err);
+  const handleDeleteNotification = useCallback(async (id: string) => {
+    try {
+      await api.notifications.delete(id);
+      // Look up wasUnread BEFORE the state update so the setNotifications
+      // updater stays pure. StrictMode invokes updaters twice to surface
+      // impurity; nesting `setUnreadNotificationCount` inside the updater
+      // would queue the decrement twice and skew the unread count by 2.
+      // `notificationsRef` is synced in render with the latest `notifications`
+      // so this read can't lag a previous state change.
+      const target = notificationsRef.current.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      if (target && !target.isRead) {
+        setUnreadNotificationCount((c) => Math.max(0, c - 1));
       }
-    },
-    [notifications],
-  );
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  }, []);
 
   // Determine available users for the dropdown based on permissions
   const availableUsers = useMemo(() => {
@@ -2701,5 +2736,11 @@ const App: React.FC = () => {
     </>
   );
 };
+
+const App: React.FC = () => (
+  <ErrorBoundary>
+    <AppContent />
+  </ErrorBoundary>
+);
 
 export default App;

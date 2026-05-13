@@ -1,13 +1,5 @@
 import type React from 'react';
-import {
-  Children,
-  cloneElement,
-  isValidElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from 'react';
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FieldLabel } from '@/components/ui/field';
@@ -100,11 +92,16 @@ const Modal: React.FC<ModalProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const focusRunIdRef = useRef(0);
   const resolvedTheme = useResolvedShadcnTheme();
-  const normalizedChildren = useMemo(() => {
-    if (!isOpen) return null;
-    const content = typeof children === 'function' ? children() : children;
-    return Children.map(content, renderWithShadcnFormPrimitives);
-  }, [children, isOpen]);
+  // Resolve children inline rather than memoizing: if `children` is a render
+  // prop that itself calls hooks, wrapping the call in `useMemo` would invoke
+  // those hooks outside the normal render phase and break the rules of hooks.
+  // Identity churn here is fine - children always re-render with the modal.
+  const normalizedChildren = !isOpen
+    ? null
+    : Children.map(
+        typeof children === 'function' ? children() : children,
+        renderWithShadcnFormPrimitives,
+      );
 
   useEffect(() => {
     if (isOpen) {

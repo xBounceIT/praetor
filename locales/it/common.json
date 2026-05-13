@@ -302,5 +302,10 @@
     "title": "Pagina Non Trovata",
     "message": "La pagina che stai cercando non esiste o è stata spostata. Controlla l'URL o torna alla pagina iniziale.",
     "return": "Torna alla Home"
+  },
+  "errorBoundary": {
+    "title": "Qualcosa è andato storto",
+    "message": "Qualcosa è andato storto — aggiorna la pagina per riprovare.",
+    "refresh": "Aggiorna"
   }
 }

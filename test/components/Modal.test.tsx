@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 
 const { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } = await import('../../utils/theme');
 const Modal = (await import('../../components/shared/Modal')).default;
@@ -274,5 +275,53 @@ describe('<Modal />', () => {
     expect(document.body.style.overflow).toBe('hidden');
     unmount();
     expect(document.body.style.overflow).toBe('');
+  });
+
+  // Regression: a child that uses hooks must render without React warning
+  // about hook order. The old implementation memoized the resolved children
+  // with `useMemo`, which executed any child render-prop's hooks outside the
+  // normal render phase. Resolving inline (current code) keeps hook order
+  // deterministic across renders.
+  test('render-prop child that uses hooks renders without hook-order warnings', () => {
+    const consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {});
+
+    const HookingChild = () => {
+      const [count, setCount] = useState(0);
+      return (
+        <button type="button" data-testid="hookful" onClick={() => setCount(count + 1)}>
+          count: {count}
+        </button>
+      );
+    };
+
+    try {
+      const { rerender } = render(
+        <Modal isOpen={true} onClose={() => {}}>
+          {() => <HookingChild />}
+        </Modal>,
+      );
+
+      expect(screen.getByTestId('hookful')).toHaveTextContent('count: 0');
+
+      // Force a parent re-render with the same child shape. Hook order in
+      // the child must be stable - any "Rendered more/fewer hooks" warning
+      // would show up via console.error.
+      rerender(
+        <Modal isOpen={true} onClose={() => {}}>
+          {() => <HookingChild />}
+        </Modal>,
+      );
+
+      fireEvent.click(screen.getByTestId('hookful'));
+      expect(screen.getByTestId('hookful')).toHaveTextContent('count: 1');
+
+      const hookOrderWarnings = consoleErrorSpy.mock.calls.filter((args) => {
+        const message = args.map((value) => String(value)).join(' ');
+        return /Rendered (more|fewer) hooks|Rules of Hooks/i.test(message);
+      });
+      expect(hookOrderWarnings).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
