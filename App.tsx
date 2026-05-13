@@ -172,6 +172,17 @@ const TrackerView: React.FC<{
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
+  onAddCustomTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
+    description?: string,
+    details?: Pick<
+      ProjectTask,
+      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
+  ) => Promise<ProjectTask>;
+  currency: string;
 }> = ({
   entries,
   clients,
@@ -193,6 +204,8 @@ const TrackerView: React.FC<{
   onAddBulkEntries,
   onRecurringAction,
   defaultLocation = 'remote',
+  onAddCustomTask,
+  currency,
 }) => {
   const { t } = useTranslation('timesheets');
   const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
@@ -461,6 +474,8 @@ const TrackerView: React.FC<{
                 dailyGoal={dailyGoal}
                 currentDayTotal={dailyTotal}
                 defaultLocation={defaultLocation}
+                onAddCustomTask={onAddCustomTask}
+                currency={currency}
               />
 
               <div className="w-full xl:max-w-[300px] xl:h-full">
@@ -2278,6 +2293,8 @@ const App: React.FC = () => {
                 onAddBulkEntries={handleAddBulkEntries}
                 onRecurringAction={handleRecurringAction}
                 defaultLocation={generalSettings.defaultLocation}
+                onAddCustomTask={addProjectTask}
+                currency={generalSettings.currency}
               />
             )}
             {hasViewAccess(currentUser.permissions, 'crm/clients') &&

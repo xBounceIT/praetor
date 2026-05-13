@@ -28,6 +28,14 @@ const betaCatalog = {
   ] satisfies ProjectTask[],
 };
 
+// onAddCustomTask + currency are required on DailyView. Tests that never exercise the modal
+// don't care about their values; provide harmless defaults so callers can spread these into
+// the test's props.
+const defaultModalProps = {
+  onAddCustomTask: mock(() => Promise.resolve(undefined)) as never,
+  currency: '$',
+};
+
 describe('<DailyView /> RBAC catalog sync', () => {
   test('rerendering with another scoped catalog replaces stale selections', async () => {
     const props = {
@@ -36,6 +44,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
       permissions: [],
       dailyGoal: 8,
       currentDayTotal: 0,
+      ...defaultModalProps,
     };
 
     const { rerender } = render(<DailyView {...props} {...alphaCatalog} />);
@@ -65,6 +74,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
       permissions: [],
       dailyGoal: 8,
       currentDayTotal: 0,
+      ...defaultModalProps,
     };
 
     const { rerender } = render(<DailyView {...props} {...alphaCatalog} />);
@@ -82,16 +92,18 @@ describe('<DailyView /> RBAC catalog sync', () => {
     });
   });
 
-  test('clears a custom task input when the scoped project disappears', async () => {
+  test('opens the task form modal with the current project pre-filled and locked when Custom task is selected', async () => {
     const props = {
       onAdd: mock(() => {}),
       selectedDate: '2026-05-11',
       permissions: ['projects.tasks.create'],
       dailyGoal: 8,
       currentDayTotal: 0,
+      onAddCustomTask: mock(() => Promise.resolve(undefined)) as never,
+      currency: '$',
     };
 
-    const { rerender } = render(
+    render(
       <DailyView
         {...props}
         clients={alphaCatalog.clients}
@@ -104,18 +116,68 @@ describe('<DailyView /> RBAC catalog sync', () => {
       expect(document.body).toHaveTextContent('Alpha Project');
     });
 
+    // Open the task SelectControl popover and pick the "+ Custom Task..." option.
     fireEvent.click(document.querySelectorAll('button[aria-expanded]')[2]);
     fireEvent.click(within(await screen.findByRole('dialog')).getByText('entry.customTask'));
 
+    // The TaskFormModal dialog appears with the "Create new task" title.
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('entry.typeCustomTask')).toBeInTheDocument();
+      expect(screen.getByText('tasks.createNewTask')).toBeInTheDocument();
     });
 
-    rerender(<DailyView {...props} clients={[]} projects={[]} projectTasks={[]} />);
+    // The Project field (inside the dialog) is rendered with the DailyView selection and is disabled.
+    const projectTrigger = document.getElementById('task-project') as HTMLButtonElement;
+    expect(projectTrigger).toBeInTheDocument();
+    expect(projectTrigger.disabled).toBe(true);
+    expect(projectTrigger).toHaveTextContent('Alpha Project');
+  });
+
+  test('calls onAddCustomTask with the locked project when the modal is submitted', async () => {
+    const onAdd = mock(() => {});
+    const createdTask: ProjectTask = {
+      id: 'task-new',
+      name: 'Onboarding call',
+      projectId: 'project-alpha',
+    };
+    const onAddCustomTask = mock(() => Promise.resolve(createdTask));
+
+    render(
+      <DailyView
+        onAdd={onAdd}
+        selectedDate="2026-05-11"
+        permissions={['projects.tasks.create']}
+        dailyGoal={8}
+        currentDayTotal={0}
+        onAddCustomTask={onAddCustomTask as never}
+        currency="$"
+        clients={alphaCatalog.clients}
+        projects={alphaCatalog.projects}
+        projectTasks={[]}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.queryByPlaceholderText('entry.typeCustomTask')).not.toBeInTheDocument();
+      expect(document.body).toHaveTextContent('Alpha Project');
     });
+
+    // Open the task select, pick "+ Custom Task...", then fill the modal name field.
+    fireEvent.click(document.querySelectorAll('button[aria-expanded]')[2]);
+    fireEvent.click(within(await screen.findByRole('dialog')).getByText('entry.customTask'));
+
+    const nameInput = (await screen.findByPlaceholderText(
+      'tasks.taskNamePlaceholder',
+    )) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Onboarding call' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'tasks.addTask' }));
+
+    // Wait for the create call. The first arg is the name; the second is the locked project id.
+    await waitFor(() => {
+      expect(onAddCustomTask).toHaveBeenCalledTimes(1);
+    });
+    const callArgs = (onAddCustomTask as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(callArgs[0]).toBe('Onboarding call');
+    expect(callArgs[1]).toBe('project-alpha');
   });
 
   test('clears stale task name when the selected project has no scoped tasks', async () => {
@@ -126,6 +188,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
       permissions: [],
       dailyGoal: 8,
       currentDayTotal: 0,
+      ...defaultModalProps,
     };
 
     const { rerender } = render(<DailyView {...props} {...alphaCatalog} />);
@@ -163,6 +226,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
       permissions: [],
       dailyGoal: 8,
       currentDayTotal: 0,
+      ...defaultModalProps,
     };
 
     render(<DailyView {...props} {...alphaCatalog} />);

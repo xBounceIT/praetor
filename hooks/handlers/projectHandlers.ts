@@ -85,7 +85,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       ProjectTask,
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
-  ) => {
+  ): Promise<ProjectTask> => {
     try {
       const task = await api.tasks.create(
         name,
@@ -101,8 +101,11 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         details?.billingFrequency,
       );
       setProjectTasks((prev) => [...prev, task]);
+      return task;
     } catch (err) {
       console.error('Failed to add task:', err);
+      alert('Failed to add task: ' + (err as Error).message);
+      throw err;
     }
   };
 

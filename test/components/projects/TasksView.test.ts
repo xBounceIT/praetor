@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-const readSource = () =>
+const readTasksViewSource = () =>
   Bun.file(new URL('../../../components/projects/TasksView.tsx', import.meta.url)).text();
+
+const readTaskFormModalSource = () =>
+  Bun.file(new URL('../../../components/projects/TaskFormModal.tsx', import.meta.url)).text();
 
 describe('TasksView', () => {
   describe('modal styling', () => {
-    test('uses the shared shadcn modal layout and form primitives', async () => {
-      const source = await readSource();
+    test('the shared TaskFormModal uses shadcn modal layout and form primitives', async () => {
+      const source = await readTaskFormModalSource();
 
       expect(source).toContain("import { Button } from '@/components/ui/button';");
       expect(source).toContain("import { Field, FieldLabel } from '@/components/ui/field';");
@@ -30,11 +33,19 @@ describe('TasksView', () => {
       expect(source).not.toContain('shadow-lg transform active:scale-95');
       expect(source).not.toContain('shadow-white/20');
     });
+
+    test('TasksView renders the shared TaskFormModal', async () => {
+      const source = await readTasksViewSource();
+
+      expect(source).toContain("from './TaskFormModal'");
+      expect(source).toContain('TaskFormModal');
+      expect(source).toContain('<TaskFormModal');
+    });
   });
 
   describe('pagination', () => {
     test('delegates rows per page to StandardTable', async () => {
-      const source = await readSource();
+      const source = await readTasksViewSource();
 
       expect(source).toContain('data={tasks}');
       expect(source).toContain('defaultRowsPerPage={5}');
