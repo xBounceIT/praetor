@@ -312,6 +312,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'New password must be at least 8 characters long');
       }
 
+      if (currentPasswordResult.value === newPasswordResult.value) {
+        return badRequest(reply, 'New password must be different from the current password');
+      }
+
       const passwordHash = await usersRepo.getPasswordHash(request.user.id);
       if (passwordHash === null) {
         return reply.code(404).send({ error: 'User not found' });

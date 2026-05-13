@@ -525,6 +525,21 @@ describe('PUT /api/settings/password', () => {
     expect(updatePasswordHashMock).not.toHaveBeenCalled();
   });
 
+  test('400 newPassword equals currentPassword', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'same-pw-123', newPassword: 'same-pw-123' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/different from the current password/i);
+    expect(getPasswordHashMock).not.toHaveBeenCalled();
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(updatePasswordHashMock).not.toHaveBeenCalled();
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'PUT',

@@ -52,6 +52,7 @@
     "updating": "Updating...",
     "passwordsDoNotMatch": "New passwords do not match",
     "passwordMinLength": "New password must be at least 8 characters long",
+    "sameAsCurrent": "New password must be different from the current password",
     "incorrectPassword": "Incorrect current password"
   },
   "mcp": {

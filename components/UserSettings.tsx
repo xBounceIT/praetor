@@ -317,6 +317,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       return;
     }
 
+    if (newPassword === currentPassword) {
+      setPasswordError(t('password.sameAsCurrent'));
+      return;
+    }
+
     if (newPassword.length < 8) {
       setPasswordError(t('password.passwordMinLength'));
       return;
