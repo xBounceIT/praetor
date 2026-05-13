@@ -240,7 +240,7 @@ describe('<UserSettings /> MCP tokens', () => {
   test('loads MCP tokens when the MCP tab opens', async () => {
     renderSettings();
 
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /mcp.title/ }));
 
     await waitFor(() => expect(onListMcpTokens).toHaveBeenCalled());
     expect(await screen.findByText('Agent')).toBeInTheDocument();
@@ -250,7 +250,7 @@ describe('<UserSettings /> MCP tokens', () => {
   test('shows the MCP endpoint URL and agent setup prompt', async () => {
     renderSettings();
 
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /mcp.title/ }));
 
     const endpointUrl = screen.getByLabelText('mcp.urlLabel') as HTMLInputElement;
     expect(endpointUrl.value).toContain('/api/mcp');
@@ -264,7 +264,7 @@ describe('<UserSettings /> MCP tokens', () => {
 
   test('creates a token and displays the raw token once', async () => {
     renderSettings();
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /mcp.title/ }));
 
     fireEvent.change(await screen.findByPlaceholderText('mcp.namePlaceholder'), {
       target: { value: 'External Agent' },
@@ -288,7 +288,7 @@ describe('<UserSettings /> MCP tokens', () => {
 
     try {
       renderSettings();
-      fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /mcp.title/ }));
       const copyButton = await screen.findByRole('button', { name: /mcp.copyUrl/ });
       await act(async () => {
         fireEvent.click(copyButton);
@@ -311,7 +311,7 @@ describe('<UserSettings /> MCP tokens', () => {
 
   test('requires confirmation before revoking a token from the list', async () => {
     renderSettings();
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /mcp.title/ }));
 
     expect(await screen.findByText('Agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /mcp.revoke/ }));

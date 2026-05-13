@@ -1,19 +1,29 @@
 import {
+  AlertCircle,
   Check,
   Contrast,
+  Globe,
+  Key,
+  Languages,
+  Loader2,
+  Lock,
   type LucideIcon,
   Moon,
+  Palette,
   RefreshCw,
+  Save,
   Shield,
   Sun,
   SunMoon,
   Trash2,
+  User,
 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
@@ -27,7 +37,9 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
 import { applyLanguagePreference } from '../utils/language';
@@ -46,64 +58,36 @@ export interface UserSettingsProps {
 }
 
 type LanguagePreference = NonNullable<Settings['language']>;
-type ThemeSwatchVariant = 'default' | 'praetor';
+type SettingsTab = 'profile' | 'appearance' | 'language' | 'security' | 'mcp';
 
-const THEME_OPTION_META: Record<
-  Theme,
-  {
-    activeClassName: string;
-    inactiveClassName: string;
-    swatchClassName: string;
-    Icon?: LucideIcon;
-    swatchVariant: ThemeSwatchVariant;
-  }
-> = {
-  light: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
-    swatchClassName:
-      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
-    Icon: Sun,
-    swatchVariant: 'default',
-  },
-  dark: {
-    activeClassName: 'border-secondary bg-secondary',
-    inactiveClassName: 'border-zinc-100 hover:border-secondary',
-    swatchClassName: 'bg-zinc-900 shadow-sm flex items-center justify-center text-white',
-    Icon: Moon,
-    swatchVariant: 'default',
-  },
-  zebra: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
-    swatchClassName:
-      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
-    Icon: Contrast,
-    swatchVariant: 'default',
-  },
-  praetor: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
-    swatchClassName: 'bg-white border border-zinc-200 shadow-sm flex items-center justify-center',
-    swatchVariant: 'praetor',
-  },
-  auto: {
-    activeClassName: 'border-praetor bg-zinc-50',
-    inactiveClassName: 'border-zinc-100 hover:border-zinc-200',
-    swatchClassName:
-      'bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-praetor',
-    Icon: SunMoon,
-    swatchVariant: 'default',
-  },
-};
+const PICKER_BUTTON_BASE =
+  'relative flex items-start gap-4 rounded-xl border-2 p-4 text-left transition-all';
+const PICKER_BUTTON_INACTIVE = 'border-input hover:border-border';
+const PICKER_BUTTON_ACTIVE = 'border-primary bg-accent';
 
-const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
-  if (option.swatchVariant === 'praetor') {
-    return <img src={praetorFaviconUrl} alt="" className="size-12 max-w-none object-cover" />;
-  }
+const SWATCH_CONTAINER =
+  'flex size-10 items-center justify-center overflow-hidden rounded-full shadow-sm';
 
-  const Icon = option.Icon;
-  return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
+const themeIconSwatch = (Icon: LucideIcon, containerClass: string) => (
+  <div className={cn(SWATCH_CONTAINER, containerClass)}>
+    <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} />
+  </div>
+);
+
+const languageSwatch = (inner: React.ReactNode) => (
+  <div className={cn(SWATCH_CONTAINER, 'bg-muted')}>{inner}</div>
+);
+
+const THEME_SWATCH: Record<Theme, React.ReactNode> = {
+  light: themeIconSwatch(Sun, 'border border-border bg-background text-primary'),
+  dark: themeIconSwatch(Moon, 'bg-zinc-900 text-white'),
+  zebra: themeIconSwatch(Contrast, 'border border-border bg-background text-primary'),
+  praetor: (
+    <div className={cn(SWATCH_CONTAINER, 'border border-border bg-background')}>
+      <img src={praetorFaviconUrl} alt="" className="size-12 max-w-none object-cover" />
+    </div>
+  ),
+  auto: themeIconSwatch(SunMoon, 'border border-border bg-background text-primary'),
 };
 
 const formatMcpTokenDate = (value: number | null) => {
@@ -134,6 +118,144 @@ const McpIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const PickerSelectedBadge = () => (
+  <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm">
+    <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
+  </span>
+);
+
+const PickerCard = ({
+  isSelected,
+  onClick,
+  swatch,
+  title,
+  description,
+}: {
+  isSelected: boolean;
+  onClick: () => void;
+  swatch: React.ReactNode;
+  title: string;
+  description: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(PICKER_BUTTON_BASE, isSelected ? PICKER_BUTTON_ACTIVE : PICKER_BUTTON_INACTIVE)}
+  >
+    <div className="relative shrink-0">
+      {swatch}
+      {isSelected && <PickerSelectedBadge />}
+    </div>
+    <div>
+      <h4 className="mb-1 font-semibold text-foreground">{title}</h4>
+      <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+    </div>
+  </button>
+);
+
+const SettingsSectionHeader = ({
+  icon: Icon,
+  title,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+}) => (
+  <CardHeader className="flex flex-row items-center gap-3">
+    <span aria-hidden="true" className="text-primary">
+      <Icon className="size-4" />
+    </span>
+    <CardTitle>{title}</CardTitle>
+  </CardHeader>
+);
+
+const ErrorBanner = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
+    <AlertCircle aria-hidden="true" className="size-4" />
+    {children}
+  </div>
+);
+
+const LANGUAGES: ReadonlyArray<{
+  code: LanguagePreference;
+  renderSwatch: (isActive: boolean) => React.ReactNode;
+  labelKey: string;
+  descKey: string;
+}> = [
+  {
+    code: 'auto',
+    renderSwatch: (isActive) =>
+      languageSwatch(
+        <Globe
+          aria-hidden="true"
+          className={cn('size-5', isActive ? 'text-primary' : 'text-muted-foreground')}
+        />,
+      ),
+    labelKey: 'language.auto',
+    descKey: 'language.autoDesc',
+  },
+  {
+    code: 'en',
+    renderSwatch: (isActive) =>
+      languageSwatch(
+        <span
+          aria-hidden="true"
+          className={cn('fi fi-gb text-xl', isActive ? 'scale-110' : 'opacity-70 grayscale')}
+        />,
+      ),
+    labelKey: 'language.english',
+    descKey: 'language.englishDesc',
+  },
+  {
+    code: 'it',
+    renderSwatch: (isActive) =>
+      languageSwatch(
+        <span
+          aria-hidden="true"
+          className={cn('fi fi-it text-xl', isActive ? 'scale-110' : 'opacity-70 grayscale')}
+        />,
+      ),
+    labelKey: 'language.italian',
+    descKey: 'language.italianDesc',
+  },
+];
+
+const PAT_DATE_FIELDS: ReadonlyArray<{
+  labelKey: string;
+  field: keyof Pick<PersonalAccessToken, 'createdAt' | 'updatedAt' | 'lastUsedAt'>;
+}> = [
+  { labelKey: 'security.personalAccessToken.createdAt', field: 'createdAt' },
+  { labelKey: 'security.personalAccessToken.updatedAt', field: 'updatedAt' },
+  { labelKey: 'security.personalAccessToken.lastUsedAt', field: 'lastUsedAt' },
+];
+
+const TABS: ReadonlyArray<{
+  id: SettingsTab;
+  icon: React.ReactNode;
+  labelKey: string;
+}> = [
+  {
+    id: 'profile',
+    icon: <User aria-hidden="true" className="size-4" />,
+    labelKey: 'userProfile.title',
+  },
+  {
+    id: 'appearance',
+    icon: <Palette aria-hidden="true" className="size-4" />,
+    labelKey: 'appearance.title',
+  },
+  {
+    id: 'language',
+    icon: <Languages aria-hidden="true" className="size-4" />,
+    labelKey: 'language.title',
+  },
+  {
+    id: 'security',
+    icon: <Lock aria-hidden="true" className="size-4" />,
+    labelKey: 'security.title',
+  },
+  { id: 'mcp', icon: <McpIcon className="size-4" />, labelKey: 'mcp.title' },
+];
+
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
   isLoading = false,
@@ -158,9 +280,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [language, setLanguage] = useState(settings.language || 'auto');
   const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
 
-  const [activeTab, setActiveTab] = useState<
-    'profile' | 'appearance' | 'language' | 'security' | 'mcp'
-  >('profile');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -236,6 +356,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
     void loadToken();
   }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
+
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
     setCurrentTheme(theme);
@@ -380,361 +501,222 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
+      <div className="mx-auto flex max-w-4xl items-center justify-center py-20">
         <div className="text-center">
-          <i className="fa-solid fa-circle-notch fa-spin text-praetor text-3xl mb-3"></i>
-          <p className="text-zinc-500 font-medium">{t('common:states.loading')}</p>
+          <Loader2
+            aria-hidden="true"
+            className="mx-auto mb-3 size-8 animate-spin text-muted-foreground"
+          />
+          <p className="font-medium text-muted-foreground">{t('common:states.loading')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-semibold text-zinc-800">{t('title')}</h2>
-          <p className="text-sm text-zinc-500 mt-1">{t('subtitle')}</p>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">{t('title')}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-zinc-200 gap-8">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-user mr-2"></i>
-          {t('userProfile.title')}
-          {activeTab === 'profile' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('appearance')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-palette mr-2"></i>
-          {t('appearance.title')}
-          {activeTab === 'appearance' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('language')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-language mr-2"></i>
-          {t('language.title')}
-          {activeTab === 'language' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'security' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-lock mr-2"></i>
-          {t('security.title')}
-          {activeTab === 'security' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('mcp')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'mcp' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <McpIcon className="inline size-4 mr-2 align-[-2px]" />
-          {t('mcp.title')}
-          {activeTab === 'mcp' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
+      <div
+        role="tablist"
+        aria-orientation="horizontal"
+        className="inline-flex h-9 w-fit items-center justify-center gap-1 rounded-lg bg-muted p-[3px] text-muted-foreground"
+      >
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'inline-flex h-[calc(100%-1px)] items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent px-3 py-1 text-sm font-medium transition-all focus-visible:outline-1 focus-visible:outline-ring',
+                isActive
+                  ? 'bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30'
+                  : 'text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground',
+              )}
+            >
+              {tab.icon}
+              {t(tab.labelKey)}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === 'profile' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-left-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-user text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('userProfile.title')}</h3>
-          </div>
-          <form onSubmit={handleSave}>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('userProfile.fullName')}
-                  </label>
-                  <input
+        <Card>
+          <SettingsSectionHeader icon={User} title={t('userProfile.title')} />
+          <form className="contents" onSubmit={handleSave}>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="profile-fullName">{t('userProfile.fullName')}</FieldLabel>
+                  <Input
+                    id="profile-fullName"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('userProfile.email')}
-                  </label>
-                  <input
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="profile-email">{t('userProfile.email')}</FieldLabel>
+                  <Input
+                    id="profile-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   />
-                </div>
+                </Field>
               </div>
-            </div>
-            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSaving || !hasChanges}
-                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
-                  isSaved
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                    : isSaving || !hasChanges
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                }`}
-              >
+            </CardContent>
+            <CardFooter className="justify-end">
+              <Button type="submit" disabled={isSaving || !hasChanges}>
                 {isSaving ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
                 ) : isSaved ? (
-                  <i className="fa-solid fa-check"></i>
+                  <Check aria-hidden="true" className="size-4" />
                 ) : (
-                  <i className="fa-solid fa-save"></i>
+                  <Save aria-hidden="true" className="size-4" />
                 )}
                 {isSaving
                   ? t('general.saving')
                   : isSaved
                     ? t('general.changesSaved')
                     : t('general.saveChanges')}
-              </button>
-            </div>
+              </Button>
+            </CardFooter>
           </form>
-        </section>
+        </Card>
       )}
 
       {activeTab === 'appearance' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-palette text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('appearance.title')}</h3>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {THEMES.map((theme) => {
-                const isSelected = currentTheme === theme;
-                const option = THEME_OPTION_META[theme];
-
-                return (
-                  <button
-                    key={theme}
-                    onClick={() => handleThemeChange(theme)}
-                    className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${
-                      isSelected ? option.activeClassName : option.inactiveClassName
-                    }`}
-                  >
-                    <div className="relative size-10 shrink-0">
-                      <div
-                        className={`size-10 overflow-hidden rounded-full ${option.swatchClassName}`}
-                      >
-                        {renderThemeSwatchContent(option)}
-                      </div>
-                      {isSelected && (
-                        <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-secondary text-secondary-foreground shadow-sm">
-                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-zinc-800 mb-1">
-                        {t(`appearance.${theme}.name`)}
-                      </h4>
-                      <p className="text-xs text-zinc-500 leading-relaxed">
-                        {t(`appearance.${theme}.description`)}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+        <Card>
+          <SettingsSectionHeader icon={Palette} title={t('appearance.title')} />
+          <CardContent>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {THEMES.map((theme) => (
+                <PickerCard
+                  key={theme}
+                  isSelected={currentTheme === theme}
+                  onClick={() => handleThemeChange(theme)}
+                  swatch={THEME_SWATCH[theme]}
+                  title={t(`appearance.${theme}.name`)}
+                  description={t(`appearance.${theme}.description`)}
+                />
+              ))}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'language' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-language text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('language.title')}</h3>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <button
-                onClick={() => handleLanguageChange('auto')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'auto' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <i
-                    className={`fa-solid fa-globe text-xl ${language === 'auto' ? 'text-praetor' : 'text-zinc-400'}`}
-                  ></i>
-                  {language === 'auto' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.auto')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">{t('language.autoDesc')}</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleLanguageChange('en')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'en' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span
-                    className={`fi fi-gb text-xl ${language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
-                  ></span>
-                  {language === 'en' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.english')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('language.englishDesc')}
-                  </p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleLanguageChange('it')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'it' ? 'border-praetor bg-zinc-50' : 'border-zinc-100 hover:border-zinc-200'}`}
-              >
-                <div className="size-10 rounded-full bg-zinc-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span
-                    className={`fi fi-it text-xl ${language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
-                  ></span>
-                  {language === 'it' && (
-                    <div className="absolute -top-1 -right-1 size-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                      <i className="fa-solid fa-check text-white text-[8px]"></i>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-semibold text-zinc-800 mb-1">{t('language.italian')}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    {t('language.italianDesc')}
-                  </p>
-                </div>
-              </button>
+        <Card>
+          <SettingsSectionHeader icon={Languages} title={t('language.title')} />
+          <CardContent>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {LANGUAGES.map((lang) => {
+                const isSelected = language === lang.code;
+                return (
+                  <PickerCard
+                    key={lang.code}
+                    isSelected={isSelected}
+                    onClick={() => handleLanguageChange(lang.code)}
+                    swatch={lang.renderSwatch(isSelected)}
+                    title={t(lang.labelKey)}
+                    description={t(lang.descKey)}
+                  />
+                );
+              })}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'security' && (
-        <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3 rounded-t-2xl">
-            <i className="fa-solid fa-lock text-praetor"></i>
-            <h3 className="font-semibold text-zinc-800">{t('security.title')}</h3>
-          </div>
-          <form onSubmit={handlePasswordUpdate}>
-            <div className="p-6">
-              {passwordError && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                  <i className="fa-solid fa-circle-exclamation"></i>
-                  {passwordError}
-                </div>
-              )}
+        <Card>
+          <SettingsSectionHeader icon={Lock} title={t('security.title')} />
+          <form className="contents" onSubmit={handlePasswordUpdate}>
+            <CardContent className="space-y-6">
+              {passwordError && <ErrorBanner>{passwordError}</ErrorBanner>}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="current-password">
                     {t('password.currentPassword')}
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <Input
+                    id="current-password"
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
-                </div>
-                <div className="hidden md:block"></div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    {t('password.newPassword')}
-                  </label>
-                  <input
+                </Field>
+                <div className="hidden md:block" aria-hidden="true" />
+                <Field>
+                  <FieldLabel htmlFor="new-password">{t('password.newPassword')}</FieldLabel>
+                  <Input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="confirm-password">
                     {t('password.confirmNewPassword')}
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <Input
+                    id="confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                     placeholder="••••••••"
                     required
                   />
-                </div>
+                </Field>
               </div>
-            </div>
-            <div className="px-6 py-4 border-t border-zinc-200 flex justify-end">
-              <button
+            </CardContent>
+            <CardFooter className="justify-end">
+              <Button
                 type="submit"
                 disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
-                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
-                  passwordSuccess
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                    : isSavingPassword || !currentPassword || !newPassword || !confirmPassword
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                      : 'bg-praetor text-white shadow-lg shadow-zinc-200 hover:bg-zinc-700'
-                }`}
               >
                 {isSavingPassword ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
                 ) : passwordSuccess ? (
-                  <i className="fa-solid fa-check"></i>
+                  <Check aria-hidden="true" className="size-4" />
                 ) : (
-                  <i className="fa-solid fa-key"></i>
+                  <Key aria-hidden="true" className="size-4" />
                 )}
                 {isSavingPassword
                   ? t('password.updating')
                   : passwordSuccess
                     ? t('password.passwordUpdated')
                     : t('password.updatePassword')}
-              </button>
-            </div>
+              </Button>
+            </CardFooter>
           </form>
-          <div className="border-t border-zinc-200 p-6">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <Separator />
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-praetor">
+                <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-primary">
                   <Shield aria-hidden="true" className="size-4" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-zinc-800">
+                  <h4 className="font-semibold text-foreground">
                     {t('security.personalAccessToken.title')}
                   </h4>
-                  <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                     {t('security.personalAccessToken.description')}
                   </p>
                 </div>
@@ -748,7 +730,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               >
                 <RefreshCw
                   aria-hidden="true"
-                  className={`size-4 ${isRenewingToken ? 'animate-spin' : ''}`}
+                  className={cn('size-4', isRenewingToken && 'animate-spin')}
                 />
                 {isRenewingToken
                   ? t('security.personalAccessToken.renewing')
@@ -756,19 +738,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               </Button>
             </div>
 
-            {tokenError && (
-              <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                {tokenError}
-              </div>
-            )}
+            {tokenError && <ErrorBanner>{tokenError}</ErrorBanner>}
 
-            <div className="space-y-4 rounded-lg border border-border bg-background p-4">
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-400">
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <Field>
+                <FieldLabel htmlFor="personal-access-token">
                   {t('security.personalAccessToken.tokenLabel')}
-                </label>
+                </FieldLabel>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
+                    id="personal-access-token"
                     value={
                       isLoadingToken ? t('security.personalAccessToken.loading') : tokenDisplayValue
                     }
@@ -784,59 +763,35 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     onCopyError={() => setTokenError(t('security.copyFailed'))}
                   />
                 </div>
-                <p className="mt-2 text-xs text-zinc-500">
+                <FieldDescription>
                   {personalAccessToken?.token
                     ? t('security.personalAccessToken.visibleOnce')
                     : t('security.personalAccessToken.masked')}
-                </p>
-              </div>
+                </FieldDescription>
+              </Field>
 
               {personalAccessToken && (
                 <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.createdAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.createdAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.updatedAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.updatedAt)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      {t('security.personalAccessToken.lastUsedAt')}
-                    </dt>
-                    <dd className="mt-1 text-zinc-700">
-                      {formatPersonalAccessTokenDate(personalAccessToken.lastUsedAt)}
-                    </dd>
-                  </div>
+                  {PAT_DATE_FIELDS.map(({ labelKey, field }) => (
+                    <div key={field}>
+                      <dt className="text-xs font-medium text-muted-foreground">{t(labelKey)}</dt>
+                      <dd className="mt-1 text-foreground">
+                        {formatPersonalAccessTokenDate(personalAccessToken[field])}
+                      </dd>
+                    </div>
+                  ))}
                 </dl>
               )}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'mcp' && (
-        <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-6 py-4">
-            <McpIcon className="size-4 text-praetor" />
-            <h3 className="font-semibold text-foreground">{t('mcp.title')}</h3>
-          </div>
-          <div className="p-6 space-y-6">
-            {mcpError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
-                <i className="fa-solid fa-circle-exclamation"></i>
-                {mcpError}
-              </div>
-            )}
+        <Card>
+          <SettingsSectionHeader icon={McpIcon} title={t('mcp.title')} />
+          <CardContent className="space-y-6">
+            {mcpError && <ErrorBanner>{mcpError}</ErrorBanner>}
 
             <Field>
               <FieldLabel htmlFor="mcp-endpoint-url">{t('mcp.urlLabel')}</FieldLabel>
@@ -892,7 +847,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 className="self-end"
               >
                 {isCreatingMcpToken ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
                 ) : (
                   <McpIcon className="size-4" />
                 )}
@@ -920,7 +875,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     className="shrink-0"
                   />
                 </div>
-                <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
+                <code className="mt-3 block break-all rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
                   {rawMcpToken}
                 </code>
               </div>
@@ -928,8 +883,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
             <div className="space-y-3">
               {isLoadingMcpTokens ? (
-                <div className="text-sm text-zinc-500 font-medium flex items-center gap-2">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
                   {t('mcp.loading')}
                 </div>
               ) : mcpTokens.length === 0 ? (
@@ -941,7 +896,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   const isRevoking = revokingMcpTokenId === token.id;
                   const renderRevokeIcon = () =>
                     isRevoking ? (
-                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                      <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
                     ) : (
                       <Trash2 aria-hidden="true" className="size-3.5" />
                     );
@@ -953,7 +908,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                     >
                       <div>
                         <p className="font-semibold text-foreground">{token.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {token.tokenPrefix}... · {t('mcp.created')}{' '}
                           {formatMcpTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
                           {formatMcpTokenDate(token.lastUsedAt)}
@@ -1001,8 +956,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 })
               )}
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
