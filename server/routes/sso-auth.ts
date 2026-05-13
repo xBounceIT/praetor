@@ -53,20 +53,6 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
-const getHeaderValue = (value: string | string[] | undefined): string => {
-  if (Array.isArray(value)) return value[0] ?? '';
-  return value ?? '';
-};
-
-const getRequestOrigin = (request: FastifyRequest): string => {
-  const proto = getHeaderValue(request.headers['x-forwarded-proto']).split(',')[0] || 'http';
-  const host =
-    getHeaderValue(request.headers['x-forwarded-host']).split(',')[0] ||
-    getHeaderValue(request.headers.host) ||
-    'localhost:3001';
-  return `${proto}://${host}`;
-};
-
 const buildFrontendErrorUrl = (message: string): string => {
   const configured = process.env.FRONTEND_URL?.trim();
   const fallback = `/?sso_error=${encodeURIComponent(message)}`;
@@ -105,7 +91,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
-      const redirectUrl = await ssoService.startOidcLogin(slug, getRequestOrigin(request));
+      const redirectUrl = await ssoService.startOidcLogin(slug);
       return reply.redirect(redirectUrl, 302);
     },
   );
@@ -123,12 +109,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
       try {
-        const currentUrl = new URL(request.url, getRequestOrigin(request));
-        const redirectUrl = await ssoService.completeOidcLogin(
-          slug,
-          currentUrl,
-          getRequestOrigin(request),
-        );
+        // We only need the search params from the inbound URL — never construct an
+        // origin from request headers. The service builds the public callback URL from
+        // server config (SSO_CALLBACK_BASE_URL / FRONTEND_URL).
+        const currentUrl = new URL(request.url, 'http://internal.invalid');
+        const redirectUrl = await ssoService.completeOidcLogin(slug, currentUrl);
         return reply.redirect(redirectUrl, 302);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'SSO login failed';
@@ -151,7 +136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
-      const redirectUrl = await ssoService.startSamlLogin(slug, getRequestOrigin(request));
+      const redirectUrl = await ssoService.startSamlLogin(slug);
       return reply.redirect(redirectUrl, 302);
     },
   );
@@ -172,7 +157,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const redirectUrl = await ssoService.completeSamlLogin(
           slug,
           request.body as Record<string, string>,
-          getRequestOrigin(request),
         );
         return reply.redirect(redirectUrl, 302);
       } catch (err) {
@@ -195,7 +179,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
-      const metadata = await ssoService.getSamlMetadata(slug, getRequestOrigin(request));
+      const metadata = await ssoService.getSamlMetadata(slug);
       return reply.type('application/samlmetadata+xml').send(metadata);
     },
   );
