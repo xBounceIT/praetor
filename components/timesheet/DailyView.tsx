@@ -283,8 +283,8 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   return (
     <div className="rounded-lg border border-border bg-background shadow-sm p-5">
-      <div className="flex justify-between items-start gap-4 mb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex justify-between items-center gap-4 mb-4">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex flex-col">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground leading-none mb-1">
               {t('entry.loggingFor')}
@@ -303,6 +303,13 @@ const DailyView: React.FC<DailyViewProps> = ({
             </div>
           </div>
         </div>
+        {isExceedingGoal && (
+          <div className="min-w-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 animate-in fade-in slide-in-from-right-4">
+            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider leading-none truncate">
+              {t('entry.warningExceedGoal', { goal: dailyGoal })}
+            </p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -426,15 +433,6 @@ const DailyView: React.FC<DailyViewProps> = ({
             </Button>
           </div>
         </div>
-
-        {isExceedingGoal && (
-          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-            <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-            <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
-              {t('entry.warningExceedGoal', { goal: dailyGoal })}
-            </p>
-          </div>
-        )}
 
         {selectedTaskId && (
           <div

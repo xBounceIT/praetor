@@ -52,7 +52,7 @@
     "stopRecurringTask": "Stop Recurring Task?",
     "howHandleEntries": "How would you like to handle existing entries for",
     "cancel": "Cancel",
-    "warningExceedGoal": "Warning: This entry will exceed your daily goal of {{goal}} hours.",
+    "warningExceedGoal": "This entry will exceed your daily goal of {{goal}} hours.",
     "clientRequired": "Client is required",
     "projectRequired": "Project is required",
     "taskRequired": "Task is required",
