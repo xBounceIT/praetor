@@ -46,7 +46,7 @@ const bcryptCompareMock = mock();
 const ldapAuthenticateMock = mock();
 const ldapAuthenticateWithProfileMock = mock();
 const ldapAuthenticateAndProvisionMock = mock();
-const applyExternalRoleIdsForUserMock = mock();
+const applyExternalRoleIdsForUserIfMatchedMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
 
@@ -82,7 +82,7 @@ beforeAll(async () => {
   }));
   mock.module('../../services/external-auth.ts', () => ({
     ...externalAuthSnap,
-    applyExternalRoleIdsForUser: applyExternalRoleIdsForUserMock,
+    applyExternalRoleIdsForUserIfMatched: applyExternalRoleIdsForUserIfMatchedMock,
   }));
   mock.module('../../services/ldap.ts', () => ({
     default: {
@@ -145,7 +145,7 @@ const allMocks = [
   ldapAuthenticateMock,
   ldapAuthenticateWithProfileMock,
   ldapAuthenticateAndProvisionMock,
-  applyExternalRoleIdsForUserMock,
+  applyExternalRoleIdsForUserIfMatchedMock,
 ];
 
 let testApp: FastifyInstance;
@@ -175,11 +175,13 @@ beforeEach(async () => {
     authenticated: false,
     groups: [],
     roleIds: ['user'],
+    matchedRoleIds: [],
   });
   ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
   findLoginUserByIdMock.mockResolvedValue(null);
-  applyExternalRoleIdsForUserMock.mockImplementation(async (_userId: string, roleIds: string[]) =>
-    roleIds.length > 0 ? roleIds : ['user'],
+  applyExternalRoleIdsForUserIfMatchedMock.mockImplementation(
+    async (_userId: string, roleIds: string[]) =>
+      roleIds.length > 0 ? { applied: true, roleIds } : { applied: false, roleIds: [] },
   );
   bcryptCompareMock.mockResolvedValue(false);
 
@@ -244,6 +246,7 @@ describe('POST /api/auth/login', () => {
       authenticated: true,
       groups: ['admins'],
       roleIds: ['admin'],
+      matchedRoleIds: ['admin'],
     });
 
     const res = await testApp.inject({
@@ -254,10 +257,32 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
-    expect(applyExternalRoleIdsForUserMock).toHaveBeenCalledWith('u1', ['admin']);
+    expect(applyExternalRoleIdsForUserIfMatchedMock).toHaveBeenCalledWith('u1', ['admin']);
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     const body = JSON.parse(res.body);
     expect(body.user.role).toBe('admin');
+  });
+
+  test('200: LDAP login with no matching role mapping preserves admin-assigned role (regression #318)', async () => {
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    // LDAP authenticates but the user's groups don't map to any configured role.
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: ['cn=other,dc=corp,dc=local'],
+      roleIds: ['user'],
+      matchedRoleIds: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(applyExternalRoleIdsForUserIfMatchedMock).toHaveBeenCalledWith('u1', []);
+    const body = JSON.parse(res.body);
+    expect(body.user.role).toBe('manager');
   });
 
   test('200: LDAP returns false, bcrypt succeeds (fallback)', async () => {
@@ -266,6 +291,7 @@ describe('POST /api/auth/login', () => {
       authenticated: false,
       groups: [],
       roleIds: ['user'],
+      matchedRoleIds: [],
     });
     bcryptCompareMock.mockResolvedValue(true);
 
@@ -384,7 +410,7 @@ describe('POST /api/auth/login', () => {
     // It should NOT re-run authenticateWithProfile (already authenticated by the helper)
     expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
     // It should NOT re-apply role mapping (the provision helper already did it)
-    expect(applyExternalRoleIdsForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRoleIdsForUserIfMatchedMock).not.toHaveBeenCalled();
     // Audit emits both user.created and user.login
     const actions = logAuditMock.mock.calls.map(
       (call) => (call as unknown as [{ action: string }])[0].action,

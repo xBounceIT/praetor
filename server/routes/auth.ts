@@ -4,7 +4,7 @@ import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { applyExternalRoleIdsForUser } from '../services/external-auth.ts';
+import { applyExternalRoleIdsForUserIfMatched } from '../services/external-auth.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -128,7 +128,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // LDAP Authentication
       let ldapAuthSuccess = ldapAutoProvisionSuccess;
-      let ldapRoleIds: string[] = [];
+      let ldapMatchedRoleIds: string[] = [];
+      let ldapGroups: string[] = [];
       if (!ldapAuthSuccess && authMethod === 'ldap') {
         try {
           const ldapService = (await import('../services/ldap.ts')).default;
@@ -137,7 +138,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             passwordResult.value,
           );
           ldapAuthSuccess = ldapAuthResult.authenticated;
-          ldapRoleIds = ldapAuthResult.roleIds;
+          ldapMatchedRoleIds = ldapAuthResult.matchedRoleIds;
+          ldapGroups = ldapAuthResult.groups;
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Unknown error';
           fastify.log.warn(
@@ -159,8 +161,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (ldapAuthSuccess && !ldapAutoProvisionSuccess) {
-        const roleIds = await applyExternalRoleIdsForUser(user.id, ldapRoleIds);
-        user = { ...user, role: roleIds[0] };
+        const applied = await applyExternalRoleIdsForUserIfMatched(user.id, ldapMatchedRoleIds);
+        if (applied.applied) {
+          user = { ...user, role: applied.roleIds[0] };
+        } else {
+          fastify.log.warn(
+            { userId: user.id, username: user.username, groups: ldapGroups },
+            'LDAP login: no LDAP group matched a role mapping — preserving existing role',
+          );
+        }
       }
 
       if (ldapAutoProvisioned) {
