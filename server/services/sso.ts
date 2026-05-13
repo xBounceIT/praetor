@@ -1,3 +1,4 @@
+import dns from 'node:dns/promises';
 import {
   type CacheItem,
   type CacheProvider,
@@ -20,6 +21,11 @@ import { resolveExternalIdentity } from './external-auth.ts';
 const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const SAML_REQUEST_TTL_MS = 10 * 60 * 1000;
 const LOGIN_TICKET_TTL_MS = 2 * 60 * 1000;
+const REMOTE_FETCH_TIMEOUT_MS = 5_000;
+const REMOTE_FETCH_REDIRECT_LIMIT = 3;
+// SAML metadata documents are typically a few KB. 1 MiB is well above any legitimate payload
+// and keeps a hostile IdP from sending multi-GB junk that would OOM the backend.
+const REMOTE_FETCH_MAX_BYTES = 1 * 1024 * 1024;
 
 export type AdminSsoProvider = ssoProvidersRepo.SsoProvider;
 export type PublicSsoProvider = ssoProvidersRepo.PublicSsoProvider;
@@ -41,6 +47,9 @@ const maskProvider = (provider: ssoProvidersRepo.SsoProvider): AdminSsoProvider 
   ...provider,
   clientSecret: provider.clientSecret ? MASKED_SECRET : '',
   privateKey: provider.privateKey ? MASKED_SECRET : '',
+  // metadataXml and idpCert can embed signing/certificate material; mask the same way.
+  metadataXml: provider.metadataXml ? MASKED_SECRET : '',
+  idpCert: provider.idpCert ? MASKED_SECRET : '',
 });
 
 const getProviderSecrets = (provider: ssoProvidersRepo.SsoProvider) => ({
@@ -72,16 +81,48 @@ const readClaimArray = (claims: Record<string, unknown>, name: string): string[]
   return coerceStringArray(claims[name]);
 };
 
-const buildPublicSsoUrl = (path: string, requestOrigin: string): string => {
-  const base = process.env.SSO_CALLBACK_BASE_URL?.trim() || requestOrigin;
-  return new URL(path, base).href;
+const isLocalLoopbackHostname = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
+/**
+ * Resolves the public base URL used to build callback / metadata / redirect URLs.
+ *
+ * We refuse to read `Host` / `x-forwarded-host` headers — those are attacker-controlled and
+ * have caused host header injection vulnerabilities in similar flows. Instead, the base URL
+ * MUST come from configuration: `SSO_CALLBACK_BASE_URL` (preferred) or `FRONTEND_URL`.
+ *
+ * The configured URL must parse and use https://, except for loopback hosts where http:// is
+ * allowed for local development. An http:// base URL on a public host would put the SSO ticket
+ * (transported via redirect to the configured FRONTEND_URL) at risk of network interception.
+ */
+export const resolvePublicBaseUrl = (): string => {
+  const explicit = process.env.SSO_CALLBACK_BASE_URL?.trim();
+  const raw = explicit || process.env.FRONTEND_URL?.trim();
+  if (!raw) {
+    throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('SSO public base URL is not a valid URL');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`SSO public base URL must use http(s) (got ${parsed.protocol})`);
+  }
+  if (parsed.protocol === 'http:' && !isLocalLoopbackHostname(parsed.hostname)) {
+    throw new Error('SSO public base URL must use https:// for non-loopback hosts');
+  }
+  return raw;
 };
 
-const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, requestOrigin: string): string =>
-  buildPublicSsoUrl(`/api/auth/sso/${protocol}/${slug}/callback`, requestOrigin);
+const buildPublicSsoUrl = (path: string, baseUrl: string): string => new URL(path, baseUrl).href;
 
-const buildSamlMetadataUrl = (slug: string, requestOrigin: string): string =>
-  buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, requestOrigin);
+const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, baseUrl: string): string =>
+  buildPublicSsoUrl(`/api/auth/sso/${protocol}/${slug}/callback`, baseUrl);
+
+const buildSamlMetadataUrl = (slug: string, baseUrl: string): string =>
+  buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, baseUrl);
 
 const buildFrontendTicketUrl = (ticket: string): string => {
   const configured = process.env.FRONTEND_URL?.trim();
@@ -108,6 +149,10 @@ const prepareProviderValues = (
   } else {
     patch.privateKey = input.privateKey ? encrypt(input.privateKey) : '';
   }
+  // Treat metadataXml / idpCert the same way as secrets: a '***' echo on PUT should preserve
+  // the stored value rather than overwriting it with the mask.
+  if (input.metadataXml === MASKED_SECRET) delete patch.metadataXml;
+  if (input.idpCert === MASKED_SECRET) delete patch.idpCert;
   if (!existing && patch.protocol === 'saml') {
     patch.scopes = patch.scopes || ssoProvidersRepo.DEFAULT_OIDC_FIELDS.scopes;
     patch.usernameAttribute =
@@ -184,14 +229,128 @@ const parseSamlMetadata = (xml: string) => {
   };
 };
 
+/**
+ * Returns true when `ip` is in an IPv4 / IPv6 private, loopback, or link-local range that a
+ * server-side fetch should NEVER target. Blocks the standard SSRF egress targets:
+ *   - 127.0.0.0/8 (loopback)
+ *   - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC1918 private)
+ *   - 169.254.0.0/16 (link-local incl. cloud metadata 169.254.169.254)
+ *   - 100.64.0.0/10 (carrier-grade NAT — non-routable on the public internet)
+ *   - 0.0.0.0/8
+ *   - ::1 (IPv6 loopback)
+ *   - fc00::/7 (IPv6 unique-local)
+ *   - fe80::/10 (IPv6 link-local)
+ */
+export const isPrivateIp = (ip: string): boolean => {
+  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+  }
+  // IPv6 — normalise to lower-case, strip zone id.
+  const v6 = ip.toLowerCase().split('%')[0];
+  if (v6 === '::1') return true;
+  if (v6 === '::') return true;
+  if (v6.startsWith('fc') || v6.startsWith('fd')) return true; // fc00::/7
+  if (v6.startsWith('fe8') || v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb'))
+    return true; // fe80::/10
+  // IPv4-mapped IPv6 — recursively check the embedded v4.
+  const mapped = v6.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped) return isPrivateIp(mapped[1]);
+  return false;
+};
+
+/**
+ * Throws if `url` is non-HTTPS or its hostname resolves to a private / loopback / link-local
+ * address. Shared by the SSRF-fetch loop and the OIDC issuer pre-flight so the two cannot drift.
+ */
+const assertSafeRemoteUrl = async (url: URL): Promise<void> => {
+  if (url.protocol !== 'https:') {
+    throw new Error(`Refusing to fetch non-HTTPS URL: ${url.protocol}//...`);
+  }
+  const addresses = await dns.lookup(url.hostname, { all: true });
+  if (addresses.length === 0) {
+    throw new Error(`Could not resolve host ${url.hostname}`);
+  }
+  if (addresses.some((a) => isPrivateIp(a.address))) {
+    throw new Error(`Refusing to fetch URL with private/loopback host: ${url.hostname}`);
+  }
+};
+
+/**
+ * Reads a response body as text, refusing to buffer more than REMOTE_FETCH_MAX_BYTES. Guards
+ * against a hostile IdP that returns a huge metadata document hoping to OOM the backend.
+ */
+const readBoundedText = async (response: Response): Promise<string> => {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > REMOTE_FETCH_MAX_BYTES) {
+    throw new Error(`Remote response too large (${declared} bytes)`);
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > REMOTE_FETCH_MAX_BYTES) {
+      await reader.cancel();
+      throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total).toString('utf-8');
+};
+
+/**
+ * SSRF-hardened fetch for IdP-supplied URLs (SAML metadata, OIDC discovery).
+ *
+ * Guarantees:
+ *   - HTTPS only (no http:, file:, gopher:, etc).
+ *   - Host resolved via DNS; rejects if any resolved address is private/loopback/link-local.
+ *   - 5-second total timeout via AbortController.
+ *   - Bounded follows: each redirect target is re-validated identically.
+ */
+const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
+  let current = url;
+  for (let hops = 0; hops <= REMOTE_FETCH_REDIRECT_LIMIT; hops++) {
+    await assertSafeRemoteUrl(new URL(current));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(current, { signal: controller.signal, redirect: 'manual' });
+      if (response.status >= 300 && response.status < 400) {
+        const next = response.headers.get('location');
+        if (!next) {
+          throw new Error(`Redirect response without Location header from ${current}`);
+        }
+        current = new URL(next, current).href;
+        continue;
+      }
+      return response;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error('Exceeded redirect limit while fetching remote URL');
+};
+
 const resolveSamlIdpConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   if (provider.metadataXml.trim()) {
     return { ...parseSamlMetadata(provider.metadataXml), source: 'metadataXml' };
   }
   if (provider.metadataUrl.trim()) {
-    const response = await fetch(provider.metadataUrl);
+    const response = await safeFetchRemoteUrl(provider.metadataUrl);
     if (!response.ok) throw new Error(`Failed to fetch SAML metadata: HTTP ${response.status}`);
-    return { ...parseSamlMetadata(await response.text()), source: 'metadataUrl' };
+    return { ...parseSamlMetadata(await readBoundedText(response)), source: 'metadataUrl' };
   }
   return {
     idpIssuer: provider.idpIssuer,
@@ -249,6 +408,17 @@ const getEnabledProviderBySlug = async (
   return provider;
 };
 
+const getEnabledProviderById = async (
+  protocol: 'oidc' | 'saml',
+  id: string,
+): Promise<ssoProvidersRepo.SsoProvider> => {
+  const provider = await ssoProvidersRepo.findById(id);
+  if (!provider || provider.protocol !== protocol || !provider.enabled) {
+    throw new Error('SSO provider is not enabled');
+  }
+  return provider;
+};
+
 const getProviderBySlug = async (
   protocol: 'oidc' | 'saml',
   slug: string,
@@ -265,17 +435,22 @@ const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   if (!provider.issuerUrl || !provider.clientId) {
     throw new Error('OIDC provider is missing issuer URL or client ID');
   }
-  return oidc.discovery(new URL(provider.issuerUrl), provider.clientId, clientSecret || undefined);
+  // Reuse the same SSRF pre-flight as the SAML metadata fetch. openid-client.discovery does its
+  // own HTTPS fetch internally, but our pre-flight catches the obvious cases (http://, private
+  // IP) before we hand control to the library.
+  const issuerUrl = new URL(provider.issuerUrl);
+  await assertSafeRemoteUrl(issuerUrl);
+  return oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined);
 };
 
 const createSamlClient = async (
   provider: ssoProvidersRepo.SsoProvider,
-  requestOrigin: string,
+  baseUrl: string,
 ): Promise<SAML> => {
   const idp = await resolveSamlIdpConfig(provider);
   const { privateKey } = getProviderSecrets(provider);
-  const callbackUrl = buildCallbackUrl('saml', provider.slug, requestOrigin);
-  const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, requestOrigin);
+  const callbackUrl = buildCallbackUrl('saml', provider.slug, baseUrl);
+  const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   const entryPoint = idp.entryPoint || provider.entryPoint;
   const idpCert = normalizeCertificate(idp.idpCert || provider.idpCert);
   if (!entryPoint || !idpCert) {
@@ -366,7 +541,8 @@ export const updateProvider = async (
 export const deleteProvider = async (id: string): Promise<boolean> =>
   ssoProvidersRepo.deleteById(id);
 
-export const startOidcLogin = async (slug: string, requestOrigin: string): Promise<string> => {
+export const startOidcLogin = async (slug: string): Promise<string> => {
+  const baseUrl = resolvePublicBaseUrl();
   const provider = await getEnabledProviderBySlug('oidc', slug);
   const config = await createOidcConfig(provider);
   const codeVerifier = oidc.randomPKCECodeVerifier();
@@ -381,7 +557,7 @@ export const startOidcLogin = async (slug: string, requestOrigin: string): Promi
     expiresAt: new Date(Date.now() + OIDC_STATE_TTL_MS),
   });
   return oidc.buildAuthorizationUrl(config, {
-    redirect_uri: buildCallbackUrl('oidc', provider.slug, requestOrigin),
+    redirect_uri: buildCallbackUrl('oidc', provider.slug, baseUrl),
     scope: provider.scopes || ssoProvidersRepo.DEFAULT_OIDC_FIELDS.scopes,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
@@ -389,17 +565,21 @@ export const startOidcLogin = async (slug: string, requestOrigin: string): Promi
   }).href;
 };
 
-export const completeOidcLogin = async (
-  slug: string,
-  callbackUrl: URL,
-  requestOrigin: string,
-): Promise<string> => {
-  const provider = await getEnabledProviderBySlug('oidc', slug);
+export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise<string> => {
+  const baseUrl = resolvePublicBaseUrl();
+  // Consume the state first, then resolve the provider FROM state.providerId — never from the
+  // URL slug. This blocks a slug-mismatch attack where the caller hits /oidc/<other>/callback
+  // with a code+state bound to a different provider, hoping to trade it for the wrong
+  // provider's tokens. The slug is only used as a defence-in-depth cross-check below.
   const stateValue = callbackUrl.searchParams.get('state') || '';
   const state = await ssoStatesRepo.consume(stateValue, 'oidc');
-  if (!state || state.providerId !== provider.id) throw new Error('Invalid or expired SSO state');
+  if (!state) throw new Error('Invalid or expired SSO state');
+  const provider = await getEnabledProviderById('oidc', state.providerId);
+  if (provider.slug !== normalizeSlug(slug)) {
+    throw new Error('Invalid or expired SSO state');
+  }
   const config = await createOidcConfig(provider);
-  const publicCallbackUrl = new URL(buildCallbackUrl('oidc', provider.slug, requestOrigin));
+  const publicCallbackUrl = new URL(buildCallbackUrl('oidc', provider.slug, baseUrl));
   publicCallbackUrl.search = callbackUrl.search;
   publicCallbackUrl.hash = callbackUrl.hash;
   const tokens = await oidc.authorizationCodeGrant(config, publicCallbackUrl, {
@@ -427,19 +607,20 @@ export const completeOidcLogin = async (
   });
 };
 
-export const startSamlLogin = async (slug: string, requestOrigin: string): Promise<string> => {
+export const startSamlLogin = async (slug: string): Promise<string> => {
+  const baseUrl = resolvePublicBaseUrl();
   const provider = await getEnabledProviderBySlug('saml', slug);
-  const saml = await createSamlClient(provider, requestOrigin);
+  const saml = await createSamlClient(provider, baseUrl);
   return saml.getAuthorizeUrlAsync('', undefined, {});
 };
 
 export const completeSamlLogin = async (
   slug: string,
   formBody: Record<string, string>,
-  requestOrigin: string,
 ): Promise<string> => {
+  const baseUrl = resolvePublicBaseUrl();
   const provider = await getEnabledProviderBySlug('saml', slug);
-  const saml = await createSamlClient(provider, requestOrigin);
+  const saml = await createSamlClient(provider, baseUrl);
   const result = await saml.validatePostResponseAsync(formBody);
   if (!result.profile || result.loggedOut) throw new Error('SAML response did not include a login');
   const profile = result.profile as Profile & Record<string, unknown>;
@@ -456,13 +637,14 @@ export const completeSamlLogin = async (
   });
 };
 
-export const getSamlMetadata = async (slug: string, requestOrigin: string): Promise<string> => {
+export const getSamlMetadata = async (slug: string): Promise<string> => {
+  const baseUrl = resolvePublicBaseUrl();
   const provider = await getProviderBySlug('saml', slug);
   const { privateKey } = getProviderSecrets(provider);
-  const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, requestOrigin);
+  const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   return generateServiceProviderMetadata({
     issuer,
-    callbackUrl: buildCallbackUrl('saml', provider.slug, requestOrigin),
+    callbackUrl: buildCallbackUrl('saml', provider.slug, baseUrl),
     privateKey: privateKey || undefined,
     publicCerts: provider.publicCert || undefined,
     signatureAlgorithm: 'sha256',

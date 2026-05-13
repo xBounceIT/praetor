@@ -4,6 +4,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
+import { MASKED_SECRET } from '../utils/crypto.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -124,9 +125,13 @@ const validateProviderBody = async (
     }
   }
 
-  if (input.enabled && input.protocol === 'saml') {
-    const hasMetadata = !!input.metadataUrl?.trim() || !!input.metadataXml?.trim();
-    const hasManual = !!input.entryPoint?.trim() && !!input.idpCert?.trim();
+  if (input.enabled && input.protocol === 'saml' && options.isCreate) {
+    // A masked sentinel never counts as "present" — the service preserves the existing value
+    // on update, but it can't satisfy a fresh create where there is nothing to preserve.
+    const hasMetadataXml = !!input.metadataXml?.trim() && input.metadataXml !== MASKED_SECRET;
+    const hasMetadata = !!input.metadataUrl?.trim() || hasMetadataXml;
+    const hasIdpCert = !!input.idpCert?.trim() && input.idpCert !== MASKED_SECRET;
+    const hasManual = !!input.entryPoint?.trim() && hasIdpCert;
     if (!hasMetadata && !hasManual) {
       badRequest(reply, 'SAML requires metadata URL/XML or manual entryPoint and idpCert');
       return null;
