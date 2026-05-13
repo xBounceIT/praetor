@@ -723,6 +723,10 @@ describe('POST /api/auth/logout', () => {
         entityId: 'u1',
       }),
     );
+    // Regression: the sliding-window refresh in authenticateToken issues a fresh token
+    // BEFORE the handler bumps session_version. Returning that token to the client would
+    // re-populate localStorage with an already-revoked token. The handler must strip it.
+    expect(res.headers['x-auth-token']).toBeUndefined();
   });
 
   test('subsequent request with the old token (stale sessionVersion) is rejected', async () => {

@@ -384,6 +384,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }),
       ]);
 
+      // The sliding-window refresh in authenticateToken already wrote a rotated token
+      // to x-auth-token. After the bump above, that token is revoked — strip it so the
+      // client doesn't persist a doomed token into localStorage.
+      reply.removeHeader('x-auth-token');
       return reply.code(204).send();
     },
   );
