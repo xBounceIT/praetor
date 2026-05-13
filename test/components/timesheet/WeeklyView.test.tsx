@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -115,10 +115,9 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
   });
 });
 
-// Catalog with two distinct (client, project, task) combos. The catalog
-// selection auto-picks the first combo for the form row, so any entry that
-// uses the *second* combo stays in the entryRows section — exactly the place
-// where the bug manifested before the fix.
+// Two distinct (client, project, task) combos. The form auto-selects the first
+// combo, so an entry referencing the *second* combo lands in entryRows rather
+// than collapsing into the form row.
 const twoComboCatalog = {
   clients: [
     { id: 'client-a', name: 'Client A' },
@@ -154,20 +153,31 @@ const findDurationInputWithValue = (value: string): HTMLInputElement | undefined
   return Array.from(inputs).find((input) => input.value === value);
 };
 
+const getSubmitButton = () => screen.getByRole('button', { name: /weekly\.(submitTime|success)/ });
+
 const clickSubmit = () => {
-  const buttons = document.body.querySelectorAll('button');
-  const submit = Array.from(buttons).find((b) => b.textContent?.includes('weekly.submitTime'));
-  if (!submit) throw new Error('submit button not found');
+  const submit = getSubmitButton();
   fireEvent.click(submit);
   return submit as HTMLButtonElement;
 };
 
+const setDurationInput = (input: HTMLInputElement, value: string) => {
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value } });
+  fireEvent.blur(input);
+};
+
+const waitForDurationInputs = async (predicate: (inputs: HTMLInputElement[]) => boolean) =>
+  waitFor(() => {
+    const inputs = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
+    );
+    if (!predicate(inputs)) throw new Error('expected duration inputs not yet rendered');
+    return inputs;
+  });
+
 describe('<WeeklyView /> submit mutations', () => {
-  test('clearing an existing entry calls onDeleteEntry and not onUpdateEntry', async () => {
-    // Regression for issue #364 bug 1: prior to the fix, setting duration to 0
-    // on an existing entry hit `continue` without calling onUpdateEntry OR
-    // onDeleteEntry, so the cell looked cleared in the UI but the entry
-    // survived on refresh.
+  test('clearing an existing entry-row cell calls onDeleteEntry and not onUpdateEntry', async () => {
     const today = todayDateOnly();
     const updateCalls: Array<{ id: string; updates: unknown }> = [];
     const deleteCalls: string[] = [];
@@ -192,10 +202,7 @@ describe('<WeeklyView /> submit mutations', () => {
       return input;
     });
 
-    fireEvent.focus(durationInput);
-    fireEvent.change(durationInput, { target: { value: '' } });
-    fireEvent.blur(durationInput);
-
+    setDurationInput(durationInput, '');
     clickSubmit();
 
     await waitFor(() => {
@@ -204,11 +211,111 @@ describe('<WeeklyView /> submit mutations', () => {
     expect(updateCalls).toEqual([]);
   });
 
+  test('clearing a form-row cell that maps to an existing entry calls onDeleteEntry', async () => {
+    // The single-combo catalog auto-selects, collapsing the matching entry
+    // into the form row. Clearing it must still flow through submitRow so
+    // hasFormChanges triggers the delete instead of dropping the edit.
+    const today = todayDateOnly();
+    const deleteCalls: string[] = [];
+
+    render(
+      <WeeklyView
+        entries={[
+          {
+            ...entryBOn(today),
+            id: 'entry-a',
+            clientId: 'client-a',
+            clientName: 'Client A',
+            projectId: 'project-a',
+            projectName: 'Project A',
+            task: 'Task A',
+          },
+        ]}
+        clients={[{ id: 'client-a', name: 'Client A' }]}
+        projects={[{ id: 'project-a', name: 'Project A', clientId: 'client-a', color: '#111' }]}
+        projectTasks={[{ id: 'task-a', name: 'Task A', projectId: 'project-a' }]}
+        {...sharedProps}
+        onDeleteEntry={(id) => {
+          deleteCalls.push(id);
+        }}
+      />,
+    );
+
+    const durationInput = await waitFor(() => {
+      const input = findDurationInputWithValue('3.5');
+      if (!input) throw new Error('pre-filled 3.5 input not found');
+      return input;
+    });
+
+    setDurationInput(durationInput, '');
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual(['entry-a']);
+    });
+  });
+
+  test('one submit dispatches mixed add, update, and delete batches', async () => {
+    // Row with two existing entries on two different days: clear one (delete),
+    // change the other (update), and fill an empty day (add). All three batches
+    // must fire from the same submit and resolve before success flashes.
+    const today = todayDateOnly();
+    const previousDay = (() => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 1);
+      return d.toISOString().slice(0, 10);
+    })();
+    const addCalls: unknown[][] = [];
+    const updateCalls: Array<{ id: string; updates: unknown }> = [];
+    const deleteCalls: string[] = [];
+
+    render(
+      <WeeklyView
+        entries={[
+          { ...entryBOn(today), id: 'entry-today', duration: 2 },
+          { ...entryBOn(previousDay), id: 'entry-prev', duration: 4 },
+        ]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onAddBulkEntries={async (entries) => {
+          addCalls.push(entries);
+        }}
+        onUpdateEntry={(id, updates) => {
+          updateCalls.push({ id, updates });
+        }}
+        onDeleteEntry={(id) => {
+          deleteCalls.push(id);
+        }}
+      />,
+    );
+
+    const inputs = await waitForDurationInputs(
+      (xs) => xs.some((i) => i.value === '2') && xs.some((i) => i.value === '4'),
+    );
+    const todayInput = inputs.find((i) => i.value === '2');
+    const prevInput = inputs.find((i) => i.value === '4');
+    if (!todayInput || !prevInput) throw new Error('expected both pre-filled inputs');
+
+    setDurationInput(prevInput, '');
+    setDurationInput(todayInput, '6');
+
+    const emptyInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
+    ).find((i) => i.value === '' && !i.disabled && i !== prevInput);
+    if (!emptyInput) throw new Error('no empty day-cell input available');
+    setDurationInput(emptyInput, '1.5');
+
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual(['entry-prev']);
+      expect(updateCalls.map((c) => c.id)).toEqual(['entry-today']);
+      expect(addCalls).toHaveLength(1);
+      expect(addCalls[0]).toHaveLength(1);
+    });
+  });
+
   test('handleSubmit awaits onUpdateEntry before flashing success', async () => {
-    // Regression for issue #364 bug 2: onUpdateEntry was previously invoked
-    // without await, so setShowSuccess(true) fired before the PATCH resolved.
-    // We expose this by holding the update promise pending and asserting the
-    // success state has not been reached.
     const today = todayDateOnly();
     let resolveUpdate: () => void = () => {
       throw new Error('updatePromise executor did not assign resolve');
@@ -232,14 +339,10 @@ describe('<WeeklyView /> submit mutations', () => {
       return input;
     });
 
-    fireEvent.focus(durationInput);
-    fireEvent.change(durationInput, { target: { value: '5' } });
-    fireEvent.blur(durationInput);
+    setDurationInput(durationInput, '5');
 
     const submit = clickSubmit();
 
-    // While the update is pending: button disabled and still labelled with
-    // `weekly.submitTime` (not the `weekly.success` flash).
     expect(submit.hasAttribute('disabled')).toBe(true);
     expect(submit.textContent).toContain('weekly.submitTime');
     expect(submit.textContent).not.toContain('weekly.success');
@@ -247,10 +350,7 @@ describe('<WeeklyView /> submit mutations', () => {
     resolveUpdate();
 
     await waitFor(() => {
-      const refreshed = Array.from(document.body.querySelectorAll('button')).find((b) =>
-        b.textContent?.includes('weekly.success'),
-      );
-      expect(refreshed).toBeTruthy();
+      expect(getSubmitButton().textContent).toContain('weekly.success');
     });
   });
 });
