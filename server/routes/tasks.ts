@@ -285,6 +285,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const id = generatePrefixedId('t');
 
+      // Read-only lookup against an existing project row; the FK constraint on the task
+      // insert below is the real integrity check. Hoisted out of the txn so we don't hold
+      // the txn's connection while waiting on a plain SELECT.
+      const clientId = await projectsRepo.findClientId(projectIdResult.value);
+
       try {
         // Atomicity: task insert + auto-assignments must all succeed or all roll back.
         // Without the transaction, an assignment failure left the task committed but
@@ -311,25 +316,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
 
-          const clientId = await projectsRepo.findClientId(projectIdResult.value, tx);
-
-          await Promise.all(
-            [
-              clientId
-                ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx)
-                : null,
-              userAssignmentsRepo.assignProjectToUser(
-                request.user.id,
-                projectIdResult.value,
-                undefined,
-                tx,
-              ),
-              userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
-              clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId, tx) : null,
-              userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
-              userAssignmentsRepo.assignTaskToTopManagers(id, tx),
-            ].filter((p): p is Promise<void> => p !== null),
-          );
+          const assignments: Promise<void>[] = [
+            userAssignmentsRepo.assignProjectToUser(
+              request.user.id,
+              projectIdResult.value,
+              undefined,
+              tx,
+            ),
+            userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
+            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
+            userAssignmentsRepo.assignTaskToTopManagers(id, tx),
+          ];
+          if (clientId) {
+            assignments.push(
+              userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx),
+              userAssignmentsRepo.assignClientToTopManagers(clientId, tx),
+            );
+          }
+          await Promise.all(assignments);
 
           return task;
         });
