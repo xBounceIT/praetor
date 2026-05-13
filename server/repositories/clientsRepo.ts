@@ -43,10 +43,10 @@ export type Client = {
   createdAt: number | undefined;
 };
 
-// Domain enum so callers can map unique-constraint violations to user-facing messages
-// without coupling to the raw Postgres index names.
 export type ClientUniqueViolationKind = 'fiscal_code' | 'client_code';
 
+// Maps Postgres unique-constraint violations to a domain kind so callers can surface
+// user-facing messages without depending on raw index names.
 export const classifyUniqueViolation = (err: unknown): ClientUniqueViolationKind | null => {
   const dup = getUniqueViolation(err);
   if (!dup) return null;

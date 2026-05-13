@@ -312,17 +312,16 @@ const canAccessClient = makeAccessChecker(
   'crm.clients_all.view',
 );
 
+const CLIENT_UNIQUE_VIOLATION_MESSAGES: Record<clientsRepo.ClientUniqueViolationKind, string> = {
+  client_code: 'Client ID already exists',
+  fiscal_code: 'Fiscal code already exists',
+};
+
 const handleClientUniqueViolation = (err: unknown, reply: FastifyReply): boolean => {
   const kind = clientsRepo.classifyUniqueViolation(err);
-  if (kind === 'client_code') {
-    badRequest(reply, 'Client ID already exists');
-    return true;
-  }
-  if (kind === 'fiscal_code') {
-    badRequest(reply, 'Fiscal code already exists');
-    return true;
-  }
-  return false;
+  if (!kind) return false;
+  badRequest(reply, CLIENT_UNIQUE_VIOLATION_MESSAGES[kind]);
+  return true;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
