@@ -358,7 +358,6 @@ describe('mapBuilderRow (exercised via create return path)', () => {
     exec.enqueue({ rows: [entryRow({ 11: null })] });
     const result = await entriesRepo.create(newEntry, testDb);
     expect(result.hourlyCost).toBe(0);
-    // cost = duration * hourlyCost — when hourlyCost falls back to 0, cost is also 0
     expect(result.cost).toBe(0);
   });
 

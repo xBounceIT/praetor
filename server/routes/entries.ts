@@ -130,21 +130,21 @@ const actorFromRequest = (request: FastifyRequest) => ({
   permissions: request.user?.permissions ?? [],
 });
 
+type SanitizedEntry = TimeEntry | Omit<TimeEntry, 'cost' | 'hourlyCost'>;
+
 // Strip `cost` / `hourlyCost` from outgoing entry payloads when the caller lacks
 // `reports.cost.view`. Computed cost reveals per-user pay rates, so the API enforces the
 // gate even when the UI happens to hide the column.
-const sanitizeEntry = (entry: TimeEntry, includeCost: boolean): Partial<TimeEntry> => {
+const sanitizeEntry = (entry: TimeEntry, includeCost: boolean): SanitizedEntry => {
   if (includeCost) return entry;
   const { cost: _cost, hourlyCost: _hourlyCost, ...rest } = entry;
   return rest;
 };
 
-// `nextCursor` here is the already-encoded cursor string returned by the service
-// (`listTimeEntries`), distinct from the raw `EntriesCursor` object exposed by the repo.
 const sanitizeListResult = (
   result: { entries: TimeEntry[]; nextCursor: string | null },
   includeCost: boolean,
-): { entries: Partial<TimeEntry>[]; nextCursor: string | null } => ({
+): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
   entries: result.entries.map((e) => sanitizeEntry(e, includeCost)),
   nextCursor: result.nextCursor,
 });
