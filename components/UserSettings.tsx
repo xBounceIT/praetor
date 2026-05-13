@@ -611,14 +611,15 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'language' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Languages aria-hidden="true" className="size-4 text-muted-foreground" />
+        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <Languages aria-hidden="true" className="size-4 text-praetor" />
               {t('language.title')}
             </CardTitle>
+            <CardDescription>{t('language.description')}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {LANGUAGE_OPTIONS.map((option) => {
                 const active = language === option.value;

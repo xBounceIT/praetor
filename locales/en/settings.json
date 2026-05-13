@@ -9,6 +9,7 @@
   },
   "language": {
     "title": "Language / Lingua",
+    "description": "Choose the language for the Praetor interface.",
     "auto": "Browser Auto",
     "autoDesc": "Automatically detect language from your browser settings",
     "english": "English",
