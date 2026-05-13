@@ -19,6 +19,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
@@ -1386,7 +1387,7 @@ describe('PUT /api/users/:id/roles', () => {
     });
     withDbTransactionMock.mockImplementation(async (cb) => {
       callOrder.push('tx:open');
-      const result = await cb(undefined);
+      const result = await cb(TX_SENTINEL);
       callOrder.push('tx:close');
       return result;
     });
@@ -1407,6 +1408,11 @@ describe('PUT /api/users/:id/roles', () => {
       'syncTopManager',
       'tx:close',
     ]);
+    // Each write step must run on the tx the wrapper handed us (not `db`), otherwise
+    // a failure in a later step won't roll the earlier ones back.
+    expect(replaceUserRolesMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(setPrimaryRoleMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(syncTopManagerAssignmentsForUserMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
   });
 
   test('does not commit role replacement when a tx step throws', async () => {
@@ -1781,7 +1787,7 @@ describe('POST /api/users/:id/assignments', () => {
     });
     withDbTransactionMock.mockImplementation(async (cb) => {
       callOrder.push('tx:open');
-      const result = await cb(undefined);
+      const result = await cb(TX_SENTINEL);
       callOrder.push('tx:close');
       return result;
     });
@@ -1804,6 +1810,13 @@ describe('POST /api/users/:id/assignments', () => {
       'clearProjectCascade',
       'applyProjectCascade',
     ]);
+    // Every write step must run on the tx the wrapper handed us, not `db` —
+    // that is the entire rollback contract this PR pins.
+    expect(replaceUserClientsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(replaceUserProjectsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(replaceUserTasksMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(clearProjectCascadeAssignmentsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(applyProjectCascadeToClientsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
   });
 
   test('does not commit assignment updates when a replace step throws in the tx', async () => {
