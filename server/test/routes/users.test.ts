@@ -19,6 +19,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
@@ -1365,6 +1366,76 @@ describe('PUT /api/users/:id/roles', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  // Regression: replaceUserRoles + setPrimaryRole + syncTopManagerAssignmentsForUser
+  // must run inside a single `withDbTransaction`. Without it, an INSERT failure in
+  // replaceUserRoles (or in any following step) leaves the user with their roles
+  // already deleted.
+  test('wraps replaceUserRoles + setPrimaryRole + syncTopManager in a single withDbTransaction', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'manager']));
+
+    const callOrder: string[] = [];
+    replaceUserRolesMock.mockImplementation(async () => {
+      callOrder.push('replaceUserRoles');
+    });
+    setPrimaryRoleMock.mockImplementation(async () => {
+      callOrder.push('setPrimaryRole');
+    });
+    syncTopManagerAssignmentsForUserMock.mockImplementation(async () => {
+      callOrder.push('syncTopManager');
+    });
+    withDbTransactionMock.mockImplementation(async (cb) => {
+      callOrder.push('tx:open');
+      const result = await cb(TX_SENTINEL);
+      callOrder.push('tx:close');
+      return result;
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'manager'], primaryRoleId: 'manager' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual([
+      'tx:open',
+      'replaceUserRoles',
+      'setPrimaryRole',
+      'syncTopManager',
+      'tx:close',
+    ]);
+    // Each write step must run on the tx the wrapper handed us (not `db`), otherwise
+    // a failure in a later step won't roll the earlier ones back.
+    expect(replaceUserRolesMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(setPrimaryRoleMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(syncTopManagerAssignmentsForUserMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+  });
+
+  test('does not commit role replacement when a tx step throws', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'manager']));
+
+    replaceUserRolesMock.mockResolvedValue(undefined);
+    setPrimaryRoleMock.mockRejectedValue(new Error('primary role update failed'));
+    withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'manager'], primaryRoleId: 'manager' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(replaceUserRolesMock).toHaveBeenCalled();
+    expect(setPrimaryRoleMock).toHaveBeenCalled();
+    expect(syncTopManagerAssignmentsForUserMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
 });
 
 // =========================================================================
@@ -1689,5 +1760,87 @@ describe('POST /api/users/:id/assignments', () => {
     expect(res.statusCode).toBe(403);
     expect(replaceUserClientsMock).not.toHaveBeenCalled();
     expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
+  });
+
+  // Regression: each replaceUser<Kind> writes a DELETE then an INSERT; partial failure
+  // between them wipes the user's existing assignments unless the whole batch is
+  // wrapped in `withDbTransaction`.
+  test('wraps all replaceUser<Kind> + clearProjectCascade + applyProjectCascade in a single withDbTransaction', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    userHasTopManagerRoleMock.mockResolvedValue(false);
+
+    const callOrder: string[] = [];
+    replaceUserClientsMock.mockImplementation(async () => {
+      callOrder.push('replaceUserClients');
+    });
+    replaceUserProjectsMock.mockImplementation(async () => {
+      callOrder.push('replaceUserProjects');
+    });
+    replaceUserTasksMock.mockImplementation(async () => {
+      callOrder.push('replaceUserTasks');
+    });
+    clearProjectCascadeAssignmentsMock.mockImplementation(async () => {
+      callOrder.push('clearProjectCascade');
+    });
+    applyProjectCascadeToClientsMock.mockImplementation(async () => {
+      callOrder.push('applyProjectCascade');
+    });
+    withDbTransactionMock.mockImplementation(async (cb) => {
+      callOrder.push('tx:open');
+      const result = await cb(TX_SENTINEL);
+      callOrder.push('tx:close');
+      return result;
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/assignments',
+      headers: adminAuth(),
+      payload: { clientIds: ['c1'], projectIds: ['p1'], taskIds: ['t1'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(callOrder[0]).toBe('tx:open');
+    expect(callOrder[callOrder.length - 1]).toBe('tx:close');
+    expect(callOrder.slice(1, -1)).toEqual([
+      'replaceUserClients',
+      'replaceUserProjects',
+      'replaceUserTasks',
+      'clearProjectCascade',
+      'applyProjectCascade',
+    ]);
+    // Every write step must run on the tx the wrapper handed us, not `db` —
+    // that is the entire rollback contract this PR pins.
+    expect(replaceUserClientsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(replaceUserProjectsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(replaceUserTasksMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(clearProjectCascadeAssignmentsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(applyProjectCascadeToClientsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+  });
+
+  test('does not commit assignment updates when a replace step throws in the tx', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    userHasTopManagerRoleMock.mockResolvedValue(false);
+
+    replaceUserClientsMock.mockResolvedValue(undefined);
+    // Canonical failure: DELETE half of replaceUserProjects succeeded, then INSERT
+    // threw; the exception propagates out of the tx callback.
+    replaceUserProjectsMock.mockRejectedValue(new Error('FK violation on user_projects'));
+    withDbTransactionMock.mockImplementation(async (cb) => cb(undefined));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/assignments',
+      headers: adminAuth(),
+      payload: { clientIds: ['c1'], projectIds: ['p1'], taskIds: ['t1'] },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(replaceUserClientsMock).toHaveBeenCalled();
+    expect(replaceUserProjectsMock).toHaveBeenCalled();
+    expect(replaceUserTasksMock).not.toHaveBeenCalled();
+    expect(applyProjectCascadeToClientsMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
