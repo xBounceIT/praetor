@@ -152,6 +152,7 @@ const TrackerView: React.FC<{
   projectTasks: ProjectTask[];
   onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
   onDeleteEntry: (id: string) => void;
+  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection: boolean;
@@ -168,6 +169,7 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
+  onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
   onAddCustomTask: (
@@ -188,6 +190,7 @@ const TrackerView: React.FC<{
   projectTasks,
   onAddEntry,
   onDeleteEntry,
+  onUpdateEntry,
   startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection,
@@ -198,6 +201,7 @@ const TrackerView: React.FC<{
   availableUsers,
   currentUser,
   dailyGoal,
+  onAddBulkEntries,
   onRecurringAction,
   defaultLocation = 'remote',
   onAddCustomTask,
@@ -445,52 +449,59 @@ const TrackerView: React.FC<{
         </div>
       )}
 
-      <div className="space-y-6">
-        <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
-            <DailyView
-              clients={clients}
-              projects={projects}
-              projectTasks={projectTasks}
-              onAdd={onAddEntry}
-              selectedDate={selectedDate}
-              onMakeRecurring={onMakeRecurring}
-              permissions={permissions}
-              dailyGoal={dailyGoal}
-              currentDayTotal={dailyTotal}
-              defaultLocation={defaultLocation}
-              onAddCustomTask={onAddCustomTask}
-              currency={currency}
-            />
-
-            <div className="w-full xl:max-w-[300px] xl:h-full">
-              <Calendar
+      {trackerMode === 'weekly' ? (
+        <WeeklyView
+          entries={entries}
+          clients={clients}
+          projects={projects}
+          projectTasks={projectTasks}
+          permissions={permissions}
+          currency={currency}
+          onAddCustomTask={onAddCustomTask}
+          onAddBulkEntries={onAddBulkEntries}
+          onUpdateEntry={onUpdateEntry}
+          viewingUserId={viewingUserId}
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
+          startOfWeek={startOfWeek}
+          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+          allowWeekendSelection={allowWeekendSelection}
+          defaultLocation={defaultLocation}
+          dailyGoal={dailyGoal}
+        />
+      ) : (
+        <div className="space-y-6">
+          <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
+              <DailyView
+                clients={clients}
+                projects={projects}
+                projectTasks={projectTasks}
+                onAdd={onAddEntry}
                 selectedDate={selectedDate}
-                onDateSelect={setSelectedDate}
-                entries={entries}
-                startOfWeek={startOfWeek}
-                treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+                onMakeRecurring={onMakeRecurring}
+                permissions={permissions}
                 dailyGoal={dailyGoal}
-                allowWeekendSelection={allowWeekendSelection}
-                size="compact"
+                currentDayTotal={dailyTotal}
+                defaultLocation={defaultLocation}
+                onAddCustomTask={onAddCustomTask}
+                currency={currency}
               />
-            </div>
-          </div>
 
-          {trackerMode === 'weekly' ? (
-            <WeeklyView
-              entries={entries}
-              clients={clients}
-              projects={projects}
-              projectTasks={projectTasks}
-              viewingUserId={viewingUserId}
-              selectedDate={selectedDate}
-              startOfWeek={startOfWeek}
-              treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-              allowWeekendSelection={allowWeekendSelection}
-              dailyGoal={dailyGoal}
-            />
-          ) : (
+              <div className="w-full xl:max-w-[300px] xl:h-full">
+                <Calendar
+                  selectedDate={selectedDate}
+                  onDateSelect={setSelectedDate}
+                  entries={entries}
+                  startOfWeek={startOfWeek}
+                  treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+                  dailyGoal={dailyGoal}
+                  allowWeekendSelection={allowWeekendSelection}
+                  size="compact"
+                />
+              </div>
+            </div>
+
             <StandardTable<TimeEntry>
               title={
                 selectedDate
@@ -527,9 +538,9 @@ const TrackerView: React.FC<{
                 </div>
               }
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Recurring Delete Modal */}
       {pendingDeleteEntry && (
@@ -1979,7 +1990,9 @@ const App: React.FC = () => {
   );
 
   const handleAddEntry = entryHandlers.add;
+  const handleAddBulkEntries = entryHandlers.addBulk;
   const handleDeleteEntry = entryHandlers.delete;
+  const handleUpdateEntry = entryHandlers.update;
 
   const handleUpdateTask = taskHandlers.update;
   const handleMakeRecurring = taskHandlers.makeRecurring;
@@ -2282,6 +2295,7 @@ const App: React.FC = () => {
                 projectTasks={trackerCatalogs.projectTasks}
                 onAddEntry={handleAddEntry}
                 onDeleteEntry={handleDeleteEntry}
+                onUpdateEntry={handleUpdateEntry}
                 startOfWeek={generalSettings.startOfWeek}
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
                 allowWeekendSelection={generalSettings.allowWeekendSelection}
@@ -2292,6 +2306,7 @@ const App: React.FC = () => {
                 availableUsers={availableUsers}
                 currentUser={currentUser}
                 dailyGoal={generalSettings.dailyLimit}
+                onAddBulkEntries={handleAddBulkEntries}
                 onRecurringAction={handleRecurringAction}
                 defaultLocation={generalSettings.defaultLocation}
                 onAddCustomTask={addProjectTask}

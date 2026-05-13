@@ -36,8 +36,15 @@ const todayDateOnly = () => {
 };
 
 const sharedProps = {
+  permissions: [] as string[],
+  currency: '€',
+  onAddCustomTask: async () =>
+    ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
+  onAddBulkEntries: async () => {},
+  onUpdateEntry: () => {},
   viewingUserId: 'user-a',
   selectedDate: todayDateOnly(),
+  onSelectedDateChange: () => {},
   startOfWeek: 'Monday' as const,
   treatSaturdayAsHoliday: false,
   allowWeekendSelection: true,
@@ -76,7 +83,7 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
     });
   });
 
-  test('renders entries from the viewing user as labelled rows', async () => {
+  test('pre-fills the form row when the catalog selection matches an existing entry', async () => {
     const entries: TimeEntry[] = [
       {
         id: 'entry-1',
@@ -96,13 +103,13 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
 
     render(<WeeklyView entries={entries} {...alphaCatalog} {...sharedProps} />);
 
-    // The grid is read-only; the entry's 3.5h appears as a formatted cell value
-    // and the row label combines client · project · task.
+    // The form auto-selects Alpha Task, so the entry collapses into the
+    // editable "Nuova voce" row. The pre-filled 3.5h must surface in a
+    // day-cell decimal input.
     await waitFor(() => {
-      expect(document.body).toHaveTextContent('Alpha Client');
-      expect(document.body).toHaveTextContent('Alpha Project');
-      expect(document.body).toHaveTextContent('Alpha Task');
-      expect(document.body).toHaveTextContent('3.50');
+      const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
+      const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
+      expect(prefilled).toBe(true);
     });
   });
 });

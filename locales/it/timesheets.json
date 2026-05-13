@@ -138,9 +138,13 @@
     "deleteRow": "Elimina riga",
     "selectProject": "Seleziona progetto...",
     "selectTask": "Seleziona attività...",
+    "newEntry": "Nuova voce",
+    "recentTask": "Recente",
     "noRecentTasks": "Nessuna voce registrata per questa settimana.",
     "weekTotal": "Totale settimanale",
     "monthTotal": "Totale mensile",
+    "weekNoteLabel": "Nota settimanale",
+    "weekNotePlaceholder": "Nota che si applica a tutta la settimana...",
     "days": {
       "mon": "Lun",
       "tue": "Mar",

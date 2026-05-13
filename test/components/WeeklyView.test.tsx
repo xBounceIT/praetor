@@ -26,8 +26,15 @@ const baseProps = {
   clients,
   projects,
   projectTasks,
+  permissions: [],
+  currency: '€',
+  onAddCustomTask: async () =>
+    ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
+  onAddBulkEntries: async () => {},
+  onUpdateEntry: () => {},
   viewingUserId: 'u-1',
   selectedDate: todayDateOnly(),
+  onSelectedDateChange: () => {},
   treatSaturdayAsHoliday: false,
   dailyGoal: 8,
 };
