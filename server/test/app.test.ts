@@ -43,9 +43,17 @@ const buildTestApp = () => {
   return { fastify, logLines };
 };
 
+// Capture both the value and presence: assigning `undefined` back to `process.env.NODE_ENV`
+// would stringify to the literal `'undefined'` and break later reads, so delete it instead
+// when the var wasn't set at module load.
+const hadOriginalNodeEnv = 'NODE_ENV' in process.env;
 const originalNodeEnv = process.env.NODE_ENV;
 afterEach(() => {
-  process.env.NODE_ENV = originalNodeEnv;
+  if (hadOriginalNodeEnv) {
+    process.env.NODE_ENV = originalNodeEnv;
+  } else {
+    delete process.env.NODE_ENV;
+  }
 });
 
 describe('buildErrorResponseMessage', () => {
