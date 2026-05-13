@@ -353,6 +353,21 @@ describe('POST /api/projects', () => {
     expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: 'co-same' }));
   });
 
+  test('201: empty-string orderId is treated as null (no consistency lookup)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: '' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
+    expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
+  });
+
   test('201: creates project with orderId omitted (orderId stored as null)', async () => {
     createMock.mockResolvedValue(SAMPLE_PROJECT);
 
@@ -617,6 +632,48 @@ describe('PUT /api/projects/:id', () => {
       error: 'orderId does not belong to the specified clientId',
     });
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: client change paired with matching orderId is accepted', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+    findOrderClientIdByIdMock.mockResolvedValue('c-new');
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, clientId: 'c-new', orderId: 'co-9' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new', orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ clientId: 'c-new', orderId: 'co-9' }),
+      undefined,
+    );
+  });
+
+  test('200: empty-string orderId is normalized to null on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: null }),
+      undefined,
+    );
+    // No order lookup should fire when normalized to null.
+    expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
   test('200: clears orderId when null is sent', async () => {
