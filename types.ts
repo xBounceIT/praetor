@@ -648,6 +648,8 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
+  taxRate?: number;
 }
 
 export interface Invoice {
@@ -660,6 +662,7 @@ export interface Invoice {
   dueDate: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   subtotal: number;
+  taxTotal: number;
   total: number;
   amountPaid: number;
   notes?: string;

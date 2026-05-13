@@ -309,11 +309,14 @@ export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
+  // Default 0 keeps legacy items (pre-tax feature) rendering with no VAT.
+  taxRate: Number(item.taxRate || 0),
 });
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({
   ...i,
   subtotal: Number(i.subtotal ?? 0),
+  taxTotal: Number(i.taxTotal ?? 0),
   total: Number(i.total ?? 0),
   amountPaid: Number(i.amountPaid ?? 0),
   items: (i.items || []).map(normalizeInvoiceItem),

@@ -27,6 +27,12 @@ export interface CostSummaryPanelProps {
     label: string;
     amount: number;
   };
+  // Optional VAT/IVA row, rendered between subtotal and total. Only shown when amount > 0
+  // so non-tax flows (e.g. quotes/offers reusing this panel) stay unchanged.
+  taxRow?: {
+    label: string;
+    amount: number;
+  };
   amountPaid?: {
     label: string;
     value: number;
@@ -51,6 +57,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
   totalLabel,
   globalDiscount,
   discountRow,
+  taxRow,
   amountPaid,
   balanceDue,
   margin,
@@ -98,6 +105,14 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
             <span className="text-sm font-medium text-muted-foreground">{discountRow.label}</span>
             <span className="text-sm font-semibold text-amber-600">
               -{formatAmount(discountRow.amount)} {currency}
+            </span>
+          </div>
+        )}
+        {taxRow && taxRow.amount > 0 && (
+          <div className="flex justify-between">
+            <span className="text-sm font-medium text-muted-foreground">{taxRow.label}</span>
+            <span className="text-sm font-semibold text-foreground">
+              {taxRow.amount.toFixed(2)} {currency}
             </span>
           </div>
         )}

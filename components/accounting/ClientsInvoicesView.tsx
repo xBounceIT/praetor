@@ -36,8 +36,15 @@ export interface ClientsInvoicesViewProps {
   currency: string;
 }
 
-const getLineTotal = (item: InvoiceItem) =>
+// Italian VAT (IVA) default for newly-added invoice lines. Reduced rates (10/5/4/0) are
+// editable per row.
+const DEFAULT_TAX_RATE = 22;
+
+const getLineTaxable = (item: InvoiceItem) =>
   item.quantity * item.unitPrice * (1 - Number(item.discount || 0) / 100);
+
+const getLineTotal = (item: InvoiceItem) =>
+  getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
 
 const normalizeUnitOfMeasure = (
   unitOfMeasure?: InvoiceItem['unitOfMeasure'],
@@ -91,6 +98,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       notes: '',
       amountPaid: 0,
       subtotal: 0,
+      taxTotal: 0,
       total: 0,
     };
   }, []);
@@ -153,6 +161,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       notes: '',
       amountPaid: 0,
       subtotal: 0,
+      taxTotal: 0,
       total: 0,
     });
     setErrors({});
@@ -174,15 +183,17 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const calculateTotals = useCallback((items: InvoiceItem[]) => {
     let subtotal = 0;
+    let taxTotal = 0;
 
     items.forEach((item) => {
-      const lineNet = getLineTotal(item);
-      subtotal += lineNet;
+      const taxable = getLineTaxable(item);
+      subtotal += taxable;
+      taxTotal += (taxable * Number(item.taxRate || 0)) / 100;
     });
 
-    const total = subtotal;
+    const total = subtotal + taxTotal;
 
-    return { subtotal, total };
+    return { subtotal, taxTotal, total };
   }, []);
 
   const handleClientChange = (clientId: string) => {
@@ -211,6 +222,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       quantity: 1,
       unitPrice: 0,
       discount: 0,
+      taxRate: DEFAULT_TAX_RATE,
     };
 
     setFormData((prev) => ({
@@ -291,14 +303,16 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       quantity: Number(item.quantity ?? 0),
       unitPrice: Number(item.unitPrice ?? 0),
       discount: Number(item.discount || 0),
+      taxRate: Number(item.taxRate || 0),
     }));
 
-    const { subtotal, total } = calculateTotals(roundedItems);
+    const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
     const payload = {
       ...formData,
       items: roundedItems,
       amountPaid: Number(formData.amountPaid || 0),
       subtotal,
+      taxTotal,
       total,
     };
 
@@ -323,7 +337,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     }
   };
 
-  const { subtotal, total } = calculateTotals(formData.items || []);
+  const { subtotal, taxTotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
     (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
     0,
@@ -601,8 +615,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       <div className="col-span-3">{t('common:labels.product')}</div>
                       <div className="col-span-2">{t('common:labels.quantity')}</div>
                       <div className="col-span-2">{t('common:labels.price')}</div>
-                      <div className="col-span-2">{t('common:labels.discount')}</div>
-                      <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
+                      <div className="col-span-1">{t('common:labels.discount')}</div>
+                      <div className="col-span-2">
+                        {t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
+                      </div>
+                      <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                     </div>
                     <div className="w-8 shrink-0"></div>
                   </div>
@@ -697,7 +714,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="space-y-1 lg:col-span-2">
+                            <div className="space-y-1 lg:col-span-1">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.discount')}
                               </FieldLabel>
@@ -722,7 +739,34 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="space-y-1 lg:col-span-3">
+                            <div className="space-y-1 lg:col-span-2">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('accounting:clientsInvoices.taxRate', {
+                                  defaultValue: 'IVA %',
+                                })}
+                              </FieldLabel>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="0"
+                                  max="100"
+                                  value={item.taxRate ?? DEFAULT_TAX_RATE}
+                                  formatDecimals={2}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateItemRow(
+                                      index,
+                                      'taxRate',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  className="min-w-0 font-medium"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.total')}
                               </FieldLabel>
@@ -810,6 +854,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         ? {
                             label: t('accounting:clientsInvoices.totalDiscount'),
                             amount: totalDiscount,
+                          }
+                        : undefined
+                    }
+                    taxRow={
+                      taxTotal > 0
+                        ? {
+                            label: t('accounting:clientsInvoices.taxTotal'),
+                            amount: taxTotal,
                           }
                         : undefined
                     }

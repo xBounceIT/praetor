@@ -239,6 +239,10 @@ describe('frontend ↔ backend agreement on invoice totals', () => {
   // The server's `computeInvoiceTotals` lives outside this tsconfig's rootDir, so the
   // formula is mirrored here. If either side changes its formula or rounding, this test
   // catches the divergence before invoices ship with mismatched subtotals.
+  // NOTE: the frontend's `calculatePricingTotals` does not model per-item VAT (it is
+  // shared with quotes/offers); this mirror ignores tax so the cross-layer agreement
+  // assertion remains apples-to-apples. Per-item tax is verified in the math test suite
+  // and end-to-end in invoice route tests.
   const computeInvoiceTotalsBackend = (
     items: { quantity: number; unitPrice: number; discount: number }[],
   ) => {
@@ -250,7 +254,7 @@ describe('frontend ↔ backend agreement on invoice totals', () => {
     return { subtotal: rounded, total: rounded };
   };
 
-  test('produces identical subtotal/total for the same line items', () => {
+  test('produces identical subtotal/total for the same line items (no tax)', () => {
     // 0.1 * 3 alone would drift to 0.30000000000000004 without rounding.
     const items = [
       { quantity: 3, unitPrice: 0.1, discount: 0 },

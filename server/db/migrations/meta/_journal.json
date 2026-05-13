@@ -246,6 +246,13 @@
       "when": 1778701695175,
       "tag": "0034_add_client_vat_and_tax_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1778702800389,
+      "tag": "0035_add_invoice_tax_fields",
+      "breakpoints": true
     }
   ]
 }

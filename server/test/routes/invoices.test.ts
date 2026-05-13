@@ -119,6 +119,7 @@ const SAMPLE_INVOICE = {
   dueDate: '2025-07-01',
   status: 'draft',
   subtotal: 100,
+  taxTotal: 22,
   total: 122,
   amountPaid: 0,
   notes: null,
@@ -135,6 +136,7 @@ const SAMPLE_ITEM = {
   quantity: 1,
   unitPrice: 100,
   discount: 0,
+  taxRate: 22,
 };
 
 const allMocks = [
@@ -324,9 +326,9 @@ describe('POST /api/invoices', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    // 2 * 50 * 0.9 = 90
+    // 2 * 50 * 0.9 = 90; no taxRate sent so taxTotal = 0
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subtotal: 90, total: 90 }),
+      expect.objectContaining({ subtotal: 90, taxTotal: 0, total: 90 }),
       undefined,
     );
   });
@@ -454,6 +456,122 @@ describe('POST /api/invoices', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 0, total: 0 }),
+      undefined,
+    );
+  });
+
+  test('201 applies per-item tax rate (22% IVA) in computed taxTotal/total', async () => {
+    generateNextIdMock.mockResolvedValue('inv-1');
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_INVOICE,
+      subtotal: input.subtotal as number,
+      taxTotal: input.taxTotal as number,
+      total: input.total as number,
+    }));
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            description: 'Service',
+            unitOfMeasure: 'unit',
+            quantity: 2,
+            unitPrice: 50,
+            taxRate: 22,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // taxable = 100, tax = 22, total = 122
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 100, taxTotal: 22, total: 122 }),
+      undefined,
+    );
+  });
+
+  test('201 mixed tax rates (22%, 10%, 0%) sum correctly', async () => {
+    generateNextIdMock.mockResolvedValue('inv-1');
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_INVOICE,
+      subtotal: input.subtotal as number,
+      taxTotal: input.taxTotal as number,
+      total: input.total as number,
+    }));
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          { description: 'A', unitOfMeasure: 'unit', quantity: 1, unitPrice: 100, taxRate: 22 },
+          { description: 'B', unitOfMeasure: 'unit', quantity: 1, unitPrice: 200, taxRate: 10 },
+          { description: 'C', unitOfMeasure: 'unit', quantity: 1, unitPrice: 50, taxRate: 0 },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // subtotal = 350, tax = 22 + 20 + 0 = 42, total = 392
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 350, taxTotal: 42, total: 392 }),
+      undefined,
+    );
+  });
+
+  test('400 taxRate > 100 rejected', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            description: 'X',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 100,
+            taxRate: 150,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/taxRate must be at most 100/);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201 missing taxRate defaults to 0 (legacy/pre-feature behavior preserved)', async () => {
+    generateNextIdMock.mockResolvedValue('inv-1');
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_INVOICE,
+      subtotal: input.subtotal as number,
+      taxTotal: input.taxTotal as number,
+      total: input.total as number,
+    }));
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: validBody, // no taxRate in items
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
       undefined,
     );
   });
