@@ -75,6 +75,8 @@
     "totalDiscount": "Sconto Totale",
     "tax": "IVA",
     "vat": "IVA",
+    "taxRate": "IVA %",
+    "taxTotal": "IVA totale",
     "total": "Totale",
     "balanceDue": "Da pagare",
     "balance": "Da pagare",

@@ -13,6 +13,7 @@ export type Invoice = {
   dueDate: string;
   status: string;
   subtotal: number;
+  taxTotal: number;
   total: number;
   amountPaid: number;
   notes: string | null;
@@ -29,6 +30,8 @@ export type InvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  // Per-item VAT (IVA) rate in percent. 0 for exempt/legacy rows.
+  taxRate: number;
 };
 
 export type InvoiceWithItems = Invoice & { items: InvoiceItem[] };
@@ -42,6 +45,7 @@ const mapInvoice = (row: typeof invoices.$inferSelect): Invoice => ({
   dueDate: requireDateOnly(row.dueDate, 'invoice.dueDate'),
   status: row.status,
   subtotal: parseDbNumber(row.subtotal, 0),
+  taxTotal: parseDbNumber(row.taxTotal, 0),
   total: parseDbNumber(row.total, 0),
   amountPaid: parseDbNumber(row.amountPaid, 0),
   notes: row.notes,
@@ -58,6 +62,7 @@ const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
   quantity: parseDbNumber(row.quantity, 0),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
+  taxRate: parseDbNumber(row.taxRate, 0),
 });
 
 export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
@@ -169,6 +174,7 @@ export type NewInvoice = {
   dueDate: string;
   status: string;
   subtotal: number;
+  taxTotal: number;
   total: number;
   amountPaid: number;
   notes: string | null;
@@ -186,6 +192,7 @@ export const create = async (input: NewInvoice, exec: DbExecutor = db): Promise<
       dueDate: input.dueDate,
       status: input.status,
       subtotal: numericForDb(input.subtotal),
+      taxTotal: numericForDb(input.taxTotal),
       total: numericForDb(input.total),
       amountPaid: numericForDb(input.amountPaid),
       notes: input.notes,
@@ -202,6 +209,7 @@ export type InvoiceUpdate = {
   dueDate?: string;
   status?: string;
   subtotal?: number;
+  taxTotal?: number;
   total?: number;
   amountPaid?: number;
   notes?: string | null;
@@ -222,6 +230,7 @@ export const update = async (
       dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${invoices.dueDate})`,
       status: sql`COALESCE(${patch.status ?? null}, ${invoices.status})`,
       subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${invoices.subtotal})`,
+      taxTotal: sql`COALESCE(${numericForDb(patch.taxTotal) ?? null}::numeric, ${invoices.taxTotal})`,
       total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${invoices.total})`,
       amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${invoices.amountPaid})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${invoices.notes})`,
@@ -240,6 +249,7 @@ export type NewInvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  taxRate: number;
 };
 
 export const insertItems = async (
@@ -260,6 +270,7 @@ export const insertItems = async (
         quantity: numericForDb(item.quantity),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
+        taxRate: numericForDb(item.taxRate),
       })),
     )
     .returning();

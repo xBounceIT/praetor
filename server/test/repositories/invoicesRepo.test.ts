@@ -11,8 +11,8 @@ beforeEach(() => {
 });
 
 // `invoices` columns in schema declaration order:
-// id, linked_sale_id, client_id, client_name, issue_date, due_date, status, subtotal, total,
-// amount_paid, notes, created_at, updated_at
+// id, linked_sale_id, client_id, client_name, issue_date, due_date, status, subtotal,
+// tax_total, total, amount_paid, notes, created_at, updated_at
 const INVOICE_BASE: readonly unknown[] = [
   'INV-2026-0001',
   null,
@@ -22,6 +22,7 @@ const INVOICE_BASE: readonly unknown[] = [
   '2026-04-30',
   'draft',
   '100',
+  '10',
   '110',
   '0',
   null,
@@ -32,7 +33,7 @@ const invoiceRow = (overrides: Record<number, unknown> = {}) => makeRow(INVOICE_
 
 // `invoice_items` columns:
 // id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount,
-// created_at
+// tax_rate, created_at
 const ITEM_BASE: readonly unknown[] = [
   'inv-item-1',
   'INV-2026-0001',
@@ -42,6 +43,7 @@ const ITEM_BASE: readonly unknown[] = [
   '2',
   '50',
   '0',
+  '22',
   new Date('2026-04-01T00:00:00Z'),
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -75,6 +77,7 @@ describe('listAll', () => {
     expect(result[0].issueDate).toBe('2026-04-01');
     expect(result[0].dueDate).toBe('2026-04-30');
     expect(result[0].subtotal).toBe(100);
+    expect(result[0].taxTotal).toBe(10);
     expect(result[0].total).toBe(110);
     expect(result[0].amountPaid).toBe(0);
   });
@@ -89,6 +92,7 @@ describe('listAllItems', () => {
     expect(result[1].unitOfMeasure).toBe('hours');
     expect(result[0].quantity).toBe(2);
     expect(result[0].unitPrice).toBe(50);
+    expect(result[0].taxRate).toBe(22);
   });
 
   test('falls back to unit when unitOfMeasure is unknown', async () => {
@@ -204,6 +208,7 @@ describe('create', () => {
         dueDate: '2026-04-30',
         status: 'draft',
         subtotal: 100,
+        taxTotal: 10,
         total: 110,
         amountPaid: 0,
         notes: null,
@@ -213,6 +218,10 @@ describe('create', () => {
     expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "invoices"');
     expect(result.id).toBe('INV-2026-0001');
     expect(result.subtotal).toBe(100);
+    expect(result.taxTotal).toBe(10);
+    expect(result.total).toBe(110);
+    // tax_total appears as one of the bound numeric parameters
+    expect(exec.calls[0].params.map(String)).toContain('10');
   });
 });
 
@@ -257,6 +266,7 @@ describe('replaceItems', () => {
         quantity: 1,
         unitPrice: 5,
         discount: 0,
+        taxRate: 22,
       },
       {
         id: 'b',
@@ -266,6 +276,7 @@ describe('replaceItems', () => {
         quantity: 2,
         unitPrice: 6,
         discount: 1,
+        taxRate: 10,
       },
     ];
     const result = await invoicesRepo.replaceItems('INV-1', items, testDb);

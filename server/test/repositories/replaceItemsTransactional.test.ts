@@ -161,6 +161,7 @@ describe('invoicesRepo.replaceItems', () => {
     quantity: 1,
     unitPrice: 5,
     discount: 0,
+    taxRate: 0,
   };
 
   test('failed INSERT leaves prior items intact (DELETE rolled back)', async () => {

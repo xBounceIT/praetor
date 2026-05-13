@@ -131,6 +131,7 @@ const baseInvoice: Invoice = {
   dueDate: '2026-02-01',
   status: 'draft',
   subtotal: 0,
+  taxTotal: 0,
   total: 0,
   amountPaid: 0,
   items: [],
@@ -826,38 +827,50 @@ describe('normalizeInvoiceItem', () => {
       quantity: undefined,
       unitPrice: undefined,
       discount: undefined,
+      taxRate: undefined,
     });
     const result = normalizeInvoiceItem(item);
     expect(result.quantity).toBe(0);
     expect(result.unitPrice).toBe(0);
     expect(result.discount).toBe(0);
+    expect(result.taxRate).toBe(0);
+  });
+
+  test('coerces string taxRate to number', () => {
+    const item = make<InvoiceItem>(baseInvoiceItem, { taxRate: '22' });
+    expect(normalizeInvoiceItem(item).taxRate).toBe(22);
   });
 });
 
 describe('normalizeInvoice', () => {
-  test('parses subtotal/total/amountPaid and normalizes items', () => {
+  test('parses subtotal/taxTotal/total/amountPaid and normalizes items', () => {
     const invoice = make<Invoice>(baseInvoice, {
       subtotal: '100',
-      total: '120',
+      taxTotal: '22',
+      total: '122',
       amountPaid: '50',
-      items: [make<InvoiceItem>(baseInvoiceItem, { quantity: 2, unitPrice: 60 })],
+      items: [make<InvoiceItem>(baseInvoiceItem, { quantity: 2, unitPrice: 60, taxRate: '22' })],
     });
     const result = normalizeInvoice(invoice);
     expect(result.subtotal).toBe(100);
-    expect(result.total).toBe(120);
+    expect(result.taxTotal).toBe(22);
+    expect(result.total).toBe(122);
     expect(result.amountPaid).toBe(50);
     expect(result.items[0].quantity).toBe(2);
+    expect(result.items[0].taxRate).toBe(22);
   });
 
   test('defaults all monetary fields to 0 and items to []', () => {
     const invoice = make<Invoice>(baseInvoice, {
       subtotal: undefined,
+      taxTotal: undefined,
       total: undefined,
       amountPaid: undefined,
       items: undefined,
     });
     const result = normalizeInvoice(invoice);
     expect(result.subtotal).toBe(0);
+    expect(result.taxTotal).toBe(0);
     expect(result.total).toBe(0);
     expect(result.amountPaid).toBe(0);
     expect(result.items).toEqual([]);
