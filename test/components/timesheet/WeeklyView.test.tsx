@@ -1,22 +1,12 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { waitFor } from '@testing-library/react';
-import type { Client, Project, ProjectTask, TimeEntry, User } from '../../../types';
+import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
 installI18nMock();
 
 const WeeklyView = (await import('../../../components/timesheet/WeeklyView')).default;
-
-const availableUsers: User[] = [
-  {
-    id: 'user-a',
-    name: 'User A',
-    role: 'user',
-    avatarInitials: 'UA',
-    username: 'user-a',
-  },
-];
 
 const alphaCatalog = {
   clients: [{ id: 'client-alpha', name: 'Alpha Client' }] satisfies Client[],
@@ -53,11 +43,10 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
       onDeleteEntry: mock(() => {}),
       onUpdateEntry: mock(() => {}),
       viewingUserId: 'user-a',
-      availableUsers,
-      onViewUserChange: mock(() => {}),
       startOfWeek: 'Monday' as const,
       treatSaturdayAsHoliday: false,
       allowWeekendSelection: true,
+      dailyGoal: 8,
     };
 
     const { rerender } = render(<WeeklyView {...props} {...alphaCatalog} />);
@@ -111,11 +100,10 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
         onDeleteEntry={mock(() => {})}
         onUpdateEntry={mock(() => {})}
         viewingUserId="user-a"
-        availableUsers={availableUsers}
-        onViewUserChange={mock(() => {})}
         startOfWeek="Monday"
         treatSaturdayAsHoliday={false}
         allowWeekendSelection
+        dailyGoal={8}
       />,
     );
 
@@ -153,11 +141,10 @@ describe('<WeeklyView /> RBAC catalog sync', () => {
         onDeleteEntry={mock(() => {})}
         onUpdateEntry={mock(() => {})}
         viewingUserId="user-a"
-        availableUsers={availableUsers}
-        onViewUserChange={mock(() => {})}
         startOfWeek="Monday"
         treatSaturdayAsHoliday={false}
         allowWeekendSelection
+        dailyGoal={8}
       />,
     );
 

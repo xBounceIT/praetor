@@ -5,12 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
+import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
-import SelectControl from '../shared/SelectControl';
+import Calendar from '../shared/Calendar';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { useCatalogSelection } from './useCatalogSelection';
@@ -24,13 +33,11 @@ export interface WeeklyViewProps {
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   viewingUserId: string;
-  currentUserId?: string;
-  availableUsers: User[];
-  onViewUserChange: (id: string) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection?: boolean;
   defaultLocation?: TimeEntryLocation;
+  dailyGoal: number;
 }
 
 const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
@@ -48,7 +55,7 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
 type DayCell = { duration: string; note: string; entryId?: string };
 type DayMap = Record<string, DayCell>;
 
-type RecentRow = {
+type EntryRow = {
   key: string;
   clientId: string;
   projectId: string;
@@ -74,13 +81,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   onAddBulkEntries,
   onUpdateEntry,
   viewingUserId,
-  currentUserId,
-  availableUsers,
-  onViewUserChange,
   startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
   defaultLocation = 'remote',
+  dailyGoal,
 }) => {
   const { t, i18n } = useTranslation('timesheets');
 
@@ -170,22 +175,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     return days;
   }, [userEntries, weekDates, selection.clientId, selection.projectId, selection.taskName]);
 
-  const recentRows: RecentRow[] = useMemo(() => {
-    const groups = new Map<
-      string,
-      {
-        row: RecentRow;
-        maxCreatedAt: number;
-        hasWeekEntry: boolean;
-      }
-    >();
-
+  // Every distinct (client, project, task) combination with at least one entry
+  // in the current week, in-scope of the user's catalogs. No row cap — the
+  // weekly grid mirrors what's actually logged this week.
+  const entryRows: EntryRow[] = useMemo(() => {
+    const groups = new Map<string, { row: EntryRow; maxCreatedAt: number }>();
     const clientById = new Map(clients.map((c) => [c.id, c]));
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const taskKey = (projectId: string, name: string) => `${projectId}|${name}`;
     const taskSet = new Set(projectTasks.map((task) => taskKey(task.projectId, task.name)));
 
     for (const entry of userEntries) {
+      if (!weekDates.includes(entry.date)) continue;
       if (!clientById.has(entry.clientId)) continue;
       if (!projectById.has(entry.projectId)) continue;
       if (!taskSet.has(taskKey(entry.projectId, entry.task))) continue;
@@ -206,23 +207,17 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             baseDays: {},
           },
           maxCreatedAt: entry.createdAt,
-          hasWeekEntry: false,
         };
         groups.set(key, group);
       }
-
       if (entry.createdAt > group.maxCreatedAt) group.maxCreatedAt = entry.createdAt;
-
-      if (weekDates.includes(entry.date)) {
-        group.hasWeekEntry = true;
-        group.row.baseDays[entry.date] = {
-          duration: String(entry.duration),
-          note: entry.notes ?? '',
-          entryId: entry.id,
-        };
-        if (entry.location) {
-          group.row.location = entry.location;
-        }
+      group.row.baseDays[entry.date] = {
+        duration: String(entry.duration),
+        note: entry.notes ?? '',
+        entryId: entry.id,
+      };
+      if (entry.location) {
+        group.row.location = entry.location;
       }
     }
 
@@ -233,11 +228,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     if (formKey) groups.delete(formKey);
 
     return Array.from(groups.values())
-      .sort((a, b) => {
-        if (a.hasWeekEntry !== b.hasWeekEntry) return a.hasWeekEntry ? -1 : 1;
-        return b.maxCreatedAt - a.maxCreatedAt;
-      })
-      .slice(0, 5)
+      .sort((a, b) => b.maxCreatedAt - a.maxCreatedAt)
       .map((g) => g.row);
   }, [
     userEntries,
@@ -251,17 +242,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     defaultLocation,
   ]);
 
-  // When the set of recent rows changes (e.g. user switches), drop stale edits
-  // that no longer match an existing row. Each row's key is itself a
-  // `|`-joined composite, so a join+split would lose key boundaries — use the
-  // raw Set directly.
-  const recentRowKeySet = useMemo(() => new Set(recentRows.map((r) => r.key)), [recentRows]);
+  // When the set of entry rows changes, drop stale edits that no longer match.
+  const entryRowKeySet = useMemo(() => new Set(entryRows.map((r) => r.key)), [entryRows]);
   useEffect(() => {
     setPendingEdits((prev) => {
       let changed = false;
       const next: Record<string, DayMap> = {};
       for (const [key, value] of Object.entries(prev)) {
-        if (key === FORM_ROW_KEY || recentRowKeySet.has(key)) {
+        if (key === FORM_ROW_KEY || entryRowKeySet.has(key)) {
           next[key] = value;
         } else {
           changed = true;
@@ -269,7 +257,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       }
       return changed ? next : prev;
     });
-  }, [recentRowKeySet]);
+  }, [entryRowKeySet]);
 
   const getCellValue = (rowKey: string, dateStr: string, baseDays?: DayMap): DayCell => {
     const edit = pendingEdits[rowKey]?.[dateStr];
@@ -304,6 +292,12 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     const newStart = new Date(currentWeekStart);
     newStart.setDate(newStart.getDate() + offset * 7);
     setCurrentWeekStart(newStart);
+    setErrors({});
+  };
+
+  const handleCalendarSelect = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    setCurrentWeekStart(getWeekStart(new Date(year, month - 1, day), startOfWeek));
     setErrors({});
   };
 
@@ -358,9 +352,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         const noteChanged = (edit.note ?? '') !== (base?.note ?? '');
         if (base?.entryId) {
           if (newDuration > 0 && (newDuration !== baseDuration || noteChanged)) {
-            // Use `edit.note` directly (not `|| base.note`) so a user can
-            // intentionally clear a previously-set note. `noteChanged` already
-            // gated us on a real change, including '' → 'x' and 'x' → ''.
+            // Use `edit.note` directly so a user can intentionally clear a
+            // previously-set note. `noteChanged` already gated us on a real
+            // change in either direction.
             onUpdateEntry(base.entryId, {
               duration: newDuration,
               notes: edit.note,
@@ -401,7 +395,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       });
     }
 
-    for (const row of recentRows) {
+    for (const row of entryRows) {
       submitRow(row.key, {
         clientId: row.clientId,
         projectId: row.projectId,
@@ -415,9 +409,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       if (entriesToAdd.length > 0) {
         await onAddBulkEntries(entriesToAdd);
       }
-      // Only clear edits + flash success when the bulk-add resolves cleanly
-      // — on failure the user's in-flight values must survive so they can
-      // retry. The parent surfaces the error via App.tsx's global handler.
       setPendingEdits({});
       setWeekNote('');
       setShowSuccess(true);
@@ -443,7 +434,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         const formBase = formRowBaseDays[day.dateStr];
         if (formBase) sum += parseDuration(formBase.duration);
       }
-      for (const row of recentRows) {
+      for (const row of entryRows) {
         const edit = pendingEdits[row.key]?.[day.dateStr];
         if (edit) {
           sum += parseDuration(edit.duration);
@@ -455,7 +446,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       totals[day.dateStr] = sum;
     }
     return totals;
-  }, [weekDays, recentRows, pendingEdits, formRowBaseDays]);
+  }, [weekDays, entryRows, pendingEdits, formRowBaseDays]);
 
   const weekTotal = useMemo(() => Object.values(dayTotals).reduce((a, b) => a + b, 0), [dayTotals]);
 
@@ -466,20 +457,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       .reduce((sum, e) => sum + e.duration, 0);
   }, [userEntries, currentWeekStart]);
 
-  const weekEnd = useMemo(() => {
+  const weekRangeLabel = useMemo(() => {
     const end = new Date(currentWeekStart);
     end.setDate(end.getDate() + 6);
-    return end;
-  }, [currentWeekStart]);
-
-  const weekRangeLabel = `${currentWeekStart.toLocaleDateString(i18n.language, {
-    month: 'short',
-    day: 'numeric',
-  })} – ${weekEnd.toLocaleDateString(i18n.language, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })}`;
+    return `${currentWeekStart.toLocaleDateString(i18n.language, {
+      month: 'short',
+      day: 'numeric',
+    })} – ${end.toLocaleDateString(i18n.language, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })}`;
+  }, [currentWeekStart, i18n.language]);
 
   const formLabel = useMemo(() => {
     const client = clients.find((c) => c.id === selection.clientId);
@@ -490,11 +479,101 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
   const hasPendingEdits = Object.values(pendingEdits).some((row) => Object.keys(row).length > 0);
 
+  // A working-week's worth of daily goal hours — used to colour the week-total
+  // stat red once the user passes the typical full-week target.
+  const weeklyGoal = dailyGoal * 5;
+
   return (
     <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
-      <Card className="px-6 py-4">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
+        <Card className="px-6 py-5 gap-4">
+          <EntryCatalogSelector
+            clients={clients}
+            filteredProjects={selection.filteredProjects}
+            filteredTasks={selection.filteredTasks}
+            selectedClientId={selection.clientId}
+            selectedProjectId={selection.projectId}
+            selectedTaskId={selection.taskId}
+            location={selection.location}
+            onClientChange={(id) => {
+              selection.setClient(id);
+              if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+            }}
+            onProjectChange={(id) => {
+              selection.setProject(id);
+              if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
+            }}
+            onTaskChange={(taskId) => {
+              selection.setTask(taskId);
+              if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+            }}
+            onLocationChange={selection.setLocation}
+            errors={errors}
+          />
+
+          <Field>
+            <FieldLabel htmlFor="weekly-week-note">{t('weekly.weekNote')}</FieldLabel>
+            <Input
+              id="weekly-week-note"
+              type="text"
+              value={weekNote}
+              onChange={(e) => setWeekNote(e.target.value)}
+              placeholder={t('weekly.weekNote')}
+              className="rounded-lg"
+            />
+          </Field>
+        </Card>
+
+        <div className="w-full xl:max-w-[300px] xl:h-full flex flex-col gap-3">
+          <Calendar
+            selectedDate={getLocalDateString(currentWeekStart)}
+            onDateSelect={handleCalendarSelect}
+            entries={userEntries}
+            startOfWeek={startOfWeek}
+            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+            dailyGoal={dailyGoal}
+            allowWeekendSelection={allowWeekendSelection}
+            size="compact"
+          />
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isLoading || !hasPendingEdits}
+            className={cn(
+              'w-full h-11 rounded-xl font-bold text-sm uppercase tracking-widest',
+              showSuccess && 'bg-emerald-600 hover:bg-emerald-600',
+            )}
+          >
+            {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
+          </Button>
+        </div>
+      </div>
+
+      <Card className="px-0 py-0 overflow-hidden">
+        <div className="flex flex-col gap-2 px-4 pt-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.weekTotal')}
+              </span>
+              <span
+                className={cn(
+                  'text-lg font-black transition-colors',
+                  weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
+                )}
+              >
+                {weekTotal.toFixed(2)} h
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {t('weekly.monthTotal')}
+              </span>
+              <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <Button
               type="button"
               variant="ghost"
@@ -504,12 +583,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             >
               <i className="fa-solid fa-chevron-left"></i>
             </Button>
-            <div className="text-center min-w-50">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
-                {weekRangeLabel}
-              </h3>
-              <p className="text-[10px] font-bold text-praetor uppercase">{t('weekly.weekView')}</p>
-            </div>
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide whitespace-nowrap">
+              {weekRangeLabel}
+            </span>
             <Button
               type="button"
               variant="ghost"
@@ -521,97 +597,27 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             </Button>
             <Button
               type="button"
-              size="sm"
+              size="xs"
               onClick={() => setCurrentWeekStart(getWeekStart(new Date(), startOfWeek))}
               className="rounded-full text-[10px] font-bold uppercase tracking-widest"
             >
               {t('weekly.goToToday')}
             </Button>
           </div>
-
-          {availableUsers.length > 1 && (
-            <div className="w-64 space-y-1.5">
-              <div className="flex min-h-6 items-center justify-between gap-2">
-                <FieldLabel>{t('weekly.viewingUser')}</FieldLabel>
-                {currentUserId && viewingUserId !== currentUserId && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onViewUserChange(currentUserId)}
-                    className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
-                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    {t('tracker.backToMe')}
-                  </Button>
-                )}
-              </div>
-              <SelectControl
-                options={availableUsers.map((u) => ({
-                  id: u.id,
-                  name: u.name,
-                  badge: u.id === currentUserId ? t('tracker.you') : undefined,
-                }))}
-                value={viewingUserId}
-                onChange={(val) => onViewUserChange(val as string)}
-                searchable={true}
-              />
-            </div>
-          )}
         </div>
-      </Card>
 
-      <Card className="px-6 py-5 gap-4">
-        <EntryCatalogSelector
-          clients={clients}
-          filteredProjects={selection.filteredProjects}
-          filteredTasks={selection.filteredTasks}
-          selectedClientId={selection.clientId}
-          selectedProjectId={selection.projectId}
-          selectedTaskId={selection.taskId}
-          location={selection.location}
-          onClientChange={(id) => {
-            selection.setClient(id);
-            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-          }}
-          onProjectChange={(id) => {
-            selection.setProject(id);
-            if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
-          }}
-          onTaskChange={(taskId) => {
-            selection.setTask(taskId);
-            if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
-          }}
-          onLocationChange={selection.setLocation}
-          errors={errors}
-        />
-
-        <Field>
-          <FieldLabel htmlFor="weekly-week-note">{t('weekly.weekNote')}</FieldLabel>
-          <Input
-            id="weekly-week-note"
-            type="text"
-            value={weekNote}
-            onChange={(e) => setWeekNote(e.target.value)}
-            placeholder={t('weekly.weekNote')}
-            className="rounded-lg"
-          />
-        </Field>
-      </Card>
-
-      <Card className="px-0 py-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-max text-left border-collapse">
-            <thead className="bg-muted/40 border-b border-border">
-              <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-tighter min-w-56">
+          <Table className="min-w-max border-collapse">
+            <TableHeader className="bg-muted/40">
+              <TableRow className="border-b border-border">
+                <TableHead className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-tighter min-w-56">
                   {t('weekly.task')}
-                </th>
+                </TableHead>
                 {weekDays.map((day) => (
-                  <th
+                  <TableHead
                     key={day.dateStr}
                     className={cn(
-                      'w-28 p-2 text-center relative',
+                      'w-28 px-2 py-2 text-center relative align-middle',
                       day.isToday && 'bg-accent',
                       day.isWeekendOrHoliday && 'bg-destructive/5',
                     )}
@@ -650,25 +656,25 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     >
                       {day.dayNum}
                     </p>
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              <tr className="bg-praetor/5">
-                <td className="px-4 py-3 align-top">
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border">
+              <TableRow className="bg-praetor/5 hover:bg-praetor/10">
+                <TableCell className="px-4 py-3 align-top whitespace-normal">
                   <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-1">
                     {t('weekly.newEntry')}
                   </p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{formLabel}</p>
-                </td>
+                </TableCell>
                 {weekDays.map((day) => {
                   const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
                   return (
-                    <td
+                    <TableCell
                       key={day.dateStr}
                       className={cn(
-                        'w-28 px-2 py-3 transition-colors',
+                        'w-28 px-2 py-3 align-top',
                         day.isToday && 'bg-accent/60',
                         day.isWeekendOrHoliday && 'bg-destructive/5',
                       )}
@@ -710,23 +716,23 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           )}
                         />
                       </div>
-                    </td>
+                    </TableCell>
                   );
                 })}
-              </tr>
-              {recentRows.length === 0 ? (
-                <tr>
-                  <td
+              </TableRow>
+              {entryRows.length === 0 ? (
+                <TableRow>
+                  <TableCell
                     colSpan={1 + weekDays.length}
                     className="px-4 py-6 text-center text-xs text-muted-foreground"
                   >
                     {t('weekly.noRecentTasks')}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
-                recentRows.map((row) => (
-                  <tr key={row.key} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 align-top">
+                entryRows.map((row) => (
+                  <TableRow key={row.key} className="hover:bg-muted/30">
+                    <TableCell className="px-4 py-3 align-top whitespace-normal">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
                         {t('weekly.recentTask')}
                       </p>
@@ -736,14 +742,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       >
                         {row.label}
                       </p>
-                    </td>
+                    </TableCell>
                     {weekDays.map((day) => {
                       const cell = getCellValue(row.key, day.dateStr, row.baseDays);
                       return (
-                        <td
+                        <TableCell
                           key={day.dateStr}
                           className={cn(
-                            'w-28 px-2 py-3 transition-colors',
+                            'w-28 px-2 py-3 align-top',
                             day.isToday && 'bg-accent/60',
                             day.isWeekendOrHoliday && 'bg-destructive/5',
                             showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
@@ -786,20 +792,20 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                               )}
                             />
                           </div>
-                        </td>
+                        </TableCell>
                       );
                     })}
-                  </tr>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-            <tfoot className="bg-muted/30 border-t border-border">
-              <tr>
-                <td className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            </TableBody>
+            <TableFooter className="bg-muted/30">
+              <TableRow className="border-t border-border">
+                <TableCell className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   {t('weekly.total')}
-                </td>
+                </TableCell>
                 {weekDays.map((day) => (
-                  <td
+                  <TableCell
                     key={day.dateStr}
                     className={cn(
                       'w-28 px-2 py-3 text-center',
@@ -810,50 +816,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     <p
                       className={cn(
                         'text-sm font-black',
-                        dayTotals[day.dateStr] > 8 ? 'text-destructive' : 'text-praetor',
+                        dayTotals[day.dateStr] > dailyGoal ? 'text-destructive' : 'text-praetor',
                       )}
                     >
                       {dayTotals[day.dateStr].toFixed(1)}
                     </p>
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
-            </tfoot>
-          </table>
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
       </Card>
-
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <Card className="px-6 py-4 flex-1">
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            <div className="text-center">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t('weekly.weekTotal')}
-              </p>
-              <p className="text-2xl font-black text-praetor">{weekTotal.toFixed(1)}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t('weekly.monthTotal')}
-              </p>
-              <p className="text-2xl font-black text-foreground">{monthTotal.toFixed(1)}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isLoading || !hasPendingEdits}
-          size="lg"
-          className={cn(
-            'h-12 px-10 rounded-xl font-bold text-sm uppercase tracking-widest',
-            showSuccess && 'bg-emerald-600 hover:bg-emerald-600',
-          )}
-        >
-          {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
-        </Button>
-      </div>
     </div>
   );
 };

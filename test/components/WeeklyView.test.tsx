@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { screen } from '@testing-library/react';
 import { act } from 'react';
-import type { Client, Project, ProjectTask, TimeEntry, User } from '../../types';
+import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
 
@@ -13,15 +13,6 @@ const clients: Client[] = [];
 const projects: Project[] = [];
 const projectTasks: ProjectTask[] = [];
 const entries: TimeEntry[] = [];
-const availableUsers: User[] = [
-  {
-    id: 'u-1',
-    name: 'Test User',
-    role: 'user',
-    avatarInitials: 'TU',
-    username: 'testuser',
-  },
-];
 
 const baseProps = {
   entries,
@@ -32,9 +23,8 @@ const baseProps = {
   onDeleteEntry: () => {},
   onUpdateEntry: () => {},
   viewingUserId: 'u-1',
-  availableUsers,
-  onViewUserChange: () => {},
   treatSaturdayAsHoliday: false,
+  dailyGoal: 8,
 };
 
 /**
