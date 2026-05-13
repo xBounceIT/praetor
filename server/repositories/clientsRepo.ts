@@ -45,8 +45,7 @@ export type Client = {
 
 export type ClientUniqueViolationKind = 'fiscal_code' | 'client_code';
 
-// Maps Postgres unique-constraint violations to a domain kind so callers can surface
-// user-facing messages without depending on raw index names.
+// Decouples callers from raw Postgres index names.
 export const classifyUniqueViolation = (err: unknown): ClientUniqueViolationKind | null => {
   const dup = getUniqueViolation(err);
   if (!dup) return null;
