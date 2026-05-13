@@ -74,15 +74,22 @@ describe('decrypt', () => {
     expect(decrypt(encrypt(plaintext))).toBe(plaintext);
   });
 
-  test('returns input unchanged when it does not look like encrypted format (legacy plaintext)', () => {
-    expect(decrypt('legacy-plaintext-no-colons')).toBe('legacy-plaintext-no-colons');
+  test('throws when input does not match the iv:authTag:encrypted format', () => {
+    expect(() => decrypt('plaintext-no-colons')).toThrow(/Invalid encrypted value format/);
   });
 
-  test('returns ciphertext unchanged when iv/authTag/encrypted decode but auth tag fails (treats as legacy)', () => {
-    // Three colon-separated base64 parts that aren't a valid GCM ciphertext should
-    // hit the catch branch and be returned as-is rather than throwing.
+  test('throws when ciphertext parses but GCM auth tag verification fails', () => {
     const fakeCiphertext = `${Buffer.from('iv').toString('base64')}:${Buffer.from('tag').toString('base64')}:${Buffer.from('data').toString('base64')}`;
-    expect(decrypt(fakeCiphertext)).toBe(fakeCiphertext);
+    expect(() => decrypt(fakeCiphertext)).toThrow();
+  });
+
+  test('throws when a real ciphertext has a tampered auth tag', () => {
+    const real = encrypt('a real secret');
+    const [iv, tag, data] = real.split(':');
+    const tagBytes = Buffer.from(tag, 'base64');
+    tagBytes[0] ^= 0xff;
+    const tampered = `${iv}:${tagBytes.toString('base64')}:${data}`;
+    expect(() => decrypt(tampered)).toThrow();
   });
 });
 
