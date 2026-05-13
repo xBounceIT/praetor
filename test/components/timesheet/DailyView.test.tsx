@@ -118,6 +118,58 @@ describe('<DailyView /> RBAC catalog sync', () => {
     });
   });
 
+  test('preserves typed custom task name across keystrokes and submits it', async () => {
+    const onAdd = mock(() => {});
+    const props = {
+      onAdd,
+      selectedDate: '2026-05-11',
+      permissions: ['projects.tasks.create'],
+      dailyGoal: 8,
+      currentDayTotal: 0,
+    };
+
+    render(
+      <DailyView
+        {...props}
+        clients={alphaCatalog.clients}
+        projects={alphaCatalog.projects}
+        projectTasks={[]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Alpha Project');
+    });
+
+    fireEvent.click(document.querySelectorAll('button[aria-expanded]')[2]);
+    fireEvent.click(within(await screen.findByRole('dialog')).getByText('entry.customTask'));
+
+    const customInput = (await screen.findByPlaceholderText(
+      'entry.typeCustomTask',
+    )) as HTMLInputElement;
+    customInput.focus();
+    expect(document.activeElement).toBe(customInput);
+
+    fireEvent.change(customInput, { target: { value: 'O' } });
+    fireEvent.change(customInput, { target: { value: 'On' } });
+    fireEvent.change(customInput, { target: { value: 'Onboarding call' } });
+
+    const inputAfterTyping = screen.getByPlaceholderText(
+      'entry.typeCustomTask',
+    ) as HTMLInputElement;
+    expect(inputAfterTyping).toBe(customInput);
+    expect(inputAfterTyping.value).toBe('Onboarding call');
+    expect(document.activeElement).toBe(inputAfterTyping);
+
+    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByText('entry.logTime'));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledTimes(1);
+    });
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ task: 'Onboarding call' }));
+  });
+
   test('clears stale task name when the selected project has no scoped tasks', async () => {
     const onAdd = mock(() => {});
     const props = {

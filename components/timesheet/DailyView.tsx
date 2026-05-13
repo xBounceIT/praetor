@@ -51,6 +51,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedTaskName, setSelectedTaskName] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
+  const [isCustomTaskMode, setIsCustomTaskMode] = useState(false);
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
   const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
@@ -130,50 +131,28 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   useEffect(() => {
     if (filteredTasks.length === 0) {
-      if (selectedTaskName === 'custom' && canCreateCustomTask && selectedProjectId !== '') {
+      if (isCustomTaskMode && canCreateCustomTask && selectedProjectId !== '') {
         return;
       }
-      if (selectedTaskId !== '' || selectedTaskName !== '') {
-        setSelectedTaskId('');
-        setSelectedTaskName('');
-      }
+      setSelectedTaskId('');
+      setSelectedTaskName('');
+      setIsCustomTaskMode(false);
       return;
     }
 
     if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
       setSelectedTaskName(firstFilteredTaskName);
       setSelectedTaskId(firstFilteredTaskId);
+      setIsCustomTaskMode(false);
     }
   }, [
     filteredTasks,
     firstFilteredTaskId,
     firstFilteredTaskName,
     selectedTaskId,
-    selectedTaskName,
     canCreateCustomTask,
     selectedProjectId,
-  ]);
-
-  useEffect(() => {
-    if (selectedProjectId === '') {
-      if (selectedTaskId !== '' || selectedTaskName !== '') {
-        setSelectedTaskName('');
-        setSelectedTaskId('');
-      }
-      return;
-    }
-
-    if (selectedTaskId && !filteredTasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskName(firstFilteredTaskName);
-      setSelectedTaskId(firstFilteredTaskId);
-    }
-  }, [
-    selectedProjectId,
-    selectedTaskId,
-    filteredTasks,
-    firstFilteredTaskId,
-    firstFilteredTaskName,
-    selectedTaskName,
+    isCustomTaskMode,
   ]);
 
   useEffect(() => {
@@ -252,12 +231,14 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const handleTaskChange = (taskId: string) => {
     if (taskId === 'custom') {
-      setSelectedTaskName('custom');
+      setIsCustomTaskMode(true);
+      setSelectedTaskName('');
       setSelectedTaskId('');
       setMakeRecurring(false);
     } else {
       const task = filteredTasks.find((t) => t.id === taskId);
       if (task) {
+        setIsCustomTaskMode(false);
         setSelectedTaskName(task.name);
         setSelectedTaskId(task.id);
       }
@@ -355,7 +336,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             <SelectControl
               label={t('entry.task')}
               options={taskOptions}
-              value={selectedTaskId || (selectedTaskName === 'custom' ? 'custom' : '')}
+              value={selectedTaskId || (isCustomTaskMode ? 'custom' : '')}
               onChange={(val) => handleTaskChange(val as string)}
               placeholder={
                 filteredTasks.length === 0 && !canCreateCustomTask
@@ -368,17 +349,17 @@ const DailyView: React.FC<DailyViewProps> = ({
             {errors.task && (
               <p className="text-destructive text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
             )}
-            {selectedTaskName === 'custom' && canCreateCustomTask && (
+            {isCustomTaskMode && canCreateCustomTask && (
               <Input
                 type="text"
                 placeholder={t('entry.typeCustomTask')}
-                value={selectedTaskName === 'custom' ? '' : selectedTaskName}
+                value={selectedTaskName}
                 onChange={(e) => {
                   setSelectedTaskName(e.target.value);
                   setSelectedTaskId('');
                   if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
                 }}
-                className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200"
+                className="mt-2 rounded-lg animate-in fade-in slide-in-from-top-1 duration-200"
               />
             )}
           </div>
