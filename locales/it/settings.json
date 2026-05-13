@@ -8,7 +8,7 @@
     "updateProfile": "Aggiorna Profilo"
   },
   "language": {
-    "title": "Lingua / Language",
+    "title": "Lingua",
     "description": "Scegli la lingua dell'interfaccia di Praetor.",
     "auto": "Automatico (Browser)",
     "autoDesc": "Rileva automaticamente la lingua dalle impostazioni del browser",
