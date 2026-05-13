@@ -33,7 +33,7 @@ const LIST_BASE: readonly unknown[] = [
 const listRow = (overrides: Record<number, unknown> = {}) => makeRow(LIST_BASE, overrides);
 
 describe('buildSnapshot', () => {
-  test('strips linkedOrderId from the supplier-quote envelope', () => {
+  test('preserves linkedOrderId on the supplier-quote snapshot for audit/portability', () => {
     const quote = {
       id: 'sq-1',
       supplierId: 's-1',
@@ -52,8 +52,25 @@ describe('buildSnapshot', () => {
     expect(snapshot.items).toBe(items);
     expect(snapshot.quote.id).toBe('sq-1');
     expect(snapshot.quote.supplierId).toBe('s-1');
-    // linkedOrderId is intentionally omitted from the snapshot's quote shape.
-    expect((snapshot.quote as Record<string, unknown>).linkedOrderId).toBeUndefined();
+    // linkedOrderId now round-trips through the snapshot.
+    expect(snapshot.quote.linkedOrderId).toBe('sso-1');
+  });
+
+  test('null linkedOrderId round-trips faithfully', () => {
+    const quote = {
+      id: 'sq-2',
+      supplierId: 's-1',
+      supplierName: 'Acme',
+      paymentTerms: 'net30',
+      status: 'draft',
+      expirationDate: '2026-06-01',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const snapshot = supplierQuoteVersionsRepo.buildSnapshot(quote, []);
+    expect(snapshot.quote.linkedOrderId).toBeNull();
   });
 });
 

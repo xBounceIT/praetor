@@ -36,12 +36,13 @@ const mapVersion = (row: typeof orderVersions.$inferSelect): OrderVersion => ({
   snapshot: row.snapshot,
 });
 
+// Record `linkedQuoteId` / `linkedOfferId` on the snapshot. These are real columns on `sales`,
+// so the restore path also writes them back to keep the link intact across restore.
 export const buildSnapshot = (
   order: ClientOrder,
   items: ClientOrderItem[],
 ): OrderVersionSnapshot => {
-  const { linkedQuoteId: _linkedQuote, linkedOfferId: _linkedOffer, ...orderSnapshot } = order;
-  return { schemaVersion: 1, order: orderSnapshot, items };
+  return { schemaVersion: 1, order, items };
 };
 
 export const listForOrder = async (

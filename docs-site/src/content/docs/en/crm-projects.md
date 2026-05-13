@@ -11,6 +11,10 @@ CRM records store the data used in commercial and accounting workflows. Keep nam
 
 Avoid duplicates: before creating a new record, search for the customer or supplier first.
 
+### Protected deletion
+
+A customer or supplier cannot be deleted while any related financial document (quote, offer, order, invoice) still references it. The delete request is rejected and the document is not lost: remove or cancel the linked documents first, then delete the record. This guardrail exists because an issued accounting document must remain traceable even if the counterparty record is no longer needed.
+
 ## Internal catalog
 
 The catalog contains products, categories, units, and pricing logic. Catalog data feeds quotes, offers, and accounting documents.

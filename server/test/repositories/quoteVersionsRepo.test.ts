@@ -33,7 +33,7 @@ const LIST_BASE: readonly unknown[] = [
 const listRow = (overrides: Record<number, unknown> = {}) => makeRow(LIST_BASE, overrides);
 
 describe('buildSnapshot', () => {
-  test('strips linkedOfferId from the quote envelope', () => {
+  test('preserves linkedOfferId on the snapshot so the historical record is complete', () => {
     const quote = {
       id: 'cq-1',
       linkedOfferId: 'co-1',
@@ -54,8 +54,27 @@ describe('buildSnapshot', () => {
     expect(snapshot.items).toBe(items);
     expect(snapshot.quote.id).toBe('cq-1');
     expect(snapshot.quote.clientId).toBe('c-1');
-    // linkedOfferId is intentionally omitted from the snapshot's quote shape.
-    expect((snapshot.quote as Record<string, unknown>).linkedOfferId).toBeUndefined();
+    // linkedOfferId now round-trips through the snapshot for audit/portability.
+    expect(snapshot.quote.linkedOfferId).toBe('co-1');
+  });
+
+  test('null linkedOfferId round-trips faithfully', () => {
+    const quote = {
+      id: 'cq-2',
+      linkedOfferId: null,
+      clientId: 'c-1',
+      clientName: 'Acme',
+      paymentTerms: 'net30',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      expirationDate: '2026-06-01',
+      notes: null,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const snapshot = quoteVersionsRepo.buildSnapshot(quote, []);
+    expect(snapshot.quote.linkedOfferId).toBeNull();
   });
 });
 

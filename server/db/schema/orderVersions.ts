@@ -6,9 +6,17 @@ import { users } from './users.ts';
 
 // Bump `schemaVersion` when ClientOrder/ClientOrderItem change in a non-additive way so
 // readers can normalize old JSONB snapshots instead of being trapped by a frozen shape.
+//
+// `linkedQuoteId` and `linkedOfferId` ARE stored columns on `sales` (the order row), so
+// preserving them in the snapshot keeps the historical link intact across restore. Older
+// snapshots predate this field and may have them as `undefined`; readers must tolerate both
+// `undefined` and `string | null`.
 export interface OrderVersionSnapshot {
   schemaVersion: 1;
-  order: Omit<ClientOrder, 'linkedQuoteId' | 'linkedOfferId'>;
+  order: Omit<ClientOrder, 'linkedQuoteId' | 'linkedOfferId'> & {
+    linkedQuoteId?: string | null;
+    linkedOfferId?: string | null;
+  };
   items: ClientOrderItem[];
 }
 

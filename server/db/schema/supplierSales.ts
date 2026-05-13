@@ -12,9 +12,11 @@ export const supplierSales = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+    // RESTRICT (not CASCADE): deleting a supplier must not silently destroy supplier sales/orders
+    // (financial documents). Callers must remove sales explicitly before deleting the supplier.
     supplierId: varchar('supplier_id', { length: 50 })
       .notNull()
-      .references(() => suppliers.id, { onDelete: 'cascade' }),
+      .references(() => suppliers.id, { onDelete: 'restrict' }),
     supplierName: varchar('supplier_name', { length: 255 }).notNull(),
     paymentTerms: varchar('payment_terms', { length: 20 }).notNull().default('immediate'),
     discount: numeric('discount', { precision: 15, scale: 2 }).notNull().default('0'),

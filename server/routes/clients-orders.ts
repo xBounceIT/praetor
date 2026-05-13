@@ -1193,6 +1193,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discountType: version.snapshot.order.discountType,
               status: version.snapshot.order.status,
               notes: version.snapshot.order.notes,
+              // Preserve link IDs across restore (legacy snapshots may omit these; the repo
+              // only writes the columns when the keys are explicitly present, so live links
+              // survive on older snapshots).
+              ...(Object.hasOwn(version.snapshot.order, 'linkedQuoteId')
+                ? { linkedQuoteId: version.snapshot.order.linkedQuoteId ?? null }
+                : {}),
+              ...(Object.hasOwn(version.snapshot.order, 'linkedOfferId')
+                ? { linkedOfferId: version.snapshot.order.linkedOfferId ?? null }
+                : {}),
             },
             tx,
           );
@@ -1201,6 +1210,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { order, items };
         });
       } catch (error) {
+        // Restoring linkedOfferId can collide with the partial unique index
+        // `idx_sales_linked_offer_id_unique` when that offer is now linked to a different
+        // order. Surface a 409 instead of leaking the 23505 as a 500.
+        const dup = getUniqueViolation(error);
+        if (
+          dup &&
+          (dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({
+            error: 'Snapshot links to an offer that is already linked to another order',
+          });
+        }
         // The pre-tx reference check is racy - a referenced client/product can be deleted
         // between validation and the restore writes. Translate the resulting FK violation to a
         // 409 instead of leaking a 500.

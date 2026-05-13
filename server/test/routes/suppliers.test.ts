@@ -10,6 +10,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -431,5 +432,23 @@ describe('DELETE /api/suppliers/:id', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  // Migration 0033 changed the FK from CASCADE to RESTRICT on supplier financial-doc tables.
+  // PG raises 23503 when any dependent supplier_invoice/supplier_quote/supplier_sale references
+  // the supplier - the route catches it and surfaces 409 instead of leaking a 500.
+  test('409 when supplier has financial documents (FK RESTRICT)', async () => {
+    deleteByIdMock.mockRejectedValueOnce(
+      makeDbError('23503', 'supplier_invoices_supplier_id_suppliers_id_fk'),
+    );
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('financial documents');
   });
 });

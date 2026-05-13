@@ -768,6 +768,27 @@ describe('DELETE /api/clients/:id', () => {
     expect(res.statusCode).toBe(403);
     expect(deleteClientByIdMock).not.toHaveBeenCalled();
   });
+
+  // Migration 0033 changed the FK from CASCADE to RESTRICT on financial-doc tables. PG raises
+  // 23503 when any dependent invoice/quote/offer/sale references the client being deleted -
+  // the route catches it and surfaces 409 instead of letting the 500 bubble up.
+  test('409 when client has financial documents (FK RESTRICT)', async () => {
+    deleteClientByIdMock.mockRejectedValueOnce(
+      makeDbError('23503', 'invoices_client_id_clients_id_fk'),
+    );
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('financial documents');
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client.deleted' }),
+    );
+  });
 });
 
 describe('GET /api/clients/profile-options/:category', () => {

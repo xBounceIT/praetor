@@ -561,6 +561,33 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(JSON.parse(res.body).error).toContain('no longer exists');
   });
 
+  // Regression for the codex review on PR #353: the snapshot now carries linkedOfferId, so
+  // restore can hit the `idx_sales_linked_offer_id_unique` partial unique index if that offer
+  // has been re-linked to a different order since the snapshot was taken. The 23505 must
+  // surface as a 409 instead of a 500.
+  test('409 when restoring linkedOfferId hits the linked-offer unique index', async () => {
+    setupHappyPath();
+    const uniqueError = Object.assign(new Error('duplicate key violates unique constraint'), {
+      code: '23505',
+      constraint: 'idx_sales_linked_offer_id_unique',
+      detail: 'Key (linked_offer_id)=(off-1) already exists.',
+      cause: undefined,
+    });
+    Object.setPrototypeOf(uniqueError, (await import('pg')).DatabaseError.prototype);
+    withDbTransactionMock.mockImplementationOnce(async () => {
+      throw uniqueError;
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('already linked');
+  });
+
   test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
     setupHappyPath();
     withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
