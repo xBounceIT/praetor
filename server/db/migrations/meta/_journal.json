@@ -260,6 +260,20 @@
       "when": 1778704999389,
       "tag": "0036_tasks_audit_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1778706502127,
+      "tag": "0037_add_projects_order_id_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1778706512154,
+      "tag": "0038_add_order_id_sequences",
+      "breakpoints": true
     }
   ]
 }

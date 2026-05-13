@@ -4,10 +4,10 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 
 export const generatePrefixedId = (prefix: string): string => `${prefix}-${randomUUID()}`;
 
-// Per-prefix sequences. Migration 0033 creates these as standalone Postgres SEQUENCEs and
-// initializes them past the historical MAX, so existing IDs can't collide with new ones.
-// nextval() is atomic and lock-free; this eliminates the previous SELECT MAX + INSERT
-// TOCTOU race that allowed two concurrent inserts to produce the same id.
+// Per-prefix sequences. `0038_add_order_id_sequences` creates these as standalone Postgres
+// SEQUENCEs and initializes them past the historical MAX, so existing IDs can't collide
+// with new ones. nextval() is atomic and lock-free; this eliminates the previous
+// SELECT MAX + INSERT TOCTOU race that allowed two concurrent inserts to produce the same id.
 //
 // Trade-off vs. the old per-year MAX scan: the sequence is global, so once we roll over
 // a year the displayed counter doesn't reset to 0001. We keep the year prefix in the
