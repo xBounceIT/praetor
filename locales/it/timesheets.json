@@ -53,7 +53,6 @@
     "howHandleEntries": "Come vuoi gestire le voci esistenti per",
     "cancel": "Annulla",
     "warningExceedGoal": "Avviso: Questa voce supererà il tuo obiettivo giornaliero di {{goal}} ore.",
-    "hoursRequired": "Le ore sono obbligatorie e devono essere maggiori di 0",
     "clientRequired": "Il cliente è obbligatorio",
     "projectRequired": "Il progetto è obbligatorio",
     "taskRequired": "L'attività è obbligatoria",

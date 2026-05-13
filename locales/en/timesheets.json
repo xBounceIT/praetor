@@ -53,7 +53,6 @@
     "howHandleEntries": "How would you like to handle existing entries for",
     "cancel": "Cancel",
     "warningExceedGoal": "Warning: This entry will exceed your daily goal of {{goal}} hours.",
-    "hoursRequired": "Hours are required and must be greater than 0",
     "clientRequired": "Client is required",
     "projectRequired": "Project is required",
     "taskRequired": "Task is required",

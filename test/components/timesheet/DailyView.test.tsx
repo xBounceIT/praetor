@@ -155,4 +155,29 @@ describe('<DailyView /> RBAC catalog sync', () => {
       expect(document.body).toHaveTextContent('entry.taskRequired');
     });
   });
+
+  test('disables submit until a positive hours value is entered', async () => {
+    const props = {
+      onAdd: mock(() => {}),
+      selectedDate: '2026-05-11',
+      permissions: [],
+      dailyGoal: 8,
+      currentDayTotal: 0,
+    };
+
+    render(<DailyView {...props} {...alphaCatalog} />);
+
+    const submitButton = await screen.findByText('entry.logTime');
+    expect(submitButton).toBeDisabled();
+
+    const hoursInput = screen.getByPlaceholderText('0.0');
+    fireEvent.change(hoursInput, { target: { value: '1.5' } });
+    expect(submitButton).not.toBeDisabled();
+
+    fireEvent.change(hoursInput, { target: { value: '0' } });
+    expect(submitButton).toBeDisabled();
+
+    fireEvent.change(hoursInput, { target: { value: '' } });
+    expect(submitButton).toBeDisabled();
+  });
 });
