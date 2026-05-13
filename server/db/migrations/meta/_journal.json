@@ -281,6 +281,13 @@
       "when": 1778712201977,
       "tag": "0039_invalidate_legacy_pat_hashes",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1778714491654,
+      "tag": "0040_widen_ldap_bind_password",
+      "breakpoints": true
     }
   ]
 }

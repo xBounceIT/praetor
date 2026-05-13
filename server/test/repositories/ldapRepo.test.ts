@@ -1,10 +1,25 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as ldapRepo from '../../repositories/ldapRepo.ts';
+import { encrypt, isEncrypted } from '../../utils/crypto.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
+
+// `encrypt()`/`decrypt()` in ldapRepo require ENCRYPTION_KEY; the unit-test crypto
+// suite (test/utils/crypto.test.ts) uses the same pattern. Save/restore so we don't
+// stomp a real env value if one is set during local runs.
+const ORIGINAL_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+beforeAll(() => {
+  process.env.ENCRYPTION_KEY = 'test-encryption-key-for-unit-tests';
+});
+
+afterAll(() => {
+  if (ORIGINAL_ENCRYPTION_KEY === undefined) delete process.env.ENCRYPTION_KEY;
+  else process.env.ENCRYPTION_KEY = ORIGINAL_ENCRYPTION_KEY;
+});
 
 beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
@@ -129,7 +144,10 @@ describe('update', () => {
     expect(params).toContain('ldaps://x');
     expect(params).toContain('dc=y');
     expect(params).toContain('cn=z');
-    expect(params).toContain('pw');
+    // bindPassword is encrypted at rest (see "bindPassword encryption" block) — the
+    // raw 'pw' string must never appear as a bound parameter. The encrypted form is
+    // asserted in the dedicated encrypt-on-write test below.
+    expect(params).not.toContain('pw');
     expect(params).toContain('(cn={0})');
     expect(params).toContain('ou=g');
     expect(params).toContain('(uniqueMember={0})');
@@ -157,6 +175,103 @@ describe('DEFAULT_CONFIG', () => {
       roleMappings: [],
       tlsCaCertificate: '',
       autoProvisionAll: false,
+    });
+  });
+});
+
+describe('bindPassword encryption', () => {
+  const hasEncryptedParam = (params: unknown[]): boolean =>
+    params.some((p) => typeof p === 'string' && isEncrypted(p));
+
+  describe('on write (update)', () => {
+    test('encrypts a non-empty bindPassword before binding it as a parameter', async () => {
+      exec.enqueue({ rows: [buildRow()] });
+      await ldapRepo.update({ bindPassword: 'super-secret' }, testDb);
+      const params = exec.calls[0].params;
+      expect(params).not.toContain('super-secret');
+      expect(hasEncryptedParam(params)).toBe(true);
+    });
+
+    test('binds empty string for cleared bindPassword (encrypt("") === "")', async () => {
+      exec.enqueue({ rows: [buildRow()] });
+      await ldapRepo.update({ bindPassword: '' }, testDb);
+      expect(exec.calls[0].params).toContain('');
+    });
+
+    test('does not bind any encrypted value when bindPassword is omitted (COALESCE preserves)', async () => {
+      exec.enqueue({ rows: [buildRow()] });
+      await ldapRepo.update({ enabled: true }, testDb);
+      expect(hasEncryptedParam(exec.calls[0].params)).toBe(false);
+    });
+
+    test('RETURNING row with encrypted bindPassword is decrypted in the returned config', async () => {
+      const ciphertext = encrypt('round-trip-pw');
+      exec.enqueue({ rows: [buildRow({ bindPassword: ciphertext })] });
+      const result = await ldapRepo.update({ bindPassword: 'round-trip-pw' }, testDb);
+      expect(result.bindPassword).toBe('round-trip-pw');
+    });
+  });
+
+  describe('on read (get)', () => {
+    test('decrypts an already-encrypted stored bindPassword without firing a migration write', async () => {
+      const ciphertext = encrypt('stored-secret');
+      exec.enqueue({ rows: [buildRow({ bindPassword: ciphertext })] });
+      const result = await ldapRepo.get(testDb);
+      expect(result?.bindPassword).toBe('stored-secret');
+      expect(exec.calls.length).toBe(1);
+    });
+
+    test('lazily migrates a legacy plaintext bindPassword to encrypted form', async () => {
+      exec.enqueue({ rows: [buildRow({ bindPassword: 'legacy-plain' })] });
+      exec.enqueue({ rows: [] });
+      const result = await ldapRepo.get(testDb);
+      // mapRow returns the plaintext as-is during the migration window — the shape
+      // check in decodeBindPassword routes legacy values around decrypt().
+      expect(result?.bindPassword).toBe('legacy-plain');
+      expect(exec.calls.length).toBe(2);
+      const migrationCall = exec.calls[1];
+      expect(migrationCall.sql).toMatch(/update\s+"ldap_config"/i);
+      expect(migrationCall.sql).toMatch(/"id"\s*=\s*\$\d+/);
+      expect(hasEncryptedParam(migrationCall.params)).toBe(true);
+      expect(migrationCall.params).not.toContain('legacy-plain');
+    });
+
+    test('migrates legacy plaintext that contains colons (regression: shape check must reject foo:bar:baz)', async () => {
+      // A two-colon password like `foo:bar:baz` passes a naive 3-part split. The
+      // robust shape check rejects it because the IV/auth-tag segments aren't 16
+      // bytes after base64 decode, so migration still fires.
+      exec.enqueue({ rows: [buildRow({ bindPassword: 'foo:bar:baz' })] });
+      exec.enqueue({ rows: [] });
+      const result = await ldapRepo.get(testDb);
+      expect(result?.bindPassword).toBe('foo:bar:baz');
+      expect(exec.calls.length).toBe(2);
+      expect(hasEncryptedParam(exec.calls[1].params)).toBe(true);
+      expect(exec.calls[1].params).not.toContain('foo:bar:baz');
+    });
+
+    test('does not fire a migration write when the stored bindPassword is empty', async () => {
+      exec.enqueue({ rows: [buildRow({ bindPassword: '' })] });
+      const result = await ldapRepo.get(testDb);
+      expect(result?.bindPassword).toBe('');
+      expect(exec.calls.length).toBe(1);
+    });
+
+    test('does not fire a migration write when the stored bindPassword is NULL', async () => {
+      exec.enqueue({ rows: [buildRow({ bindPassword: null })] });
+      const result = await ldapRepo.get(testDb);
+      expect(result?.bindPassword).toBe('');
+      expect(exec.calls.length).toBe(1);
+    });
+
+    test('swallows a migration write failure and still returns the decrypted plaintext', async () => {
+      exec.enqueue({ rows: [buildRow({ bindPassword: 'legacy-plain' })] });
+      exec.enqueue(() => {
+        throw new Error('simulated DB failure');
+      });
+      const result = await ldapRepo.get(testDb);
+      // Read path must NOT break LDAP auth on a self-heal failure.
+      expect(result?.bindPassword).toBe('legacy-plain');
+      expect(exec.calls.length).toBe(2);
     });
   });
 });
