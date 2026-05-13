@@ -626,6 +626,25 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 <span className="inline-flex">
                   <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={t('common:table.exportToCsv')}
+                    onClick={handleExportToCsv}
+                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                  >
+                    <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
+                    <span>{t('common:table.export')}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('common:table.exportToCsv')}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
                     variant={hideWeekend ? 'secondary' : 'outline'}
                     size="sm"
                     aria-label={t('weekly.hideWeekend')}
@@ -643,30 +662,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('weekly.hideWeekend')}</TooltipContent>
             </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label={t('common:table.exportToCsv')}
-                    onClick={handleExportToCsv}
-                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                  >
-                    <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
-                    <span>{t('common:table.export')}</span>
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('common:table.exportToCsv')}</TooltipContent>
-            </Tooltip>
           </div>
         </div>
 
         <div className="-mx-5 overflow-x-auto">
-          <Table className="min-w-max border-collapse">
+          <Table className="border-collapse">
             <TableHeader className="bg-muted/40">
               <TableRow className="border-b border-border">
                 <TableHead className="px-4 py-3 min-w-56" />
@@ -675,7 +675,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   <TableHead
                     key={day.dateStr}
                     className={cn(
-                      'w-28 px-2 py-2 text-center relative align-middle',
+                      'min-w-28 px-2 py-2 text-center relative align-middle',
                       day.isToday && 'bg-accent',
                       day.isWeekendOrHoliday && 'bg-destructive/5',
                     )}
@@ -730,7 +730,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   <TableCell
                     key={day.dateStr}
                     className={cn(
-                      'w-28 px-2 py-3 align-top',
+                      'min-w-28 px-2 py-3 align-top',
                       day.isToday && 'bg-accent/60',
                       day.isWeekendOrHoliday && 'bg-destructive/5',
                     )}
@@ -767,7 +767,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         <TableCell
                           key={day.dateStr}
                           className={cn(
-                            'w-28 px-2 py-3 align-top',
+                            'min-w-28 px-2 py-3 align-top',
                             day.isToday && 'bg-accent/60',
                             day.isWeekendOrHoliday && 'bg-destructive/5',
                             showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
@@ -790,7 +790,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   <TableCell
                     key={day.dateStr}
                     className={cn(
-                      'w-28 px-2 py-3 text-center',
+                      'min-w-28 px-2 py-3 text-center',
                       day.isToday && 'bg-accent',
                       day.isWeekendOrHoliday && 'bg-destructive/5',
                     )}
