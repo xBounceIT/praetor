@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { personalAccessTokens } from '../db/schema/personalAccessTokens.ts';
 
 export type PersonalAccessTokenRecord = {
@@ -47,21 +47,30 @@ export const createForUserIfMissing = async (
   tokenHash: string,
   tokenPrefix: string,
   exec: DbExecutor = db,
-): Promise<{ record: PersonalAccessTokenRecord; created: boolean }> => {
-  const inserted = await exec
-    .insert(personalAccessTokens)
-    .values({ userId, tokenHash, tokenPrefix })
-    .onConflictDoNothing({ target: personalAccessTokens.userId })
-    .returning(TOKEN_PROJECTION);
+): Promise<{ record: PersonalAccessTokenRecord; created: boolean }> =>
+  // SELECT-then-INSERT must observe a consistent snapshot so the caller never receives a
+  // (record, created=true) pair whose tokenHash isn't the one the caller passed in.
+  runAtomically(exec, async (tx) => {
+    const existing = await findByUserId(userId, tx);
+    if (existing) return { record: existing, created: false };
 
-  if (inserted[0]) return { record: inserted[0], created: true };
+    const inserted = await tx
+      .insert(personalAccessTokens)
+      .values({ userId, tokenHash, tokenPrefix })
+      .onConflictDoNothing({ target: personalAccessTokens.userId })
+      .returning(TOKEN_PROJECTION);
 
-  const existing = await findByUserId(userId, exec);
-  if (!existing) {
-    throw new Error('Failed to create personal access token');
-  }
-  return { record: existing, created: false };
-};
+    if (inserted[0]) return { record: inserted[0], created: true };
+
+    // Another concurrent transaction inserted between our SELECT and INSERT. Re-fetch so the
+    // caller sees the winning row and knows it didn't create it (so it won't return its
+    // own raw token to the client).
+    const winner = await findByUserId(userId, tx);
+    if (!winner) {
+      throw new Error('Failed to create personal access token');
+    }
+    return { record: winner, created: false };
+  });
 
 export const renewForUser = async (
   userId: string,

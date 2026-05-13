@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import jwt from 'jsonwebtoken';
 import {
+  __resetPatIdleTimeoutCacheForTests,
   authenticateToken,
   generateToken,
   requireAnyPermission,
@@ -18,6 +19,9 @@ import {
   signOverMaxSessionToken,
   signToken,
 } from '../helpers/jwt.ts';
+
+// hashPersonalAccessToken (HMAC-keyed) requires ENCRYPTION_KEY at call time.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
 
 // Snapshot the real exports BEFORE mock.module fires so afterAll can restore them. The
 // `mock.module` calls inside beforeAll are NOT hoisted (verified empirically on Bun 1.3.13);
@@ -422,6 +426,98 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  describe('PAT idle timeout', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    beforeEach(() => {
+      delete process.env.PAT_IDLE_TIMEOUT_MS;
+      __resetPatIdleTimeoutCacheForTests();
+    });
+
+    test('rejects when lastUsedAt is older than the idle window (default 30d)', async () => {
+      const stale = new Date(Date.now() - 31 * DAY_MS);
+      findPersonalAccessTokenByHashMock.mockResolvedValue({
+        userId: 'u1',
+        tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+        tokenPrefix: 'praetor_pat_valid',
+        createdAt: new Date(Date.now() - 60 * DAY_MS),
+        updatedAt: stale,
+        lastUsedAt: stale,
+      });
+      const request = buildFakeRequest('praetor_pat_valid-token');
+      const reply = buildFakeReply();
+
+      await authenticateToken(request as never, reply as never);
+
+      expect(reply.statusCode).toBe(403);
+      expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+      expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+      expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+    });
+
+    test('rejects when lastUsedAt is null and createdAt is past the idle window', async () => {
+      const ancient = new Date(Date.now() - 31 * DAY_MS);
+      findPersonalAccessTokenByHashMock.mockResolvedValue({
+        userId: 'u1',
+        tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+        tokenPrefix: 'praetor_pat_valid',
+        createdAt: ancient,
+        updatedAt: ancient,
+        lastUsedAt: null,
+      });
+      const request = buildFakeRequest('praetor_pat_valid-token');
+      const reply = buildFakeReply();
+
+      await authenticateToken(request as never, reply as never);
+
+      expect(reply.statusCode).toBe(403);
+      expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+      expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+    });
+
+    test('accepts when lastUsedAt is just inside the idle window', async () => {
+      // 29 days ago — under the 30-day default.
+      const fresh = new Date(Date.now() - 29 * DAY_MS);
+      findPersonalAccessTokenByHashMock.mockResolvedValue({
+        userId: 'u1',
+        tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+        tokenPrefix: 'praetor_pat_valid',
+        createdAt: new Date(Date.now() - 60 * DAY_MS),
+        updatedAt: fresh,
+        lastUsedAt: fresh,
+      });
+      const request = buildFakeRequest('praetor_pat_valid-token');
+      const reply = buildFakeReply();
+
+      await authenticateToken(request as never, reply as never);
+
+      expect(reply.statusCode).toBe(0);
+      expect(request.auth).toEqual({ userId: 'u1', source: 'personalAccessToken' });
+      expect(markPersonalAccessTokenUsedMock).toHaveBeenCalled();
+    });
+
+    test('honours the PAT_IDLE_TIMEOUT_MS override', async () => {
+      process.env.PAT_IDLE_TIMEOUT_MS = '60000'; // 60 seconds
+      __resetPatIdleTimeoutCacheForTests();
+      const stale = new Date(Date.now() - 5 * 60_000); // 5 minutes ago
+      findPersonalAccessTokenByHashMock.mockResolvedValue({
+        userId: 'u1',
+        tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+        tokenPrefix: 'praetor_pat_valid',
+        createdAt: stale,
+        updatedAt: stale,
+        lastUsedAt: stale,
+      });
+      const request = buildFakeRequest('praetor_pat_valid-token');
+      const reply = buildFakeReply();
+
+      await authenticateToken(request as never, reply as never);
+
+      expect(reply.statusCode).toBe(403);
+      expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    });
   });
 });
 

@@ -36,14 +36,13 @@ const JWT_SECRET = resolveJwtSecret();
 const JWT_ALGORITHM = 'HS256' as const;
 
 const DEFAULT_SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+const DEFAULT_PAT_IDLE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-const resolveSessionMaxDurationMs = (): number => {
-  const raw = process.env.SESSION_MAX_DURATION_MS?.trim();
-  if (!raw) return DEFAULT_SESSION_MAX_DURATION_MS;
+const resolvePositiveDurationMs = (name: string, fallback: number): number => {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_SESSION_MAX_DURATION_MS;
-  }
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 };
 
@@ -53,7 +52,10 @@ const resolveSessionMaxDurationMs = (): number => {
 let cachedSessionMaxDurationMs: number | null = null;
 const getSessionMaxDurationMs = (): number => {
   if (cachedSessionMaxDurationMs === null) {
-    cachedSessionMaxDurationMs = resolveSessionMaxDurationMs();
+    cachedSessionMaxDurationMs = resolvePositiveDurationMs(
+      'SESSION_MAX_DURATION_MS',
+      DEFAULT_SESSION_MAX_DURATION_MS,
+    );
   }
   return cachedSessionMaxDurationMs;
 };
@@ -62,6 +64,21 @@ const getSessionMaxDurationMs = (): number => {
 // authenticated request. Not part of the public production API.
 export const __resetSessionMaxDurationCacheForTests = () => {
   cachedSessionMaxDurationMs = null;
+};
+
+let cachedPatIdleTimeoutMs: number | null = null;
+const getPatIdleTimeoutMs = (): number => {
+  if (cachedPatIdleTimeoutMs === null) {
+    cachedPatIdleTimeoutMs = resolvePositiveDurationMs(
+      'PAT_IDLE_TIMEOUT_MS',
+      DEFAULT_PAT_IDLE_TIMEOUT_MS,
+    );
+  }
+  return cachedPatIdleTimeoutMs;
+};
+
+export const __resetPatIdleTimeoutCacheForTests = () => {
+  cachedPatIdleTimeoutMs = null;
 };
 
 type SessionJwtPayload = JwtPayload & {
@@ -168,6 +185,13 @@ const authenticatePersonalAccessToken = async (
     const tokenHash = hashPersonalAccessToken(token);
     const tokenRecord = await personalAccessTokensRepo.findByTokenHash(tokenHash);
     if (!tokenRecord) {
+      return reply.code(403).send({ error: 'Invalid or expired token' });
+    }
+
+    // Idle timeout: fall back to createdAt for tokens that haven't been used yet, so a
+    // freshly-issued PAT isn't compared against epoch 0.
+    const idleReference = tokenRecord.lastUsedAt ?? tokenRecord.createdAt;
+    if (Date.now() - idleReference.getTime() > getPatIdleTimeoutMs()) {
       return reply.code(403).send({ error: 'Invalid or expired token' });
     }
 
