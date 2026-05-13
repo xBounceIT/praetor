@@ -3,6 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  type GeneralSettingsState,
+  INITIAL_EMAIL_CONFIG,
+  INITIAL_GENERAL_SETTINGS,
+  INITIAL_LDAP_CONFIG,
+} from './authScopedDefaults';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import SupplierInvoicesView from './components/accounting/SupplierInvoicesView';
@@ -642,33 +648,9 @@ const AppContent: React.FC = () => {
   // logout/role-switch alongside `setEntries([])`. We use state (not a ref) so
   // the dependent effect re-runs when the flag changes.
   const [entriesLoaded, setEntriesLoaded] = useState(false);
-  const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
-    enabled: false,
-    serverUrl: 'ldap://ldap.example.com:389',
-    baseDn: 'dc=example,dc=com',
-    bindDn: 'cn=read-only-admin,dc=example,dc=com',
-    bindPassword: '',
-    userFilter: '(uid={0})',
-    groupBaseDn: 'ou=groups,dc=example,dc=com',
-    groupFilter: '(member={0})',
-    roleMappings: [],
-    tlsCaCertificate: '',
-    autoProvisionAll: false,
-  });
-  const [generalSettings, setGeneralSettings] = useState({
-    currency: '€',
-    dailyLimit: 8,
-    startOfWeek: 'Monday' as 'Monday' | 'Sunday',
-    treatSaturdayAsHoliday: true,
-    allowWeekendSelection: true,
-    enableAiReporting: false,
-    geminiApiKey: '',
-    aiProvider: 'gemini' as 'gemini' | 'openrouter',
-    openrouterApiKey: '',
-    geminiModelId: '',
-    openrouterModelId: '',
-    defaultLocation: 'remote' as TimeEntryLocation,
-  });
+  const [ldapConfig, setLdapConfig] = useState<LdapConfig>(INITIAL_LDAP_CONFIG);
+  const [generalSettings, setGeneralSettings] =
+    useState<GeneralSettingsState>(INITIAL_GENERAL_SETTINGS);
   const {
     loadedModules,
     moduleLoadErrors,
@@ -684,17 +666,7 @@ const AppContent: React.FC = () => {
   const [hasLoadedSsoProviders, setHasLoadedSsoProviders] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
-  const [emailConfig, setEmailConfig] = useState<EmailConfig>({
-    enabled: false,
-    smtpHost: '',
-    smtpPort: 587,
-    smtpEncryption: 'tls',
-    smtpRejectUnauthorized: true,
-    smtpUser: '',
-    smtpPassword: '',
-    fromEmail: '',
-    fromName: 'Praetor',
-  });
+  const [emailConfig, setEmailConfig] = useState<EmailConfig>(INITIAL_EMAIL_CONFIG);
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -856,11 +828,14 @@ const AppContent: React.FC = () => {
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
+    setGeneralSettings(INITIAL_GENERAL_SETTINGS);
     setHasLoadedLdapConfig(false);
-    setHasLoadedSsoProviders(false);
+    setLdapConfig(INITIAL_LDAP_CONFIG);
     setHasLoadedEmailConfig(false);
-    setHasLoadedRoles(false);
+    setEmailConfig(INITIAL_EMAIL_CONFIG);
+    setHasLoadedSsoProviders(false);
     setSsoProviders([]);
+    setHasLoadedRoles(false);
     setRoles([]);
     setUsers([]);
     setClients([]);
