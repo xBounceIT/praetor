@@ -498,9 +498,9 @@ const TrackerView: React.FC<{
                     })
                   : t('entry.recentActivity')
               }
-              footerExtras={
+              headerExtras={
                 selectedDate ? (
-                  <div className="flex flex-1 min-w-0 items-baseline justify-center gap-2">
+                  <div className="flex items-baseline gap-2">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       {t('tracker.dayTotal')}
                     </span>
