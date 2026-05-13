@@ -22,11 +22,11 @@
     "description": "Choose the theme for the Praetor interface.",
     "light": {
       "name": "Light",
-      "description": "Use light mode for shadcn components."
+      "description": "Uses light mode for the app interface."
     },
     "dark": {
       "name": "Dark",
-      "description": "Use dark mode for shadcn components."
+      "description": "Uses dark mode for the app interface."
     },
     "zebra": {
       "name": "Zebra",
