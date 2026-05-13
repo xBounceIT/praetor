@@ -786,6 +786,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </TableCell>
                 ))}
               </TableRow>
+              <TableRow className="hover:bg-transparent border-b-0">
+                <TableCell colSpan={1 + visibleWeekDays.length} className="h-6 p-0" />
+              </TableRow>
             </TableBody>
             <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
               {entryRows.length === 0 ? (
