@@ -809,7 +809,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 
   test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
       linkedOfferId: null,

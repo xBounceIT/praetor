@@ -572,7 +572,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
   });
 
   test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
-    coFindForUpdateMock.mockResolvedValue({
+    coFindExistingMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: null,
       clientId: 'c1',
