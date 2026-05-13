@@ -500,15 +500,15 @@ const TrackerView: React.FC<{
               }
               footerExtras={
                 selectedDate ? (
-                  <div className="flex-1 min-w-0 text-center">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <div className="flex flex-1 min-w-0 items-baseline justify-center gap-2">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       {t('tracker.dayTotal')}
-                    </p>
-                    <p
+                    </span>
+                    <span
                       className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-destructive' : 'text-praetor'}`}
                     >
                       {dailyTotal.toFixed(2)} h
-                    </p>
+                    </span>
                   </div>
                 ) : undefined
               }
