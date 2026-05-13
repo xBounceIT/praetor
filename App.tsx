@@ -87,6 +87,7 @@ import {
   clearStaleModuleScopedState,
   getStaleModulesAfterNavigation,
 } from './utils/moduleScopedState';
+import { normalizeCurrency } from './utils/normalizeCurrency';
 import {
   buildPermission,
   equivalentPermissionsFor,
@@ -1186,11 +1187,9 @@ const AppContent: React.FC = () => {
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
       const genSettings = await api.generalSettings.get();
-      if (genSettings.currency === 'USD') {
-        genSettings.currency = '$';
-      }
       setGeneralSettings({
         ...genSettings,
+        currency: normalizeCurrency(genSettings.currency),
         geminiApiKey: genSettings.geminiApiKey || '',
         aiProvider: genSettings.aiProvider || 'gemini',
         openrouterApiKey: genSettings.openrouterApiKey || '',
@@ -2033,6 +2032,7 @@ const AppContent: React.FC = () => {
       const updated = await api.generalSettings.update(updates);
       setGeneralSettings({
         ...updated,
+        currency: normalizeCurrency(updated.currency),
         geminiApiKey: updated.geminiApiKey || '',
         aiProvider: updated.aiProvider || 'gemini',
         openrouterApiKey: updated.openrouterApiKey || '',
