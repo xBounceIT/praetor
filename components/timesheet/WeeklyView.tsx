@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { downloadCsv } from '../../utils/csv';
-import { getLocalDateString } from '../../utils/date';
+import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
 import Calendar from '../shared/Calendar';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
@@ -66,11 +66,6 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
   return start;
 };
 
-const dateOnlyToLocalDate = (dateOnly: string): Date => {
-  const [year, month, day] = dateOnly.split('-').map(Number);
-  return new Date(year, month - 1, day);
-};
-
 type DayCell = { duration: string; note: string; entryId?: string };
 type DayMap = Record<string, DayCell>;
 
@@ -114,7 +109,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   const { t } = useTranslation('timesheets');
 
   const currentWeekStart = useMemo(
-    () => getWeekStart(dateOnlyToLocalDate(selectedDate), startOfWeek),
+    () => getWeekStart(dateOnlyStringToLocalDate(selectedDate), startOfWeek),
     [selectedDate, startOfWeek],
   );
 
@@ -175,7 +170,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     [weekDays, hideWeekend],
   );
 
-  // Per-row, per-day edits the user has made since the last sync from props.
   const [pendingEdits, setPendingEdits] = useState<Record<string, DayMap>>({});
 
   // Reset pending edits whenever the visible week changes.
@@ -323,6 +317,40 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       };
       return { ...prev, [rowKey]: { ...rowEdits, [dateStr]: nextCell } };
     });
+  };
+
+  const renderDayCellInputs = (
+    rowKey: string,
+    day: (typeof weekDays)[number],
+    baseDays: DayMap,
+  ) => {
+    const cell = getCellValue(rowKey, day.dateStr, baseDays);
+    return (
+      <div className="flex flex-col gap-2">
+        <ValidatedNumberInput
+          placeholder="0.0"
+          disabled={day.isForbidden}
+          value={cell.duration}
+          onValueChange={(value) =>
+            updateCell(rowKey, day.dateStr, { duration: value }, baseDays[day.dateStr])
+          }
+          className={cn(
+            'h-9 w-full text-center text-sm font-bold',
+            day.isForbidden && 'opacity-50 cursor-not-allowed',
+          )}
+        />
+        <Input
+          type="text"
+          placeholder={t('weekly.note')}
+          disabled={day.isForbidden}
+          value={cell.note}
+          onChange={(e) =>
+            updateCell(rowKey, day.dateStr, { note: e.target.value }, baseDays[day.dateStr])
+          }
+          className={cn('h-7 text-xs rounded', day.isForbidden && 'opacity-40 cursor-not-allowed')}
+        />
+      </div>
+    );
   };
 
   const clearError = (field: keyof WeeklyEntryFormErrors) => {
@@ -698,57 +726,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   </p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{formLabel}</p>
                 </TableCell>
-                {visibleWeekDays.map((day) => {
-                  const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
-                  return (
-                    <TableCell
-                      key={day.dateStr}
-                      className={cn(
-                        'w-28 px-2 py-3 align-top',
-                        day.isToday && 'bg-accent/60',
-                        day.isWeekendOrHoliday && 'bg-destructive/5',
-                      )}
-                    >
-                      <div className="flex flex-col gap-2">
-                        <ValidatedNumberInput
-                          placeholder="0.0"
-                          disabled={day.isForbidden}
-                          value={cell.duration}
-                          onValueChange={(value) =>
-                            updateCell(
-                              FORM_ROW_KEY,
-                              day.dateStr,
-                              { duration: value },
-                              formRowBaseDays[day.dateStr],
-                            )
-                          }
-                          className={cn(
-                            'h-9 w-full text-center text-sm font-bold',
-                            day.isForbidden && 'opacity-50 cursor-not-allowed',
-                          )}
-                        />
-                        <Input
-                          type="text"
-                          placeholder={t('weekly.note')}
-                          disabled={day.isForbidden}
-                          value={cell.note}
-                          onChange={(e) =>
-                            updateCell(
-                              FORM_ROW_KEY,
-                              day.dateStr,
-                              { note: e.target.value },
-                              formRowBaseDays[day.dateStr],
-                            )
-                          }
-                          className={cn(
-                            'h-7 text-xs rounded',
-                            day.isForbidden && 'opacity-40 cursor-not-allowed',
-                          )}
-                        />
-                      </div>
-                    </TableCell>
-                  );
-                })}
+                {visibleWeekDays.map((day) => (
+                  <TableCell
+                    key={day.dateStr}
+                    className={cn(
+                      'w-28 px-2 py-3 align-top',
+                      day.isToday && 'bg-accent/60',
+                      day.isWeekendOrHoliday && 'bg-destructive/5',
+                    )}
+                  >
+                    {renderDayCellInputs(FORM_ROW_KEY, day, formRowBaseDays)}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableBody>
             <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
@@ -784,43 +773,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                             showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
                           )}
                         >
-                          <div className="flex flex-col gap-2">
-                            <ValidatedNumberInput
-                              placeholder="0.0"
-                              disabled={day.isForbidden}
-                              value={cell.duration}
-                              onValueChange={(value) =>
-                                updateCell(
-                                  row.key,
-                                  day.dateStr,
-                                  { duration: value },
-                                  row.baseDays[day.dateStr],
-                                )
-                              }
-                              className={cn(
-                                'h-9 w-full text-center text-sm font-bold',
-                                day.isForbidden && 'opacity-50 cursor-not-allowed',
-                              )}
-                            />
-                            <Input
-                              type="text"
-                              placeholder={t('weekly.note')}
-                              disabled={day.isForbidden}
-                              value={cell.note}
-                              onChange={(e) =>
-                                updateCell(
-                                  row.key,
-                                  day.dateStr,
-                                  { note: e.target.value },
-                                  row.baseDays[day.dateStr],
-                                )
-                              }
-                              className={cn(
-                                'h-7 text-xs rounded',
-                                day.isForbidden && 'opacity-40 cursor-not-allowed',
-                              )}
-                            />
-                          </div>
+                          {renderDayCellInputs(row.key, day, row.baseDays)}
                         </TableCell>
                       );
                     })}
