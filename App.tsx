@@ -915,12 +915,11 @@ const App: React.FC = () => {
     () =>
       makeProjectHandlers({
         projects,
-        clientsOrders,
         setProjects,
         setProjectTasks,
         setEntries,
       }),
-    [projects, clientsOrders],
+    [projects],
   );
 
   const entryHandlers = useMemo(

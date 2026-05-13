@@ -97,7 +97,8 @@ export interface ProjectsViewProps {
   tasks: ProjectTask[];
   onAddProject: (
     name: string,
-    orderId: string,
+    clientId: string,
+    orderId: string | undefined,
     description?: string,
     tasks?: DraftTaskInput[],
     billingType?: StoredBillingType,
@@ -159,8 +160,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   // Form State
   const [name, setName] = useState('');
-  const [orderId, setOrderId] = useState(''); // used for create
-  const [clientId, setClientId] = useState(''); // used for edit
+  const [orderId, setOrderId] = useState('');
+  const [clientId, setClientId] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(COLORS[0]);
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
@@ -347,12 +348,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
-
-    if (editingProject) {
-      if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    } else {
-      if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    }
+    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -387,7 +383,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         }));
       onAddProject(
         name,
-        orderId,
+        clientId,
+        orderId || undefined,
         description,
         taskInputs.length > 0 ? taskInputs : undefined,
         billingType,
@@ -747,7 +744,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       name: `${o.clientName} - ${formatOrderId(o.id)}`,
     }));
 
-  const selectedOrder = orders.find((o) => o.id === orderId);
+  const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
@@ -954,7 +951,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
                 )}
                 <div className="space-y-4">
-                  {/* Order selector (create only) / Client selector (edit only) */}
                   {editingProject ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-1.5">
@@ -999,19 +995,42 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           options={orderOptions}
                           value={orderId}
                           onChange={(val) => {
-                            setOrderId(val as string);
+                            const nextOrderId = val as string;
+                            setOrderId(nextOrderId);
+                            const nextOrder = orders.find((o) => o.id === nextOrderId);
+                            if (nextOrder) {
+                              setClientId(nextOrder.clientId);
+                              if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            }
                             if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
                           }}
-                          label={t('projects:projects.order')}
+                          label={t('projects:projects.orderOptionalLabel')}
                           placeholder={t('projects:projects.selectOrder')}
                           searchable={true}
                           buttonClassName="h-9"
                         />
                         <FieldError className="text-xs">{errors.orderId}</FieldError>
+                      </div>
+                      <div className="space-y-1.5">
+                        <SelectControl
+                          id="project-client"
+                          options={clientOptions}
+                          value={clientId}
+                          onChange={(val) => {
+                            setClientId(val as string);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                          }}
+                          label={t('projects:projects.client')}
+                          placeholder={t('projects:projects.selectClient')}
+                          searchable={true}
+                          disabled={Boolean(selectedOrder)}
+                          buttonClassName="h-9"
+                        />
+                        <FieldError className="text-xs">{errors.clientId}</FieldError>
                         {selectedOrder && (
                           <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
                             <i
-                              className="fa-solid fa-building text-xs text-muted-foreground"
+                              className="fa-solid fa-link text-xs text-muted-foreground"
                               aria-hidden="true"
                             ></i>
                             <span className="text-xs text-muted-foreground">
@@ -1023,7 +1042,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           </div>
                         )}
                       </div>
-                      <Field data-invalid={Boolean(errors.name)}>
+                      <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
                         <FieldLabel htmlFor="project-name">
                           {t('projects:projects.name')}
                         </FieldLabel>

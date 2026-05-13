@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
@@ -19,6 +20,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const projectsRepoSnap = { ...realProjectsRepo };
+const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
@@ -42,6 +44,9 @@ const clearNonTopManagerAssignmentsMock = mock();
 const addManualAssignmentsMock = mock();
 const ensureClientCascadeAssignmentsMock = mock();
 const removeClientCascadeForUsersIfUnusedMock = mock();
+
+// clientsOrdersRepo mocks
+const findOrderClientIdByIdMock = mock();
 
 // userAssignmentsRepo mocks
 const assignClientToUserMock = mock(async () => undefined);
@@ -88,6 +93,10 @@ beforeAll(async () => {
     ensureClientCascadeAssignments: ensureClientCascadeAssignmentsMock,
     removeClientCascadeForUsersIfUnused: removeClientCascadeForUsersIfUnusedMock,
   }));
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
+    ...clientsOrdersRepoSnap,
+    findClientIdById: findOrderClientIdByIdMock,
+  }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
     assignClientToUser: assignClientToUserMock,
@@ -115,6 +124,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -171,6 +181,7 @@ const allMocks = [
   addManualAssignmentsMock,
   ensureClientCascadeAssignmentsMock,
   removeClientCascadeForUsersIfUnusedMock,
+  findOrderClientIdByIdMock,
   assignClientToUserMock,
   assignProjectToUserMock,
   assignClientToTopManagersMock,
@@ -196,6 +207,9 @@ beforeEach(async () => {
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
+  // Default: order lookups return null (not in DB) so the consistency check is a no-op
+  // and the real FK violation surfaces from the repo path under test.
+  findOrderClientIdByIdMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -305,6 +319,67 @@ describe('POST /api/projects', () => {
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ color: '#3b82f6', orderId: null, description: null }),
     );
+  });
+
+  test('400: orderId belonging to a different client is rejected', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-other');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: 'co-foreign' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201: orderId belonging to the same client is allowed', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: 'co-same' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: 'co-same' }));
+  });
+
+  test('201: empty-string orderId is treated as null (no consistency lookup)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'X', clientId: 'c-1', orderId: '' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
+    expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('201: creates project with orderId omitted (orderId stored as null)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Orderless', clientId: 'c-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
   });
 
   test('400: missing name', async () => {
@@ -519,6 +594,138 @@ describe('PUT /api/projects/:id', () => {
       'c-old',
       undefined,
     );
+  });
+
+  test('200: sets orderId when provided (consistent client)', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-9' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: 'co-9' }),
+      undefined,
+    );
+  });
+
+  test('400: orderId belonging to a different client is rejected on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-other');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-foreign' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: client change paired with matching orderId is accepted', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-old');
+    findOrderClientIdByIdMock.mockResolvedValue('c-new');
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, clientId: 'c-new', orderId: 'co-9' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-new', orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ clientId: 'c-new', orderId: 'co-9' }),
+      undefined,
+    );
+  });
+
+  test('200: empty-string orderId is normalized to null on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: null }),
+      undefined,
+    );
+    // No order lookup should fire when normalized to null.
+    expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('200: clears orderId when null is sent', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: null }),
+      undefined,
+    );
+  });
+
+  test('200: leaves orderId unchanged when not provided', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateArgs = updateMock.mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined;
+    expect(updateArgs?.orderId).toBeUndefined();
+  });
+
+  test('400: ForeignKeyError(Linked order) on bad orderId mapped to 400', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockImplementation(async () => {
+      throw new ForeignKeyError('Linked order');
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Linked order not found' });
   });
 
   test('200: isDisabled=true alone audits as project.disabled', async () => {
