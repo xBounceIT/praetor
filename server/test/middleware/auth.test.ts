@@ -457,7 +457,7 @@ describe('authenticateToken', () => {
       expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
     });
 
-    test('rejects when lastUsedAt is null and createdAt is past the idle window', async () => {
+    test('rejects when lastUsedAt is null and updatedAt is past the idle window', async () => {
       const ancient = new Date(Date.now() - 31 * DAY_MS);
       findPersonalAccessTokenByHashMock.mockResolvedValue({
         userId: 'u1',
@@ -475,6 +475,28 @@ describe('authenticateToken', () => {
       expect(reply.statusCode).toBe(403);
       expect(reply.body).toEqual({ error: 'Invalid or expired token' });
       expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+    });
+
+    test('accepts a freshly renewed token whose row was originally created long ago', async () => {
+      // renewForUser bumps updatedAt and clears lastUsedAt but leaves createdAt untouched.
+      // The idle check must read from updatedAt (or it would 403 every renewed PAT whose
+      // row predates the idle window).
+      findPersonalAccessTokenByHashMock.mockResolvedValue({
+        userId: 'u1',
+        tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+        tokenPrefix: 'praetor_pat_valid',
+        createdAt: new Date(Date.now() - 365 * DAY_MS),
+        updatedAt: new Date(),
+        lastUsedAt: null,
+      });
+      const request = buildFakeRequest('praetor_pat_valid-token');
+      const reply = buildFakeReply();
+
+      await authenticateToken(request as never, reply as never);
+
+      expect(reply.statusCode).toBe(0);
+      expect(request.auth).toEqual({ userId: 'u1', source: 'personalAccessToken' });
+      expect(markPersonalAccessTokenUsedMock).toHaveBeenCalled();
     });
 
     test('accepts when lastUsedAt is just inside the idle window', async () => {

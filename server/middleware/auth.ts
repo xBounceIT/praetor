@@ -188,9 +188,11 @@ const authenticatePersonalAccessToken = async (
       return reply.code(403).send({ error: 'Invalid or expired token' });
     }
 
-    // Idle timeout: fall back to createdAt for tokens that haven't been used yet, so a
-    // freshly-issued PAT isn't compared against epoch 0.
-    const idleReference = tokenRecord.lastUsedAt ?? tokenRecord.createdAt;
+    // Idle timeout: fall back to updatedAt for tokens that haven't been used yet, so a
+    // freshly-issued PAT isn't compared against epoch 0. updatedAt — not createdAt — is the
+    // correct anchor because renewForUser bumps updatedAt and clears lastUsedAt while leaving
+    // createdAt alone, so a renewed token with an old createdAt would otherwise 403 instantly.
+    const idleReference = tokenRecord.lastUsedAt ?? tokenRecord.updatedAt;
     if (Date.now() - idleReference.getTime() > getPatIdleTimeoutMs()) {
       return reply.code(403).send({ error: 'Invalid or expired token' });
     }
