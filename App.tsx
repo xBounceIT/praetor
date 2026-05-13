@@ -1604,6 +1604,12 @@ const App: React.FC = () => {
                 () => api.clientsOrders.list(),
                 setClientsOrders,
               ),
+              listRequest(
+                'client offers',
+                canListClientOffers,
+                () => api.clientOffers.list(),
+                setClientOffers,
+              ),
             ]);
             break;
           }
@@ -2558,6 +2564,7 @@ const App: React.FC = () => {
                   projects={projects}
                   clients={clients}
                   orders={clientsOrders}
+                  offers={clientOffers}
                   currency={generalSettings.currency}
                   permissions={currentUser.permissions || []}
                   users={availableUsers}

@@ -26,7 +26,7 @@ beforeEach(() => {
 // and the user_projects/user_clients-touching helpers use executeRows (named-key rows).
 //
 // Schema column order: id, name, client_id, color, description, is_disabled, created_at, order_id,
-// billing_type, billing_frequency
+// offer_id, start_date, end_date, revenue, billing_type, billing_frequency
 const PROJECT_ROW: readonly unknown[] = [
   'p-1',
   'Alpha',
@@ -35,6 +35,10 @@ const PROJECT_ROW: readonly unknown[] = [
   'desc',
   false,
   new Date('2026-04-30T12:00:00Z'),
+  null,
+  null,
+  null,
+  null,
   null,
   'time_and_materials',
   'monthly',
@@ -49,6 +53,10 @@ const mappedRow: projectsRepo.Project = {
   isDisabled: false,
   createdAt: new Date('2026-04-30T12:00:00Z').getTime(),
   orderId: null,
+  offerId: null,
+  startDate: null,
+  endDate: null,
+  revenue: null,
   billingType: 'time_and_materials',
   billingFrequency: 'monthly',
 };
@@ -62,6 +70,10 @@ const rawProjectRow = {
   is_disabled: false,
   created_at: new Date('2026-04-30T12:00:00Z'),
   order_id: null,
+  offer_id: null,
+  start_date: null,
+  end_date: null,
+  revenue: null,
   billing_type: 'time_and_materials',
   billing_frequency: 'monthly',
 };

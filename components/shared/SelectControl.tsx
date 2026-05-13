@@ -36,7 +36,7 @@ export interface SelectControlProps {
   options: Option[];
   value: string | string[];
   onChange: (value: string | string[]) => void;
-  label?: string;
+  label?: React.ReactNode;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -76,7 +76,7 @@ const getMultiButtonLabel = ({
   return `${selectedOptions.length} ${t('select.selected').toLowerCase()}`;
 };
 
-const SelectLabel = ({ id, label }: { id?: string; label?: string }) => {
+const SelectLabel = ({ id, label }: { id?: string; label?: React.ReactNode }) => {
   if (!label) return null;
   return <FieldLabel htmlFor={id}>{label}</FieldLabel>;
 };

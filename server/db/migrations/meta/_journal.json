@@ -225,6 +225,13 @@
       "when": 1778617609340,
       "tag": "0031_add_ldap_auto_provision_all",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1778634334384,
+      "tag": "0032_add_project_lifecycle_fields",
+      "breakpoints": true
     }
   ]
 }

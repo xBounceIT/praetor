@@ -203,6 +203,10 @@ export interface Project {
   isDisabled?: boolean;
   createdAt?: number;
   orderId?: string;
+  offerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
   billingType?: BillingType;
   billingFrequency?: BillingFrequency;
 }

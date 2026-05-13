@@ -11,6 +11,7 @@ import {
 } from '../utils/billing.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
+import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
@@ -26,6 +27,10 @@ export type Project = {
   isDisabled: boolean;
   createdAt: number;
   orderId: string | null;
+  offerId: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  revenue: number | null;
   billingType: BillingType;
   billingFrequency: BillingFrequency;
 };
@@ -41,6 +46,10 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   // `?? 0` is a TS-strict appeasement for the unreachable branch.
   createdAt: row.createdAt?.getTime() ?? 0,
   orderId: row.orderId,
+  offerId: row.offerId,
+  startDate: row.startDate ?? null,
+  endDate: row.endDate ?? null,
+  revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
 });
@@ -54,6 +63,10 @@ type ProjectRawRow = {
   is_disabled: boolean | null;
   created_at: string | Date | null;
   order_id: string | null;
+  offer_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  revenue: string | number | null;
   billing_type: BillingType | null;
   billing_frequency: BillingFrequency | null;
 };
@@ -79,11 +92,16 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   isDisabled: row.is_disabled ?? false,
   createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
   orderId: row.order_id,
+  offerId: row.offer_id,
+  startDate: row.start_date,
+  endDate: row.end_date,
+  revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billing_type ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
 });
 
 const projectSelectSql = sql`p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id,
+       p.offer_id, p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
        ${derivedBillingTypeSql} AS billing_type, p.billing_frequency`;
 
 export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
@@ -172,11 +190,16 @@ export type NewProject = {
   description: string | null;
   isDisabled: boolean;
   orderId?: string | null;
+  offerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
 };
 
 const PROJECT_ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
+const PROJECT_OFFER_FK_CONSTRAINT = 'projects_offer_id_customer_offers_id_fk';
 
 export const create = async (project: NewProject, exec: DbExecutor = db): Promise<Project> => {
   try {
@@ -190,6 +213,10 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         description: project.description,
         isDisabled: project.isDisabled,
         orderId: project.orderId ?? null,
+        offerId: project.offerId ?? null,
+        startDate: project.startDate ?? null,
+        endDate: project.endDate ?? null,
+        revenue: numericForDb(project.revenue),
         billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
         billingFrequency: normalizeBillingFrequency(
           project.billingType ?? DEFAULT_BILLING_TYPE,
@@ -202,6 +229,7 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
     const fk = getForeignKeyViolation(err);
     if (fk) {
       if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      if (fk.constraint === PROJECT_OFFER_FK_CONSTRAINT) throw new ForeignKeyError('Linked offer');
       throw new ForeignKeyError('Client');
     }
     throw err;
@@ -215,6 +243,10 @@ export type ProjectUpdate = {
   description?: string | null;
   isDisabled?: boolean;
   orderId?: string | null;
+  offerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
   billingType?: StoredBillingType | null;
   billingFrequency?: BillingFrequency | null;
 };
@@ -231,6 +263,12 @@ export const update = async (
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
   if (patch.orderId !== undefined) set.orderId = patch.orderId;
+  if (patch.offerId !== undefined) set.offerId = patch.offerId;
+  if (patch.startDate !== undefined) set.startDate = patch.startDate;
+  if (patch.endDate !== undefined) set.endDate = patch.endDate;
+  if (patch.revenue !== undefined) {
+    set.revenue = numericForDb(patch.revenue);
+  }
   if (patch.billingType !== undefined) {
     const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
     set.billingType = nextBillingType;
@@ -257,10 +295,33 @@ export const update = async (
     const fk = getForeignKeyViolation(err);
     if (fk) {
       if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      if (fk.constraint === PROJECT_OFFER_FK_CONSTRAINT) throw new ForeignKeyError('Linked offer');
       throw new ForeignKeyError('Client');
     }
     throw err;
   }
+};
+
+export const findDateRangeById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ startDate: string | null; endDate: string | null } | null> => {
+  const rows = await exec
+    .select({ startDate: projects.startDate, endDate: projects.endDate })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
+};
+
+export const findClientLinksById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ orderId: string | null; offerId: string | null } | null> => {
+  const rows = await exec
+    .select({ orderId: projects.orderId, offerId: projects.offerId })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
 };
 
 export const findBillingById = async (

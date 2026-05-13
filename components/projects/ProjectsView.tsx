@@ -12,6 +12,7 @@ import type {
   BillingFrequency,
   BillingType,
   Client,
+  ClientOffer,
   ClientsOrder,
   Project,
   ProjectTask,
@@ -20,6 +21,7 @@ import type {
   User,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { calculatePricingTotals } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -86,24 +88,50 @@ const billingFrequencyOptions = [
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
 
+// `aria-hidden` — screen readers get the requirement signal from the input's `required` attr.
+const RequiredMark = () => (
+  <span className="text-destructive" aria-hidden="true">
+    *
+  </span>
+);
+
+type RevenueSource = 'activities' | 'order' | 'manual';
+type RevenueLike = { revenue?: number | string | null };
+
+const sumActivityRevenue = (tasks: RevenueLike[]): number =>
+  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+
+const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
+  if (activitiesSum > 0) return 'activities';
+  if (hasOrder) return 'order';
+  return 'manual';
+};
+
+export type AddProjectFormInput = {
+  name: string;
+  clientId: string;
+  offerId: string;
+  orderId?: string;
+  description?: string;
+  draftTasks?: DraftTaskInput[];
+  billingType?: StoredBillingType;
+  billingFrequency?: BillingFrequency;
+  startDate?: string | null;
+  endDate?: string | null;
+  revenue?: number | null;
+};
+
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
   orders: ClientsOrder[];
+  offers: ClientOffer[];
   permissions: string[];
   users: User[];
   roles: Role[];
   currency: string;
   tasks: ProjectTask[];
-  onAddProject: (
-    name: string,
-    clientId: string,
-    orderId: string | undefined,
-    description?: string,
-    tasks?: DraftTaskInput[],
-    billingType?: StoredBillingType,
-    billingFrequency?: BillingFrequency,
-  ) => void;
+  onAddProject: (input: AddProjectFormInput) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
   onAddTask: (
@@ -125,6 +153,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
   orders,
+  offers,
   permissions,
   users,
   roles,
@@ -168,6 +197,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+  const [offerId, setOfferId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [revenue, setRevenue] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Draft tasks state (create modal only)
@@ -278,6 +311,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setBillingType('time_and_materials');
     setBillingFrequency('monthly');
     setProjectBillingChanged(false);
+    setOfferId('');
+    setStartDate('');
+    setEndDate('');
+    setRevenue('');
     setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
@@ -302,6 +339,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         : (project.billingFrequency ?? 'monthly'),
     );
     setProjectBillingChanged(false);
+    setOfferId(project.offerId ?? '');
+    setStartDate(project.startDate ?? '');
+    setEndDate(project.endDate ?? '');
+    setRevenue(
+      project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
+    );
     setDraftTasks([]);
     setErrors({});
     setTaskEdits({});
@@ -339,6 +382,34 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectBillingChanged(false);
   };
 
+  // Reset a currently-bound order/offer if it no longer matches `nextClientId`. The
+  // `keep` flag lets the order/offer pickers skip the link they just set themselves — a
+  // direct setX(...) call followed by this helper would otherwise race with React's
+  // batched updates and re-clear the value via the still-old closure.
+  const clearStaleClientLinks = (nextClientId: string, keep: 'order' | 'offer' | null) => {
+    if (keep !== 'offer' && offerId) {
+      const current = offers.find((o) => o.id === offerId);
+      if (!current || current.clientId !== nextClientId) {
+        setOfferId('');
+        if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+      }
+    }
+    if (keep !== 'order' && orderId) {
+      const current = orders.find((o) => o.id === orderId);
+      if (!current || current.clientId !== nextClientId) {
+        setOrderId('');
+        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+      }
+    }
+  };
+
+  // Direct client picker: change the client and clear both stale order and stale offer.
+  const applyClientChange = (nextClientId: string) => {
+    setClientId(nextClientId);
+    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+    clearStaleClientLinks(nextClientId, null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -349,6 +420,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+
+    if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+
+    if (startDate && endDate && startDate > endDate) {
+      newErrors.dateRange = t('projects:projects.dateRangeInvalid');
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -362,6 +439,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         description,
         color,
         isDisabled: tempIsDisabled,
+        offerId,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        revenue: persistedRevenue,
       };
       if (displayProjectBillingType !== 'mixed' || projectBillingChanged) {
         updates.billingType = billingType;
@@ -381,15 +462,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           revenue: t.revenue ? parseFloat(t.revenue) : undefined,
           notes: t.notes.trim() || undefined,
         }));
-      onAddProject(
+      onAddProject({
         name,
         clientId,
-        orderId || undefined,
+        orderId: orderId || undefined,
+        offerId,
         description,
-        taskInputs.length > 0 ? taskInputs : undefined,
+        draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
         billingType,
-        billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-      );
+        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        revenue: persistedRevenue,
+      });
     }
     closeModal();
   };
@@ -746,6 +831,53 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
+  // The edit modal has no order selector — only a read-only chip — so the existing link lives
+  // on `editingProject.orderId` and we resolve from there for both render and submit.
+  const effectiveOrder = editingProject?.orderId
+    ? orders.find((o) => o.id === editingProject.orderId)
+    : selectedOrder;
+
+  // Hide drafts/denied. Filter to the current client so the user can't pick an offer for a
+  // different client than the project (the server enforces the same invariant).
+  const offerOptions = offers
+    .filter((o) => o.status === 'sent' || o.status === 'accepted')
+    .filter((o) => !clientId || o.clientId === clientId)
+    .map((o) => ({ id: o.id, name: `${o.clientName} - ${o.id}` }));
+  // Surface a bound-but-filtered-out offer so the user can see and resolve the mismatch.
+  if (offerId && !offerOptions.some((o) => o.id === offerId)) {
+    const fallback = offers.find((o) => o.id === offerId);
+    if (fallback) {
+      offerOptions.unshift({ id: fallback.id, name: `${fallback.clientName} - ${fallback.id}` });
+    }
+  }
+
+  const activitiesRevenueSum = sumActivityRevenue(
+    editingProject ? editingProjectTasks : draftTasks,
+  );
+
+  const orderRevenue = effectiveOrder
+    ? calculatePricingTotals(
+        effectiveOrder.items,
+        effectiveOrder.discount,
+        'hours',
+        effectiveOrder.discountType,
+      ).total
+    : 0;
+
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(effectiveOrder));
+  const revenueBySource: Record<RevenueSource, number> = {
+    activities: activitiesRevenueSum,
+    order: orderRevenue,
+    manual: revenue ? parseFloat(revenue) : 0,
+  };
+  const revenueHintBySource: Record<RevenueSource, string> = {
+    activities: t('projects:projects.revenueFromActivities'),
+    order: t('projects:projects.revenueFromOrder'),
+    manual: t('projects:projects.revenueManualHint'),
+  };
+  const displayedRevenue = revenueBySource[revenueSource];
+  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;
+
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
@@ -959,10 +1091,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           options={clientOptions}
                           value={clientId}
                           onChange={(val) => {
-                            setClientId(val as string);
-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            applyClientChange(val as string);
                           }}
-                          label={t('projects:projects.client')}
+                          label={
+                            <>
+                              {t('projects:projects.client')} <RequiredMark />
+                            </>
+                          }
                           placeholder={t('projects:projects.selectClient')}
                           searchable={true}
                           buttonClassName="h-9"
@@ -971,11 +1106,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       </div>
                       <Field data-invalid={Boolean(errors.name)}>
                         <FieldLabel htmlFor="project-name">
-                          {t('projects:projects.name')}
+                          {t('projects:projects.name')} <RequiredMark />
                         </FieldLabel>
                         <Input
                           id="project-name"
                           type="text"
+                          required
                           value={name}
                           aria-invalid={Boolean(errors.name)}
                           onChange={(e) => {
@@ -997,12 +1133,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           onChange={(val) => {
                             const nextOrderId = val as string;
                             setOrderId(nextOrderId);
-                            const nextOrder = orders.find((o) => o.id === nextOrderId);
-                            if (nextOrder) {
-                              setClientId(nextOrder.clientId);
-                              if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                            }
                             if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                            const nextOrder = orders.find((o) => o.id === nextOrderId);
+                            if (!nextOrder) return;
+                            setClientId(nextOrder.clientId);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            clearStaleClientLinks(nextOrder.clientId, 'order');
                           }}
                           label={t('projects:projects.orderOptionalLabel')}
                           placeholder={t('projects:projects.selectOrder')}
@@ -1017,10 +1153,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           options={clientOptions}
                           value={clientId}
                           onChange={(val) => {
-                            setClientId(val as string);
-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            applyClientChange(val as string);
                           }}
-                          label={t('projects:projects.client')}
+                          label={
+                            <>
+                              {t('projects:projects.client')} <RequiredMark />
+                            </>
+                          }
                           placeholder={t('projects:projects.selectClient')}
                           searchable={true}
                           disabled={Boolean(selectedOrder)}
@@ -1044,11 +1183,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       </div>
                       <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
                         <FieldLabel htmlFor="project-name">
-                          {t('projects:projects.name')}
+                          {t('projects:projects.name')} <RequiredMark />
                         </FieldLabel>
                         <Input
                           id="project-name"
                           type="text"
+                          required
                           value={name}
                           aria-invalid={Boolean(errors.name)}
                           onChange={(e) => {
@@ -1075,6 +1215,91 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       className="min-h-20 resize-none"
                     />
                   </Field>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field data-invalid={Boolean(errors.dateRange)}>
+                      <FieldLabel htmlFor="project-start-date">
+                        {t('projects:projects.startDate')}
+                      </FieldLabel>
+                      <Input
+                        id="project-start-date"
+                        type="date"
+                        value={startDate}
+                        aria-invalid={Boolean(errors.dateRange)}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                        }}
+                      />
+                    </Field>
+                    <Field data-invalid={Boolean(errors.dateRange)}>
+                      <FieldLabel htmlFor="project-end-date">
+                        {t('projects:projects.endDate')}
+                      </FieldLabel>
+                      <Input
+                        id="project-end-date"
+                        type="date"
+                        value={endDate}
+                        aria-invalid={Boolean(errors.dateRange)}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                        }}
+                      />
+                    </Field>
+                  </div>
+                  {errors.dateRange && (
+                    <FieldError className="text-xs">{errors.dateRange}</FieldError>
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-offer"
+                        options={offerOptions}
+                        value={offerId}
+                        onChange={(val) => {
+                          const nextOfferId = val as string;
+                          setOfferId(nextOfferId);
+                          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                          const nextOffer = offers.find((o) => o.id === nextOfferId);
+                          if (!nextOffer) return;
+                          if (nextOffer.clientId !== clientId) {
+                            setClientId(nextOffer.clientId);
+                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                          }
+                          clearStaleClientLinks(nextOffer.clientId, 'offer');
+                        }}
+                        label={
+                          <>
+                            {t('projects:projects.offerReference')} <RequiredMark />
+                          </>
+                        }
+                        placeholder={t('projects:projects.selectOffer')}
+                        searchable={true}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.offerId}</FieldError>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="project-revenue">
+                        {`${t('projects:projects.projectRevenue')} (${currency})`}
+                      </FieldLabel>
+                      <Input
+                        id="project-revenue"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
+                        readOnly={revenueSource !== 'manual'}
+                        onChange={(e) => setRevenue(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {revenueHintBySource[revenueSource]}
+                      </p>
+                    </Field>
+                  </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <SelectControl

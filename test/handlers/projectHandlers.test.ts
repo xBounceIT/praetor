@@ -73,12 +73,18 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add('Project Alpha', 'client-A', 'order-1');
+    await handlers.add({
+      name: 'Project Alpha',
+      clientId: 'client-A',
+      orderId: 'order-1',
+      offerId: 'of-1',
+    });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.name).toBe('Project Alpha');
     expect(callArg.clientId).toBe('client-A');
     expect(callArg.orderId).toBe('order-1');
+    expect(callArg.offerId).toBe('of-1');
     expect(projects.get()).toHaveLength(1);
   });
 
@@ -94,12 +100,40 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add('Project Beta', 'client-B', undefined);
+    await handlers.add({ name: 'Project Beta', clientId: 'client-B', offerId: 'of-1' });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.clientId).toBe('client-B');
     expect(callArg.orderId).toBeUndefined();
     expect(projects.get()).toHaveLength(1);
+  });
+
+  test('add forwards new lifecycle fields', async () => {
+    apiMocks.projectsCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'proj-new', ...(data as object) }),
+    );
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      projects: projects.get() as never,
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    await handlers.add({
+      name: 'P',
+      clientId: 'client-A',
+      orderId: 'order-1',
+      offerId: 'of-1',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      revenue: 5000,
+    });
+    const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.startDate).toBe('2026-01-01');
+    expect(callArg.endDate).toBe('2026-12-31');
+    expect(callArg.revenue).toBe(5000);
+    expect(callArg.offerId).toBe('of-1');
   });
 
   test('add with draftTasks creates tasks too', async () => {
@@ -117,10 +151,13 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add('Project', 'c1', 'order-1', undefined, [
-      { name: 'task-A' },
-      { name: 'task-B' },
-    ] as never);
+    await handlers.add({
+      name: 'Project',
+      clientId: 'c1',
+      orderId: 'order-1',
+      offerId: 'of-1',
+      draftTasks: [{ name: 'task-A' }, { name: 'task-B' }] as never,
+    });
 
     expect(apiMocks.tasksCreate).toHaveBeenCalledTimes(2);
     expect(tasks.get()).toHaveLength(2);
@@ -141,7 +178,7 @@ describe('makeProjectHandlers', () => {
     const alertMock = mock((_msg?: string) => {});
     globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
-      await handlers.add('P', '', undefined);
+      await handlers.add({ name: 'P', clientId: '', offerId: 'of-1' });
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
       expect(alertMock).toHaveBeenCalledTimes(1);
@@ -168,7 +205,7 @@ describe('makeProjectHandlers', () => {
     const alertMock = mock((_msg?: string) => {});
     globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
-      await handlers.add('P', 'c1', 'order-1');
+      await handlers.add({ name: 'P', clientId: 'c1', orderId: 'order-1', offerId: 'of-1' });
       expect(projects.get()).toEqual([]);
       expect(alertMock).toHaveBeenCalledTimes(1);
       expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');
