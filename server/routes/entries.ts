@@ -4,6 +4,7 @@ import {
   requireAnyPermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
+import type { TimeEntry } from '../repositories/entriesRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -18,6 +19,7 @@ import {
   updateTimeEntry,
 } from '../services/timeEntries.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { requestHasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 
 const idParamSchema = {
@@ -43,10 +45,13 @@ const entrySchema = {
     notes: { type: ['string', 'null'] },
     duration: { type: 'number' },
     hourlyCost: { type: 'number' },
+    cost: { type: 'number' },
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
     createdAt: { type: 'number' },
   },
+  // `cost` and `hourlyCost` stay out of `required` because they are stripped at response
+  // time when the caller lacks `reports.cost.view`. Everything else is always present.
   required: [
     'id',
     'userId',
@@ -57,7 +62,6 @@ const entrySchema = {
     'projectName',
     'task',
     'duration',
-    'hourlyCost',
     'isPlaceholder',
     'location',
     'createdAt',
@@ -126,6 +130,25 @@ const actorFromRequest = (request: FastifyRequest) => ({
   permissions: request.user?.permissions ?? [],
 });
 
+type SanitizedEntry = TimeEntry | Omit<TimeEntry, 'cost' | 'hourlyCost'>;
+
+// Strip `cost` / `hourlyCost` from outgoing entry payloads when the caller lacks
+// `reports.cost.view`. Computed cost reveals per-user pay rates, so the API enforces the
+// gate even when the UI happens to hide the column.
+const sanitizeEntry = (entry: TimeEntry, includeCost: boolean): SanitizedEntry => {
+  if (includeCost) return entry;
+  const { cost: _cost, hourlyCost: _hourlyCost, ...rest } = entry;
+  return rest;
+};
+
+const sanitizeListResult = (
+  result: { entries: TimeEntry[]; nextCursor: string | null },
+  includeCost: boolean,
+): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
+  entries: result.entries.map((e) => sanitizeEntry(e, includeCost)),
+  nextCursor: result.nextCursor,
+});
+
 const handleTimeEntryServiceError = (err: unknown, reply: FastifyReply) => {
   if (err instanceof TimeEntryServiceError) {
     return reply.code(err.statusCode).send({ error: err.message });
@@ -162,7 +185,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         cursor?: string;
       };
       try {
-        return await listTimeEntries(actorFromRequest(request), { userId, limit, cursor });
+        const result = await listTimeEntries(actorFromRequest(request), {
+          userId,
+          limit,
+          cursor,
+        });
+        return sanitizeListResult(result, requestHasPermission(request, 'reports.cost.view'));
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }
@@ -189,7 +217,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       try {
         const created = await createTimeEntry(actorFromRequest(request), request.body ?? {});
-        return reply.code(201).send(created);
+        return reply
+          .code(201)
+          .send(sanitizeEntry(created, requestHasPermission(request, 'reports.cost.view')));
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }
@@ -217,7 +247,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { id } = request.params as { id: string };
       try {
-        return await updateTimeEntry(actorFromRequest(request), id, request.body ?? {});
+        const updated = await updateTimeEntry(actorFromRequest(request), id, request.body ?? {});
+        return sanitizeEntry(updated, requestHasPermission(request, 'reports.cost.view'));
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }

@@ -66,6 +66,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
+  { id: 'reports.cost', actions: ['view'], module: 'reports' },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },

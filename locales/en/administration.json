@@ -62,7 +62,8 @@
       "work_units_all": "Work Units (All)"
     },
     "reports": {
-      "ai_reporting": "AI Reporting"
+      "ai_reporting": "AI Reporting",
+      "cost": "Cost reports"
     },
     "configuration": {
       "authentication": "Authentication",

@@ -1,6 +1,7 @@
 import { and, eq, gte, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
+import { computeEntryCost } from '../utils/billing.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import { managedUserIdsSubquerySql } from './workUnitsRepo.ts';
@@ -18,6 +19,11 @@ export type TimeEntry = {
   notes: string | null;
   duration: number;
   hourlyCost: number;
+  // `cost` is computed on read as `duration * hourlyCost` (rounded to currency precision)
+  // so retroactive `hourly_cost` changes never rewrite historical entry costs - the per-row
+  // `hourly_cost` we already store on insert is the "as of the day the entry was logged"
+  // rate that we want to preserve here.
+  cost: number;
   isPlaceholder: boolean;
   location: string;
   createdAt: number;
@@ -56,6 +62,8 @@ const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project
 const mapRawRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
   if (!date) throw new TypeError('Invalid date value for entry.date');
+  const duration = parseDbNumber(row.duration, 0);
+  const hourlyCost = parseDbNumber(row.hourly_cost, 0);
   return {
     id: row.id,
     userId: row.user_id,
@@ -67,8 +75,9 @@ const mapRawRow = (row: TimeEntryRow): TimeEntry => {
     task: row.task,
     taskId: row.task_id,
     notes: row.notes,
-    duration: parseDbNumber(row.duration, 0),
-    hourlyCost: parseDbNumber(row.hourly_cost, 0),
+    duration,
+    hourlyCost,
+    cost: computeEntryCost(duration, hourlyCost),
     isPlaceholder: !!row.is_placeholder,
     location: row.location || 'remote',
     createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
@@ -81,6 +90,8 @@ const mapRawRow = (row: TimeEntryRow): TimeEntry => {
 const mapBuilderRow = (row: typeof timeEntries.$inferSelect): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
   if (!date) throw new TypeError('Invalid date value for entry.date');
+  const duration = parseDbNumber(row.duration, 0);
+  const hourlyCost = parseDbNumber(row.hourlyCost, 0);
   return {
     id: row.id,
     userId: row.userId,
@@ -92,8 +103,9 @@ const mapBuilderRow = (row: typeof timeEntries.$inferSelect): TimeEntry => {
     task: row.task,
     taskId: row.taskId,
     notes: row.notes,
-    duration: parseDbNumber(row.duration, 0),
-    hourlyCost: parseDbNumber(row.hourlyCost, 0),
+    duration,
+    hourlyCost,
+    cost: computeEntryCost(duration, hourlyCost),
     isPlaceholder: !!row.isPlaceholder,
     location: row.location || 'remote',
     createdAt: row.createdAt?.getTime() ?? 0,

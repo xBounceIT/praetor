@@ -61,6 +61,11 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'] },
+  // `reports.cost.view` gates exposure of per-entry / aggregated *cost* numbers
+  // (duration * hourly_cost) - kept separate from `hr.costs` because someone can be
+  // allowed to read cost roll-ups in reports without being trusted to set per-user
+  // hourly cost rates.
+  { id: 'reports.cost', actions: ['view'] },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE },
@@ -138,6 +143,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     buildPermission('hr.employee_assignments', 'update'),
     buildPermission('reports.ai_reporting', 'view'),
     buildPermission('reports.ai_reporting', 'create'),
+    buildPermission('reports.cost', 'view'),
     buildPermission('settings', 'view'),
     buildPermission('settings', 'update'),
     buildPermission('docs.api', 'view'),
@@ -175,6 +181,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     buildPermission('hr.work_units_all', 'view'),
     buildPermission('reports.ai_reporting', 'view'),
     buildPermission('reports.ai_reporting', 'create'),
+    buildPermission('reports.cost', 'view'),
     buildPermission('settings', 'view'),
     buildPermission('settings', 'update'),
     buildPermission('docs.api', 'view'),

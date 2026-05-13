@@ -646,18 +646,31 @@ describe('normalizeClientsOrder', () => {
 });
 
 describe('normalizeTimeEntry', () => {
-  test('parses duration and hourlyCost as numbers', () => {
-    const entry = make<TimeEntry>(baseTimeEntry, { duration: '2.5', hourlyCost: '50' });
+  test('parses duration, hourlyCost, and cost as numbers', () => {
+    const entry = make<TimeEntry>(baseTimeEntry, {
+      duration: '2.5',
+      hourlyCost: '50',
+      cost: '125',
+    });
     const result = normalizeTimeEntry(entry);
     expect(result.duration).toBe(2.5);
     expect(result.hourlyCost).toBe(50);
+    expect(result.cost).toBe(125);
   });
 
-  test('defaults missing duration and hourlyCost to 0', () => {
-    const entry = make<TimeEntry>(baseTimeEntry, { duration: undefined, hourlyCost: undefined });
+  test('defaults missing duration to 0; keeps hourlyCost/cost absent when stripped server-side', () => {
+    // The server omits hourlyCost / cost entirely when the caller lacks
+    // `reports.cost.view`. The normalizer must preserve that absence so callers can
+    // branch on permission visibility instead of misreading a 0 as "no cost".
+    const entry = make<TimeEntry>(baseTimeEntry, {
+      duration: undefined,
+      hourlyCost: undefined,
+      cost: undefined,
+    });
     const result = normalizeTimeEntry(entry);
     expect(result.duration).toBe(0);
-    expect(result.hourlyCost).toBe(0);
+    expect(result.hourlyCost).toBeUndefined();
+    expect(result.cost).toBeUndefined();
   });
 });
 
