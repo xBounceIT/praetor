@@ -539,9 +539,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           <Table className="min-w-max border-collapse">
             <TableHeader className="bg-muted/40">
               <TableRow className="border-b border-border">
-                <TableHead className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-tighter min-w-56">
-                  {t('weekly.task')}
-                </TableHead>
+                <TableHead className="px-4 py-3 min-w-56" />
+
                 {weekDays.map((day) => (
                   <TableHead
                     key={day.dateStr}
@@ -650,16 +649,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 })}
               </TableRow>
             </TableBody>
-            <TableBody className="divide-y divide-border">
-              {/* Recent tasks section header */}
-              <TableRow className="bg-muted/30 hover:bg-muted/30 border-t-[3px] border-t-border">
-                <TableCell
-                  colSpan={1 + weekDays.length}
-                  className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
-                >
-                  {t('weekly.recentTasks')}
-                </TableCell>
-              </TableRow>
+            <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
               {entryRows.length === 0 ? (
                 <TableRow>
                   <TableCell
