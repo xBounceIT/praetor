@@ -166,7 +166,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           user = { ...user, role: applied.roleIds[0] };
         } else {
           fastify.log.warn(
-            { userId: user.id, username: user.username, groups: ldapGroups },
+            {
+              userId: user.id,
+              username: user.username,
+              groups: ldapGroups,
+              currentRole: user.role,
+            },
             'LDAP login: no LDAP group matched a role mapping — preserving existing role',
           );
         }

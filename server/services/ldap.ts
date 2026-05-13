@@ -75,11 +75,6 @@ export type LdapAuthResult = {
   authenticated: boolean;
   userDn?: string;
   groups: string[];
-  // Defaulted to [DEFAULT_ROLE_ID] when no LDAP group matched a mapping. Consumed by the
-  // "test LDAP connection" admin endpoint that previews the role a user would be assigned.
-  roleIds: string[];
-  // Raw mapping result without the default fallback — used by the login path to decide
-  // whether to overwrite an admin-assigned role.
   matchedRoleIds: string[];
   canonicalUsername?: string;
   displayName?: string;
@@ -88,6 +83,17 @@ export type LdapAuthResult = {
 export type LdapUserEntry = {
   dn: string;
   attributes: Record<string, unknown>;
+};
+
+const warnRoleMappingNoMatch = (
+  phase: string,
+  user: { id: string; username: string; role: string },
+  groups: string[],
+): void => {
+  logger.warn(
+    { userId: user.id, username: user.username, groups, currentRole: user.role },
+    `${phase}: no LDAP group matched a role mapping — preserving existing role`,
+  );
 };
 
 const pickFirstString = (value: unknown): string | undefined => {
@@ -189,12 +195,12 @@ class LDAPService {
     try {
       client = await this.getClient();
       if (!client) {
-        return { authenticated: false, groups: [], roleIds: [DEFAULT_ROLE_ID], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
       const ldapClient = client;
       const config = this.config;
       if (!config) {
-        return { authenticated: false, groups: [], roleIds: [DEFAULT_ROLE_ID], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
 
       // Bind with service account first to find the user's DN
@@ -208,7 +214,7 @@ class LDAPService {
       // Find user entry (DN + attributes for canonical username/display name)
       const userEntry = await this.findUserEntry(ldapClient, username);
       if (!userEntry) {
-        return { authenticated: false, groups: [], roleIds: [DEFAULT_ROLE_ID], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
       const userDn = userEntry.dn;
       const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
@@ -228,20 +234,17 @@ class LDAPService {
         });
       });
 
-      const roleMappings = this.getRoleMappings();
-      const matchedRoleIds = mapExternalGroupsToMatchedRoleIds(groups, roleMappings);
       return {
         authenticated: true,
         userDn,
         groups,
-        roleIds: matchedRoleIds.length > 0 ? matchedRoleIds : [DEFAULT_ROLE_ID],
-        matchedRoleIds,
+        matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, this.getRoleMappings()),
         canonicalUsername,
         displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
       };
     } catch (err) {
       logger.error({ err: serializeError(err), username }, 'LDAP auth error');
-      return { authenticated: false, groups: [], roleIds: [DEFAULT_ROLE_ID], matchedRoleIds: [] };
+      return { authenticated: false, groups: [], matchedRoleIds: [] };
     } finally {
       if (client) {
         client.unbind((err) => {
@@ -287,14 +290,14 @@ class LDAPService {
         roleMappings,
       );
       if (!applied.applied) {
-        logger.warn(
+        warnRoleMappingNoMatch(
+          'LDAP login',
           {
-            userId: existingByCanonical.id,
+            id: existingByCanonical.id,
             username: canonicalUsername,
-            groups: result.groups,
-            currentRole: existingByCanonical.role,
+            role: existingByCanonical.role,
           },
-          'LDAP login: no LDAP group matched a role mapping — preserving existing role',
+          result.groups,
         );
       }
       return {
@@ -336,14 +339,10 @@ class LDAPService {
             roleMappings,
           );
           if (!applied.applied) {
-            logger.warn(
-              {
-                userId: racedUser.id,
-                username: canonicalUsername,
-                groups: result.groups,
-                currentRole: racedUser.role,
-              },
-              'LDAP login (race recovery): no LDAP group matched a role mapping — preserving existing role',
+            warnRoleMappingNoMatch(
+              'LDAP login (race recovery)',
+              { id: racedUser.id, username: canonicalUsername, role: racedUser.role },
+              result.groups,
             );
           }
           return {
@@ -642,14 +641,10 @@ class LDAPService {
             roleMappings,
           );
           if (!applied.applied) {
-            logger.warn(
-              {
-                userId: existing.id,
-                username,
-                groups,
-                currentRole: existing.role,
-              },
-              'LDAP sync: no LDAP group matched a role mapping — preserving existing role',
+            warnRoleMappingNoMatch(
+              'LDAP sync',
+              { id: existing.id, username, role: existing.role },
+              groups,
             );
           }
           syncedCount++;

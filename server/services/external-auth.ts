@@ -131,29 +131,22 @@ export const applyExternalRoleIdsForUser = async (
 // Preserve admin-assigned roles: only overwrite when LDAP groups actually map to at least one
 // existing role. Returns { applied: false } when no group matched (or the matched roles have
 // since been deleted), so callers can keep the user's current role intact.
-export const applyExternalRolesForUserIfMatched = async (
-  userId: string,
-  groups: string[],
-  mappings: ExternalRoleMapping[],
-): Promise<{ applied: boolean; roleIds: string[] }> => {
-  const matched = mapExternalGroupsToMatchedRoleIds(groups, mappings);
-  if (matched.length === 0) return { applied: false, roleIds: [] };
-  const existing = await filterToExistingRoleIds(matched);
-  if (existing.length === 0) return { applied: false, roleIds: [] };
-  await writeExternalRoleIds(userId, existing);
-  return { applied: true, roleIds: existing };
-};
-
 export const applyExternalRoleIdsForUserIfMatched = async (
   userId: string,
   roleIds: string[],
 ): Promise<{ applied: boolean; roleIds: string[] }> => {
-  if (roleIds.length === 0) return { applied: false, roleIds: [] };
   const existing = await filterToExistingRoleIds(roleIds);
   if (existing.length === 0) return { applied: false, roleIds: [] };
   await writeExternalRoleIds(userId, existing);
   return { applied: true, roleIds: existing };
 };
+
+export const applyExternalRolesForUserIfMatched = (
+  userId: string,
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): Promise<{ applied: boolean; roleIds: string[] }> =>
+  applyExternalRoleIdsForUserIfMatched(userId, mapExternalGroupsToMatchedRoleIds(groups, mappings));
 
 export const resolveExternalIdentity = async (
   input: ResolveExternalIdentityInput,

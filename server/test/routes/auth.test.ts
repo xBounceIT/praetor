@@ -174,7 +174,6 @@ beforeEach(async () => {
   ldapAuthenticateWithProfileMock.mockResolvedValue({
     authenticated: false,
     groups: [],
-    roleIds: ['user'],
     matchedRoleIds: [],
   });
   ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
@@ -245,7 +244,6 @@ describe('POST /api/auth/login', () => {
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
       groups: ['admins'],
-      roleIds: ['admin'],
       matchedRoleIds: ['admin'],
     });
 
@@ -269,7 +267,6 @@ describe('POST /api/auth/login', () => {
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
       groups: ['cn=other,dc=corp,dc=local'],
-      roleIds: ['user'],
       matchedRoleIds: [],
     });
 
@@ -290,7 +287,6 @@ describe('POST /api/auth/login', () => {
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
       groups: [],
-      roleIds: ['user'],
       matchedRoleIds: [],
     });
     bcryptCompareMock.mockResolvedValue(true);
@@ -509,7 +505,7 @@ describe('POST /api/auth/login', () => {
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
       groups: [],
-      roleIds: ['user'],
+      matchedRoleIds: [],
     });
     bcryptCompareMock.mockResolvedValue(false);
 

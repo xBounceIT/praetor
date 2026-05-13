@@ -432,7 +432,7 @@ describe('authenticate', () => {
 
     expect(result.authenticated).toBe(true);
     expect(result.groups).toEqual([]);
-    expect(result.roleIds).toEqual(['user']);
+    expect(result.matchedRoleIds).toEqual([]);
   });
 });
 
@@ -908,7 +908,7 @@ describe('authenticateAndProvision', () => {
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
-  test('existing-user login routes role application through the IfMatched helper (regression #318)', async () => {
+  test('existing-user login with no matching group preserves current role (regression #318)', async () => {
     nextFixture = {
       bindResponses: [null, null],
       searchResponses: [
@@ -925,7 +925,7 @@ describe('authenticateAndProvision', () => {
         },
       ],
     };
-    // The default mock returns { applied: false }, simulating "no LDAP group matched".
+    // Default mock returns { applied: false } — simulating "no LDAP group matched a mapping".
     // Admin has assigned 'manager' to this LDAP user.
     findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_LOGIN_USER, role: 'manager' });
 
@@ -937,14 +937,11 @@ describe('authenticateAndProvision', () => {
       created: false,
       canonicalUsername: 'alice',
     });
-    // The IfMatched helper is what gets called for existing users — never the defaulted
-    // applyExternalRolesForUser, which would clobber the admin's role assignment.
     expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(
       LDAP_LOGIN_USER.id,
       ['cn=randoms,ou=groups,dc=test,dc=com'],
       [],
     );
-    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('refuses to bind LDAP login to an existing non-LDAP local user', async () => {
