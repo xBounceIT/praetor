@@ -559,6 +559,27 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('no longer exists');
   });
+
+  test('replaceItems failure inside tx rolls back: no audit, no success response', async () => {
+    setupHappyPath();
+    // Simulate the INSERT inside replaceItems failing with a non-FK error. The DELETE
+    // issued moments earlier in the same tx; a real PG rollback would restore the
+    // original items. Verify the route surfaces the failure (500), no audit log fires,
+    // and replaceItems was wired with the tx executor as its third positional arg.
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
@@ -787,5 +808,55 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).toHaveBeenCalled();
+  });
+
+  test('PUT items: replaceItems INSERT failure rolls back (no audit, no success)', async () => {
+    coFindForUpdateMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    // Simulate INSERT failure inside replaceItems. The DELETE ran moments earlier in the
+    // same tx; the real PG rollback would restore the original items. Verify the route
+    // surfaces a 500 and does not commit (no audit log).
+    coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'si-new',
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: 999, // differs to force content-change branch
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

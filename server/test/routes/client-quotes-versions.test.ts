@@ -516,6 +516,27 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     });
     expect(res.statusCode).toBe(403);
   });
+
+  test('replaceItems failure inside tx rolls back: no audit, no success response', async () => {
+    setupHappyPath();
+    // Simulate the INSERT inside replaceItems failing. The DELETE issued moments before
+    // ran inside the same tx; a real PG rollback would restore the original items. The
+    // test verifies the route surfaces the failure without committing (no audit log)
+    // and that replaceItems was wired with the tx executor.
+    cqReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(cqReplaceItemsMock).toHaveBeenCalled();
+    expect(cqReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
