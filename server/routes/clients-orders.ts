@@ -1210,6 +1210,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { order, items };
         });
       } catch (error) {
+        // Restoring linkedOfferId can collide with the partial unique index
+        // `idx_sales_linked_offer_id_unique` when that offer is now linked to a different
+        // order. Surface a 409 instead of leaking the 23505 as a 500.
+        const dup = getUniqueViolation(error);
+        if (
+          dup &&
+          (dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({
+            error: 'Snapshot links to an offer that is already linked to another order',
+          });
+        }
         // The pre-tx reference check is racy - a referenced client/product can be deleted
         // between validation and the restore writes. Translate the resulting FK violation to a
         // 409 instead of leaking a 500.
