@@ -15,6 +15,7 @@ export type AuthUser = {
   role: string;
   avatarInitials: string;
   isDisabled: boolean;
+  sessionVersion: number;
 };
 
 export type LoginUser = AuthUser & {
@@ -37,6 +38,7 @@ const LOGIN_USER_PROJECTION = {
   employeeType: users.employeeType,
   authMethod: users.authMethod,
   authProviderId: users.authProviderId,
+  sessionVersion: users.sessionVersion,
 } as const;
 
 type LoginUserRow = {
@@ -50,6 +52,7 @@ type LoginUserRow = {
   employeeType: string | null;
   authMethod: AuthMethod | null;
   authProviderId: string | null;
+  sessionVersion: number;
 };
 
 const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
@@ -63,6 +66,7 @@ const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
   authMethod: row.authMethod ?? 'local',
   authProviderId: row.authProviderId ?? null,
+  sessionVersion: row.sessionVersion,
 });
 
 export const findAuthUserById = async (
@@ -77,6 +81,7 @@ export const findAuthUserById = async (
       role: users.role,
       avatarInitials: users.avatarInitials,
       isDisabled: users.isDisabled,
+      sessionVersion: users.sessionVersion,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -88,7 +93,15 @@ export const findAuthUserById = async (
     role: rows[0].role,
     avatarInitials: rows[0].avatarInitials,
     isDisabled: rows[0].isDisabled ?? false,
+    sessionVersion: rows[0].sessionVersion,
   };
+};
+
+export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db): Promise<void> => {
+  await exec
+    .update(users)
+    .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, userId));
 };
 
 export const findLoginUserByUsername = async (

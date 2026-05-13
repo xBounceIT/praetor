@@ -36,8 +36,8 @@ describe('getPasswordHash', () => {
 
 describe('findAuthUserById', () => {
   test('returns the mapped user when the row exists', async () => {
-    // Projection: id, name, username, role, avatarInitials, isDisabled
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', false]] });
+    // Projection: id, name, username, role, avatarInitials, isDisabled, sessionVersion
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', false, 3]] });
     const result = await usersRepo.findAuthUserById('user-1', testDb);
     expect(result).toEqual({
       id: 'user-1',
@@ -46,6 +46,7 @@ describe('findAuthUserById', () => {
       role: 'manager',
       avatarInitials: 'AL',
       isDisabled: false,
+      sessionVersion: 3,
     });
     expect(exec.calls[0].params).toContain('user-1');
   });
@@ -59,7 +60,7 @@ describe('findAuthUserById', () => {
 describe('findLoginUserByUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
     // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,
-    // employeeType, authMethod, authProviderId
+    // employeeType, authMethod, authProviderId, sessionVersion
     exec.enqueue({
       rows: [
         [
@@ -73,6 +74,7 @@ describe('findLoginUserByUsername', () => {
           'app_user',
           'local',
           null,
+          1,
         ],
       ],
     });
@@ -88,6 +90,7 @@ describe('findLoginUserByUsername', () => {
       employeeType: 'app_user',
       authMethod: 'local',
       authProviderId: null,
+      sessionVersion: 1,
     });
     expect(exec.calls[0].params).toContain('alice');
   });

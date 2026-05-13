@@ -72,6 +72,7 @@ const HAPPY_USER = {
   role: 'user',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 // notifications permissions are always granted in real `getRolePermissions`, but here we mock

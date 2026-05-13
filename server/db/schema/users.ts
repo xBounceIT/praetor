@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, numeric, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { roles } from './roles.ts';
 import { ssoProviders } from './ssoProviders.ts';
 
@@ -26,6 +35,7 @@ export const users = pgTable(
     authProviderId: varchar('auth_provider_id', { length: 50 }).references(() => ssoProviders.id, {
       onDelete: 'set null',
     }),
+    sessionVersion: integer('session_version').notNull().default(1),
   },
   (table) => [
     check(

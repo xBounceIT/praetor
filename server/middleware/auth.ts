@@ -85,6 +85,7 @@ type SessionJwtPayload = JwtPayload & {
   userId: string;
   sessionStart?: number;
   activeRole?: string;
+  sessionVersion?: number;
 };
 
 const loadAuthenticatedUserContext = async (
@@ -92,6 +93,7 @@ const loadAuthenticatedUserContext = async (
   reply: FastifyReply,
   userId: string,
   activeRole?: string,
+  expectedSessionVersion?: number,
 ) => {
   const user = await usersRepo.findAuthUserById(userId);
 
@@ -102,6 +104,13 @@ const loadAuthenticatedUserContext = async (
 
   if (user.isDisabled) {
     reply.code(403).send({ error: 'Account disabled', errorCode: 'account_disabled' });
+    return null;
+  }
+
+  // Session version mismatch means the token was issued before a logout (or other
+  // forced revocation) bumped the user's session version. Reject without rotating.
+  if (expectedSessionVersion !== undefined && user.sessionVersion !== expectedSessionVersion) {
+    reply.code(401).send({ error: 'Session revoked', errorCode: 'session_revoked' });
     return null;
   }
 
@@ -157,19 +166,39 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       return reply.code(401).send({ error: 'Session expired (max duration exceeded)' });
     }
 
-    request.auth = { userId: decoded.userId, sessionStart, source: 'session' };
+    // Tokens issued before the session-version revocation feature lack this claim.
+    // Refuse them — clients must re-authenticate to pick up the new token format.
+    if (typeof decoded.sessionVersion !== 'number') {
+      return reply.code(401).send({
+        error: 'Session token outdated, please log in again',
+        errorCode: 'session_outdated',
+      });
+    }
+
+    request.auth = {
+      userId: decoded.userId,
+      sessionStart,
+      sessionVersion: decoded.sessionVersion,
+      source: 'session',
+    };
 
     const userContext = await loadAuthenticatedUserContext(
       request,
       reply,
       decoded.userId,
       decoded.activeRole,
+      decoded.sessionVersion,
     );
     if (!userContext) return;
 
-    // Sliding window: Issue new token with same sessionStart
-    // This resets the 30m idle timer but keeps the 8h max session limit
-    const newToken = generateToken(decoded.userId, sessionStart, userContext.effectiveRole);
+    // Sliding window: reset the 30m idle timer while preserving sessionStart (8h cap)
+    // and sessionVersion (so the rotated token survives until logout bumps it).
+    const newToken = generateToken(
+      decoded.userId,
+      sessionStart,
+      userContext.effectiveRole,
+      decoded.sessionVersion,
+    );
     reply.header('x-auth-token', newToken);
   } catch {
     return reply.code(403).send({ error: 'Invalid or expired token' });
@@ -255,18 +284,34 @@ export const requireAnyPermission = (...permissions: string[]) => {
 export const requireScopedPermission = (resource: PermissionResource, action: PermissionAction) =>
   requireAnyPermission(...equivalentPermissionsFor(resource, action));
 
+// Narrow `request.auth` to a session-sourced context for endpoints that must not be
+// callable with a personal access token (logout, role switch). Returns null after sending
+// a response if the caller doesn't have a valid session.
+export const requireSessionAuth = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+): { userId: string; sessionStart: number; sessionVersion: number } | null => {
+  if (request.auth?.source !== 'session') {
+    reply.code(403).send({ error: 'Session authentication required' });
+    return null;
+  }
+  return {
+    userId: request.auth.userId,
+    sessionStart: request.auth.sessionStart ?? Date.now(),
+    sessionVersion: request.auth.sessionVersion as number,
+  };
+};
+
 export const generateToken = (
   userId: string,
-  sessionStart: number = Date.now(),
-  activeRole?: string,
-) => {
-  // Token expires in 30 minutes (idle timeout)
-  // sessionStart tracks the absolute start of the session (SESSION_MAX_DURATION_MS, default 8h)
-  return jwt.sign({ userId, sessionStart, activeRole }, JWT_SECRET, {
+  sessionStart: number,
+  activeRole: string | undefined,
+  sessionVersion: number,
+) =>
+  jwt.sign({ userId, sessionStart, activeRole, sessionVersion }, JWT_SECRET, {
     expiresIn: '30m',
     algorithm: JWT_ALGORITHM,
   });
-};
 
 export default {
   authenticateToken,

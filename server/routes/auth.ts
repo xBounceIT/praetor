@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, generateToken } from '../middleware/auth.ts';
+import { authenticateToken, generateToken, requireSessionAuth } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -193,7 +193,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const token = generateToken(user.id, Date.now(), user.role);
+      const token = generateToken(user.id, Date.now(), user.role, user.sessionVersion);
       const permissions = await getRolePermissions(user.role);
 
       await logAudit({
@@ -296,20 +296,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const roleIdResult = requireNonEmptyString(roleId, 'roleId');
       if (!roleIdResult.ok) return badRequest(reply, roleIdResult.message);
 
-      if (request.auth?.source === 'personalAccessToken') {
-        return reply.code(403).send({ error: 'Session authentication required' });
-      }
+      const session = requireSessionAuth(request, reply);
+      if (!session) return;
 
-      const userId = request.user?.id;
-      if (!userId) return reply.code(401).send({ error: 'Authentication required' });
-
-      const hasRole = await rolesRepo.userHasRole(userId, roleIdResult.value);
+      const hasRole = await rolesRepo.userHasRole(session.userId, roleIdResult.value);
       if (!hasRole) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       const permissions = await getRolePermissions(roleIdResult.value);
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(userId);
+      const availableRoles = await rolesRepo.listAvailableRolesForUser(session.userId);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles
@@ -322,9 +318,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               },
             ];
       const token = generateToken(
-        userId,
-        request.auth?.sessionStart ?? Date.now(),
+        session.userId,
+        session.sessionStart,
         roleIdResult.value,
+        session.sessionVersion,
       );
       reply.header('x-auth-token', token);
 
@@ -332,7 +329,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         action: 'user.role_switched',
         entityType: 'user',
-        entityId: userId,
+        entityId: session.userId,
         details: {
           targetLabel: request.user?.name,
           secondaryLabel: request.user?.username,
@@ -344,7 +341,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         token,
         user: {
-          id: userId,
+          id: session.userId,
           name: request.user?.name,
           username: request.user?.username,
           role: roleIdResult.value,
@@ -353,6 +350,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           availableRoles: effectiveAvailableRoles,
         },
       };
+    },
+  );
+
+  // Bumping session_version invalidates the caller's token (and any other live tokens
+  // for the same user) on the next authenticated request.
+  fastify.post(
+    '/logout',
+    {
+      onRequest: [authenticateToken],
+      schema: {
+        tags: ['auth'],
+        summary: 'Logout (revoke all sessions for this user)',
+        response: {
+          204: { type: 'null' },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = requireSessionAuth(request, reply);
+      if (!session) return;
+
+      await Promise.all([
+        usersRepo.bumpSessionVersion(session.userId),
+        logAudit({
+          request,
+          action: 'user.logout',
+          entityType: 'user',
+          entityId: session.userId,
+          details: {
+            targetLabel: request.user?.name,
+            secondaryLabel: request.user?.username,
+          },
+        }),
+      ]);
+
+      // The sliding-window refresh in authenticateToken already wrote a rotated token
+      // to x-auth-token. After the bump above, that token is revoked — strip it so the
+      // client doesn't persist a doomed token into localStorage.
+      reply.removeHeader('x-auth-token');
+      return reply.code(204).send();
     },
   );
 }

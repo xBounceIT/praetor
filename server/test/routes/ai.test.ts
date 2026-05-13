@@ -67,6 +67,7 @@ const HAPPY_USER = {
   role: 'admin',
   avatarInitials: 'AD',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const ADMIN_PERMS = ['administration.general.update'];

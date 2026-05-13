@@ -201,7 +201,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const consumed = await ssoService.consumeLoginTicket(ticketResult.value);
       if (!consumed) return reply.code(401).send({ error: 'Invalid or expired SSO ticket' });
 
-      const token = generateToken(consumed.tokenUser.id, Date.now(), consumed.activeRole);
+      const token = generateToken(
+        consumed.tokenUser.id,
+        Date.now(),
+        consumed.activeRole,
+        consumed.tokenUser.sessionVersion,
+      );
       const user = await ssoService.buildAuthUserResponse(consumed.tokenUser, consumed.activeRole);
       await logAudit({
         request,

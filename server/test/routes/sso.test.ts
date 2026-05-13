@@ -80,6 +80,7 @@ const HAPPY_USER = {
   role: 'admin',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const FULL_PERMS = ['administration.authentication.view', 'administration.authentication.update'];

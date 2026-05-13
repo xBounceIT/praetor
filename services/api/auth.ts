@@ -94,4 +94,6 @@ export const authApi = {
         body: JSON.stringify({ roleId }),
       }),
     ),
+
+  logout: (): Promise<void> => fetchApi('/auth/logout', { method: 'POST' }),
 };

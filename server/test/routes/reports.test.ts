@@ -160,6 +160,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const FULL_PERMS = ['reports.ai_reporting.view', 'reports.ai_reporting.create'];

@@ -134,6 +134,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const FULL_PERMS = [

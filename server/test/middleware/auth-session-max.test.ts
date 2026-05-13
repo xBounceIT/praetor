@@ -26,6 +26,7 @@ const HAPPY_USER = {
   role: 'manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view'];

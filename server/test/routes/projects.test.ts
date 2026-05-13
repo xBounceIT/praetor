@@ -153,6 +153,7 @@ const HAPPY_USER = {
   role: 'top_manager',
   avatarInitials: 'AL',
   isDisabled: false,
+  sessionVersion: 1,
 };
 
 const MANAGE_PERMS = [
