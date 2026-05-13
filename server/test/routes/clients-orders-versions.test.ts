@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -560,12 +561,9 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(JSON.parse(res.body).error).toContain('no longer exists');
   });
 
-  test('replaceItems failure inside tx rolls back: no audit, no success response', async () => {
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
     setupHappyPath();
-    // Simulate the INSERT inside replaceItems failing with a non-FK error. The DELETE
-    // issued moments earlier in the same tx; a real PG rollback would restore the
-    // original items. Verify the route surfaces the failure (500), no audit log fires,
-    // and replaceItems was wired with the tx executor as its third positional arg.
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
     coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
@@ -577,7 +575,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
     expect(coReplaceItemsMock).toHaveBeenCalled();
-    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
@@ -810,7 +808,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(ovInsertMock).toHaveBeenCalled();
   });
 
-  test('PUT items: replaceItems INSERT failure rolls back (no audit, no success)', async () => {
+  test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
     coFindForUpdateMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
@@ -829,9 +827,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
       items: [SAMPLE_ITEM],
     });
     coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
-    // Simulate INSERT failure inside replaceItems. The DELETE ran moments earlier in the
-    // same tx; the real PG rollback would restore the original items. Verify the route
-    // surfaces a 500 and does not commit (no audit log).
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
     coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
@@ -856,7 +852,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
     expect(coReplaceItemsMock).toHaveBeenCalled();
-    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

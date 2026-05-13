@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -499,14 +500,9 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(403);
   });
 
-  test('replaceItems failure inside tx rolls back: no audit, no success response', async () => {
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
     setupHappyPath();
-    // Simulate the INSERT inside replaceItems failing (e.g., FK violation on a deleted
-    // product between the snapshot read and the insert). The DELETE issued by replaceItems
-    // ran inside the same tx that withDbTransaction owns, so a real PG rollback would
-    // restore the original items. Here we verify the route does NOT commit the work (no
-    // audit log, no 200) — proving replaceItems is wired inside the transactional
-    // boundary rather than running standalone.
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
     coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
@@ -517,12 +513,8 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
-    // replaceItems was invoked with the tx executor (third positional arg), so a real DB
-    // rollback would discard the DELETE that ran ahead of the failing INSERT.
     expect(coReplaceItemsMock).toHaveBeenCalled();
-    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
-    // No audit log on rollback - audit fires only after the tx callback resolves
-    // successfully.
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
@@ -579,7 +571,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
   });
 
-  test('PUT items: replaceItems INSERT failure rolls back (no audit, no success)', async () => {
+  test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
     coFindForUpdateMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: null,
@@ -592,9 +584,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
       items: [SAMPLE_ITEM],
     });
     coUpdateMock.mockResolvedValue({ ...SAMPLE_OFFER, linkedQuoteId: null });
-    // Simulate INSERT failure inside replaceItems. The DELETE ran moments earlier in the
-    // same tx; the real PG rollback would restore the original items. Verify the route
-    // surfaces a 500 and does not commit (no audit log).
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
     coReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
@@ -626,9 +616,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
     expect(coReplaceItemsMock).toHaveBeenCalled();
-    // The tx executor is passed as the third positional arg, ensuring the DELETE+INSERT
-    // both run inside the same transaction that withDbTransaction owns.
-    expect(coReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

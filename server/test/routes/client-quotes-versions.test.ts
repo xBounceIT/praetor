@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -517,12 +518,9 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(403);
   });
 
-  test('replaceItems failure inside tx rolls back: no audit, no success response', async () => {
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
     setupHappyPath();
-    // Simulate the INSERT inside replaceItems failing. The DELETE issued moments before
-    // ran inside the same tx; a real PG rollback would restore the original items. The
-    // test verifies the route surfaces the failure without committing (no audit log)
-    // and that replaceItems was wired with the tx executor.
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
     cqReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
@@ -534,7 +532,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
     expect(cqReplaceItemsMock).toHaveBeenCalled();
-    expect(cqReplaceItemsMock.mock.calls[0]?.length).toBeGreaterThanOrEqual(3);
+    expect(cqReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
