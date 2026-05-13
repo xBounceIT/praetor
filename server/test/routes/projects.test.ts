@@ -322,10 +322,11 @@ describe('POST /api/projects', () => {
         offerId: 'of-1',
         isDisabled: false,
       }),
+      undefined,
     );
-    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1');
+    expect(assignClientToUserMock).toHaveBeenCalledWith('u1', 'c-1', undefined, undefined);
     expect(assignProjectToUserMock).toHaveBeenCalled();
-    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1');
+    expect(assignClientToTopManagersMock).toHaveBeenCalledWith('c-1', undefined);
     expect(assignProjectToTopManagersMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
@@ -363,6 +364,7 @@ describe('POST /api/projects', () => {
         endDate: '2026-12-31',
         revenue: 12345.5,
       }),
+      undefined,
     );
     expect(JSON.parse(res.body)).toMatchObject({
       offerId: 'of-1',
@@ -385,6 +387,7 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ color: '#3b82f6', orderId: null, description: null }),
+      undefined,
     );
   });
 
@@ -417,7 +420,10 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: 'co-same' }));
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'co-same' }),
+      undefined,
+    );
   });
 
   test('201: empty-string orderId is treated as null (no consistency lookup)', async () => {
@@ -431,7 +437,7 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }), undefined);
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
@@ -446,7 +452,7 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }));
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ orderId: null }), undefined);
   });
 
   test('400: offerId belonging to a different client is rejected', async () => {
@@ -478,7 +484,10 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ offerId: 'of-same' }));
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: 'of-same' }),
+      undefined,
+    );
   });
 
   test('400: missing name', async () => {
@@ -662,6 +671,38 @@ describe('POST /api/projects', () => {
 
     expect(res.statusCode).toBe(403);
     expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('500: failing auto-assignment rolls back project insert (atomic)', async () => {
+    // Simulate a real transaction: if the callback rejects, nothing is committed.
+    // The fake `withDbTransaction` here runs the callback and lets the rejection
+    // propagate — that's the same shape `db.transaction` exposes for callers, so
+    // the route's behavior on rollback is what we're asserting.
+    let createInvoked = false;
+    createMock.mockImplementation(async () => {
+      createInvoked = true;
+      return SAMPLE_PROJECT;
+    });
+    assignProjectToTopManagersMock.mockImplementation(async () => {
+      throw new Error('boom');
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { name: 'Website', clientId: 'c-1', offerId: 'of-1' },
+    });
+
+    // The handler propagates the error → Fastify returns 500.
+    expect(res.statusCode).toBe(500);
+    // The whole create + assignments block ran inside `withDbTransaction`, so a
+    // real DB would have rolled back the project insert. We assert the wrapper
+    // was used (proves atomicity is in place) and the audit log did NOT run
+    // (it's outside the txn but after the awaited block, so a failed txn skips it).
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(createInvoked).toBe(true);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 

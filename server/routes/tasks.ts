@@ -286,36 +286,56 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('t');
 
       try {
-        const created = await tasksRepo.create({
-          id,
-          name: nameResult.value,
-          projectId: projectIdResult.value,
-          description: description || null,
-          isRecurring: isRecurringValue,
-          recurrencePattern: recurrencePattern || null,
-          recurrenceStart: start,
-          recurrenceDuration: durationResult.value || 0,
-          expectedEffort: expectedEffortResult.value ?? 0,
-          monthlyEffort: monthlyEffortResult.value ?? 0,
-          revenue: revenueResult.value ?? 0,
-          notes: notes || null,
-          isDisabled: false,
-          billingType: taskBillingType,
-          billingFrequency: taskBillingFrequency,
+        // Atomicity: task insert + auto-assignments must all succeed or all roll back.
+        // Without the transaction, an assignment failure left the task committed but
+        // unassigned (orphan) while the handler still returned 500.
+        const created = await withDbTransaction(async (tx) => {
+          const task = await tasksRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              projectId: projectIdResult.value,
+              description: description || null,
+              isRecurring: isRecurringValue,
+              recurrencePattern: recurrencePattern || null,
+              recurrenceStart: start,
+              recurrenceDuration: durationResult.value || 0,
+              expectedEffort: expectedEffortResult.value ?? 0,
+              monthlyEffort: monthlyEffortResult.value ?? 0,
+              revenue: revenueResult.value ?? 0,
+              notes: notes || null,
+              isDisabled: false,
+              billingType: taskBillingType,
+              billingFrequency: taskBillingFrequency,
+            },
+            tx,
+          );
+
+          const clientId = await projectsRepo.findClientId(projectIdResult.value, tx);
+
+          await Promise.all(
+            [
+              clientId
+                ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx)
+                : null,
+              userAssignmentsRepo.assignProjectToUser(
+                request.user.id,
+                projectIdResult.value,
+                undefined,
+                tx,
+              ),
+              userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
+              clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId, tx) : null,
+              userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
+              userAssignmentsRepo.assignTaskToTopManagers(id, tx),
+            ].filter((p): p is Promise<void> => p !== null),
+          );
+
+          return task;
         });
 
-        const clientId = await projectsRepo.findClientId(projectIdResult.value);
-
-        await Promise.all(
-          [
-            clientId ? userAssignmentsRepo.assignClientToUser(request.user.id, clientId) : null,
-            userAssignmentsRepo.assignProjectToUser(request.user.id, projectIdResult.value),
-            userAssignmentsRepo.assignTaskToUser(request.user.id, id),
-            clientId ? userAssignmentsRepo.assignClientToTopManagers(clientId) : null,
-            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value),
-            userAssignmentsRepo.assignTaskToTopManagers(id),
-          ].filter((p): p is Promise<void> => p !== null),
-        );
+        // Audit log is best-effort and intentionally outside the transaction: a logging
+        // failure must not roll back the resource that was successfully created.
         await logAudit({
           request,
           action: 'task.created',

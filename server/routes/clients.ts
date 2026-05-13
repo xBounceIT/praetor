@@ -516,36 +516,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const primaryFromContacts = buildPrimaryFieldsFromContacts(contactsValue);
 
       try {
-        const client = await clientsRepo.create({
-          id,
-          name: nameResult.value,
-          type: typeof type === 'string' && type ? type : 'company',
-          contacts: contactsValue,
-          contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
-          clientCode: clientCodeResult.value,
-          email: explicitEmailResult.value ?? primaryFromContacts.email,
-          phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
-          address: addressResult.value,
-          addressCountry: addressCountryResult.value,
-          addressState: addressStateResult.value,
-          addressCap: addressCapResult.value,
-          addressProvince: addressProvinceResult.value,
-          addressCivicNumber: addressCivicNumberResult.value,
-          addressLine: addressLineResult.value,
-          description: descriptionResult.value,
-          atecoCode: atecoCodeResult.value,
-          website: websiteResult.value,
-          sector: sectorResult.value,
-          numberOfEmployees: numberOfEmployeesResult.value,
-          revenue: revenueResult.value,
-          fiscalCode: resolvedFiscalCode,
-          officeCountRange: officeCountRangeResult.value,
+        // Atomicity: client insert + auto-assignments must all succeed or all roll back.
+        // Without the transaction, an assignment failure left the client committed but
+        // unassigned (orphan) while the handler still returned 500.
+        const client = await withDbTransaction(async (tx) => {
+          const created = await clientsRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              type: typeof type === 'string' && type ? type : 'company',
+              contacts: contactsValue,
+              contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
+              clientCode: clientCodeResult.value,
+              email: explicitEmailResult.value ?? primaryFromContacts.email,
+              phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
+              address: addressResult.value,
+              addressCountry: addressCountryResult.value,
+              addressState: addressStateResult.value,
+              addressCap: addressCapResult.value,
+              addressProvince: addressProvinceResult.value,
+              addressCivicNumber: addressCivicNumberResult.value,
+              addressLine: addressLineResult.value,
+              description: descriptionResult.value,
+              atecoCode: atecoCodeResult.value,
+              website: websiteResult.value,
+              sector: sectorResult.value,
+              numberOfEmployees: numberOfEmployeesResult.value,
+              revenue: revenueResult.value,
+              fiscalCode: resolvedFiscalCode,
+              officeCountRange: officeCountRangeResult.value,
+            },
+            tx,
+          );
+
+          if (request.user?.id) {
+            await userAssignmentsRepo.assignClientToUser(request.user.id, id, undefined, tx);
+          }
+          await userAssignmentsRepo.assignClientToTopManagers(id, tx);
+
+          return created;
         });
 
-        if (request.user?.id) {
-          await userAssignmentsRepo.assignClientToUser(request.user.id, id);
-        }
-        await userAssignmentsRepo.assignClientToTopManagers(id);
+        // Audit log is best-effort and intentionally outside the transaction: a logging
+        // failure must not roll back the resource that was successfully created.
         await logAudit({
           request,
           action: 'client.created',

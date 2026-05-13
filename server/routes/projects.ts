@@ -275,28 +275,46 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const created = await projectsRepo.create({
-          id,
-          name: nameResult.value,
-          clientId: clientIdResult.value,
-          color: projectColor,
-          description: description || null,
-          isDisabled: false,
-          orderId: orderId || null,
-          offerId: offerIdResult.value,
-          startDate: startDateResult.value,
-          endDate: endDateResult.value,
-          revenue: revenueResult.value,
-          billingType,
-          billingFrequency,
+        // Atomicity: project insert + auto-assignments must all succeed or all roll back.
+        // Without the transaction, an assignment failure left the project committed but
+        // unassigned (orphan) while the handler still returned 500.
+        const created = await withDbTransaction(async (tx) => {
+          const project = await projectsRepo.create(
+            {
+              id,
+              name: nameResult.value,
+              clientId: clientIdResult.value,
+              color: projectColor,
+              description: description || null,
+              isDisabled: false,
+              orderId: orderId || null,
+              offerId: offerIdResult.value,
+              startDate: startDateResult.value,
+              endDate: endDateResult.value,
+              revenue: revenueResult.value,
+              billingType,
+              billingFrequency,
+            },
+            tx,
+          );
+
+          await Promise.all([
+            userAssignmentsRepo.assignClientToUser(
+              request.user.id,
+              clientIdResult.value,
+              undefined,
+              tx,
+            ),
+            userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
+            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+            userAssignmentsRepo.assignProjectToTopManagers(id, tx),
+          ]);
+
+          return project;
         });
 
-        await Promise.all([
-          userAssignmentsRepo.assignClientToUser(request.user.id, clientIdResult.value),
-          userAssignmentsRepo.assignProjectToUser(request.user.id, id),
-          userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value),
-          userAssignmentsRepo.assignProjectToTopManagers(id),
-        ]);
+        // Audit log is best-effort and intentionally outside the transaction: a logging
+        // failure must not roll back the resource that was successfully created.
         await logAudit({
           request,
           action: 'project.created',
