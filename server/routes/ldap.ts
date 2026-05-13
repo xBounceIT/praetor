@@ -207,15 +207,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings,
         autoProvisionAll,
       } = body;
-      // When the client round-trips the MASKED_SECRET sentinel returned by GET /config, treat the
-      // whole bindDn/bindPassword pair as "no change" so the stored secret is preserved. The
-      // UI re-sends the existing bindDn alongside the masked password on every save; without
-      // also clearing bindDn here, the paired-validation below would reject the request when
-      // the operator intentionally avoided re-typing the secret. Operators who actually want
-      // to rotate bindDn must also re-enter bindPassword (i.e. supply a non-mask value).
+      // bindPassword === MASKED_SECRET means "preserve the stored secret" (the UI round-trips
+      // the masked value when the operator did not edit the field). To satisfy the paired
+      // validation below, bindDn is also dropped from the patch, but only when the client's
+      // bindDn matches what is currently stored - otherwise a request that changes bindDn
+      // while keeping the masked password would silently swallow the DN edit and return 200.
+      // To actually rotate bindDn, the operator must re-enter bindPassword (supply a non-mask
+      // value) so the credentials are updated together.
       const isBindPasswordMasked = body.bindPassword === MASKED_SECRET;
-      const bindDn = isBindPasswordMasked ? undefined : body.bindDn;
-      const bindPassword = isBindPasswordMasked ? undefined : body.bindPassword;
+      let bindDn: string | undefined;
+      let bindPassword: string | undefined;
+      if (isBindPasswordMasked) {
+        const storedConfig = (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG;
+        if (body.bindDn !== undefined && body.bindDn !== storedConfig.bindDn) {
+          return badRequest(
+            reply,
+            'bindDn cannot be changed while bindPassword is masked; re-enter bindPassword to rotate credentials',
+          );
+        }
+        bindDn = undefined;
+        bindPassword = undefined;
+      } else {
+        bindDn = body.bindDn;
+        bindPassword = body.bindPassword;
+      }
       const enabledValue = parseBoolean(enabled);
       const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
       if (!tlsCaResult.ok) {
