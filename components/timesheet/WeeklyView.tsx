@@ -72,10 +72,11 @@ type DayMap = Record<string, DayCell>;
 type EntryRow = {
   key: string;
   clientId: string;
+  clientName: string;
   projectId: string;
+  projectName: string;
   taskName: string;
   location: TimeEntryLocation;
-  label: string;
   baseDays: DayMap;
 };
 
@@ -226,10 +227,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           row: {
             key,
             clientId: entry.clientId,
+            clientName: client?.name ?? '',
             projectId: entry.projectId,
+            projectName: project?.name ?? '',
             taskName: entry.task,
             location: entry.location ?? defaultLocation,
-            label: [client?.name, project?.name, entry.task].filter(Boolean).join(' · '),
             baseDays: {},
           },
           maxCreatedAt: entry.createdAt,
@@ -511,12 +513,40 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       .reduce((sum, e) => sum + e.duration, 0);
   }, [userEntries, currentWeekStart]);
 
-  const formLabel = useMemo(() => {
+  const formSelectionLabels = useMemo(() => {
     const client = clients.find((c) => c.id === selection.clientId);
     const project = projects.find((p) => p.id === selection.projectId);
-    const parts = [client?.name, project?.name, selection.taskName].filter((p) => Boolean(p));
-    return parts.length > 0 ? parts.join(' · ') : t('weekly.newEntry');
-  }, [clients, projects, selection.clientId, selection.projectId, selection.taskName, t]);
+    return {
+      clientName: client?.name ?? '',
+      projectName: project?.name ?? '',
+      taskName: selection.taskName,
+    };
+  }, [clients, projects, selection.clientId, selection.projectId, selection.taskName]);
+
+  const renderRowLabel = (
+    clientName: string,
+    projectName: string,
+    taskName: string,
+  ): React.ReactNode => {
+    const rows: Array<{ icon: string; text: string }> = [];
+    if (clientName) rows.push({ icon: 'fa-building', text: clientName });
+    if (projectName) rows.push({ icon: 'fa-folder-open', text: projectName });
+    if (taskName) rows.push({ icon: 'fa-list-check', text: taskName });
+    if (rows.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-1">
+        {rows.map(({ icon, text }) => (
+          <div key={icon} className="flex items-center gap-2 text-xs text-foreground">
+            <i
+              className={cn('fa-solid w-3 text-[10px] text-muted-foreground', icon)}
+              aria-hidden="true"
+            />
+            <span className="line-clamp-1">{text}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const hasPendingEdits = Object.values(pendingEdits).some((row) => Object.keys(row).length > 0);
   const weeklyGoal = dailyGoal * 5;
@@ -533,13 +563,22 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     ];
     const rows: string[][] = [headerRow];
 
+    const joinLabel = (clientName: string, projectName: string, taskName: string) =>
+      [clientName, projectName, taskName].filter(Boolean).join(' · ');
+
     const formRowValues = visibleWeekDays.map((day) => {
       const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
       return formatHours(parseDuration(cell.duration));
     });
     const formRowTotal = sumDayValues(formRowValues);
     if (formRowTotal > 0) {
-      rows.push([formLabel, ...formRowValues, formatHours(formRowTotal)]);
+      const label =
+        joinLabel(
+          formSelectionLabels.clientName,
+          formSelectionLabels.projectName,
+          formSelectionLabels.taskName,
+        ) || t('weekly.newEntry');
+      rows.push([label, ...formRowValues, formatHours(formRowTotal)]);
     }
 
     for (const row of entryRows) {
@@ -548,7 +587,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         return formatHours(parseDuration(cell.duration));
       });
       const rowTotal = sumDayValues(dayValues);
-      rows.push([row.label, ...dayValues, formatHours(rowTotal)]);
+      rows.push([
+        joinLabel(row.clientName, row.projectName, row.taskName),
+        ...dayValues,
+        formatHours(rowTotal),
+      ]);
     }
 
     rows.push([
@@ -721,10 +764,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             <TableBody>
               <TableRow className="bg-praetor/5 hover:bg-praetor/10">
                 <TableCell className="px-4 py-3 align-top whitespace-normal">
-                  <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-1">
+                  <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-2">
                     {t('weekly.newEntry')}
                   </p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{formLabel}</p>
+                  {renderRowLabel(
+                    formSelectionLabels.clientName,
+                    formSelectionLabels.projectName,
+                    formSelectionLabels.taskName,
+                  )}
                 </TableCell>
                 {visibleWeekDays.map((day) => (
                   <TableCell
@@ -754,12 +801,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 entryRows.map((row) => (
                   <TableRow key={row.key} className="hover:bg-muted/30">
                     <TableCell className="px-4 py-3 align-middle whitespace-normal">
-                      <p
-                        className="text-xs font-semibold text-foreground line-clamp-2"
-                        title={row.label}
-                      >
-                        {row.label}
-                      </p>
+                      {renderRowLabel(row.clientName, row.projectName, row.taskName)}
                     </TableCell>
                     {visibleWeekDays.map((day) => {
                       const cell = getCellValue(row.key, day.dateStr, row.baseDays);
