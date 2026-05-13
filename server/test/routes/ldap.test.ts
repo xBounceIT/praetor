@@ -146,7 +146,7 @@ beforeEach(async () => {
   authenticateWithProfileMock.mockResolvedValue({
     authenticated: false,
     groups: [],
-    roleIds: ['user'],
+    matchedRoleIds: [],
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ldap');
@@ -327,7 +327,7 @@ describe('POST /api/ldap/test', () => {
       authenticated: true,
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=admins,ou=groups,dc=example,dc=com'],
-      roleIds: ['admin'],
+      matchedRoleIds: ['admin'],
     });
 
     const response = await testLdapAuth({ username: ' alice ', password: 'secret' });
@@ -349,7 +349,7 @@ describe('POST /api/ldap/test', () => {
     authenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
       groups: ['cn=admins,ou=groups,dc=example,dc=com'],
-      roleIds: ['admin'],
+      matchedRoleIds: ['admin'],
     });
 
     const response = await testLdapAuth({ username: 'alice', password: 'wrong' });

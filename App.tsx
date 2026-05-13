@@ -405,18 +405,20 @@ const TrackerView: React.FC<{
           {/* Manager Selection Header */}
           {availableUsers.length > 1 && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-100 text-amber-600'}`}
+                    className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
                   >
                     {viewingUser?.avatarInitials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                       {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
                     </p>
-                    <p className="text-sm font-bold text-zinc-800 truncate">{viewingUser?.name}</p>
+                    <p className="text-sm font-bold text-foreground truncate">
+                      {viewingUser?.name}
+                    </p>
                   </div>
                 </div>
                 <div className="w-full sm:w-56 space-y-1.5 shrink-0">

@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
@@ -347,7 +348,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : 'LDAP authentication failed. Verify the credentials and saved LDAP configuration.',
         userDn: result.userDn,
         groups: authenticated ? result.groups : [],
-        roleIds: authenticated ? result.roleIds : [],
+        roleIds: authenticated
+          ? result.matchedRoleIds.length > 0
+            ? result.matchedRoleIds
+            : [DEFAULT_ROLE_ID]
+          : [],
       };
     },
   );

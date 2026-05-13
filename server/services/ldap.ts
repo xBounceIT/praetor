@@ -12,8 +12,11 @@ import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   applyExternalRolesForUser,
+  applyExternalRolesForUserIfMatched,
+  DEFAULT_ROLE_ID,
   type ExternalRoleMapping,
   filterExistingRoleIds,
+  mapExternalGroupsToMatchedRoleIds,
   mapExternalGroupsToRoleIds,
 } from './external-auth.ts';
 
@@ -72,7 +75,7 @@ export type LdapAuthResult = {
   authenticated: boolean;
   userDn?: string;
   groups: string[];
-  roleIds: string[];
+  matchedRoleIds: string[];
   canonicalUsername?: string;
   displayName?: string;
 };
@@ -80,6 +83,17 @@ export type LdapAuthResult = {
 export type LdapUserEntry = {
   dn: string;
   attributes: Record<string, unknown>;
+};
+
+const warnRoleMappingNoMatch = (
+  phase: string,
+  user: { id: string; username: string; role: string },
+  groups: string[],
+): void => {
+  logger.warn(
+    { userId: user.id, username: user.username, groups, currentRole: user.role },
+    `${phase}: no LDAP group matched a role mapping — preserving existing role`,
+  );
 };
 
 const pickFirstString = (value: unknown): string | undefined => {
@@ -181,12 +195,12 @@ class LDAPService {
     try {
       client = await this.getClient();
       if (!client) {
-        return { authenticated: false, groups: [], roleIds: ['user'] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
       const ldapClient = client;
       const config = this.config;
       if (!config) {
-        return { authenticated: false, groups: [], roleIds: ['user'] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
 
       // Bind with service account first to find the user's DN
@@ -200,7 +214,7 @@ class LDAPService {
       // Find user entry (DN + attributes for canonical username/display name)
       const userEntry = await this.findUserEntry(ldapClient, username);
       if (!userEntry) {
-        return { authenticated: false, groups: [], roleIds: ['user'] };
+        return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
       const userDn = userEntry.dn;
       const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
@@ -224,13 +238,13 @@ class LDAPService {
         authenticated: true,
         userDn,
         groups,
-        roleIds: mapExternalGroupsToRoleIds(groups, this.getRoleMappings()),
+        matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, this.getRoleMappings()),
         canonicalUsername,
         displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
       };
     } catch (err) {
       logger.error({ err: serializeError(err), username }, 'LDAP auth error');
-      return { authenticated: false, groups: [], roleIds: ['user'] };
+      return { authenticated: false, groups: [], matchedRoleIds: [] };
     } finally {
       if (client) {
         client.unbind((err) => {
@@ -270,7 +284,22 @@ class LDAPService {
         );
         return { authenticated: false };
       }
-      await applyExternalRolesForUser(existingByCanonical.id, result.groups, roleMappings);
+      const applied = await applyExternalRolesForUserIfMatched(
+        existingByCanonical.id,
+        result.groups,
+        roleMappings,
+      );
+      if (!applied.applied) {
+        warnRoleMappingNoMatch(
+          'LDAP login',
+          {
+            id: existingByCanonical.id,
+            username: canonicalUsername,
+            role: existingByCanonical.role,
+          },
+          result.groups,
+        );
+      }
       return {
         authenticated: true,
         userId: existingByCanonical.id,
@@ -304,7 +333,18 @@ class LDAPService {
       if (isUniqueViolationError(err)) {
         const racedUser = await usersRepo.findLoginUserByUsername(canonicalUsername);
         if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
-          await applyExternalRolesForUser(racedUser.id, result.groups, roleMappings);
+          const applied = await applyExternalRolesForUserIfMatched(
+            racedUser.id,
+            result.groups,
+            roleMappings,
+          );
+          if (!applied.applied) {
+            warnRoleMappingNoMatch(
+              'LDAP login (race recovery)',
+              { id: racedUser.id, username: canonicalUsername, role: racedUser.role },
+              result.groups,
+            );
+          }
           return {
             authenticated: true,
             userId: racedUser.id,
@@ -595,7 +635,18 @@ class LDAPService {
           }
           const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
           await usersRepo.updateNameByUsername(username, name);
-          await applyExternalRolesForUser(existing.id, groups, roleMappings);
+          const applied = await applyExternalRolesForUserIfMatched(
+            existing.id,
+            groups,
+            roleMappings,
+          );
+          if (!applied.applied) {
+            warnRoleMappingNoMatch(
+              'LDAP sync',
+              { id: existing.id, username, role: existing.role },
+              groups,
+            );
+          }
           syncedCount++;
         } else if (config.autoProvisionAll) {
           const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
