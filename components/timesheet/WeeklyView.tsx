@@ -1,8 +1,6 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -25,7 +23,6 @@ export interface WeeklyViewProps {
   projectTasks: ProjectTask[];
   viewingUserId: string;
   selectedDate: string;
-  onSelectedDateChange: (date: string) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection?: boolean;
@@ -63,13 +60,12 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   projectTasks,
   viewingUserId,
   selectedDate,
-  onSelectedDateChange,
   startOfWeek,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
   dailyGoal,
 }) => {
-  const { t, i18n } = useTranslation('timesheets');
+  const { t } = useTranslation('timesheets');
 
   const currentWeekStart = useMemo(
     () => getWeekStart(dateOnlyToLocalDate(selectedDate), startOfWeek),
@@ -165,88 +161,35 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       .reduce((sum, e) => sum + e.duration, 0);
   }, [userEntries, currentWeekStart]);
 
-  const weekRangeLabel = useMemo(() => {
-    const end = new Date(currentWeekStart);
-    end.setDate(end.getDate() + 6);
-    return `${currentWeekStart.toLocaleDateString(i18n.language, {
-      month: 'short',
-      day: 'numeric',
-    })} – ${end.toLocaleDateString(i18n.language, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })}`;
-  }, [currentWeekStart, i18n.language]);
-
   // Use `dailyGoal * 5` as the typical full-week target so the week-total stat
   // can flip red once it's exceeded.
   const weeklyGoal = dailyGoal * 5;
 
-  const shiftSelectedDate = (offsetDays: number) => {
-    const d = dateOnlyToLocalDate(selectedDate);
-    d.setDate(d.getDate() + offsetDays);
-    onSelectedDateChange(getLocalDateString(d));
-  };
-
   return (
-    <Card className="px-0 py-0 overflow-hidden">
-      <div className="flex flex-col gap-2 px-4 pt-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              {t('weekly.weekTotal')}
-            </span>
-            <span
-              className={cn(
-                'text-lg font-black transition-colors',
-                weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
-              )}
-            >
-              {weekTotal.toFixed(2)} h
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              {t('weekly.monthTotal')}
-            </span>
-            <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => shiftSelectedDate(-7)}
-            aria-label={t('weekly.weekView')}
-          >
-            <i className="fa-solid fa-chevron-left"></i>
-          </Button>
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wide whitespace-nowrap">
-            {weekRangeLabel}
+    <div className="rounded-lg border border-border bg-background shadow-sm p-5">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-4">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            {t('weekly.weekTotal')}
           </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => shiftSelectedDate(7)}
-            aria-label={t('weekly.weekView')}
+          <span
+            className={cn(
+              'text-lg font-black transition-colors',
+              weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
+            )}
           >
-            <i className="fa-solid fa-chevron-right"></i>
-          </Button>
-          <Button
-            type="button"
-            size="xs"
-            onClick={() => onSelectedDateChange(getLocalDateString(new Date()))}
-            className="rounded-full text-[10px] font-bold uppercase tracking-widest"
-          >
-            {t('weekly.goToToday')}
-          </Button>
+            {weekTotal.toFixed(2)} h
+          </span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            {t('weekly.monthTotal')}
+          </span>
+          <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="-mx-5 overflow-x-auto">
         <Table className="min-w-max border-collapse">
           <TableHeader className="bg-muted/40">
             <TableRow className="border-b border-border">
@@ -374,7 +317,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           </TableFooter>
         </Table>
       </div>
-    </Card>
+    </div>
   );
 };
 

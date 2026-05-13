@@ -485,7 +485,6 @@ const TrackerView: React.FC<{
               projectTasks={projectTasks}
               viewingUserId={viewingUserId}
               selectedDate={selectedDate}
-              onSelectedDateChange={setSelectedDate}
               startOfWeek={startOfWeek}
               treatSaturdayAsHoliday={treatSaturdayAsHoliday}
               allowWeekendSelection={allowWeekendSelection}

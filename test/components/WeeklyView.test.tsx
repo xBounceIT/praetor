@@ -28,7 +28,6 @@ const baseProps = {
   projectTasks,
   viewingUserId: 'u-1',
   selectedDate: todayDateOnly(),
-  onSelectedDateChange: () => {},
   treatSaturdayAsHoliday: false,
   dailyGoal: 8,
 };

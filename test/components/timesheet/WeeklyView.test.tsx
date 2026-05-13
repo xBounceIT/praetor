@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { waitFor } from '@testing-library/react';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -38,7 +38,6 @@ const todayDateOnly = () => {
 const sharedProps = {
   viewingUserId: 'user-a',
   selectedDate: todayDateOnly(),
-  onSelectedDateChange: mock(() => {}),
   startOfWeek: 'Monday' as const,
   treatSaturdayAsHoliday: false,
   allowWeekendSelection: true,
