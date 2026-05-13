@@ -3,8 +3,21 @@ import api from '../../services/api';
 import type { SupplierInvoice, SupplierQuote, SupplierSaleOrder, View } from '../../types';
 import { makeTempId } from '../../utils/tempId';
 
+/**
+ * Supplier-quote handlers read `supplierQuoteFilterId` both before and AFTER
+ * awaited network calls. Capturing the raw value via the deps closure would
+ * surface a stale-closure bug: the handler factory is memoized with the value
+ * at the time of the surrounding `useMemo` render, but an awaited API call can
+ * outlive that render. While the await is pending the user can navigate or
+ * clear the filter, which mutates the underlying state. Reading the captured
+ * value after the await would then act on out-of-date data (for example, the
+ * `supplierQuoteFilterId === id` branch could re-apply a filter the user just
+ * cleared). Callers pass a getter that closes over the latest React state via
+ * a ref in `App.tsx`, so reads inside the handler always see the current value
+ * — even across awaits. See `quoteHandlers.ts` for the canonical example.
+ */
 export type SupplierQuoteHandlersDeps = {
-  supplierQuoteFilterId: string | null;
+  getSupplierQuoteFilterId: () => string | null;
   setSupplierQuotes: React.Dispatch<React.SetStateAction<SupplierQuote[]>>;
   setSupplierOrders: React.Dispatch<React.SetStateAction<SupplierSaleOrder[]>>;
   setSupplierInvoices: React.Dispatch<React.SetStateAction<SupplierInvoice[]>>;
@@ -14,7 +27,7 @@ export type SupplierQuoteHandlersDeps = {
 
 export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
   const {
-    supplierQuoteFilterId,
+    getSupplierQuoteFilterId,
     setSupplierQuotes,
     setSupplierOrders,
     setSupplierInvoices,
@@ -52,7 +65,10 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
   const updateSupplierQuote = async (id: string, updates: Partial<SupplierQuote>) => {
     try {
       const updated = await api.supplierQuotes.update(id, updates);
-      if (supplierQuoteFilterId === id) {
+      // Re-read the filter via the getter so we observe the latest value, not
+      // the one captured when this handler was created. A navigation effect in
+      // App.tsx can clear the filter while the API call is in flight.
+      if (getSupplierQuoteFilterId() === id) {
         setSupplierQuoteFilterId(updated.id);
       }
       await refreshSupplierQuoteFlow();

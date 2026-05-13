@@ -8,15 +8,24 @@ import type {
   ProjectTask,
 } from '../../types';
 
+/**
+ * Client handlers read `projects` AFTER an awaited delete to compute which
+ * project tasks to drop. Capturing the array from the deps closure would
+ * surface a stale-closure bug: between the time `makeClientHandlers` runs and
+ * the time `remove()` awaits the API, the user may have added or deleted a
+ * project. Using a getter that reads from a ref in `App.tsx` keeps the read
+ * fresh — we filter against the latest `projects` snapshot at invocation
+ * time. See `quoteHandlers.ts` for the canonical example of the pattern.
+ */
 export type ClientHandlersDeps = {
-  projects: Project[];
+  getProjects: () => Project[];
   setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
 };
 
 export const makeClientHandlers = (deps: ClientHandlersDeps) => {
-  const { projects, setClients, setProjects, setProjectTasks } = deps;
+  const { getProjects, setClients, setProjects, setProjectTasks } = deps;
 
   const add = async (clientData: Partial<Client>) => {
     try {
@@ -41,7 +50,12 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
   const remove = async (id: string) => {
     try {
       await api.clients.delete(id);
-      const projectIdsForClient = projects.filter((p) => p.clientId === id).map((p) => p.id);
+      // Read `projects` via the getter so we observe the latest array, not the
+      // one captured at factory creation. Any project added/removed during the
+      // delete round-trip would otherwise be missed when filtering tasks.
+      const projectIdsForClient = getProjects()
+        .filter((p) => p.clientId === id)
+        .map((p) => p.id);
       setClients((prev) => prev.filter((c) => c.id !== id));
       setProjects((prev) => prev.filter((p) => p.clientId !== id));
       setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));

@@ -634,6 +634,12 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
   const entriesStreamTokenRef = useRef(0);
+  // Flips to true once the initial entries page resolves; the recurring-entry
+  // generator effect waits on this rather than relying on a setTimeout
+  // heuristic to guess when entries are loaded. Reset to false on
+  // logout/role-switch alongside `setEntries([])`. We use state (not a ref) so
+  // the dependent effect re-runs when the flag changes.
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
     enabled: false,
     serverUrl: 'ldap://ldap.example.com:389',
@@ -795,13 +801,16 @@ const App: React.FC = () => {
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
 
-  // Latest-value refs for the quote handler factory. The handlers read these
-  // BEFORE and AFTER awaited API calls; getters backed by refs let the memoized
-  // factory observe up-to-date state once promises resolve (a navigation can
-  // clear `clientQuoteFilterId` mid-await, for example).
+  // Latest-value refs for handler factories. The handlers read these BEFORE
+  // and AFTER awaited API calls; getters backed by refs let the memoized
+  // factories observe up-to-date state once promises resolve (a navigation can
+  // clear `clientQuoteFilterId` mid-await, or a new project can land between
+  // factory creation and a `clients.remove()` call, for example).
   const quotesRef = useRef(quotes);
   const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
+  const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
+  const projectsRef = useRef(projects);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
@@ -809,6 +818,8 @@ const App: React.FC = () => {
   quotesRef.current = quotes;
   clientQuoteFilterIdRef.current = clientQuoteFilterId;
   clientOfferFilterIdRef.current = clientOfferFilterId;
+  supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
+  projectsRef.current = projects;
 
   const clearAuthScopedAppState = useCallback(() => {
     resetModuleLoader();
@@ -834,6 +845,7 @@ const App: React.FC = () => {
     setSupplierInvoices([]);
     setEntries([]);
     entriesStreamTokenRef.current++;
+    setEntriesLoaded(false);
     setWorkUnits([]);
     setViewingUserAssignmentState({
       userId: '',
@@ -889,14 +901,16 @@ const App: React.FC = () => {
   const supplierQuoteHandlers = useMemo(
     () =>
       makeSupplierQuoteHandlers({
-        supplierQuoteFilterId,
+        // Getter backed by a ref so reads after awaited API calls see the
+        // latest value instead of the snapshot captured at factory creation.
+        getSupplierQuoteFilterId: () => supplierQuoteFilterIdRef.current,
         setSupplierQuotes,
         setSupplierOrders,
         setSupplierInvoices,
         setSupplierQuoteFilterId,
         setActiveView,
       }),
-    [supplierQuoteFilterId],
+    [],
   );
 
   const quoteHandlers = useMemo(
@@ -922,12 +936,14 @@ const App: React.FC = () => {
   const clientHandlers = useMemo(
     () =>
       makeClientHandlers({
-        projects,
+        // Getter backed by a ref so the post-await read of `projects` sees the
+        // latest snapshot rather than the one captured at factory creation.
+        getProjects: () => projectsRef.current,
         setClients,
         setProjects,
         setProjectTasks,
       }),
-    [projects],
+    [],
   );
 
   const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), []);
@@ -1141,6 +1157,7 @@ const App: React.FC = () => {
       entries: () => {
         entriesStreamTokenRef.current++;
         setEntries([]);
+        setEntriesLoaded(false);
       },
       workUnits: () => setWorkUnits([]),
       users: () => setUsers([]),
@@ -1408,6 +1425,13 @@ const App: React.FC = () => {
                 apply: (page) => {
                   const token = ++entriesStreamTokenRef.current;
                   setEntries(page.entries);
+                  // Signal that the initial page of entries is in state. The
+                  // recurring-entries generator effect gates on this so it
+                  // never runs against the empty-array initial state (which
+                  // used to be papered over with a setTimeout(100) heuristic
+                  // and could miss/duplicate entries under varying API
+                  // latency).
+                  setEntriesLoaded(true);
                   if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                 },
               },
@@ -1871,13 +1895,19 @@ const App: React.FC = () => {
     [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserAssignmentState],
   );
 
+  // Generate recurring entries once the initial entries page is in state.
+  // Previously this used a setTimeout(100) heuristic to guess when the
+  // entries fetch had resolved — that race was visible under slow APIs
+  // (could miss new recurring rows) and could double-fire on fast ones.
+  // Sequencing on `entriesLoaded` makes the ordering deterministic: the
+  // generator inspects the real `entries` state, and `setEntriesLoaded` is
+  // flipped to false on logout/role-switch/module-clear, so a subsequent
+  // entries refetch will re-trigger generation exactly once.
   useEffect(() => {
     if (!currentUser) return;
-    const timer = setTimeout(() => {
-      generateRecurringEntries();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [generateRecurringEntries, currentUser]);
+    if (!entriesLoaded) return;
+    generateRecurringEntries();
+  }, [generateRecurringEntries, currentUser, entriesLoaded]);
 
   const taskHandlers = useMemo(
     () =>
