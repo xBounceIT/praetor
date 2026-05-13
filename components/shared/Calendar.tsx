@@ -183,7 +183,10 @@ const Calendar: React.FC<CalendarProps> = ({
           : '');
 
     days.push(
-      <Tooltip key={d} disabled={!holidayLabel}>
+      // `dateStr` already encodes year/month/day, so keys stay stable across
+      // month or year changes (bare `d` reused the same key for the same day-
+      // number across different months and confused React reconciliation).
+      <Tooltip key={dateStr} disabled={!holidayLabel}>
         <TooltipTrigger asChild>
           <span className="inline-flex w-full">
             <button

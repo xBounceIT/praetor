@@ -618,6 +618,7 @@ const TrackerView: React.FC<{
 };
 
 const App: React.FC = () => {
+  const { t: tApp } = useTranslation(['common', 'reports']);
   useLayoutEffect(() => {
     applyTheme(getTheme());
   }, []);
@@ -2238,7 +2239,6 @@ const App: React.FC = () => {
   if (!currentUser)
     return (
       <Login
-        users={users}
         onLogin={handleLogin}
         logoutReason={logoutReason}
         onClearLogoutReason={clearLogoutReason}
@@ -2744,7 +2744,7 @@ const App: React.FC = () => {
                     <div className="text-center">
                       <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
                       <p className="text-zinc-700 font-medium">
-                        AI reporting settings failed to load.
+                        {tApp('reports:aiReporting.settingsFailedToLoad')}
                       </p>
                     </div>
                   </div>
@@ -2752,7 +2752,7 @@ const App: React.FC = () => {
                   <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
                     <div className="text-center">
                       <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                      <p className="text-zinc-600 font-medium">Loading…</p>
+                      <p className="text-zinc-600 font-medium">{tApp('common:states.loading')}</p>
                     </div>
                   </div>
                 )

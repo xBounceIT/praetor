@@ -77,6 +77,49 @@ const renderSettings = (
   );
 
 describe('<UserSettings /> profile form', () => {
+  test('two rapid submits while save is in flight only call onUpdate once', async () => {
+    let resolveSave!: () => void;
+    const slowUpdate = mock(
+      (_updates: Partial<Settings>) =>
+        new Promise<void>((resolve) => {
+          resolveSave = () => resolve();
+        }),
+    );
+
+    const { container } = render(
+      <UserSettings
+        settings={settings}
+        onUpdate={slowUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+    // Dirty the form so the submit button is enabled (hasChanges).
+    const fullNameInput = screen.getByDisplayValue('Alice') as HTMLInputElement;
+    fireEvent.change(fullNameInput, { target: { value: 'Alice Edited' } });
+
+    const form = container.querySelector('form');
+    expect(form).not.toBeNull();
+    // Fire the submit event twice back-to-back: the disabled-button guard would
+    // miss programmatic submits, so the in-component `if (isSaving) return;`
+    // is what enforces this.
+    fireEvent.submit(form as HTMLFormElement);
+    fireEvent.submit(form as HTMLFormElement);
+
+    // Only one onUpdate call should be issued for the rapid double-submit.
+    expect(slowUpdate).toHaveBeenCalledTimes(1);
+    // Resolve the in-flight save so the test cleans up.
+    await act(async () => {
+      resolveSave();
+      await Promise.resolve();
+    });
+  });
+
   test('preserves in-progress edits when the parent re-renders with a new settings reference', () => {
     const { rerender } = render(
       <UserSettings
