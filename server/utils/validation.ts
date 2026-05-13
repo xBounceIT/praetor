@@ -320,8 +320,7 @@ export function parseDateString(
   if (Number.isNaN(date.getTime())) {
     return { ok: false, message: `${fieldName} must be a valid date` };
   }
-  // `new Date('2023-02-29')` silently rolls to Mar 1 instead of failing; the round-trip
-  // catches any input whose normalized UTC form differs from the original.
+  // JS silently rolls 2023-02-29 → Mar 1; the round-trip catches the normalization mismatch.
   if (date.toISOString().slice(0, 10) !== result.value) {
     return { ok: false, message: `${fieldName} must be a valid date` };
   }
