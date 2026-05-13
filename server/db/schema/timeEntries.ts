@@ -48,6 +48,7 @@ export const timeEntries = pgTable(
   (table) => [
     index('idx_time_entries_user_id').on(table.userId),
     index('idx_time_entries_date').on(table.date),
+    index('idx_time_entries_client_id').on(table.clientId),
     index('idx_time_entries_project_id').on(table.projectId),
     index('idx_time_entries_task_id').on(table.taskId),
     index('idx_time_entries_created_at_id').on(table.createdAt.desc(), table.id.desc()),

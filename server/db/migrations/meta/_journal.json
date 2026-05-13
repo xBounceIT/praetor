@@ -253,6 +253,13 @@
       "when": 1778702800389,
       "tag": "0035_add_invoice_tax_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778704999389,
+      "tag": "0036_tasks_audit_indexes",
+      "breakpoints": true
     }
   ]
 }

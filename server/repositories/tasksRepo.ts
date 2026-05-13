@@ -291,9 +291,26 @@ export const tasksT = alias(tasks, 't');
 // rows where task_id is null (legacy entries, or entries created before the matching task
 // existed). Use as part of a larger query: the caller's FROM clause must declare the `te` and
 // `t` aliases (typically `FROM time_entries te` plus this JOIN).
-export const timeEntriesTasksJoin = sql`JOIN tasks t
-    ON ${tasksT.id} = ${timeEntriesTe.taskId}
-    OR (${timeEntriesTe.taskId} IS NULL AND ${tasksT.projectId} = ${timeEntriesTe.projectId} AND ${tasksT.name} = ${timeEntriesTe.task})`;
+//
+// LATERAL join with `LIMIT 1` ensures exactly one task row per time entry. The previous
+// `JOIN tasks t ON (FK) OR (name fallback)` multiplied rows whenever a project contained
+// duplicate task names: every legacy entry with `task_id IS NULL` matched all duplicates,
+// inflating SUMs/COUNTs in downstream aggregations.
+//
+// Resolution rule (matches `findIdByProjectAndName`): prefer the FK match when present,
+// otherwise pick the lowest task id among `(project_id, name)` siblings - the
+// `ORDER BY (id = task_id) DESC NULLS LAST, id ASC` clause sorts the FK match first
+// (boolean true > false), then by id for the fallback case.
+export const timeEntriesTasksJoin = sql`JOIN LATERAL (
+      SELECT t_inner.*
+        FROM tasks t_inner
+       WHERE t_inner.id = ${timeEntriesTe.taskId}
+          OR (${timeEntriesTe.taskId} IS NULL
+              AND t_inner.project_id = ${timeEntriesTe.projectId}
+              AND t_inner.name = ${timeEntriesTe.task})
+       ORDER BY (t_inner.id = ${timeEntriesTe.taskId}) DESC NULLS LAST, t_inner.id ASC
+       LIMIT 1
+    ) t ON TRUE`;
 
 // Best-effort lookup of a task by (project, name). Duplicate task names within a project resolve
 // to the lowest task id; callers store the result so subsequent aggregations remain deterministic

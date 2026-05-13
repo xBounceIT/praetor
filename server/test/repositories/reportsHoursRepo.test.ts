@@ -440,7 +440,7 @@ describe('getTasksSection', () => {
   // ON-clause body, not the whole SQL - so a future change that moved one branch into a CTE or
   // WHERE filter would not satisfy these tests.
   describe('timeEntriesTasksJoin coverage in scoped task hours queries', () => {
-    test('matched-FK branch sits inside the JOIN ON clause', async () => {
+    test('matched-FK branch sits inside the LATERAL subquery WHERE clause', async () => {
       enqueueEmptyN(3);
       await repo.getTasksSection(
         {
@@ -460,10 +460,13 @@ describe('getTasksSection', () => {
       expect(hoursCall).toBeDefined();
       const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
       expect(onClause).not.toBeNull();
-      expect(onClause).toContain('"t"."id" = "te"."task_id"');
+      expect(onClause).toContain('t_inner.id = "te"."task_id"');
+      // Structural guarantee against row multiplication: LATERAL subquery with LIMIT 1.
+      expect(hoursCall?.sql).toContain('JOIN LATERAL');
+      expect(hoursCall?.sql).toMatch(/LIMIT\s+1/);
     });
 
-    test('name-fallback branch sits inside the JOIN ON clause, OR-combined with the FK branch', async () => {
+    test('name-fallback branch sits inside the LATERAL subquery WHERE, OR-combined with the FK branch', async () => {
       enqueueEmptyN(3);
       await repo.getTasksSection(
         {
@@ -483,13 +486,13 @@ describe('getTasksSection', () => {
       expect(hoursCall).toBeDefined();
       const onClause = extractTasksJoinOn(hoursCall?.sql ?? '');
       expect(onClause).not.toBeNull();
-      // Both branches must be in the same ON clause; the fallback's three predicates AND'd
-      // together inside parens, the whole thing OR'd against the FK match.
-      expect(onClause).toContain('"t"."id" = "te"."task_id"');
+      // Both branches must live in the same WHERE clause; the fallback's three predicates
+      // AND'd together inside parens, the whole thing OR'd against the FK match.
+      expect(onClause).toContain('t_inner.id = "te"."task_id"');
       expect(onClause).toMatch(/\bOR\b/);
       expect(onClause).toContain('"te"."task_id" IS NULL');
-      expect(onClause).toContain('"t"."project_id" = "te"."project_id"');
-      expect(onClause).toContain('"t"."name" = "te"."task"');
+      expect(onClause).toContain('t_inner.project_id = "te"."project_id"');
+      expect(onClause).toContain('t_inner.name = "te"."task"');
     });
   });
 });
