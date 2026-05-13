@@ -23,6 +23,9 @@ const SAML_REQUEST_TTL_MS = 10 * 60 * 1000;
 const LOGIN_TICKET_TTL_MS = 2 * 60 * 1000;
 const REMOTE_FETCH_TIMEOUT_MS = 5_000;
 const REMOTE_FETCH_REDIRECT_LIMIT = 3;
+// SAML metadata documents are typically a few KB. 1 MiB is well above any legitimate payload
+// and keeps a hostile IdP from sending multi-GB junk that would OOM the backend.
+const REMOTE_FETCH_MAX_BYTES = 1 * 1024 * 1024;
 
 export type AdminSsoProvider = ssoProvidersRepo.SsoProvider;
 export type PublicSsoProvider = ssoProvidersRepo.PublicSsoProvider;
@@ -78,19 +81,39 @@ const readClaimArray = (claims: Record<string, unknown>, name: string): string[]
   return coerceStringArray(claims[name]);
 };
 
+const isLocalLoopbackHostname = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
 /**
  * Resolves the public base URL used to build callback / metadata / redirect URLs.
  *
  * We refuse to read `Host` / `x-forwarded-host` headers — those are attacker-controlled and
  * have caused host header injection vulnerabilities in similar flows. Instead, the base URL
  * MUST come from configuration: `SSO_CALLBACK_BASE_URL` (preferred) or `FRONTEND_URL`.
+ *
+ * The configured URL must parse and use https://, except for loopback hosts where http:// is
+ * allowed for local development. An http:// base URL on a public host would put the SSO ticket
+ * (transported via redirect to the configured FRONTEND_URL) at risk of network interception.
  */
 export const resolvePublicBaseUrl = (): string => {
   const explicit = process.env.SSO_CALLBACK_BASE_URL?.trim();
-  if (explicit) return explicit;
-  const frontend = process.env.FRONTEND_URL?.trim();
-  if (frontend) return frontend;
-  throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+  const raw = explicit || process.env.FRONTEND_URL?.trim();
+  if (!raw) {
+    throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('SSO public base URL is not a valid URL');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`SSO public base URL must use http(s) (got ${parsed.protocol})`);
+  }
+  if (parsed.protocol === 'http:' && !isLocalLoopbackHostname(parsed.hostname)) {
+    throw new Error('SSO public base URL must use https:// for non-loopback hosts');
+  }
+  return raw;
 };
 
 const buildPublicSsoUrl = (path: string, baseUrl: string): string => new URL(path, baseUrl).href;
@@ -212,6 +235,7 @@ const parseSamlMetadata = (xml: string) => {
  *   - 127.0.0.0/8 (loopback)
  *   - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC1918 private)
  *   - 169.254.0.0/16 (link-local incl. cloud metadata 169.254.169.254)
+ *   - 100.64.0.0/10 (carrier-grade NAT — non-routable on the public internet)
  *   - 0.0.0.0/8
  *   - ::1 (IPv6 loopback)
  *   - fc00::/7 (IPv6 unique-local)
@@ -227,6 +251,7 @@ export const isPrivateIp = (ip: string): boolean => {
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
     if (a === 169 && b === 254) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
     return false;
   }
   // IPv6 — normalise to lower-case, strip zone id.
@@ -260,6 +285,32 @@ const assertSafeRemoteUrl = async (url: URL): Promise<void> => {
 };
 
 /**
+ * Reads a response body as text, refusing to buffer more than REMOTE_FETCH_MAX_BYTES. Guards
+ * against a hostile IdP that returns a huge metadata document hoping to OOM the backend.
+ */
+const readBoundedText = async (response: Response): Promise<string> => {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > REMOTE_FETCH_MAX_BYTES) {
+    throw new Error(`Remote response too large (${declared} bytes)`);
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > REMOTE_FETCH_MAX_BYTES) {
+      await reader.cancel();
+      throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total).toString('utf-8');
+};
+
+/**
  * SSRF-hardened fetch for IdP-supplied URLs (SAML metadata, OIDC discovery).
  *
  * Guarantees:
@@ -278,7 +329,9 @@ const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
       const response = await fetch(current, { signal: controller.signal, redirect: 'manual' });
       if (response.status >= 300 && response.status < 400) {
         const next = response.headers.get('location');
-        if (!next) return response;
+        if (!next) {
+          throw new Error(`Redirect response without Location header from ${current}`);
+        }
         current = new URL(next, current).href;
         continue;
       }
@@ -297,7 +350,7 @@ const resolveSamlIdpConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   if (provider.metadataUrl.trim()) {
     const response = await safeFetchRemoteUrl(provider.metadataUrl);
     if (!response.ok) throw new Error(`Failed to fetch SAML metadata: HTTP ${response.status}`);
-    return { ...parseSamlMetadata(await response.text()), source: 'metadataUrl' };
+    return { ...parseSamlMetadata(await readBoundedText(response)), source: 'metadataUrl' };
   }
   return {
     idpIssuer: provider.idpIssuer,
