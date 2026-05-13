@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -515,6 +516,24 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
+    setupHappyPath();
+    withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
+    cqReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(cqReplaceItemsMock).toHaveBeenCalled();
+    expect(cqReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 
