@@ -24,7 +24,7 @@ import {
 process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
 
 // Snapshot the real exports BEFORE mock.module fires so afterAll can restore them. The
-// `mock.module` calls inside beforeAll are NOT hoisted (verified empirically on Bun 1.3.13);
+// `mock.module` calls inside beforeAll are NOT hoisted (verified empirically on Bun 1.3.14);
 // only top-level mock.module calls get hoisted ahead of imports.
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
