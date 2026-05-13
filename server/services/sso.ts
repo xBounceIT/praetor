@@ -63,15 +63,11 @@ const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
 const coerceString = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value === null || value === undefined) return '';
-  // Nested claim values (objects, arrays) may legitimately appear in SAML/OIDC payloads.
-  // Falling back to '' silently drops them; serialize so they are at least inspectable
-  // for downstream identity resolution and audit logging.
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return '';
-  }
+  // Identifier-like fields (subject, username, issuer, nameID) reach this helper. A nested
+  // claim value here is almost always an IdP misconfiguration — serializing it to JSON
+  // would persist a stringified blob as the user identifier. Fall back to '' so the caller
+  // can detect the missing value and surface a clear error.
+  return '';
 };
 
 const coerceStringArray = (value: unknown): string[] => {

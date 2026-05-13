@@ -30,7 +30,10 @@ const generateSequentialId = async (
     exec,
     sql`SELECT nextval(${sql.raw(`'${sequenceName}'`)}) AS "nextValue"`,
   );
-  const nextSequence = Number(rows[0]?.nextValue ?? 0);
+  if (rows.length === 0 || rows[0]?.nextValue == null) {
+    throw new Error(`Sequence ${sequenceName} returned no value — schema migration likely missing`);
+  }
+  const nextSequence = Number(rows[0].nextValue);
   return `${prefix}-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
 
