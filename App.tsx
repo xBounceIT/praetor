@@ -463,6 +463,7 @@ const TrackerView: React.FC<{
           onAddCustomTask={onAddCustomTask}
           onAddBulkEntries={onAddBulkEntries}
           onUpdateEntry={onUpdateEntry}
+          onDeleteEntry={onDeleteEntry}
           viewingUserId={viewingUserId}
           selectedDate={selectedDate}
           onSelectedDateChange={setSelectedDate}
