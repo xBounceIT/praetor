@@ -19,6 +19,7 @@
   },
   "appearance": {
     "title": "Aspetto",
+    "description": "Scegli il tema dell'interfaccia di Praetor.",
     "light": {
       "name": "Chiaro",
       "description": "Usa la modalita chiara per i componenti shadcn."

@@ -9,6 +9,7 @@ import {
   Lock,
   type LucideIcon,
   Moon,
+  Palette,
   RefreshCw,
   Shield,
   Sun,
@@ -551,25 +552,36 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       )}
 
       {activeTab === 'appearance' && (
-        <Card className="gap-0 overflow-hidden py-0 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center gap-3 border-b bg-muted px-6 py-4">
-            <i className="fa-solid fa-palette text-praetor"></i>
-            <CardTitle className="text-base">{t('appearance.title')}</CardTitle>
-          </div>
+        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <Palette aria-hidden="true" className="size-4 text-praetor" />
+              {t('appearance.title')}
+            </CardTitle>
+            <CardDescription>{t('appearance.description')}</CardDescription>
+          </CardHeader>
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {THEMES.map((theme) => {
                 const isSelected = currentTheme === theme;
                 const option = THEME_OPTION_META[theme];
 
                 return (
-                  <button
+                  <Card
                     key={theme}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
                     onClick={() => handleThemeChange(theme)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleThemeChange(theme);
+                      }
+                    }}
                     className={cn(
-                      'relative flex items-start gap-4 rounded-xl border bg-card p-4 text-left text-card-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                      isSelected ? 'border-primary ring-2 ring-ring' : 'border-border',
+                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isSelected && 'border-primary ring-2 ring-primary/40',
                     )}
                   >
                     <div className="relative shrink-0">
@@ -582,18 +594,20 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                         {renderThemeSwatchContent(option)}
                       </div>
                       {isSelected && (
-                        <span className="absolute -top-1 -right-1 z-10 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm">
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
                           <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
                         </span>
                       )}
                     </div>
-                    <div>
-                      <h4 className="mb-1 font-semibold">{t(`appearance.${theme}.name`)}</h4>
-                      <p className="text-xs leading-relaxed text-muted-foreground">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-foreground">
+                        {t(`appearance.${theme}.name`)}
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         {t(`appearance.${theme}.description`)}
                       </p>
                     </div>
-                  </button>
+                  </Card>
                 );
               })}
             </div>

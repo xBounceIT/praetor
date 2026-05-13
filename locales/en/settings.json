@@ -19,6 +19,7 @@
   },
   "appearance": {
     "title": "Appearance",
+    "description": "Choose the theme for the Praetor interface.",
     "light": {
       "name": "Light",
       "description": "Use light mode for shadcn components."
