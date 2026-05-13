@@ -214,6 +214,19 @@ describe('testConnection (success/failure)', () => {
     expect(result.code).toBe('SMTP_ERROR');
     expect(result.params).toEqual({ error: 'connect refused' });
   });
+
+  test('routes verify() failures through the structured logger, not console.error', async () => {
+    const consoleErrorSpy = mock(console.error);
+    const restore = console.error;
+    console.error = consoleErrorSpy;
+    try {
+      transporterStub.verify.mockRejectedValue(new Error('connect refused'));
+      await emailService.testConnection();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    } finally {
+      console.error = restore;
+    }
+  });
 });
 
 describe('sendEmail', () => {
@@ -233,6 +246,19 @@ describe('sendEmail', () => {
     expect(result.success).toBe(false);
     expect(result.code).toBe('SMTP_ERROR');
     expect(result.params).toEqual({ error: 'relay denied' });
+  });
+
+  test('routes sendMail() failures through the structured logger, not console.error', async () => {
+    const consoleErrorSpy = mock(console.error);
+    const restore = console.error;
+    console.error = consoleErrorSpy;
+    try {
+      transporterStub.sendMail.mockRejectedValue(new Error('relay denied'));
+      await emailService.sendEmail('to@x.com', 'subj', '<p>html</p>');
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    } finally {
+      console.error = restore;
+    }
   });
 
   test('formats from-address as "Name" <email> when fromName is present', async () => {

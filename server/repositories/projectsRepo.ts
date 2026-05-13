@@ -228,7 +228,13 @@ export type NewProject = {
   billingFrequency?: BillingFrequency;
 };
 
-const PROJECT_ORDER_FK_CONSTRAINT = 'projects_order_id_fkey';
+// Legacy auto-generated name from schema.sql, plus the canonical Drizzle name produced by
+// `.references(() => sales.id)`. The migration renames the constraint to the latter, but old
+// DBs that haven't been migrated yet still surface the former at runtime.
+const PROJECT_ORDER_FK_CONSTRAINTS = new Set<string | undefined>([
+  'projects_order_id_fkey',
+  'projects_order_id_sales_id_fk',
+]);
 const PROJECT_OFFER_FK_CONSTRAINT = 'projects_offer_id_customer_offers_id_fk';
 
 export const create = async (project: NewProject, exec: DbExecutor = db): Promise<Project> => {
@@ -258,7 +264,8 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
   } catch (err) {
     const fk = getForeignKeyViolation(err);
     if (fk) {
-      if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      if (PROJECT_ORDER_FK_CONSTRAINTS.has(fk.constraint))
+        throw new ForeignKeyError('Linked order');
       if (fk.constraint === PROJECT_OFFER_FK_CONSTRAINT) throw new ForeignKeyError('Linked offer');
       throw new ForeignKeyError('Client');
     }
@@ -324,7 +331,8 @@ export const update = async (
   } catch (err) {
     const fk = getForeignKeyViolation(err);
     if (fk) {
-      if (fk.constraint === PROJECT_ORDER_FK_CONSTRAINT) throw new ForeignKeyError('Linked order');
+      if (PROJECT_ORDER_FK_CONSTRAINTS.has(fk.constraint))
+        throw new ForeignKeyError('Linked order');
       if (fk.constraint === PROJECT_OFFER_FK_CONSTRAINT) throw new ForeignKeyError('Linked offer');
       throw new ForeignKeyError('Client');
     }

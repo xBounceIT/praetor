@@ -1,5 +1,9 @@
-import { describe, expect, test } from 'bun:test';
-import { generatePrefixedId } from '../../utils/order-ids.ts';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  generateClientOrderId,
+  generatePrefixedId,
+  generateSupplierOrderId,
+} from '../../utils/order-ids.ts';
 
 describe('generatePrefixedId', () => {
   test('formats id as prefix-uuid', () => {
@@ -14,5 +18,65 @@ describe('generatePrefixedId', () => {
   test('preserves multi-segment prefixes verbatim', () => {
     const id = generatePrefixedId('rpt-chat');
     expect(id.startsWith('rpt-chat-')).toBe(true);
+  });
+});
+
+// `generateClientOrderId` / `generateSupplierOrderId` should be race-free: they back onto
+// PostgreSQL SEQUENCEs (`order_id_seq`, `supplier_order_id_seq`) via `nextval()`. We mock
+// the executor so the test runs without a live DB while still exercising the actual logic
+// the routes will execute.
+describe('generateSequentialId (sequence-backed)', () => {
+  let counter: number;
+  let mockExec: { execute: ReturnType<typeof mock> };
+
+  beforeEach(() => {
+    counter = 0;
+    mockExec = {
+      execute: mock(async () => {
+        counter += 1;
+        return { rows: [{ nextValue: counter }] };
+      }),
+    };
+  });
+
+  afterEach(() => {
+    mockExec.execute.mockReset();
+  });
+
+  test('uses nextval() rather than SELECT MAX', async () => {
+    await generateClientOrderId(mockExec as never);
+    // The drizzle SQL object passed to execute() carries the literal `nextval(` we wrote.
+    const callArg = mockExec.execute.mock.calls[0]?.[0] as unknown;
+    const serialized = JSON.stringify(callArg);
+    expect(serialized).toContain('nextval');
+    expect(serialized).not.toContain('MAX(');
+  });
+
+  test('concurrent generateClientOrderId calls produce unique sequential ids', async () => {
+    const ids = await Promise.all(
+      Array.from({ length: 50 }, () => generateClientOrderId(mockExec as never)),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    const year = new Date().getFullYear();
+    for (const id of ids) {
+      expect(id).toMatch(new RegExp(`^ORD-${year}-\\d{4}$`));
+    }
+  });
+
+  test('concurrent generateSupplierOrderId calls produce unique sequential ids', async () => {
+    const ids = await Promise.all(
+      Array.from({ length: 25 }, () => generateSupplierOrderId(mockExec as never)),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    const year = new Date().getFullYear();
+    for (const id of ids) {
+      expect(id).toMatch(new RegExp(`^SORD-${year}-\\d{4}$`));
+    }
+  });
+
+  test('formats sequence value as zero-padded 4-digit suffix', async () => {
+    const id = await generateClientOrderId(mockExec as never);
+    const year = new Date().getFullYear();
+    expect(id).toBe(`ORD-${year}-0001`);
   });
 });

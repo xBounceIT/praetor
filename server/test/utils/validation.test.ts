@@ -434,23 +434,37 @@ describe('parseBoolean', () => {
     expect(parseBoolean(false)).toBe(false);
   });
 
-  test('returns true for "true" string variants', () => {
+  test('returns true for recognized truthy strings (case-insensitive, trimmed)', () => {
     expect(parseBoolean('true')).toBe(true);
     expect(parseBoolean('  TRUE ')).toBe(true);
     expect(parseBoolean('True')).toBe(true);
+    expect(parseBoolean('1')).toBe(true);
+    expect(parseBoolean('yes')).toBe(true);
+    expect(parseBoolean('YES')).toBe(true);
   });
 
-  test('returns false for other strings', () => {
+  test('returns false for recognized falsy strings (case-insensitive, trimmed)', () => {
     expect(parseBoolean('false')).toBe(false);
+    expect(parseBoolean('FALSE')).toBe(false);
+    expect(parseBoolean('0')).toBe(false);
+    expect(parseBoolean('no')).toBe(false);
+    expect(parseBoolean('NO')).toBe(false);
+  });
+
+  test('returns false for unrecognized strings', () => {
     expect(parseBoolean('xyz')).toBe(false);
     expect(parseBoolean('')).toBe(false);
+    expect(parseBoolean('off')).toBe(false);
+    expect(parseBoolean('on')).toBe(false);
   });
 
-  test('coerces non-string non-boolean using truthiness', () => {
-    expect(parseBoolean(1)).toBe(true);
+  test('returns false for non-string non-boolean values (no truthiness coercion)', () => {
+    expect(parseBoolean(1)).toBe(false);
     expect(parseBoolean(0)).toBe(false);
-    expect(parseBoolean({})).toBe(true);
+    expect(parseBoolean({})).toBe(false);
+    expect(parseBoolean([])).toBe(false);
     expect(parseBoolean(null)).toBe(false);
+    expect(parseBoolean(undefined)).toBe(false);
   });
 });
 
@@ -464,7 +478,13 @@ describe('optionalBoolean', () => {
   test('returns parsed boolean', () => {
     expect(optionalBoolean('true')).toBe(true);
     expect(optionalBoolean(false)).toBe(false);
-    expect(optionalBoolean(1)).toBe(true);
+    expect(optionalBoolean('1')).toBe(true);
+    expect(optionalBoolean('no')).toBe(false);
+  });
+
+  test('returns false for unrecognized non-empty input (strict parseBoolean)', () => {
+    expect(optionalBoolean(1)).toBe(false);
+    expect(optionalBoolean('maybe')).toBe(false);
   });
 });
 
@@ -760,6 +780,31 @@ describe('isValidEmail', () => {
     expect(isValidEmail('user@example.com.')).toBe(false);
     expect(isValidEmail('user@-example.com')).toBe(false);
     expect(isValidEmail('user@example-.com')).toBe(false);
+  });
+
+  test('rejects TLDs shorter than 2 chars', () => {
+    expect(isValidEmail('a@b.c')).toBe(false);
+    expect(isValidEmail('user@example.x')).toBe(false);
+  });
+
+  test('rejects local-part with only dots / consecutive dots starting at @', () => {
+    expect(isValidEmail('..@example.com')).toBe(false);
+    expect(isValidEmail('a..b@example.com')).toBe(false);
+  });
+
+  test('rejects TLDs with digits', () => {
+    expect(isValidEmail('user@example.c0m')).toBe(false);
+    expect(isValidEmail('user@example.123')).toBe(false);
+  });
+
+  test('rejects non-string input', () => {
+    expect(isValidEmail(null as unknown as string)).toBe(false);
+    expect(isValidEmail(42 as unknown as string)).toBe(false);
+  });
+
+  test('accepts emails with longer TLDs and subdomains', () => {
+    expect(isValidEmail('user@mail.example.museum')).toBe(true);
+    expect(isValidEmail('first.last+tag@sub.example.com')).toBe(true);
   });
 });
 

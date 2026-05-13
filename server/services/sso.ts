@@ -7,6 +7,7 @@ import {
   SAML,
   ValidateInResponseTo,
 } from '@node-saml/node-saml';
+import { XMLParser } from 'fast-xml-parser';
 import * as oidc from 'openid-client';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as ssoLoginTicketsRepo from '../repositories/ssoLoginTicketsRepo.ts';
@@ -14,6 +15,7 @@ import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
 import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+import { buildFrontendUrl } from '../utils/frontend-url.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { resolveExternalIdentity } from './external-auth.ts';
@@ -62,6 +64,10 @@ const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
 const coerceString = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  // Identifier-like fields (subject, username, issuer, nameID) reach this helper. A nested
+  // claim value here is almost always an IdP misconfiguration — serializing it to JSON
+  // would persist a stringified blob as the user identifier. Fall back to '' so the caller
+  // can detect the missing value and surface a clear error.
   return '';
 };
 
@@ -124,13 +130,7 @@ const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, baseUrl: stri
 const buildSamlMetadataUrl = (slug: string, baseUrl: string): string =>
   buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, baseUrl);
 
-const buildFrontendTicketUrl = (ticket: string): string => {
-  const configured = process.env.FRONTEND_URL?.trim();
-  if (!configured) return `/?sso_ticket=${encodeURIComponent(ticket)}`;
-  const url = new URL(configured);
-  url.searchParams.set('sso_ticket', ticket);
-  return url.href;
-};
+const buildFrontendTicketUrl = (ticket: string): string => buildFrontendUrl('sso_ticket', ticket);
 
 const prepareProviderValues = (
   input: SsoProviderInput,
@@ -211,22 +211,92 @@ const normalizeCertificate = (certificate: string): string => {
   return `-----BEGIN CERTIFICATE-----\n${compact}\n-----END CERTIFICATE-----`;
 };
 
-const getXmlAttribute = (tag: string, attribute: string): string => {
-  const match = tag.match(new RegExp(`${attribute}=["']([^"']+)["']`, 'i'));
-  return match?.[1] ?? '';
+// SAML metadata parser. Uses fast-xml-parser instead of ad-hoc regexes so we correctly
+// handle namespaces, nested CDATA, and attribute quoting variants. The traversal is
+// schema-aware about which structural elements we're looking for, but tolerant about
+// where they appear (any descendant of the document root).
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  allowBooleanAttributes: true,
+  parseAttributeValue: false,
+  removeNSPrefix: true,
+  trimValues: true,
+  cdataPropName: '#cdata',
+});
+
+const isXmlObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const xmlAttr = (node: unknown, name: string): string => {
+  if (!isXmlObject(node)) return '';
+  const value = node[`@_${name}`];
+  return typeof value === 'string' ? value : '';
+};
+
+const xmlText = (node: unknown): string => {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(xmlText).join('');
+  if (!isXmlObject(node)) return '';
+  const direct = node['#text'];
+  if (typeof direct === 'string' && direct.trim()) return direct;
+  const cdata = node['#cdata'];
+  if (typeof cdata === 'string' && cdata.trim()) return cdata;
+  if (Array.isArray(cdata)) return cdata.map(xmlText).join('');
+  return '';
+};
+
+// Single-pass DFS collecting every named element we care about for SAML metadata. One walk
+// over the parsed tree is enough — `parseSamlMetadata` previously traversed three times.
+const collectDescendantsByName = (
+  root: unknown,
+  names: readonly string[],
+): Record<string, unknown[]> => {
+  const result: Record<string, unknown[]> = Object.fromEntries(names.map((n) => [n, []]));
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (!isXmlObject(node)) return;
+    for (const [key, value] of Object.entries(node)) {
+      if (key in result) {
+        if (Array.isArray(value)) result[key].push(...value);
+        else result[key].push(value);
+      }
+      if (key.startsWith('@_') || key === '#text' || key === '#cdata') continue;
+      walk(value);
+    }
+  };
+  walk(root);
+  return result;
 };
 
 const parseSamlMetadata = (xml: string) => {
-  const entityMatch = xml.match(/<[^>]*EntityDescriptor\b[^>]*entityID=["']([^"']+)["']/i);
-  const ssoTags = [...xml.matchAll(/<[^>]*SingleSignOnService\b[^>]*>/gi)].map((m) => m[0]);
-  const redirectTag =
-    ssoTags.find((tag) => /HTTP-Redirect/i.test(getXmlAttribute(tag, 'Binding'))) ?? ssoTags[0];
-  const certMatch = xml.match(/<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i);
-  return {
-    idpIssuer: entityMatch?.[1] ?? '',
-    entryPoint: redirectTag ? getXmlAttribute(redirectTag, 'Location') : '',
-    idpCert: certMatch?.[1] ? normalizeCertificate(certMatch[1]) : '',
-  };
+  let parsed: unknown;
+  try {
+    parsed = xmlParser.parse(xml);
+  } catch {
+    return { idpIssuer: '', entryPoint: '', idpCert: '' };
+  }
+
+  const found = collectDescendantsByName(parsed, [
+    'EntityDescriptor',
+    'SingleSignOnService',
+    'X509Certificate',
+  ]);
+
+  const idpIssuer = xmlAttr(found.EntityDescriptor[0], 'entityID');
+
+  const redirectService =
+    found.SingleSignOnService.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ??
+    found.SingleSignOnService[0];
+  const entryPoint = redirectService ? xmlAttr(redirectService, 'Location') : '';
+
+  const rawCert = found.X509Certificate.length > 0 ? xmlText(found.X509Certificate[0]) : '';
+  const idpCert = rawCert ? normalizeCertificate(rawCert) : '';
+
+  return { idpIssuer, entryPoint, idpCert };
 };
 
 /**

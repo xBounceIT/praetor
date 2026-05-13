@@ -13,6 +13,7 @@ import {
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
 import { customerOffers } from './customerOffers.ts';
+import { sales } from './sales.ts';
 
 export const projects = pgTable(
   'projects',
@@ -26,11 +27,13 @@ export const projects = pgTable(
     description: text('description'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    // `order_id` → `sales.id` FK lives only in `schema.sql` (`ON DELETE SET NULL`, auto-named
-    // `projects_order_id_fkey`); intentionally not modeled here so the projects schema doesn't
-    // import from sales. `projectsRepo` still keys off the constraint name when handling FK
-    // violation errors.
-    orderId: varchar('order_id', { length: 100 }),
+    // `order_id` → `sales.id` FK. Historical schema.sql created it auto-named as
+    // `projects_order_id_fkey`; the Drizzle migration renames it to the canonical
+    // `projects_order_id_sales_id_fk`. `projectsRepo` translates both names into a
+    // ForeignKeyError('Linked order') so installations mid-migration stay covered.
+    orderId: varchar('order_id', { length: 100 }).references(() => sales.id, {
+      onDelete: 'set null',
+    }),
     offerId: varchar('offer_id', { length: 100 }).references(() => customerOffers.id, {
       onDelete: 'set null',
       onUpdate: 'cascade',

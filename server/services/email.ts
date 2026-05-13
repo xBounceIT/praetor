@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 import * as emailRepo from '../repositories/emailRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
+
+const logger = createChildLogger({ module: 'email' });
 
 // Plaintext input for `saveConfig`. Distinct from `EmailConfigPatch` (which carries
 // `smtpPasswordCiphertext`) so the encrypt step can't be skipped: anything reaching the repo
@@ -113,7 +116,7 @@ class EmailService {
       await transporter.verify();
       return { success: true, code: 'CONNECTION_SUCCESS' };
     } catch (err) {
-      console.error('Email connection test failed:', err);
+      logger.error({ err: serializeError(err) }, 'Email connection test failed');
       return {
         success: false,
         code: 'SMTP_ERROR',
@@ -158,7 +161,7 @@ class EmailService {
         messageId: info.messageId,
       };
     } catch (err) {
-      console.error('Failed to send email:', err);
+      logger.error({ err: serializeError(err) }, 'Failed to send email');
       return {
         success: false,
         code: 'SMTP_ERROR',

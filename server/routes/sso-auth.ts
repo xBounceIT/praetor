@@ -3,6 +3,7 @@ import { generateToken } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
+import { buildFrontendUrl } from '../utils/frontend-url.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -53,14 +54,7 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
-const buildFrontendErrorUrl = (message: string): string => {
-  const configured = process.env.FRONTEND_URL?.trim();
-  const fallback = `/?sso_error=${encodeURIComponent(message)}`;
-  if (!configured) return fallback;
-  const url = new URL(configured);
-  url.searchParams.set('sso_error', message);
-  return url.href;
-};
+const buildFrontendErrorUrl = (message: string): string => buildFrontendUrl('sso_error', message);
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addContentTypeParser(
