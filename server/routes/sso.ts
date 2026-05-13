@@ -73,10 +73,14 @@ const validateProviderBody = async (
   reply: FastifyReply,
   options: { isCreate: boolean },
 ): Promise<ssoService.SsoProviderInput | null> => {
-  const input = body as ssoService.SsoProviderInput;
+  // Build a new object rather than mutating `body`: the caller passes `request.body`, and
+  // Fastify hooks downstream (audit logging, error handler) shouldn't observe normalized
+  // values like trimmed strings or coerced booleans.
+  const source = body as ssoService.SsoProviderInput;
+  const validated: ssoService.SsoProviderInput = { ...source };
 
   if (options.isCreate) {
-    const protocol = requireNonEmptyString(input.protocol, 'protocol');
+    const protocol = requireNonEmptyString(source.protocol, 'protocol');
     if (!protocol.ok) {
       badRequest(reply, protocol.message);
       return null;
@@ -85,10 +89,11 @@ const validateProviderBody = async (
       badRequest(reply, 'protocol must be oidc or saml');
       return null;
     }
+    validated.protocol = protocol.value;
   }
 
-  if (input.slug !== undefined) {
-    const slug = requireNonEmptyString(input.slug, 'slug');
+  if (source.slug !== undefined) {
+    const slug = requireNonEmptyString(source.slug, 'slug');
     if (!slug.ok) {
       badRequest(reply, slug.message);
       return null;
@@ -97,55 +102,56 @@ const validateProviderBody = async (
       badRequest(reply, 'slug must contain lowercase letters, numbers, and hyphens only');
       return null;
     }
+    validated.slug = slug.value;
   }
 
-  if (input.name !== undefined) {
-    const name = requireNonEmptyString(input.name, 'name');
+  if (source.name !== undefined) {
+    const name = requireNonEmptyString(source.name, 'name');
     if (!name.ok) {
       badRequest(reply, name.message);
       return null;
     }
-    input.name = name.value;
+    validated.name = name.value;
   }
 
-  if (input.enabled !== undefined) {
-    input.enabled = parseBoolean(input.enabled);
+  if (source.enabled !== undefined) {
+    validated.enabled = parseBoolean(source.enabled);
   } else if (options.isCreate) {
-    input.enabled = false;
+    validated.enabled = false;
   }
 
-  if (input.enabled && input.protocol === 'oidc') {
+  if (validated.enabled && validated.protocol === 'oidc') {
     for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {
-      const result = requireNonEmptyString(input[field], field);
+      const result = requireNonEmptyString(source[field], field);
       if (!result.ok) {
         badRequest(reply, result.message);
         return null;
       }
-      input[field] = result.value;
+      validated[field] = result.value;
     }
   }
 
-  if (input.enabled && input.protocol === 'saml' && options.isCreate) {
+  if (validated.enabled && validated.protocol === 'saml' && options.isCreate) {
     // A masked sentinel never counts as "present" — the service preserves the existing value
     // on update, but it can't satisfy a fresh create where there is nothing to preserve.
-    const hasMetadataXml = !!input.metadataXml?.trim() && input.metadataXml !== MASKED_SECRET;
-    const hasMetadata = !!input.metadataUrl?.trim() || hasMetadataXml;
-    const hasIdpCert = !!input.idpCert?.trim() && input.idpCert !== MASKED_SECRET;
-    const hasManual = !!input.entryPoint?.trim() && hasIdpCert;
+    const hasMetadataXml = !!source.metadataXml?.trim() && source.metadataXml !== MASKED_SECRET;
+    const hasMetadata = !!source.metadataUrl?.trim() || hasMetadataXml;
+    const hasIdpCert = !!source.idpCert?.trim() && source.idpCert !== MASKED_SECRET;
+    const hasManual = !!source.entryPoint?.trim() && hasIdpCert;
     if (!hasMetadata && !hasManual) {
       badRequest(reply, 'SAML requires metadata URL/XML or manual entryPoint and idpCert');
       return null;
     }
   }
 
-  if (input.roleMappings !== undefined) {
-    if (!Array.isArray(input.roleMappings)) {
+  if (source.roleMappings !== undefined) {
+    if (!Array.isArray(source.roleMappings)) {
       badRequest(reply, 'roleMappings must be an array');
       return null;
     }
     const roleMappings: NonNullable<ssoService.SsoProviderInput['roleMappings']> = [];
-    for (let i = 0; i < input.roleMappings.length; i++) {
-      const mapping = input.roleMappings[i] as { externalGroup?: unknown; role?: unknown };
+    for (let i = 0; i < source.roleMappings.length; i++) {
+      const mapping = source.roleMappings[i] as { externalGroup?: unknown; role?: unknown };
       const externalGroup = requireNonEmptyString(
         mapping.externalGroup,
         `roleMappings[${i}].externalGroup`,
@@ -168,10 +174,10 @@ const validateProviderBody = async (
         return null;
       }
     }
-    input.roleMappings = roleMappings;
+    validated.roleMappings = roleMappings;
   }
 
-  return input;
+  return validated;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

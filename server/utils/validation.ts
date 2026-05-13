@@ -277,17 +277,24 @@ export function optionalLocalizedPositiveNumber(
 }
 
 /**
- * Parse a boolean (accept boolean or string 'true'/'false')
+ * Parse a boolean strictly. Accepts native booleans and a fixed allow-list of strings
+ * ('true'/'false'/'1'/'0'/'yes'/'no', case-insensitive, trimmed). Anything else — numbers,
+ * objects, unrecognized strings — returns `false` rather than relying on JS truthiness,
+ * which previously coerced truthy strings like `'off'` or stray numbers into `true`.
  */
+const TRUE_STRINGS = new Set(['true', '1', 'yes']);
+const FALSE_STRINGS = new Set(['false', '0', 'no']);
+
 export function parseBoolean(value: unknown): boolean {
   if (typeof value === 'boolean') {
     return value;
   }
   if (typeof value === 'string') {
-    const trimmed = value.trim().toLowerCase();
-    return trimmed === 'true';
+    const normalized = value.trim().toLowerCase();
+    if (TRUE_STRINGS.has(normalized)) return true;
+    if (FALSE_STRINGS.has(normalized)) return false;
   }
-  return !!value;
+  return false;
 }
 
 /**
@@ -459,11 +466,21 @@ export function forbidden(reply: FastifyReply, message: string): FastifyReply {
 }
 
 /**
- * Validate email format (basic regex)
+ * Validate email format. Stricter than a simple `x@y.z` regex:
+ * - rejects whitespace, leading/trailing whitespace
+ * - rejects leading/consecutive/trailing dots in either side
+ * - rejects domain labels with leading/trailing hyphens
+ * - requires the top-level domain label to be ≥ 2 alpha chars
+ * - restricts characters to the printable ASCII subset RFC 5321 allows in practice
  */
+const EMAIL_LOCAL_CHARS = /^[A-Za-z0-9._+-]+$/;
+const EMAIL_DOMAIN_LABEL = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
+const EMAIL_TLD = /^[A-Za-z]{2,}$/;
+
 export function isValidEmail(value: string): boolean {
+  if (typeof value !== 'string' || !value) return false;
   if (value !== value.trim()) return false;
-  if (!value || /\s/.test(value)) return false;
+  if (/\s/.test(value)) return false;
 
   const atIndex = value.indexOf('@');
   if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return false;
@@ -471,13 +488,19 @@ export function isValidEmail(value: string): boolean {
   const localPart = value.slice(0, atIndex);
   const domainPart = value.slice(atIndex + 1);
   if (!localPart || !domainPart) return false;
+  if (localPart.length > 64 || domainPart.length > 253) return false;
   if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
   if (localPart.includes('..') || domainPart.includes('..')) return false;
+  if (domainPart.startsWith('.') || domainPart.endsWith('.')) return false;
+  if (!EMAIL_LOCAL_CHARS.test(localPart)) return false;
   if (!domainPart.includes('.')) return false;
 
   const domainLabels = domainPart.split('.');
-  if (domainLabels.some((label) => !label)) return false;
-  if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
+  if (domainLabels.length < 2) return false;
+  if (!domainLabels.every((label) => EMAIL_DOMAIN_LABEL.test(label))) return false;
+
+  const tld = domainLabels[domainLabels.length - 1];
+  if (!EMAIL_TLD.test(tld)) return false;
 
   return true;
 }

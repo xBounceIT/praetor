@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -10,7 +10,6 @@ import {
   installAuthMiddlewareMock,
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
-import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -25,6 +24,7 @@ const getRolePermissionsMock = mock();
 const findExistingIdsMock = mock();
 const listMock = mock();
 const findByIdMock = mock();
+const insertMock = mock();
 const updateMock = mock();
 const logAuditMock = mock(async () => undefined);
 
@@ -53,6 +53,7 @@ beforeAll(async () => {
     ...ssoProvidersRepoSnap,
     list: listMock,
     findById: findByIdMock,
+    insert: insertMock,
     update: updateMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
@@ -81,6 +82,8 @@ const HAPPY_USER = {
   isDisabled: false,
 };
 
+const FULL_PERMS = ['administration.authentication.view', 'administration.authentication.update'];
+
 const baseProvider: realSsoProvidersRepo.SsoProvider = {
   id: 'sso-1',
   protocol: 'oidc',
@@ -107,7 +110,28 @@ const baseProvider: realSsoProvidersRepo.SsoProvider = {
   roleMappings: [],
 };
 
+const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+// Snapshots are populated from preHandler/onResponse hooks. We rebuild the app each test so
+// the snapshots are fresh and the hooks can be registered before `.ready()` is called.
+type BodySnapshots = { before: unknown; after: unknown };
+
+const buildAppWithSnapshots = async (snapshots: BodySnapshots): Promise<FastifyInstance> => {
+  const app = Fastify({ logger: false });
+  app.decorate('rateLimit', () => async () => {});
+  app.addHook('preHandler', async (request) => {
+    snapshots.before = JSON.parse(JSON.stringify(request.body ?? null));
+  });
+  app.addHook('onResponse', async (request) => {
+    snapshots.after = JSON.parse(JSON.stringify(request.body ?? null));
+  });
+  await app.register(routePlugin, { prefix: '/api/sso' });
+  await app.ready();
+  return app;
+};
+
 let testApp: FastifyInstance;
+let bodySnapshots: BodySnapshots;
 
 const allMocks = [
   findAuthUserByIdMock,
@@ -116,6 +140,7 @@ const allMocks = [
   findExistingIdsMock,
   listMock,
   findByIdMock,
+  insertMock,
   updateMock,
   logAuditMock,
 ];
@@ -124,20 +149,17 @@ beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
-  getRolePermissionsMock.mockResolvedValue([
-    'administration.authentication.view',
-    'administration.authentication.update',
-  ]);
-  findExistingIdsMock.mockResolvedValue(new Set<string>());
+  getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  findExistingIdsMock.mockImplementation(async () => new Set<string>(['user', 'manager', 'admin']));
   logAuditMock.mockImplementation(async () => undefined);
-  testApp = await buildRouteTestApp(routePlugin, '/api/sso');
+
+  bodySnapshots = { before: null, after: null };
+  testApp = await buildAppWithSnapshots(bodySnapshots);
 });
 
 afterEach(async () => {
   await testApp.close();
 });
-
-const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/sso/providers — secret masking', () => {
   test('clientSecret and privateKey are returned as MASKED_SECRET when set', async () => {
@@ -254,5 +276,67 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
     const [, patch] = updateMock.mock.calls[0];
     expect(patch).not.toHaveProperty('metadataXml');
     expect(patch).not.toHaveProperty('idpCert');
+  });
+});
+
+describe('POST /api/sso/providers — validateProviderBody', () => {
+  test('passes a validated, decoupled object downstream (request.body is not mutated)', async () => {
+    insertMock.mockImplementation(async (row: realSsoProvidersRepo.SsoProvider) => row);
+
+    // Body uses an untrimmed name; if the validator mutated request.body in place, the
+    // post-handler snapshot would show 'My IdP' rather than '  My IdP  '.
+    const payload = {
+      protocol: 'oidc',
+      slug: 'my-idp',
+      name: '  My IdP  ',
+      enabled: true,
+      issuerUrl: 'https://idp.example.com',
+      clientId: 'praetor',
+      usernameAttribute: 'preferred_username',
+      roleMappings: [],
+    };
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sso/providers',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(insertMock).toHaveBeenCalledTimes(1);
+
+    // request.body identity check via JSON snapshots: before/after must match.
+    expect(bodySnapshots.before).toEqual(payload);
+    expect(bodySnapshots.after).toEqual(payload);
+
+    // The repo must have received the normalized name — proving validation ran on a
+    // separate object, not the raw body.
+    const inserted = insertMock.mock.calls[0]?.[0] as { name: string };
+    expect(inserted.name).toBe('My IdP');
+  });
+
+  test('returns 400 without mutating body when roleMappings contains an unknown role', async () => {
+    findExistingIdsMock.mockImplementationOnce(async () => new Set<string>(['admin']));
+
+    const payload = {
+      protocol: 'oidc',
+      slug: 'idp-2',
+      name: 'IdP Two',
+      enabled: false,
+      roleMappings: [{ externalGroup: 'devs', role: 'developer' }],
+    };
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sso/providers',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(bodySnapshots.before).toEqual(payload);
+    expect(bodySnapshots.after).toEqual(payload);
   });
 });

@@ -90,7 +90,9 @@ export const buildApp = async () => {
   });
 
   await fastify.register(cors, {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // Default to the documented Praetor dev frontend port (3000). Anything else (legacy
+    // Vite default 5173, deployed origin, …) is opt-in via FRONTEND_URL.
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

@@ -53,13 +53,13 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
+// Always route the query string through URLSearchParams so the encoded output is byte-
+// identical between the configured-FRONTEND_URL and fallback branches.
 const buildFrontendErrorUrl = (message: string): string => {
   const configured = process.env.FRONTEND_URL?.trim();
-  const fallback = `/?sso_error=${encodeURIComponent(message)}`;
-  if (!configured) return fallback;
-  const url = new URL(configured);
+  const url = configured ? new URL(configured) : new URL('/', 'http://localhost');
   url.searchParams.set('sso_error', message);
-  return url.href;
+  return configured ? url.href : `${url.pathname}${url.search}${url.hash}`;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

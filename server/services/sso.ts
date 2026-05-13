@@ -7,6 +7,7 @@ import {
   SAML,
   ValidateInResponseTo,
 } from '@node-saml/node-saml';
+import { XMLParser } from 'fast-xml-parser';
 import * as oidc from 'openid-client';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as ssoLoginTicketsRepo from '../repositories/ssoLoginTicketsRepo.ts';
@@ -62,7 +63,15 @@ const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
 const coerceString = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return '';
+  if (value === null || value === undefined) return '';
+  // Nested claim values (objects, arrays) may legitimately appear in SAML/OIDC payloads.
+  // Falling back to '' silently drops them; serialize so they are at least inspectable
+  // for downstream identity resolution and audit logging.
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
 };
 
 const coerceStringArray = (value: unknown): string[] => {
@@ -124,12 +133,15 @@ const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, baseUrl: stri
 const buildSamlMetadataUrl = (slug: string, baseUrl: string): string =>
   buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, baseUrl);
 
+// Use the same encoding pathway (URLSearchParams) in both branches so the encoded query
+// string is byte-identical regardless of whether FRONTEND_URL is configured. Building a
+// relative URL via `URL` with a synthetic base keeps the same `application/x-www-form-urlencoded`
+// encoding rules in play even when we only return a path.
 const buildFrontendTicketUrl = (ticket: string): string => {
   const configured = process.env.FRONTEND_URL?.trim();
-  if (!configured) return `/?sso_ticket=${encodeURIComponent(ticket)}`;
-  const url = new URL(configured);
+  const url = configured ? new URL(configured) : new URL('/', 'http://localhost');
   url.searchParams.set('sso_ticket', ticket);
-  return url.href;
+  return configured ? url.href : `${url.pathname}${url.search}${url.hash}`;
 };
 
 const prepareProviderValues = (
@@ -211,22 +223,80 @@ const normalizeCertificate = (certificate: string): string => {
   return `-----BEGIN CERTIFICATE-----\n${compact}\n-----END CERTIFICATE-----`;
 };
 
-const getXmlAttribute = (tag: string, attribute: string): string => {
-  const match = tag.match(new RegExp(`${attribute}=["']([^"']+)["']`, 'i'));
-  return match?.[1] ?? '';
+// SAML metadata parser. Uses fast-xml-parser instead of ad-hoc regexes so we correctly
+// handle namespaces, nested CDATA, and attribute quoting variants. The traversal is
+// schema-aware about which structural elements we're looking for, but tolerant about
+// where they appear (any descendant of the document root).
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  allowBooleanAttributes: true,
+  parseAttributeValue: false,
+  removeNSPrefix: true,
+  trimValues: true,
+  cdataPropName: '#cdata',
+});
+
+const isXmlObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const xmlAttr = (node: unknown, name: string): string => {
+  if (!isXmlObject(node)) return '';
+  const value = node[`@_${name}`];
+  return typeof value === 'string' ? value : '';
+};
+
+const xmlText = (node: unknown): string => {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(xmlText).join('');
+  if (!isXmlObject(node)) return '';
+  const direct = node['#text'];
+  if (typeof direct === 'string' && direct.trim()) return direct;
+  const cdata = node['#cdata'];
+  if (typeof cdata === 'string' && cdata.trim()) return cdata;
+  if (Array.isArray(cdata)) return cdata.map(xmlText).join('');
+  return '';
+};
+
+const collectDescendants = (root: unknown, name: string, acc: unknown[] = []): unknown[] => {
+  if (Array.isArray(root)) {
+    for (const item of root) collectDescendants(item, name, acc);
+    return acc;
+  }
+  if (!isXmlObject(root)) return acc;
+  for (const [key, value] of Object.entries(root)) {
+    if (key === name) {
+      if (Array.isArray(value)) acc.push(...value);
+      else acc.push(value);
+    }
+    if (key.startsWith('@_') || key === '#text' || key === '#cdata') continue;
+    collectDescendants(value, name, acc);
+  }
+  return acc;
 };
 
 const parseSamlMetadata = (xml: string) => {
-  const entityMatch = xml.match(/<[^>]*EntityDescriptor\b[^>]*entityID=["']([^"']+)["']/i);
-  const ssoTags = [...xml.matchAll(/<[^>]*SingleSignOnService\b[^>]*>/gi)].map((m) => m[0]);
-  const redirectTag =
-    ssoTags.find((tag) => /HTTP-Redirect/i.test(getXmlAttribute(tag, 'Binding'))) ?? ssoTags[0];
-  const certMatch = xml.match(/<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i);
-  return {
-    idpIssuer: entityMatch?.[1] ?? '',
-    entryPoint: redirectTag ? getXmlAttribute(redirectTag, 'Location') : '',
-    idpCert: certMatch?.[1] ? normalizeCertificate(certMatch[1]) : '',
-  };
+  let parsed: unknown;
+  try {
+    parsed = xmlParser.parse(xml);
+  } catch {
+    return { idpIssuer: '', entryPoint: '', idpCert: '' };
+  }
+
+  const entityDescriptors = collectDescendants(parsed, 'EntityDescriptor');
+  const entityDescriptor = entityDescriptors[0];
+  const idpIssuer = xmlAttr(entityDescriptor, 'entityID');
+
+  const ssoServices = collectDescendants(parsed, 'SingleSignOnService');
+  const redirectService =
+    ssoServices.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ?? ssoServices[0];
+  const entryPoint = redirectService ? xmlAttr(redirectService, 'Location') : '';
+
+  const certNodes = collectDescendants(parsed, 'X509Certificate');
+  const rawCert = certNodes.length > 0 ? xmlText(certNodes[0]) : '';
+  const idpCert = rawCert ? normalizeCertificate(rawCert) : '';
+
+  return { idpIssuer, entryPoint, idpCert };
 };
 
 /**
