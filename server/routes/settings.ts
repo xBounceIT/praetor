@@ -21,6 +21,7 @@ import {
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
+  forbidden,
   optionalEmail,
   optionalEnum,
   optionalNonEmptyString,
@@ -181,6 +182,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const languageResult = optionalEnum(language, settingsRepo.LANGUAGES, 'language');
       if (!languageResult.ok) return badRequest(reply, languageResult.message);
 
+      // Identity fields (name, email) are mastered by the upstream IdP for
+      // non-local users; only the UI-preference `language` field stays editable.
+      if (fullNameResult.value !== null || emailResult.value !== null) {
+        const userCore = await usersRepo.findCoreById(request.user.id);
+        if (userCore && userCore.authMethod !== 'local') {
+          return forbidden(reply, 'Profile is managed by the identity provider');
+        }
+      }
+
       return settingsRepo.upsertForUser(request.user.id, {
         fullName: fullNameResult.value,
         email: emailResult.value,
@@ -314,6 +324,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (currentPasswordResult.value === newPasswordResult.value) {
         return badRequest(reply, 'New password must be different from the current password');
+      }
+
+      // The password lives in the upstream IdP for non-local users; reject before
+      // bcrypt so we surface a clear error instead of "Incorrect current password".
+      const userCore = await usersRepo.findCoreById(request.user.id);
+      if (userCore && userCore.authMethod !== 'local') {
+        return forbidden(reply, 'Password is managed by the identity provider');
       }
 
       const passwordHash = await usersRepo.getPasswordHash(request.user.id);

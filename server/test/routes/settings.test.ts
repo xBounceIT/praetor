@@ -25,6 +25,7 @@ const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
+const findCoreByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const getOrCreateForUserMock = mock();
@@ -51,6 +52,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
+    findCoreById: findCoreByIdMock,
     getPasswordHash: getPasswordHashMock,
     updatePasswordHash: updatePasswordHashMock,
   }));
@@ -134,6 +136,7 @@ const HAPPY_PERSONAL_ACCESS_TOKEN = {
 
 const allMocks = [
   findAuthUserByIdMock,
+  findCoreByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
   getOrCreateForUserMock,
@@ -155,9 +158,20 @@ const allMocks = [
 
 let testApp: FastifyInstance;
 
+const LOCAL_CORE_USER = {
+  id: 'u1',
+  name: 'Alice',
+  username: 'alice',
+  role: 'user',
+  employeeType: 'app_user',
+  authMethod: 'local',
+  authProviderId: null,
+};
+
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
+  findCoreByIdMock.mockResolvedValue(LOCAL_CORE_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue([]);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
@@ -292,6 +306,54 @@ describe('PUT /api/settings', () => {
       payload: { fullName: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('403 non-local user cannot update fullName', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...LOCAL_CORE_USER, authMethod: 'ldap' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: authHeader(),
+      payload: { fullName: 'Alice B' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toMatch(/identity provider/);
+    expect(upsertForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403 non-local user cannot update email', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...LOCAL_CORE_USER, authMethod: 'oidc' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: authHeader(),
+      payload: { email: 'alice@new.com' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(upsertForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 non-local user can still change language', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...LOCAL_CORE_USER, authMethod: 'saml' });
+    upsertForUserMock.mockResolvedValue({ ...HAPPY_SETTINGS, language: 'it' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: authHeader(),
+      payload: { language: 'it' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(upsertForUserMock).toHaveBeenCalledWith('u1', {
+      fullName: null,
+      email: null,
+      language: 'it',
+    });
   });
 });
 
@@ -547,6 +609,23 @@ describe('PUT /api/settings/password', () => {
       payload: { currentPassword: 'a', newPassword: 'b' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('403 non-local user cannot change password', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...LOCAL_CORE_USER, authMethod: 'ldap' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'old-pw1', newPassword: 'new-secure-pw' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toMatch(/identity provider/);
+    expect(getPasswordHashMock).not.toHaveBeenCalled();
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+    expect(updatePasswordHashMock).not.toHaveBeenCalled();
   });
 });
 

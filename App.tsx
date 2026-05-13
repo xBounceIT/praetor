@@ -2658,6 +2658,8 @@ const App: React.FC = () => {
             {activeView === 'settings' && (
               <UserSettings
                 settings={userSettings}
+                authMethod={currentUser.authMethod ?? 'local'}
+                authProviderName={currentUser.authProviderName ?? null}
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
                 onListMcpTokens={handleListMcpTokens}
