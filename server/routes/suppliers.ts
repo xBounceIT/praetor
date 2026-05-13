@@ -7,6 +7,7 @@ import {
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -364,7 +365,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const deleted = await suppliersRepo.deleteById(idResult.value);
+      let deleted: Awaited<ReturnType<typeof suppliersRepo.deleteById>>;
+      try {
+        deleted = await suppliersRepo.deleteById(idResult.value);
+      } catch (err) {
+        // Supplier financial-doc tables (supplier_invoices, supplier_quotes, supplier_sales)
+        // now reference suppliers with ON DELETE RESTRICT instead of CASCADE - deleting a
+        // supplier with any such document errors at the FK layer. Translate to a 409 so the
+        // UI can surface a clear "supplier has financial documents" message.
+        if (getForeignKeyViolation(err)) {
+          return reply.code(409).send({
+            error:
+              'Cannot delete supplier because it has financial documents (invoices, quotes, or sales). Remove them first.',
+          });
+        }
+        throw err;
+      }
       if (!deleted) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }

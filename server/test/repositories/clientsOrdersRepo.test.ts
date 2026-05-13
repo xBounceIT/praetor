@@ -482,4 +482,81 @@ describe('restoreSnapshotOrder', () => {
     );
     expect(result).toBeNull();
   });
+
+  // Regression: B15. When the snapshot carries linkedQuoteId / linkedOfferId, the restore
+  // path must write them back to the sales row so the historical link is preserved.
+  test('writes linkedQuoteId / linkedOfferId when the snapshot carries them', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.restoreSnapshotOrder(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+        linkedQuoteId: 'cq-link',
+        linkedOfferId: 'co-link',
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toContain('"linked_quote_id"');
+    expect(setClause).toContain('"linked_offer_id"');
+    expect(exec.calls[0].params).toContain('cq-link');
+    expect(exec.calls[0].params).toContain('co-link');
+  });
+
+  test('explicit null linkedQuoteId / linkedOfferId clears the columns', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.restoreSnapshotOrder(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+        linkedQuoteId: null,
+        linkedOfferId: null,
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toContain('"linked_quote_id"');
+    expect(setClause).toContain('"linked_offer_id"');
+  });
+
+  // Legacy snapshots stored before the schema change do not carry linkedQuoteId/linkedOfferId
+  // at all - in that case the columns must not be touched (overwriting with `null` would wipe
+  // a link that is still valid on the live row). Asserting via the absence of the columns in
+  // the SET clause specifically (the RETURNING clause projects them regardless).
+  test('omits linkedQuoteId / linkedOfferId from the SET clause when the snapshot omits them', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.restoreSnapshotOrder(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 0,
+        discountType: 'percentage',
+        status: 'draft',
+        notes: null,
+        // linkedQuoteId / linkedOfferId intentionally absent (legacy snapshot shape).
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    // Carve out just the SET clause (between "set " and " where").
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).not.toContain('"linked_quote_id"');
+    expect(setClause).not.toContain('"linked_offer_id"');
+  });
 });

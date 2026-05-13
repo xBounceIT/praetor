@@ -1193,6 +1193,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discountType: version.snapshot.order.discountType,
               status: version.snapshot.order.status,
               notes: version.snapshot.order.notes,
+              // Preserve link IDs across restore (legacy snapshots may omit these; the repo
+              // only writes the columns when the keys are explicitly present, so live links
+              // survive on older snapshots).
+              ...(Object.hasOwn(version.snapshot.order, 'linkedQuoteId')
+                ? { linkedQuoteId: version.snapshot.order.linkedQuoteId ?? null }
+                : {}),
+              ...(Object.hasOwn(version.snapshot.order, 'linkedOfferId')
+                ? { linkedOfferId: version.snapshot.order.linkedOfferId ?? null }
+                : {}),
             },
             tx,
           );

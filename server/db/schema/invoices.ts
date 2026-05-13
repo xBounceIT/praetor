@@ -23,9 +23,12 @@ export const invoices = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+    // RESTRICT (not CASCADE): deleting a client must not silently destroy invoices. The
+    // delete route surfaces a 409 with a "client has financial documents" message when
+    // dependent invoices exist; callers must explicitly clean those up first.
     clientId: varchar('client_id', { length: 50 })
       .notNull()
-      .references(() => clients.id, { onDelete: 'cascade' }),
+      .references(() => clients.id, { onDelete: 'restrict' }),
     clientName: varchar('client_name', { length: 255 }).notNull(),
     issueDate: date('issue_date', { mode: 'string' }).notNull(),
     dueDate: date('due_date', { mode: 'string' }).notNull(),

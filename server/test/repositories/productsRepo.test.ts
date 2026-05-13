@@ -396,6 +396,43 @@ describe('product type propagations', () => {
     expect(exec.calls[1].params).toContain('hours');
     expect(exec.calls[1].params).toContain('good');
   });
+
+  // Regression: B14. Each propagate fn issues TWO updates that must be atomic so a failure on
+  // the SECOND update doesn't leave products/internal_product_categories drifted out of sync.
+  // The repo wraps in withDbTransaction when called without an explicit exec; when an explicit
+  // tx is supplied (as here via testDb), the caller owns the transactional scope and a thrown
+  // error from the underlying executor should propagate up to that caller's rollback.
+  test('propagateProductTypeName propagates an error from the SECOND update so the caller can roll back', async () => {
+    exec.enqueue({ rows: [], rowCount: 5 });
+    exec.enqueue(() => {
+      throw new Error('simulated failure on internal_product_categories update');
+    });
+    await expect(
+      productsRepo.propagateProductTypeName('old', 'new', testDb),
+      // Drizzle wraps thrown executor errors with a "Failed query: ..." prefix; assert via
+      // the SQL fragment to stay tied to the second update (categories) rather than the literal
+      // error message we threw.
+    ).rejects.toThrow(/internal_product_categories/);
+    // Both queries were attempted before the second one threw - we never short-circuit before
+    // the first update lands, so a transactional caller's rollback covers both.
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('update "products"');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "internal_product_categories"');
+  });
+
+  test('propagateProductTypeCostUnit propagates an error from the SECOND update so the caller can roll back', async () => {
+    exec.enqueue({ rows: [], rowCount: 4 });
+    exec.enqueue(() => {
+      throw new Error('simulated failure on internal_product_categories update');
+    });
+    await expect(
+      productsRepo.propagateProductTypeCostUnit('good', 'hours', testDb),
+      // Drizzle wraps thrown executor errors with a "Failed query: ..." prefix; assert via
+      // the SQL fragment to stay tied to the second update (categories) rather than the literal
+      // error message we threw.
+    ).rejects.toThrow(/internal_product_categories/);
+    expect(exec.calls).toHaveLength(2);
+  });
 });
 
 describe('countProductsForType / countCategoriesForType', () => {

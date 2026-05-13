@@ -310,28 +310,44 @@ export const update = async (
   return rows[0] ? mapOrder(rows[0]) : null;
 };
 
+// `linkedQuoteId` / `linkedOfferId` are optional: snapshots predating this change don't carry
+// them, in which case we preserve whatever is currently on the row (no-op on those columns).
 export type ClientOrderRestoreFields = Pick<
   ClientOrder,
   'clientId' | 'clientName' | 'paymentTerms' | 'discount' | 'discountType' | 'status' | 'notes'
->;
+> & {
+  linkedQuoteId?: string | null;
+  linkedOfferId?: string | null;
+};
 
 export const restoreSnapshotOrder = async (
   id: string,
   snapshot: ClientOrderRestoreFields,
   exec: DbExecutor = db,
 ): Promise<ClientOrder | null> => {
+  const baseFields = {
+    clientId: snapshot.clientId,
+    clientName: snapshot.clientName,
+    paymentTerms: snapshot.paymentTerms ?? 'immediate',
+    discount: numericForDb(snapshot.discount),
+    discountType: snapshot.discountType,
+    status: snapshot.status,
+    notes: snapshot.notes,
+    updatedAt: sql`CURRENT_TIMESTAMP`,
+  };
+  // Only overwrite linkedQuoteId/linkedOfferId when the snapshot explicitly carries them
+  // (legacy snapshots stored these as undefined; overwriting with `null` would wipe a link
+  // that is still valid on the live row).
+  const linkedFields: { linkedQuoteId?: string | null; linkedOfferId?: string | null } = {};
+  if (Object.hasOwn(snapshot, 'linkedQuoteId')) {
+    linkedFields.linkedQuoteId = snapshot.linkedQuoteId ?? null;
+  }
+  if (Object.hasOwn(snapshot, 'linkedOfferId')) {
+    linkedFields.linkedOfferId = snapshot.linkedOfferId ?? null;
+  }
   const rows = await exec
     .update(sales)
-    .set({
-      clientId: snapshot.clientId,
-      clientName: snapshot.clientName,
-      paymentTerms: snapshot.paymentTerms ?? 'immediate',
-      discount: numericForDb(snapshot.discount),
-      discountType: snapshot.discountType,
-      status: snapshot.status,
-      notes: snapshot.notes,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
+    .set({ ...baseFields, ...linkedFields })
     .where(eq(sales.id, id))
     .returning();
   return rows[0] ? mapOrder(rows[0]) : null;

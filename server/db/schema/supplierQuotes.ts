@@ -18,9 +18,11 @@ export const supplierQuotes = pgTable(
   'supplier_quotes',
   {
     id: varchar('id', { length: 100 }).primaryKey(),
+    // RESTRICT (not CASCADE): deleting a supplier must not silently destroy supplier quotes
+    // (financial documents). Callers must remove quotes explicitly before deleting the supplier.
     supplierId: varchar('supplier_id', { length: 50 })
       .notNull()
-      .references(() => suppliers.id, { onDelete: 'cascade' }),
+      .references(() => suppliers.id, { onDelete: 'restrict' }),
     supplierName: varchar('supplier_name', { length: 255 }).notNull(),
     paymentTerms: varchar('payment_terms', { length: 20 }).notNull().default('immediate'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),

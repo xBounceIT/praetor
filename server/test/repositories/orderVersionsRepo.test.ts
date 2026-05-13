@@ -33,7 +33,7 @@ const LIST_BASE: readonly unknown[] = [
 const listRow = (overrides: Record<number, unknown> = {}) => makeRow(LIST_BASE, overrides);
 
 describe('buildSnapshot', () => {
-  test('strips linkedQuoteId and linkedOfferId from the order envelope', () => {
+  test('preserves linkedQuoteId and linkedOfferId on the snapshot for restore round-trip', () => {
     const order = {
       id: 'so-1',
       linkedQuoteId: 'cq-1',
@@ -54,9 +54,29 @@ describe('buildSnapshot', () => {
     expect(snapshot.items).toBe(items);
     expect(snapshot.order.id).toBe('so-1');
     expect(snapshot.order.clientId).toBe('c-1');
-    // linkedQuoteId / linkedOfferId are intentionally omitted from the snapshot's order shape.
-    expect((snapshot.order as Record<string, unknown>).linkedQuoteId).toBeUndefined();
-    expect((snapshot.order as Record<string, unknown>).linkedOfferId).toBeUndefined();
+    // linkedQuoteId / linkedOfferId are real columns on `sales`, so the restore path needs them.
+    expect(snapshot.order.linkedQuoteId).toBe('cq-1');
+    expect(snapshot.order.linkedOfferId).toBe('co-1');
+  });
+
+  test('null link IDs round-trip faithfully', () => {
+    const order = {
+      id: 'so-2',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c-1',
+      clientName: 'Acme',
+      paymentTerms: 'net30',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const snapshot = orderVersionsRepo.buildSnapshot(order, []);
+    expect(snapshot.order.linkedQuoteId).toBeNull();
+    expect(snapshot.order.linkedOfferId).toBeNull();
   });
 });
 

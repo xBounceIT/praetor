@@ -11,6 +11,10 @@ Le anagrafiche CRM raccolgono i dati usati nei flussi commerciali e contabili. M
 
 Evita duplicati: prima di creare una nuova anagrafica, cerca se il cliente o fornitore esiste già.
 
+### Eliminazione protetta
+
+Non è possibile eliminare un cliente o un fornitore se sono presenti documenti commerciali collegati (preventivi, offerte, ordini, fatture). La richiesta di eliminazione viene respinta e il documento non viene perso: prima rimuovi o annulla i documenti collegati, poi elimina l'anagrafica. Questa protezione esiste perché un documento contabile emesso deve rimanere tracciabile, anche se l'anagrafica della controparte non serve più.
+
 ## Catalogo interno
 
 Il catalogo contiene prodotti, categorie, unità di misura e logiche di prezzo. Le informazioni del catalogo alimentano preventivi, offerte e documenti contabili.

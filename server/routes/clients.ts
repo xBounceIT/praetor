@@ -15,7 +15,7 @@ import {
 } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -853,7 +853,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      const deleted = await clientsRepo.deleteById(idResult.value);
+      let deleted: Awaited<ReturnType<typeof clientsRepo.deleteById>>;
+      try {
+        deleted = await clientsRepo.deleteById(idResult.value);
+      } catch (err) {
+        // Financial-doc tables (invoices, quotes, customer_offers, sales) now reference
+        // clients with ON DELETE RESTRICT instead of CASCADE - deleting a client with any
+        // such document errors at the FK layer. Translate to a 409 so the UI can surface
+        // a clear "client has financial documents" message instead of leaking a 500.
+        if (getForeignKeyViolation(err)) {
+          return reply.code(409).send({
+            error:
+              'Cannot delete client because it has financial documents (invoices, quotes, offers, or sales). Remove them first.',
+          });
+        }
+        throw err;
+      }
       if (!deleted) {
         return reply.code(404).send({ error: 'Client not found' });
       }

@@ -22,9 +22,11 @@ export const supplierInvoices = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+    // RESTRICT (not CASCADE): deleting a supplier must not silently destroy supplier invoices
+    // (financial documents). Callers must remove invoices explicitly before deleting the supplier.
     supplierId: varchar('supplier_id', { length: 50 })
       .notNull()
-      .references(() => suppliers.id, { onDelete: 'cascade' }),
+      .references(() => suppliers.id, { onDelete: 'restrict' }),
     supplierName: varchar('supplier_name', { length: 255 }).notNull(),
     issueDate: date('issue_date', { mode: 'string' }).notNull(),
     dueDate: date('due_date', { mode: 'string' }).notNull(),

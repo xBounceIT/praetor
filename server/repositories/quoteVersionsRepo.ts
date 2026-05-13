@@ -36,12 +36,16 @@ const mapVersion = (row: typeof quoteVersions.$inferSelect): QuoteVersion => ({
   snapshot: row.snapshot,
 });
 
+// Record `linkedOfferId` on the snapshot so the saved version is a complete historical record.
+// `linkedOfferId` is derived (no column on the quote row), so the restore path does NOT
+// re-establish it on the customer_offers side - the link survives restore naturally because
+// customer_offers.linked_quote_id is not touched. This is here for completeness / audit / data
+// portability. Older snapshots from before this change may not have the field at all.
 export const buildSnapshot = (
   quote: ClientQuote,
   items: ClientQuoteItem[],
 ): QuoteVersionSnapshot => {
-  const { linkedOfferId: _linked, ...quoteSnapshot } = quote;
-  return { schemaVersion: 1, quote: quoteSnapshot, items };
+  return { schemaVersion: 1, quote, items };
 };
 
 export const listForQuote = async (
