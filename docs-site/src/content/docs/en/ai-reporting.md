@@ -36,7 +36,7 @@ To grant or revoke cost visibility, edit the role in Administration > Roles and 
 
 ## MCP Access For External Agents
 
-Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol compatible agents. Agents must authenticate with a personal MCP token created from Settings > MCP Tokens.
+Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol compatible agents. Agents must authenticate with a personal MCP token created from Settings > MCP.
 
 The token is shown only once when it is created. Praetor stores only a hash, so revoke and recreate the token if it is lost.
 
@@ -50,13 +50,13 @@ Authorization: Bearer praetor_mcp_...
 
 Use these steps to connect an external agent:
 
-1. Open Settings > MCP Tokens.
+1. Open Settings > MCP.
 2. Create a token with a recognizable name, such as the agent or device name.
 3. Copy the token immediately; it will not be shown again.
 4. Use the displayed MCP Server URL field for the exact endpoint, usually `https://your-praetor-host/api/mcp`.
 5. Copy the Agent Setup Prompt if you want an AI agent to configure the server automatically.
 6. Configure the MCP client with the endpoint URL and bearer token header above.
-7. Revoke old or unused tokens from Settings > MCP Tokens.
+7. Revoke old or unused tokens from Settings > MCP.
 
 Supported tools:
 
