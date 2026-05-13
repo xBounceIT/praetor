@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -493,9 +492,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           currency={currency}
           onAddCustomTask={onAddCustomTask}
           defaultLocation={defaultLocation}
+          onSubmit={handleSubmit}
+          isSubmitting={isLoading}
+          showSubmitSuccess={showSuccess}
+          canSubmit={hasPendingEdits}
         />
 
-        <div className="w-full xl:max-w-[300px] xl:h-full flex flex-col gap-3">
+        <div className="w-full xl:max-w-[300px] xl:h-full">
           <Calendar
             selectedDate={selectedDate}
             onDateSelect={onSelectedDateChange}
@@ -506,17 +509,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             allowWeekendSelection={allowWeekendSelection}
             size="compact"
           />
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isLoading || !hasPendingEdits}
-            className={cn(
-              'w-full h-11 rounded-xl font-bold text-sm uppercase tracking-widest',
-              showSuccess && 'bg-emerald-600 hover:bg-emerald-600',
-            )}
-          >
-            {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
-          </Button>
         </div>
       </div>
 

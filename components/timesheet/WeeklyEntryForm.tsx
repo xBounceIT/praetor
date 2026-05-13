@@ -1,12 +1,15 @@
+import { ArrowUp } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntryLocation } from '../../types';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import TaskFormModal, {
   type RecurringConfig,
   type TaskFormDetails,
 } from '../projects/TaskFormModal';
+import { Button } from '../ui/button';
 import { Field, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import EntryCatalogSelector from './EntryCatalogSelector';
@@ -37,6 +40,10 @@ export interface WeeklyEntryFormProps {
     details?: TaskFormDetails,
   ) => Promise<ProjectTask>;
   defaultLocation?: TimeEntryLocation;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+  showSubmitSuccess: boolean;
+  canSubmit: boolean;
 }
 
 const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
@@ -51,6 +58,10 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
   permissions,
   currency,
   onAddCustomTask,
+  onSubmit,
+  isSubmitting,
+  showSubmitSuccess,
+  canSubmit,
 }) => {
   const { t } = useTranslation('timesheets');
   const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
@@ -126,17 +137,34 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
           errors={errors}
         />
 
-        <Field>
-          <FieldLabel htmlFor="weekly-form-week-note">{t('weekly.weekNoteLabel')}</FieldLabel>
-          <Input
-            id="weekly-form-week-note"
-            type="text"
-            value={weekNote}
-            onChange={(e) => onWeekNoteChange(e.target.value)}
-            placeholder={t('weekly.weekNotePlaceholder')}
-            className="h-10 rounded-lg"
-          />
-        </Field>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="weekly-form-week-note">{t('weekly.weekNoteLabel')}</FieldLabel>
+            <Input
+              id="weekly-form-week-note"
+              type="text"
+              value={weekNote}
+              onChange={(e) => onWeekNoteChange(e.target.value)}
+              placeholder={t('weekly.weekNotePlaceholder')}
+              className="h-10 rounded-lg"
+            />
+          </Field>
+
+          <div className="min-w-0 flex items-end">
+            <Button
+              type="button"
+              onClick={onSubmit}
+              disabled={isSubmitting || !canSubmit}
+              className={cn(
+                'h-10 w-full rounded-lg',
+                showSubmitSuccess && 'bg-emerald-600 hover:bg-emerald-600',
+              )}
+            >
+              {showSubmitSuccess ? t('weekly.success') : t('weekly.submitTime')}
+              <ArrowUp className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <TaskFormModal
