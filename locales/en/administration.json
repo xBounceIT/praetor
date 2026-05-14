@@ -121,6 +121,7 @@
         "roles_updated": "Updated roles",
         "assignments_updated": "Updated assignments",
         "permissions_updated": "Updated permissions",
+        "reverted_to_draft": "Reverted to Draft",
         "synced": "Synced",
         "login": "Signed in",
         "role_switched": "Switched role",

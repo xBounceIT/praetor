@@ -133,6 +133,19 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
+  const revertClientOfferToDraft = async (id: string, reason?: string) => {
+    try {
+      const updated = await api.clientOffers.revertToDraft(id, reason);
+      if (getClientOfferFilterId() === id) {
+        setClientOfferFilterId(updated.id);
+      }
+      await refreshClientQuoteFlow();
+    } catch (err) {
+      console.error('Failed to revert client offer to draft:', err);
+      throw err;
+    }
+  };
+
   const deleteClientOffer = async (id: string) => {
     try {
       await api.clientOffers.delete(id);
@@ -238,6 +251,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     updateQuote,
     deleteQuote,
     updateClientOffer,
+    revertClientOfferToDraft,
     deleteClientOffer,
     createClientOfferFromQuote,
     updateClientsOrder,

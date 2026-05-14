@@ -97,6 +97,7 @@ import {
 } from './utils/moduleScopedState';
 import { normalizeCurrency } from './utils/normalizeCurrency';
 import {
+  ADMIN_ROLE_ID,
   buildPermission,
   equivalentPermissionsFor,
   getDefaultViewForPermissions,
@@ -104,6 +105,7 @@ import {
   hasAnyPermission,
   hasPermission,
   hasViewAccess,
+  TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
@@ -1968,6 +1970,7 @@ const AppContent: React.FC = () => {
   const handleUpdateQuote = quoteHandlers.updateQuote;
   const handleDeleteQuote = quoteHandlers.deleteQuote;
   const handleUpdateClientOffer = quoteHandlers.updateClientOffer;
+  const handleRevertClientOfferToDraft = quoteHandlers.revertClientOfferToDraft;
   const handleDeleteClientOffer = quoteHandlers.deleteClientOffer;
   const handleCreateClientOfferFromQuote = quoteHandlers.createClientOfferFromQuote;
   const handleUpdateClientsOrder = quoteHandlers.updateClientsOrder;
@@ -2342,6 +2345,10 @@ const AppContent: React.FC = () => {
                   supplierQuotes={supplierQuotes}
                   offerIdsWithOrders={offerIdsWithOrders}
                   onUpdateOffer={handleUpdateClientOffer}
+                  onRevertOfferToDraft={handleRevertClientOfferToDraft}
+                  canRevertTerminalStatus={
+                    currentUser.role === TOP_MANAGER_ROLE_ID || currentUser.role === ADMIN_ROLE_ID
+                  }
                   onOfferRestored={async () => {
                     setClientOffers(await api.clientOffers.list());
                   }}

@@ -140,6 +140,7 @@ const normalizeAuditDetails = (details?: AuditLogDetails): AuditLogDetails | nul
     counts: counts && Object.keys(counts).length > 0 ? counts : undefined,
     fromValue: details.fromValue?.trim() || undefined,
     toValue: details.toValue?.trim() || undefined,
+    reason: details.reason?.trim() || undefined,
   };
 
   return Object.values(normalized).some((value) => value !== undefined) ? normalized : null;

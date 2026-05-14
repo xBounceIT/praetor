@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, db, withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
@@ -10,6 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
+import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -27,6 +28,14 @@ import {
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
+const TERMINAL_OFFER_STATUSES = new Set(['accepted', 'denied']);
+const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the revert-to-draft action';
+const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
+const TERMINAL_REVERT_LINKED_SALE_ERROR =
+  'Cannot revert an offer once a sale order has been created from it';
+
+const canRevertTerminalOfferStatus = (request: FastifyRequest) =>
+  request.user?.role === TOP_MANAGER_ROLE_ID || request.user?.role === ADMIN_ROLE_ID;
 
 const idParamSchema = {
   type: 'object',
@@ -142,6 +151,14 @@ const offerUpdateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
+} as const;
+
+const offerRevertToDraftBodySchema = {
+  type: 'object',
+  properties: {
+    reason: { type: 'string' },
+  },
+  additionalProperties: false,
 } as const;
 
 type OfferItemInput = {
@@ -624,6 +641,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      const isTerminalToDraftRevert =
+        typeof status === 'string' &&
+        status === 'draft' &&
+        TERMINAL_OFFER_STATUSES.has(existingOffer.status);
+      if (isTerminalToDraftRevert) {
+        if (!canRevertTerminalOfferStatus(request)) {
+          return reply.code(403).send({ error: TERMINAL_REVERT_ROLE_ERROR });
+        }
+        return reply.code(409).send({ error: TERMINAL_REVERT_ERROR });
+      }
+
       const hasLockedFieldUpdates =
         clientId !== undefined ||
         clientName !== undefined ||
@@ -836,6 +864,99 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       return { ...updatedOffer, items: updatedItems };
+    },
+  );
+
+  fastify.post(
+    '/:id/revert-to-draft',
+    {
+      onRequest: [requireRole(ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID)],
+      preValidation: async (request) => {
+        request.body ??= {};
+      },
+      schema: {
+        tags: ['client-offers'],
+        summary: 'Revert a terminal client offer to draft',
+        params: idParamSchema,
+        body: offerRevertToDraftBodySchema,
+        response: {
+          200: offerSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const { reason } = (request.body ?? {}) as { reason?: unknown };
+      const reasonResult = optionalNonEmptyString(reason, 'reason');
+      if (!reasonResult.ok) return badRequest(reply, reasonResult.message);
+
+      type RevertOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            previousStatus: string;
+            offer: clientOffersRepo.ClientOffer;
+            items: clientOffersRepo.ClientOfferItem[];
+          };
+
+      const result: RevertOutcome = await withDbTransaction(async (tx) => {
+        const current = await clientOffersRepo.lockExistingById(idResult.value, tx);
+        if (!current) {
+          return { ok: false, status: 404, body: { error: 'Offer not found' } };
+        }
+        if (!TERMINAL_OFFER_STATUSES.has(current.status)) {
+          return {
+            ok: false,
+            status: 409,
+            body: {
+              error: 'Only accepted or denied offers can be reverted to draft',
+              currentStatus: current.status,
+            },
+          };
+        }
+
+        const linkedSaleId = await clientOffersRepo.findLinkedSaleId(idResult.value, tx);
+        if (linkedSaleId) {
+          return {
+            ok: false,
+            status: 409,
+            body: { error: TERMINAL_REVERT_LINKED_SALE_ERROR },
+          };
+        }
+
+        await snapshotPreState(idResult.value, 'update', request, tx);
+        const offer = await clientOffersRepo.update(idResult.value, { status: 'draft' }, tx);
+        if (!offer) {
+          return { ok: false, status: 404, body: { error: 'Offer not found' } };
+        }
+        const items = await clientOffersRepo.findItemsForOffer(offer.id, tx);
+        return { ok: true, previousStatus: current.status, offer, items };
+      });
+
+      if (!result.ok) {
+        return reply.code(result.status).send(result.body);
+      }
+
+      await logAudit({
+        request,
+        action: 'client_offer.reverted_to_draft',
+        entityType: 'client_offer',
+        entityId: result.offer.id,
+        details: {
+          targetLabel: result.offer.id,
+          secondaryLabel: result.offer.clientName,
+          changedFields: ['status'],
+          fromValue: result.previousStatus,
+          toValue: 'draft',
+          reason: reasonResult.value ?? undefined,
+        },
+      });
+
+      return { ...result.offer, items: result.items };
     },
   );
 

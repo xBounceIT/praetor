@@ -528,6 +528,117 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
   });
 });
 
+describe('POST /api/sales/client-offers/:id/revert-to-draft', () => {
+  const setupHappyPath = (status = 'accepted') => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, role: 'top_manager' });
+    coLockExistingByIdMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status,
+    });
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      offer: { ...SAMPLE_OFFER, status },
+      items: [SAMPLE_ITEM],
+    });
+    ovInsertMock.mockResolvedValue({ ...SAMPLE_VERSION_ROW, reason: 'update' });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_OFFER, status: 'draft' });
+    coFindItemsForOfferMock.mockResolvedValue([SAMPLE_ITEM]);
+  };
+
+  test('200 top manager reverts accepted offer to draft with snapshot and audit reason', async () => {
+    setupHappyPath('accepted');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revert-to-draft',
+      headers: authHeader(),
+      payload: { reason: 'Wrong status' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: 'off-1', reason: 'update', createdByUserId: 'u1' }),
+      TX_SENTINEL,
+    );
+    expect(coUpdateMock).toHaveBeenCalledWith('off-1', { status: 'draft' }, TX_SENTINEL);
+    expect(coFindItemsForOfferMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_offer.reverted_to_draft',
+        entityType: 'client_offer',
+        entityId: 'off-1',
+        details: expect.objectContaining({
+          changedFields: ['status'],
+          fromValue: 'accepted',
+          toValue: 'draft',
+          reason: 'Wrong status',
+        }),
+      }),
+    );
+  });
+
+  test('200 admin can use the dedicated revert endpoint', async () => {
+    setupHappyPath('denied');
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, role: 'admin' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revert-to-draft',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith('off-1', { status: 'draft' }, TX_SENTINEL);
+  });
+
+  test('403 manager cannot revert terminal offers through the dedicated endpoint', async () => {
+    setupHappyPath('accepted');
+    findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revert-to-draft',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coLockExistingByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when current offer is not terminal', async () => {
+    setupHappyPath('sent');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revert-to-draft',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when accepted offer already has a linked sale order', async () => {
+    setupHappyPath('accepted');
+    coFindLinkedSaleIdMock.mockResolvedValue('sale-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revert-to-draft',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     coFindExistingMock.mockResolvedValue({
@@ -578,6 +689,27 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).not.toHaveBeenCalled();
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT terminal-to-draft rejects ordinary manager before generic update', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'accepted',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-offers/off-1',
+      headers: authHeader(),
+      payload: { status: 'draft' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
   test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {

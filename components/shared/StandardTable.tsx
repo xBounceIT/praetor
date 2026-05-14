@@ -47,6 +47,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { Empty, EmptyHeader, EmptyTitle } from '../ui/empty';
 import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -88,6 +89,10 @@ const STORAGE_SUFFIX = {
   activeView: 'activeview',
 } as const;
 type StorageSuffix = (typeof STORAGE_SUFFIX)[keyof typeof STORAGE_SUFFIX];
+
+// Keep in sync with the `h-11` Tailwind class on padding rows (1rem*2.75 = 44px).
+// Reserved height of empty-state cell = minBodyRows × this constant.
+const BODY_ROW_HEIGHT_PX = 44;
 
 const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
@@ -172,6 +177,12 @@ export type StandardTableProps<T extends object = object> = {
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
+  /**
+   * Minimum visible body rows. When the current page has fewer rows than this,
+   * the body is padded with inert placeholder rows so the table footprint stays
+   * stable across empty / sparse / full states. Defaults to 4.
+   */
+  minBodyRows?: number;
   rowClassName?: (row: T) => string;
   disabledRow?: (row: T) => boolean;
   onRowClick?: (row: T) => void;
@@ -195,6 +206,7 @@ const StandardTable = <T extends object>({
   data,
   columns,
   defaultRowsPerPage = 10,
+  minBodyRows = 4,
   rowClassName,
   disabledRow,
   onRowClick,
@@ -701,6 +713,15 @@ const StandardTable = <T extends object>({
   const hasTrailingSpacer =
     shouldRenderTable && !shouldAnchorTrailingActionColumn && visibleColumns.length > 0;
   const tableStretches = shouldAnchorTrailingActionColumn || hasTrailingSpacer;
+  const bodyColSpan = Math.max(
+    visibleColumns.length +
+      (shouldAnchorTrailingActionColumn ? 1 : 0) +
+      (hasTrailingSpacer ? 1 : 0),
+    1,
+  );
+  const normalizedMinBodyRows = Math.max(0, minBodyRows);
+  const paddingRowCount = Math.max(0, normalizedMinBodyRows - paginatedRows.length);
+  const emptyStateMinHeightPx = normalizedMinBodyRows * BODY_ROW_HEIGHT_PX;
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -1814,185 +1835,208 @@ const StandardTable = <T extends object>({
             </TableHeader>
             <TableBody>
               {paginatedRows.length > 0 ? (
-                paginatedRows.map((tableRow) => {
-                  const row = tableRow.original;
-                  const visibleCells = tableRow.getVisibleCells();
-                  const rowActionCell = visibleCells.find((cell) => {
-                    const col = colsById.get(cell.column.id);
-                    return col ? isRowActionColumn(col) : false;
-                  });
-                  const rowActionColumn = rowActionCell
-                    ? colsById.get(rowActionCell.column.id)
-                    : undefined;
-                  const rowActionValue = rowActionCell?.getValue() as
-                    | T[keyof T]
-                    | string
-                    | number
-                    | boolean
-                    | null
-                    | undefined;
-                  const rowActionContent = rowActionCell
-                    ? rowActionColumn?.cell
-                      ? rowActionColumn.cell({
-                          getValue: () => rowActionValue,
-                          row,
-                          value: rowActionValue,
-                        })
-                      : flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
-                    : null;
-                  const rowActionMenuItems = hasActionMenuItems(rowActionContent)
-                    ? renderActionMenuItems(rowActionContent)
-                    : null;
-                  const isActionMenuOpen = openActionMenuRowId === tableRow.id;
-                  const isContextMenuOpen = openContextMenuRowId === tableRow.id;
-                  const rowElement = (
-                    <TableRow
-                      key={tableRow.id}
-                      onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                      className={`group border-border transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
-                    >
-                      {visibleCells.map((cell, colIdx) => {
-                        const colId = cell.column.id;
-                        const col = colsById.get(colId);
-                        if (!col) return null;
-                        const isActionColumn = isRowActionColumn(col);
-                        const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
-                        const isFirstColumn = colIdx === 0;
-                        const isLastColumn = colIdx === visibleCells.length - 1;
-                        const shouldStickRightColumn = isStickyRightColumn;
-                        // Force alignment: first column left, last column right, otherwise use col.align
-                        const effectiveAlign = isFirstColumn
-                          ? 'left'
-                          : isLastColumn
-                            ? 'right'
-                            : col.align;
-                        const minColumnWidth = getColumnMinWidth(col);
-                        const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
-                        const stickyBorderClass =
-                          shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
-                        const stickyHoverClass =
-                          shouldStickRightColumn && !isActionColumn
-                            ? 'group-hover:bg-muted/50'
-                            : '';
-                        const rawValue = cell.getValue() as
-                          | T[keyof T]
-                          | string
-                          | number
-                          | boolean
-                          | null
-                          | undefined;
-                        const cellContent =
-                          isActionColumn && cell.id === rowActionCell?.id
-                            ? rowActionContent
-                            : col.cell
-                              ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                              : flexRender(cell.column.columnDef.cell, cell.getContext());
-                        const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
-                        return (
-                          <Fragment key={cell.id}>
-                            {shouldAnchorTrailingActionColumn && isActionColumn && (
-                              <TableCell
-                                aria-hidden="true"
-                                style={{ width: 'auto', minWidth: 0 }}
-                                className="border-border p-0"
-                              />
-                            )}
-                            <TableCell
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                col.onCellDoubleClick?.(row);
-                              }}
-                              style={{ width: colWidth, minWidth: minColumnWidth }}
-                              className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
-                            >
-                              {isActionColumn ? (
-                                actionMenuItems ? (
-                                  <DropdownMenu
-                                    open={isActionMenuOpen}
-                                    onOpenChange={(open) =>
-                                      setOpenActionMenuRowId(open ? tableRow.id : null)
-                                    }
-                                  >
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        aria-label={t('table.rowActions')}
-                                        onClick={(event) => event.stopPropagation()}
-                                        className="rounded-lg"
-                                      >
-                                        <i
-                                          className="fa-solid fa-ellipsis text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    {isActionMenuOpen && (
-                                      <DropdownMenuContent
-                                        align="end"
-                                        data-standard-table-action-menu="true"
-                                        className={ACTION_MENU_CONTENT_CLASSNAME}
-                                        onClick={(event) => event.stopPropagation()}
-                                        onDoubleClick={(event) => event.stopPropagation()}
-                                      >
-                                        <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                                          {actionMenuItems}
-                                        </div>
-                                      </DropdownMenuContent>
-                                    )}
-                                  </DropdownMenu>
-                                ) : null
-                              ) : (
-                                cellContent
+                <>
+                  {paginatedRows.map((tableRow) => {
+                    const row = tableRow.original;
+                    const visibleCells = tableRow.getVisibleCells();
+                    const rowActionCell = visibleCells.find((cell) => {
+                      const col = colsById.get(cell.column.id);
+                      return col ? isRowActionColumn(col) : false;
+                    });
+                    const rowActionColumn = rowActionCell
+                      ? colsById.get(rowActionCell.column.id)
+                      : undefined;
+                    const rowActionValue = rowActionCell?.getValue() as
+                      | T[keyof T]
+                      | string
+                      | number
+                      | boolean
+                      | null
+                      | undefined;
+                    const rowActionContent = rowActionCell
+                      ? rowActionColumn?.cell
+                        ? rowActionColumn.cell({
+                            getValue: () => rowActionValue,
+                            row,
+                            value: rowActionValue,
+                          })
+                        : flexRender(
+                            rowActionCell.column.columnDef.cell,
+                            rowActionCell.getContext(),
+                          )
+                      : null;
+                    const rowActionMenuItems = hasActionMenuItems(rowActionContent)
+                      ? renderActionMenuItems(rowActionContent)
+                      : null;
+                    const isActionMenuOpen = openActionMenuRowId === tableRow.id;
+                    const isContextMenuOpen = openContextMenuRowId === tableRow.id;
+                    const rowElement = (
+                      <TableRow
+                        key={tableRow.id}
+                        onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
+                        className={`group border-border transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
+                      >
+                        {visibleCells.map((cell, colIdx) => {
+                          const colId = cell.column.id;
+                          const col = colsById.get(colId);
+                          if (!col) return null;
+                          const isActionColumn = isRowActionColumn(col);
+                          const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
+                          const isFirstColumn = colIdx === 0;
+                          const isLastColumn = colIdx === visibleCells.length - 1;
+                          const shouldStickRightColumn = isStickyRightColumn;
+                          // Force alignment: first column left, last column right, otherwise use col.align
+                          const effectiveAlign = isFirstColumn
+                            ? 'left'
+                            : isLastColumn
+                              ? 'right'
+                              : col.align;
+                          const minColumnWidth = getColumnMinWidth(col);
+                          const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
+                          const stickyBorderClass =
+                            shouldStickRightColumn && !isActionColumn
+                              ? 'border-l border-border'
+                              : '';
+                          const stickyHoverClass =
+                            shouldStickRightColumn && !isActionColumn
+                              ? 'group-hover:bg-muted/50'
+                              : '';
+                          const rawValue = cell.getValue() as
+                            | T[keyof T]
+                            | string
+                            | number
+                            | boolean
+                            | null
+                            | undefined;
+                          const cellContent =
+                            isActionColumn && cell.id === rowActionCell?.id
+                              ? rowActionContent
+                              : col.cell
+                                ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+                                : flexRender(cell.column.columnDef.cell, cell.getContext());
+                          const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
+                          return (
+                            <Fragment key={cell.id}>
+                              {shouldAnchorTrailingActionColumn && isActionColumn && (
+                                <TableCell
+                                  aria-hidden="true"
+                                  style={{ width: 'auto', minWidth: 0 }}
+                                  className="border-border p-0"
+                                />
                               )}
-                            </TableCell>
-                          </Fragment>
-                        );
-                      })}
-                      {hasTrailingSpacer && (
-                        <TableCell
-                          aria-hidden="true"
-                          style={{ width: 'auto', minWidth: 0 }}
-                          className="border-border p-0"
-                        />
-                      )}
-                    </TableRow>
-                  );
+                              <TableCell
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  col.onCellDoubleClick?.(row);
+                                }}
+                                style={{ width: colWidth, minWidth: minColumnWidth }}
+                                className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
+                              >
+                                {isActionColumn ? (
+                                  actionMenuItems ? (
+                                    <DropdownMenu
+                                      open={isActionMenuOpen}
+                                      onOpenChange={(open) =>
+                                        setOpenActionMenuRowId(open ? tableRow.id : null)
+                                      }
+                                    >
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          aria-label={t('table.rowActions')}
+                                          onClick={(event) => event.stopPropagation()}
+                                          className="rounded-lg"
+                                        >
+                                          <i
+                                            className="fa-solid fa-ellipsis text-[10px]"
+                                            aria-hidden="true"
+                                          ></i>
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      {isActionMenuOpen && (
+                                        <DropdownMenuContent
+                                          align="end"
+                                          data-standard-table-action-menu="true"
+                                          className={ACTION_MENU_CONTENT_CLASSNAME}
+                                          onClick={(event) => event.stopPropagation()}
+                                          onDoubleClick={(event) => event.stopPropagation()}
+                                        >
+                                          <div className={ACTION_MENU_ITEMS_CLASSNAME}>
+                                            {actionMenuItems}
+                                          </div>
+                                        </DropdownMenuContent>
+                                      )}
+                                    </DropdownMenu>
+                                  ) : null
+                                ) : (
+                                  cellContent
+                                )}
+                              </TableCell>
+                            </Fragment>
+                          );
+                        })}
+                        {hasTrailingSpacer && (
+                          <TableCell
+                            aria-hidden="true"
+                            style={{ width: 'auto', minWidth: 0 }}
+                            className="border-border p-0"
+                          />
+                        )}
+                      </TableRow>
+                    );
 
-                  return rowActionMenuItems ? (
-                    <ContextMenu
-                      key={tableRow.id}
-                      onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}
+                    return rowActionMenuItems ? (
+                      <ContextMenu
+                        key={tableRow.id}
+                        onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}
+                      >
+                        <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
+                        {isContextMenuOpen && (
+                          <ContextMenuContent
+                            data-standard-table-action-menu="true"
+                            className={ACTION_MENU_CONTENT_CLASSNAME}
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                          >
+                            <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
+                          </ContextMenuContent>
+                        )}
+                      </ContextMenu>
+                    ) : (
+                      rowElement
+                    );
+                  })}
+                  {Array.from({ length: paddingRowCount }).map((_, idx) => (
+                    <TableRow
+                      key={`__padding-${idx}`}
+                      aria-hidden="true"
+                      className="pointer-events-none hover:bg-transparent"
                     >
-                      <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
-                      {isContextMenuOpen && (
-                        <ContextMenuContent
-                          data-standard-table-action-menu="true"
-                          className={ACTION_MENU_CONTENT_CLASSNAME}
-                          onClick={(event) => event.stopPropagation()}
-                          onDoubleClick={(event) => event.stopPropagation()}
-                        >
-                          <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
-                        </ContextMenuContent>
-                      )}
-                    </ContextMenu>
-                  ) : (
-                    rowElement
-                  );
-                })
+                      <TableCell colSpan={bodyColSpan} className="h-11 p-0" />
+                    </TableRow>
+                  ))}
+                </>
               ) : (
-                <TableRow className="border-border">
-                  <TableCell
-                    colSpan={Math.max(
-                      visibleColumns.length +
-                        (shouldAnchorTrailingActionColumn ? 1 : 0) +
-                        (hasTrailingSpacer ? 1 : 0),
-                      1,
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={bodyColSpan} className="p-0">
+                    {emptyState ? (
+                      <div
+                        className="flex w-full items-center justify-center"
+                        style={{ minHeight: emptyStateMinHeightPx }}
+                      >
+                        {emptyState}
+                      </div>
+                    ) : (
+                      <Empty style={{ minHeight: emptyStateMinHeightPx }}>
+                        <EmptyHeader>
+                          <EmptyTitle className="text-sm font-medium text-muted-foreground">
+                            {t('table.noResults')}
+                          </EmptyTitle>
+                        </EmptyHeader>
+                      </Empty>
                     )}
-                    className="p-12 text-center text-sm font-medium text-muted-foreground"
-                  >
-                    {emptyState ?? t('table.noResults')}
                   </TableCell>
                 </TableRow>
               )}
