@@ -150,6 +150,18 @@ const ldapSyncResponseSchema = {
   additionalProperties: true,
 } as const;
 
+const ldapSyncErrorResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    error: { type: 'string' },
+    errorCode: { type: 'string' },
+    skipped: { type: 'boolean' },
+    reason: { type: 'string' },
+  },
+  required: ['success', 'error'],
+} as const;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET /config - Get LDAP configuration (admin only)
   fastify.get(
@@ -418,12 +430,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         response: {
           200: ldapSyncResponseSchema,
           ...standardRateLimitedErrorResponses,
+          400: ldapSyncErrorResponseSchema,
+          503: ldapSyncErrorResponseSchema,
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const config = await ldapRepo.get();
+      if (!config?.enabled) {
+        return reply.code(400).send({
+          success: false,
+          error: 'LDAP is not enabled',
+          errorCode: 'ldap_not_enabled',
+        });
+      }
+
       const ldapService = (await import('../services/ldap.ts')).default;
-      const stats = await ldapService.syncUsers();
+      let stats: Awaited<ReturnType<typeof ldapService.syncUsers>>;
+      try {
+        stats = await ldapService.syncUsers();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        request.log.warn({ err }, 'LDAP sync request failed');
+        return reply.code(503).send({
+          success: false,
+          error: `LDAP sync failed: ${message}`,
+          errorCode: 'ldap_sync_failed',
+        });
+      }
+
+      if (stats.skipped) {
+        return reply.code(400).send({
+          ...stats,
+          success: false,
+          error: stats.reason ?? 'LDAP sync skipped',
+          errorCode: 'ldap_sync_skipped',
+        });
+      }
+
       await logAudit({
         request,
         action: 'ldap.synced',
