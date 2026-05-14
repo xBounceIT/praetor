@@ -36,6 +36,7 @@ const getRolePermissionsMock = mock();
 
 const soExistsByIdMock = mock();
 const soFindExistingMock = mock();
+const soLockExistingByIdMock = mock();
 const soFindLinkedInvoiceIdMock = mock();
 const soFindFullForSnapshotMock = mock();
 const soFindItemsForOrderMock = mock();
@@ -76,6 +77,7 @@ beforeAll(async () => {
     ...supplierOrdersRepoSnap,
     existsById: soExistsByIdMock,
     findExisting: soFindExistingMock,
+    lockExistingById: soLockExistingByIdMock,
     findLinkedInvoiceId: soFindLinkedInvoiceIdMock,
     findFullForSnapshot: soFindFullForSnapshotMock,
     findItemsForOrder: soFindItemsForOrderMock,
@@ -195,6 +197,7 @@ const allMocks = [
   getRolePermissionsMock,
   soExistsByIdMock,
   soFindExistingMock,
+  soLockExistingByIdMock,
   soFindLinkedInvoiceIdMock,
   soFindFullForSnapshotMock,
   soFindItemsForOrderMock,
@@ -313,7 +316,7 @@ describe('GET /api/accounting/supplier-orders/:id/versions/:versionId', () => {
 describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingMock.mockResolvedValue({
+    soLockExistingByIdMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -347,15 +350,18 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     const body = JSON.parse(res.body);
     expect(body.id).toBe('so-1');
     expect(body.items).toHaveLength(1);
+    // TOCTOU guard: gate-read must use the FOR UPDATE helper, not the non-locking findExisting
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soFindExistingMock).not.toHaveBeenCalled();
 
     // Pre-restore snapshot inserted with reason='restore'
     expect(sovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'so-1', reason: 'restore', createdByUserId: 'u1' }),
       TX_SENTINEL,
     );
-    // Reference checks ran
-    expect(suppliersExistsByIdMock).toHaveBeenCalledWith('s-1');
-    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    // Reference checks ran (inside the same tx, so the executor is forwarded)
+    expect(suppliersExistsByIdMock).toHaveBeenCalledWith('s-1', TX_SENTINEL);
+    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1'], TX_SENTINEL);
     // Order and items applied
     expect(soRestoreSnapshotOrderMock).toHaveBeenCalledWith(
       'so-1',
@@ -377,6 +383,13 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
   });
 
   test('409 when linked invoice exists', async () => {
+    soLockExistingByIdMock.mockResolvedValue({
+      id: 'so-1',
+      linkedQuoteId: null,
+      supplierId: 's-1',
+      supplierName: 'Acme',
+      status: 'draft',
+    });
     soFindLinkedInvoiceIdMock.mockResolvedValue('inv-1');
 
     const res = await testApp.inject({
@@ -392,7 +405,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('404 when current order does not exist', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingMock.mockResolvedValue(null);
+    soLockExistingByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -406,7 +419,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('409 when order is non-draft', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingMock.mockResolvedValue({
+    soLockExistingByIdMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -456,7 +469,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
   test('404 when version not found (and no cross-order leak)', async () => {
     soFindLinkedInvoiceIdMock.mockResolvedValue(null);
-    soFindExistingMock.mockResolvedValue({
+    soLockExistingByIdMock.mockResolvedValue({
       id: 'so-1',
       linkedQuoteId: null,
       supplierId: 's-1',
@@ -473,7 +486,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
     expect(res.statusCode).toBe(404);
     // findById should be scoped on (orderId, versionId) so a foreign versionId returns null
-    expect(sovFindByIdMock).toHaveBeenCalledWith('so-1', 'sov-other');
+    expect(sovFindByIdMock).toHaveBeenCalledWith('so-1', 'sov-other', TX_SENTINEL);
     expect(soRestoreSnapshotOrderMock).not.toHaveBeenCalled();
   });
 
@@ -508,7 +521,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     });
 
     expect(res.statusCode).toBe(200);
-    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1'], TX_SENTINEL);
   });
 });
 

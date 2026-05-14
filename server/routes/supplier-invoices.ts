@@ -348,7 +348,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           try {
             const idForAttempt = resolvedInvoiceId;
-            result = await withDbTransaction(async (tx) => {
+            type CreateOutcome =
+              | { ok: false; status: number; body: Record<string, unknown> }
+              | {
+                  ok: true;
+                  invoice: supplierInvoicesRepo.SupplierInvoice;
+                  items: supplierInvoicesRepo.SupplierInvoiceItem[];
+                };
+            const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+              // Lock the linked supplier order so a concurrent supplier-order restore
+              // (which gates on "no linked invoice exists") serializes against this insert.
+              if (linkedSaleIdResult.value) {
+                const lockedOrder = await supplierOrdersRepo.lockExistingById(
+                  linkedSaleIdResult.value,
+                  tx,
+                );
+                if (!lockedOrder) {
+                  return { ok: false, status: 404, body: { error: 'Source order not found' } };
+                }
+                if (lockedOrder.status !== 'sent') {
+                  return {
+                    ok: false,
+                    status: 409,
+                    body: { error: 'Invoices can only be created from sent orders' },
+                  };
+                }
+                const existingInvoiceId = await supplierInvoicesRepo.findInvoiceForLinkedSale(
+                  linkedSaleIdResult.value,
+                  tx,
+                );
+                if (existingInvoiceId) {
+                  return {
+                    ok: false,
+                    status: 409,
+                    body: { error: 'An invoice already exists for this order' },
+                  };
+                }
+              }
+
               const invoice = await supplierInvoicesRepo.create(
                 {
                   id: idForAttempt,
@@ -370,8 +407,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 normalizedItems,
                 tx,
               );
-              return { invoice, items: createdItems };
+              return { ok: true, invoice, items: createdItems };
             });
+            if (!txResult.ok) {
+              return reply.code(txResult.status).send(txResult.body);
+            }
+            result = { invoice: txResult.invoice, items: txResult.items };
             break;
           } catch (error) {
             const dup = getUniqueViolation(error);

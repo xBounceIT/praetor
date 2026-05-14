@@ -115,6 +115,26 @@ describe('findCurrent', () => {
   });
 });
 
+describe('lockCurrentById', () => {
+  test('uses FOR UPDATE in the emitted SQL', async () => {
+    exec.enqueue({ rows: [['sent', '0', 'percentage']] });
+    await clientQuotesRepo.lockCurrentById('cq-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[0].params).toContain('cq-1');
+  });
+
+  test('returns parsed row when present', async () => {
+    exec.enqueue({ rows: [['draft', '7.25', 'currency']] });
+    const result = await clientQuotesRepo.lockCurrentById('cq-1', testDb);
+    expect(result).toEqual({ status: 'draft', discount: 7.25, discountType: 'currency' });
+  });
+
+  test('returns null when row missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientQuotesRepo.lockCurrentById('cq-x', testDb)).toBeNull();
+  });
+});
+
 describe('linked-sale guards', () => {
   test('findLinkedOfferId returns id from customer_offers', async () => {
     exec.enqueue({ rows: [['co-1']] });
