@@ -3,9 +3,11 @@
 // back any earlier ones. Mocks `db/drizzle.ts` with an in-memory tx-aware fake.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import * as realDrizzle from '../../db/drizzle.ts';
 import {
+  type AssignmentSource,
   MANUAL_ASSIGNMENT_SOURCE,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
 } from '../../db/schema/_userAssignmentTable.ts';
@@ -73,7 +75,7 @@ const fakeDb = {
     };
   },
   async execute(sqlObj: unknown) {
-    const { sql: text } = dialect.sqlToQuery(sqlObj as never);
+    const { sql: text } = dialect.sqlToQuery(sqlObj as SQL);
     const op = detectOp(text);
     const table = detectTable(text);
     if (!table) throw new Error(`userAssignments test: unrecognized SQL (no known table): ${text}`);
@@ -108,7 +110,7 @@ const fakeWithDbTransaction = async <T>(cb: (tx: unknown) => Promise<T>): Promis
 };
 
 const fakeRunAtomically = <T>(exec: unknown, cb: (tx: unknown) => Promise<T>): Promise<T> =>
-  exec === fakeDb ? fakeWithDbTransaction(cb) : cb(exec as unknown as never);
+  exec === fakeDb ? fakeWithDbTransaction(cb) : cb(exec);
 
 // Snapshot real exports BEFORE mocking so the afterAll restore covers every key —
 // otherwise the mock leaks into later tests in the same Bun process.
@@ -153,11 +155,7 @@ beforeEach(() => {
   userHasRoleResult = false;
 });
 
-type ReplaceFn = (
-  userId: string,
-  ids: string[],
-  source: typeof MANUAL_ASSIGNMENT_SOURCE,
-) => Promise<void>;
+type ReplaceFn = (userId: string, ids: string[], source: AssignmentSource) => Promise<void>;
 
 describe.each<readonly [string, () => ReplaceFn, TableKey]>([
   ['replaceUserClients', () => userAssignmentsRepo.replaceUserClients, 'user_clients'],
