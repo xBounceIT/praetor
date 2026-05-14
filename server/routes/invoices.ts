@@ -4,7 +4,11 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import {
+  type DatabaseError,
+  getForeignKeyViolation,
+  getUniqueViolation,
+} from '../utils/db-errors.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -23,6 +27,9 @@ import {
 const UNIT_OF_MEASURE_VALUES = ['unit', 'hours'] as const;
 const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
 const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
+
+const isInvoiceIdConflict = (databaseError: DatabaseError) =>
+  databaseError.constraint === 'invoices_pkey' || Boolean(databaseError.detail?.includes('(id)'));
 
 const idParamSchema = {
   type: 'object',
@@ -359,38 +366,66 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const issueDateYear = issueDateResult.value.split('-')[0];
-      const invoiceId = nextIdResult.value || (await invoicesRepo.generateNextId(issueDateYear));
+      const maxInsertAttempts = nextIdResult.value ? 1 : 5;
+      let resolvedInvoiceId: string | null = nextIdResult.value;
 
-      let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] };
+      let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
+        null;
       try {
-        result = await withDbTransaction(async (tx) => {
-          const invoice = await invoicesRepo.create(
-            {
-              id: invoiceId,
-              linkedSaleId: (linkedSaleId as string | null | undefined) || null,
-              clientId: clientIdResult.value,
-              clientName: clientNameResult.value,
-              issueDate: issueDateResult.value,
-              dueDate: dueDateResult.value,
-              status: statusValue,
-              subtotal: computedSubtotal,
-              taxTotal: computedTaxTotal,
-              total: computedTotal,
-              amountPaid: amountPaidValue,
-              notes: (notes as string | null | undefined) ?? null,
-            },
-            tx,
-          );
-          const items = await invoicesRepo.insertItems(
-            invoice.id,
-            buildItemsForInsert(normalizedItems),
-            tx,
-          );
-          return { invoice, items };
-        });
+        for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
+          if (!resolvedInvoiceId) {
+            resolvedInvoiceId = await invoicesRepo.generateNextId(issueDateYear);
+          }
+
+          try {
+            const idForAttempt = resolvedInvoiceId;
+            result = await withDbTransaction(async (tx) => {
+              const invoice = await invoicesRepo.create(
+                {
+                  id: idForAttempt,
+                  linkedSaleId: (linkedSaleId as string | null | undefined) || null,
+                  clientId: clientIdResult.value,
+                  clientName: clientNameResult.value,
+                  issueDate: issueDateResult.value,
+                  dueDate: dueDateResult.value,
+                  status: statusValue,
+                  subtotal: computedSubtotal,
+                  taxTotal: computedTaxTotal,
+                  total: computedTotal,
+                  amountPaid: amountPaidValue,
+                  notes: (notes as string | null | undefined) ?? null,
+                },
+                tx,
+              );
+              const items = await invoicesRepo.insertItems(
+                invoice.id,
+                buildItemsForInsert(normalizedItems),
+                tx,
+              );
+              return { invoice, items };
+            });
+            break;
+          } catch (error) {
+            const dup = getUniqueViolation(error);
+            if (
+              !nextIdResult.value &&
+              dup &&
+              isInvoiceIdConflict(dup) &&
+              attempt < maxInsertAttempts - 1
+            ) {
+              resolvedInvoiceId = null;
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (!result) {
+          return reply.code(409).send({ error: 'Invoice ID already exists' });
+        }
       } catch (error) {
         const dup = getUniqueViolation(error);
-        if (dup && (dup.constraint === 'invoices_pkey' || dup.detail?.includes('(id)'))) {
+        if (dup && isInvoiceIdConflict(dup)) {
           return reply.code(409).send({ error: 'Invoice ID already exists' });
         }
         throw error;
@@ -625,7 +660,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (error) {
         const dup = getUniqueViolation(error);
-        if (dup && (dup.constraint === 'invoices_pkey' || dup.detail?.includes('(id)'))) {
+        if (dup && isInvoiceIdConflict(dup)) {
           return reply.code(409).send({ error: 'Invoice ID already exists' });
         }
         throw error;
