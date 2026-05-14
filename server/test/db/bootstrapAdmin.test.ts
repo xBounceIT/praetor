@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
 import * as realDbIndex from '../../db/index.ts';
 import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
@@ -59,11 +59,23 @@ const allMocks = [
   bcryptCompareMock,
 ];
 
+const ADMIN_PASSWORD_ENV = 'ADMIN_DEFAULT_PASSWORD';
+const originalAdminPasswordEnv = process.env[ADMIN_PASSWORD_ENV];
+
 beforeEach(() => {
   for (const mockedFn of allMocks) mockedFn.mockReset();
   createUserMock.mockResolvedValue(undefined);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
+  delete process.env[ADMIN_PASSWORD_ENV];
+});
+
+afterEach(() => {
+  if (originalAdminPasswordEnv === undefined) {
+    delete process.env[ADMIN_PASSWORD_ENV];
+  } else {
+    process.env[ADMIN_PASSWORD_ENV] = originalAdminPasswordEnv;
+  }
 });
 
 describe('ensureBootstrapAdmin', () => {
@@ -116,7 +128,61 @@ describe('ensureBootstrapAdmin', () => {
     expect(adminId).toBe('u1');
     expect(createUserMock).not.toHaveBeenCalled();
     expect(bcryptCompareMock).toHaveBeenCalledWith('password', '$2a$changed');
+    expect(bcryptCompareMock).toHaveBeenCalledWith(
+      'change-me-strong-admin-password',
+      '$2a$changed',
+    );
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('fresh admin uses ADMIN_DEFAULT_PASSWORD when set', async () => {
+    process.env[ADMIN_PASSWORD_ENV] = 'op-chosen-strong-pw';
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    bcryptHashMock.mockResolvedValue('$2a$op-hash');
+    bcryptCompareMock.mockResolvedValue(false);
+
+    await bootstrapAdmin.ensureBootstrapAdmin();
+
+    expect(bcryptHashMock).toHaveBeenCalledWith('op-chosen-strong-pw', 12);
+    expect(bcryptHashMock).not.toHaveBeenCalledWith('password', 12);
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ passwordHash: '$2a$op-hash' }),
+    );
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('fresh admin falls back to literal default when env var is whitespace', async () => {
+    process.env[ADMIN_PASSWORD_ENV] = '   ';
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    bcryptHashMock.mockResolvedValue('$2a$password-hash');
+    bcryptCompareMock.mockResolvedValue(true);
+
+    await bootstrapAdmin.ensureBootstrapAdmin();
+
+    expect(bcryptHashMock).toHaveBeenCalledWith('password', 12);
+  });
+
+  test('existing admin still using the .env.example placeholder gets the warning', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id: 'u1', password_hash: '$2a$placeholder' }] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    bcryptCompareMock.mockImplementation(
+      async (candidate: string) => candidate === 'change-me-strong-admin-password',
+    );
+
+    const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
+
+    expect(adminId).toBe('u1');
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
+    expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
 });

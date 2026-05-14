@@ -19,8 +19,10 @@ Set at least:
 - `ENCRYPTION_KEY`
 - `FRONTEND_URL`
 
-Fresh installs create the bootstrap admin as `admin` / `password`. Change that password after
-the first login.
+Fresh installs create the bootstrap admin as `admin` with the password from the
+`ADMIN_DEFAULT_PASSWORD` env var (falls back to `password` when unset). The app surfaces an
+in-app warning until the admin password is changed away from any insecure default; change it
+after the first login.
 
 ## 2) Authenticate to Registry (if private)
 
