@@ -493,13 +493,20 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       for (const id of entriesToDelete) {
         pending.push(Promise.resolve(onDeleteEntry(id)));
       }
-      try {
-        await Promise.all(pending);
+      // allSettled (not all): a single failure shouldn't abort the rest. Successful
+      // writes already update local entry state via their handlers; we only gate the
+      // "clear pendingEdits / show success" path on every write succeeding.
+      const results = await Promise.allSettled(pending);
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (rejected.length === 0) {
         setPendingEdits({});
         setWeekNote('');
         setShowSuccess(true);
-      } catch (err) {
-        toastError(err instanceof Error ? err.message : t('entry.entryUpdateFailed'));
+      } else {
+        const firstReason = rejected[0].reason;
+        toastError(
+          firstReason instanceof Error ? firstReason.message : t('entry.entryUpdateFailed'),
+        );
       }
     } finally {
       setIsLoading(false);

@@ -82,6 +82,7 @@ export function useCatalogSelection({
     const skipOnce = skipProjectSnapRef.current;
     skipProjectSnapRef.current = false;
     if (filteredProjects.length === 0) {
+      if (skipOnce) return;
       if (projectId !== '') setProjectId('');
       return;
     }
@@ -95,6 +96,7 @@ export function useCatalogSelection({
     const skipOnce = skipTaskSnapRef.current;
     skipTaskSnapRef.current = false;
     if (filteredTasks.length === 0) {
+      if (skipOnce) return;
       setTaskId('');
       setTaskName('');
       return;

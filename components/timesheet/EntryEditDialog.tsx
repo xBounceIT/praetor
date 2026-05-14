@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
@@ -65,6 +66,13 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
   const { t } = useTranslation(['timesheets', 'common']);
   const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
 
+  // Resolve a missing taskId via name lookup so legacy/orphan entries (FK never set)
+  // still seed a real catalog id rather than '', which would render an empty dropdown.
+  const seededTaskId =
+    entry.taskId ??
+    projectTasks.find((t) => t.projectId === entry.projectId && t.name === entry.task)?.id ??
+    '';
+
   const selection = useCatalogSelection({
     clients,
     projects,
@@ -73,7 +81,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     initialSelection: {
       clientId: entry.clientId,
       projectId: entry.projectId,
-      taskId: entry.taskId ?? '',
+      taskId: seededTaskId,
       taskName: entry.task,
     },
   });
@@ -114,8 +122,11 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
   };
 
   const parsedDuration = parseFloat(duration);
-  // Backend accepts duration >= 0 (placeholders carry 0); only block on blank/NaN.
+  // Backend accepts duration >= 0 (placeholders carry 0); blank means "untouched".
+  const isDurationBlank = duration.trim() === '';
   const hasValidDuration = Number.isFinite(parsedDuration) && parsedDuration >= 0;
+  const durationChanged = !isDurationBlank && hasValidDuration && parsedDuration !== entry.duration;
+  const durationInvalid = !isDurationBlank && !hasValidDuration;
 
   const catalogChanged =
     selection.clientId !== entry.clientId ||
@@ -124,7 +135,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
   const isDirty =
     catalogChanged ||
     selection.location !== entry.location ||
-    (hasValidDuration && parsedDuration !== entry.duration) ||
+    durationChanged ||
     (notes || '') !== (entry.notes ?? '');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,7 +145,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     if (!selection.projectId) newErrors.projectId = t('entry.projectRequired');
     if (!selection.taskName) newErrors.task = t('entry.taskRequired');
 
-    if (Object.keys(newErrors).length > 0 || !hasValidDuration) {
+    if (Object.keys(newErrors).length > 0 || durationInvalid) {
       setErrors(newErrors);
       return;
     }
@@ -148,7 +159,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
       patch.projectId = selection.projectId;
       patch.task = selection.taskName;
     }
-    if (parsedDuration !== entry.duration) patch.duration = parsedDuration;
+    if (durationChanged) patch.duration = parsedDuration;
     if ((notes || '') !== (entry.notes ?? '')) patch.notes = notes;
     if (selection.location !== entry.location) patch.location = selection.location;
 
@@ -219,7 +230,11 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
                   value={duration}
                   onChange={handleDurationInputChange}
                   placeholder="0.0"
-                  className="h-10 rounded-lg"
+                  aria-invalid={durationInvalid}
+                  className={cn(
+                    'h-10 rounded-lg',
+                    durationInvalid && 'border-destructive focus-visible:ring-destructive',
+                  )}
                 />
               </Field>
               <Field className="min-w-0">
@@ -239,7 +254,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               {t('common:buttons.cancel')}
             </Button>
-            <Button type="submit" disabled={isSubmitting || !isDirty || !hasValidDuration}>
+            <Button type="submit" disabled={isSubmitting || !isDirty || durationInvalid}>
               <Save className="size-4" aria-hidden="true" />
               {t('common:buttons.save')}
             </Button>

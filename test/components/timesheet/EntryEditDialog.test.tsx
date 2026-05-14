@@ -186,6 +186,53 @@ describe('<EntryEditDialog />', () => {
     expect(patch).toEqual({ notes: 'placeholder note' });
   });
 
+  test('clearing the hours field still allows saving notes-only changes', async () => {
+    const onSave = mock(() => Promise.resolve());
+    const onClose = mock(() => {});
+
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        entry={sampleEntry}
+        onClose={onClose}
+        onSave={onSave as never}
+      />,
+    );
+
+    const hoursInput = document.getElementById('entry-edit-hours') as HTMLInputElement;
+    const notesInput = document.getElementById('entry-edit-notes') as HTMLInputElement;
+
+    fireEvent.change(hoursInput, { target: { value: '' } });
+    fireEvent.change(notesInput, { target: { value: 'just the note' } });
+    fireEvent.submit(hoursInput.closest('form') as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
+    const [, patch] = (onSave as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [
+      string,
+      Partial<TimeEntry>,
+    ];
+    // Blank duration is treated as "untouched" — no `duration` field in the patch.
+    expect(patch).toEqual({ notes: 'just the note' });
+  });
+
+  test('resolves seeded taskId via name lookup when the entry has no taskId FK', () => {
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        // Legacy/orphan entry: taskId is null but the task name matches a catalog row.
+        entry={{ ...sampleEntry, taskId: null }}
+        onClose={mock(() => {})}
+        onSave={mock(() => {})}
+      />,
+    );
+
+    // The Task SelectControl trigger surfaces the resolved task name, not the placeholder,
+    // proving the seed found a real catalog id rather than rendering an empty dropdown.
+    expect(document.body).toHaveTextContent('Alpha Task');
+  });
+
   test('cancel closes without saving', () => {
     const onSave = mock(() => Promise.resolve());
     const onClose = mock(() => {});
