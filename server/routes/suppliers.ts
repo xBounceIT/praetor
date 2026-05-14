@@ -272,8 +272,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const addressResult = optionalNonEmptyString(address, 'address');
       if (!addressResult.ok) return badRequest(reply, addressResult.message);
 
-      const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
-      if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+      // POST requires vatNumber (`requireNonEmptyString`); keep PUT symmetric so an empty
+      // string can't silently null it out, which would leave a supplier in a state that the
+      // create endpoint would have rejected. `vatNumberValue` is the validated string when
+      // provided, or `undefined` when the field was omitted from the body.
+      let vatNumberValue: string | undefined;
+      if (vatNumber !== undefined) {
+        const vatNumberResult = requireNonEmptyString(vatNumber, 'vatNumber');
+        if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+        vatNumberValue = vatNumberResult.value;
+      }
 
       const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
       if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
@@ -297,7 +305,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (Object.hasOwn(body, 'email')) patch.email = emailResult.value;
       if (Object.hasOwn(body, 'phone')) patch.phone = phoneResult.value;
       if (Object.hasOwn(body, 'address')) patch.address = addressResult.value;
-      if (Object.hasOwn(body, 'vatNumber')) patch.vatNumber = vatNumberResult.value;
+      if (vatNumberValue !== undefined) patch.vatNumber = vatNumberValue;
       if (Object.hasOwn(body, 'taxCode')) patch.taxCode = taxCodeResult.value;
       if (Object.hasOwn(body, 'paymentTerms')) patch.paymentTerms = paymentTermsResult.value;
       if (Object.hasOwn(body, 'notes')) patch.notes = notesResult.value;

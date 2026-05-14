@@ -402,15 +402,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const hasContentUpdate =
-        supplierId !== undefined ||
-        supplierName !== undefined ||
-        items !== undefined ||
-        paymentTerms !== undefined ||
-        status !== undefined ||
-        expirationDate !== undefined ||
-        notes !== undefined;
-
+      // Two related flags with different jobs: `hasNonStatusOrIdUpdates` drives the
+      // non-draft read-only guard (status transitions and id renames must still be allowed
+      // on sent/accepted/denied quotes); `hasContentUpdate` drives whether to take a
+      // version snapshot before writing (status transitions DO want a snapshot, id-only
+      // renames do not).
       const hasNonStatusOrIdUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
@@ -418,6 +414,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined;
+      const hasContentUpdate = hasNonStatusOrIdUpdates || status !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 

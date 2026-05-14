@@ -319,6 +319,29 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
+  // When a non-draft quote has both a non-status edit AND a conflicting id rename,
+  // the status guard runs first and the response surfaces status as the reason. The
+  // id-conflict 409 from the surviving idConflict branch should NEVER appear in this
+  // case - asserting the response copy locks in the precedence order.
+  test('409 status guard takes precedence over id-conflict on a non-draft quote', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindIdConflictMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: 'sq-other', paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Non-draft supplier quotes are read-only',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('404 when quote does not exist', async () => {
     sqFindByIdMock.mockResolvedValue(null);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

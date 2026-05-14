@@ -380,6 +380,34 @@ describe('PUT /api/suppliers/:id', () => {
     expect(patch).not.toHaveProperty('name');
   });
 
+  // POST requires vatNumber; PUT keeps that contract so an empty payload can't drop a
+  // supplier into a state the create endpoint would reject.
+  test('400 vatNumber="" is rejected (mirrors POST contract)', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { vatNumber: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 vatNumber update with a valid value', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, vatNumber: 'IT999' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { vatNumber: 'IT999' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ vatNumber: 'IT999' }));
+  });
+
   test('404 when repo returns null', async () => {
     updateMock.mockResolvedValue(null);
 
