@@ -42,7 +42,7 @@ export interface WeeklyViewProps {
       'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
-  onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
+  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void | Promise<void>;
   onDeleteEntry: (id: string) => void | Promise<void>;
   viewingUserId: string;
@@ -69,6 +69,7 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
 
 type DayCell = { duration: string; note: string; entryId?: string };
 type DayMap = Record<string, DayCell>;
+type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
 
 type EntryRow = {
   key: string;
@@ -405,7 +406,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       return;
     }
 
-    const entriesToAdd: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[] = [];
+    const entriesToAdd: TimeEntryDraft[] = [];
     const entriesToUpdate: Array<{ id: string; updates: Partial<TimeEntry> }> = [];
     const entriesToDelete: string[] = [];
 
@@ -457,7 +458,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           task: meta.taskName,
           duration: parseDuration(edit.duration),
           notes: edit.note || weekNote,
-          hourlyCost: 0,
           location: meta.location,
         });
       }
