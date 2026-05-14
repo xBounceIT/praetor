@@ -21,6 +21,8 @@ When saving LDAP configuration, Praetor confirms the save only after the setting
 
 Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration.
 
+If saving an OIDC or SAML provider fails, the provider tab shows an error message with the detail returned by the server. Correct the reported fields or retry when the service is available before treating the configuration as updated.
+
 In the user list, open the row actions menu and choose **Change authentication method** to restrict an application user to local credentials, LDAP, OIDC, or SAML. For OIDC and SAML, also select the specific provider: the user will be able to sign in only through that provider. Internal and external employees are not application accounts and cannot be bound to LDAP/SSO.
 
 When you bind a user to LDAP, Praetor looks them up in the directory and immediately applies the roles configured in the LDAP group role mapping, overriding the local role. If the directory is unreachable or the user is not in it yet, the existing role is kept and the next login or sync will re-apply the mapping.

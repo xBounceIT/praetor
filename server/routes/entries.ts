@@ -362,6 +362,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['entries'],
         summary: 'Bulk delete time entries',
+        description:
+          'Deletes entries matching `projectId` and `task`. Callers with only ' +
+          '`timesheets.recurring.delete` are limited to placeholder entries, even if ' +
+          '`placeholderOnly=false` is supplied; tracker delete permissions can delete all ' +
+          'matching entries allowed by their scope.',
         querystring: entriesBulkDeleteQuerySchema,
         response: {
           204: { type: 'null' },

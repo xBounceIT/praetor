@@ -491,10 +491,10 @@ export const bulkDeleteTimeEntries = async (
   actor: AuthenticatedActor,
   input: { projectId?: unknown; task?: unknown; futureOnly?: unknown; placeholderOnly?: unknown },
 ): Promise<{ message: string }> => {
-  if (
-    !hasTrackerPermission(actor, 'delete') &&
-    !hasPermission(actor, 'timesheets.recurring.delete')
-  ) {
+  const canDeleteTrackerEntries = hasTrackerPermission(actor, 'delete');
+  const canDeleteRecurringEntries = hasPermission(actor, 'timesheets.recurring.delete');
+
+  if (!canDeleteTrackerEntries && !canDeleteRecurringEntries) {
     fail(403, 'Insufficient permissions');
   }
 
@@ -502,7 +502,8 @@ export const bulkDeleteTimeEntries = async (
   const task = requireValid(requireNonEmptyString(input.task, 'task'));
 
   const futureOnlyValue = parseQueryBoolean(input.futureOnly) ?? false;
-  const placeholderOnlyValue = parseQueryBoolean(input.placeholderOnly) ?? false;
+  const requestedPlaceholderOnly = parseQueryBoolean(input.placeholderOnly) ?? false;
+  const placeholderOnlyValue = canDeleteTrackerEntries ? requestedPlaceholderOnly : true;
   const restrictToManagerScopeOf = hasPermission(actor, 'timesheets.tracker_all.delete')
     ? undefined
     : actor.id;
