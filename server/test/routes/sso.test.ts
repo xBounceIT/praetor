@@ -111,6 +111,23 @@ const baseProvider: realSsoProvidersRepo.SsoProvider = {
   roleMappings: [],
 };
 
+const samlProvider = (
+  patch: Partial<realSsoProvidersRepo.SsoProvider> = {},
+): realSsoProvidersRepo.SsoProvider => ({
+  ...baseProvider,
+  protocol: 'saml',
+  issuerUrl: '',
+  clientId: '',
+  clientSecret: '',
+  metadataUrl: '',
+  metadataXml: '',
+  entryPoint: '',
+  idpIssuer: '',
+  idpCert: '',
+  spIssuer: '',
+  ...patch,
+});
+
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 // Snapshots are populated from preHandler/onResponse hooks. We rebuild the app each test so
@@ -260,10 +277,15 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
   });
 
   test('metadataXml === MASKED_SECRET is dropped from patch', async () => {
-    findByIdMock.mockResolvedValue({ ...baseProvider, protocol: 'saml' });
+    const existing = samlProvider({
+      enabled: true,
+      metadataXml: '<EntityDescriptor />',
+      idpCert: 'MIIDstoredcert',
+    });
+    findByIdMock.mockResolvedValue(existing);
     updateMock.mockImplementation(
       async (_id: string, patch: realSsoProvidersRepo.SsoProviderPatch) => ({
-        ...baseProvider,
+        ...existing,
         ...patch,
       }),
     );
@@ -276,6 +298,56 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
     expect(response.statusCode).toBe(200);
     const [, patch] = updateMock.mock.calls[0];
     expect(patch).not.toHaveProperty('metadataXml');
+    expect(patch).not.toHaveProperty('idpCert');
+  });
+});
+
+describe('PUT /api/sso/providers/:id — enabled SAML configuration validation', () => {
+  test('rejects enabling a SAML provider without metadata or manual IdP config', async () => {
+    findByIdMock.mockResolvedValue(samlProvider({ enabled: false }));
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { enabled: true },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'SAML requires metadata URL/XML or manual entryPoint and idpCert',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('allows enabling a manual SAML provider when masked idpCert preserves the stored cert', async () => {
+    const existing = samlProvider({
+      enabled: false,
+      entryPoint: 'https://idp.example.com/sso',
+      idpCert: 'MIIDstoredcert',
+    });
+    findByIdMock.mockResolvedValue(existing);
+    updateMock.mockImplementation(
+      async (_id: string, patch: realSsoProvidersRepo.SsoProviderPatch) => ({
+        ...existing,
+        ...patch,
+      }),
+    );
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: {
+        enabled: true,
+        entryPoint: 'https://idp.example.com/sso',
+        idpCert: MASKED_SECRET,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [, patch] = updateMock.mock.calls[0];
+    expect(patch.enabled).toBe(true);
     expect(patch).not.toHaveProperty('idpCert');
   });
 });
