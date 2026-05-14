@@ -141,6 +141,21 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     expect(source).toMatch(/setOfferId\(nextOfferId\)[\s\S]{0,600}['"]offer['"]/);
   });
 
+  test('start and end dates are required on submit (issue #474)', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
+    );
+    expect(source).toContain(
+      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
+    );
+    expect(source).toMatch(/projects\.startDate'\)\}\s*<RequiredMark\s*\/>/);
+    expect(source).toMatch(/projects\.endDate'\)\}\s*<RequiredMark\s*\/>/);
+  });
+
   test('edit-mode revenue resolves the effective order from editingProject.orderId', async () => {
     // Regression for the order-derived branch silently falling back to "manual" on edit:
     // the form's `orderId` state is empty in openEditModal (no order selector is shown there —

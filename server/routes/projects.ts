@@ -38,6 +38,7 @@ import {
   optionalEnum,
   optionalNonEmptyString,
   optionalNonNegativeNumber,
+  parseDateString,
   requireNonEmptyString,
   validateHexColor,
 } from '../utils/validation.ts';
@@ -92,13 +93,13 @@ const projectCreateBodySchema = {
     },
     orderId: { type: 'string' },
     offerId: { type: 'string' },
-    startDate: { type: ['string', 'null'] },
-    endDate: { type: ['string', 'null'] },
+    startDate: { type: 'string' },
+    endDate: { type: 'string' },
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
   },
-  required: ['name', 'clientId', 'offerId'],
+  required: ['name', 'clientId', 'offerId', 'startDate', 'endDate'],
 } as const;
 
 const projectUpdateBodySchema = {
@@ -206,8 +207,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
         offerId?: string;
-        startDate?: string | null;
-        endDate?: string | null;
+        startDate?: string;
+        endDate?: string;
         revenue?: number | string | null;
       };
 
@@ -233,15 +234,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
       if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
 
-      const startDateResult = optionalDateString(body.startDate, 'startDate');
+      const startDateResult = parseDateString(body.startDate, 'startDate');
       if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
-      const endDateResult = optionalDateString(body.endDate, 'endDate');
+      const endDateResult = parseDateString(body.endDate, 'endDate');
       if (!endDateResult.ok) return badRequest(reply, endDateResult.message);
-      if (
-        startDateResult.value &&
-        endDateResult.value &&
-        startDateResult.value > endDateResult.value
-      ) {
+      if (startDateResult.value > endDateResult.value) {
         return badRequest(reply, 'startDate must be on or before endDate');
       }
 
