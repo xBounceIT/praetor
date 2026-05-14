@@ -20,6 +20,8 @@ import {
   optionalNumber,
   optionalPositiveNumber,
   parseBoolean,
+  parseBooleanField,
+  parseBooleanStrict,
   parseDateString,
   parseLocalizedNonNegativeNumber,
   parseLocalizedNumber,
@@ -468,6 +470,48 @@ describe('parseBoolean', () => {
   });
 });
 
+describe('parseBooleanStrict', () => {
+  test('accepts booleans and recognized strings', () => {
+    expect(parseBooleanStrict(true, 'enabled')).toEqual({ ok: true, value: true });
+    expect(parseBooleanStrict(false, 'enabled')).toEqual({ ok: true, value: false });
+    expect(parseBooleanStrict(' YES ', 'enabled')).toEqual({ ok: true, value: true });
+    expect(parseBooleanStrict('0', 'enabled')).toEqual({ ok: true, value: false });
+  });
+
+  test('rejects invalid, null, undefined, and non-string inputs', () => {
+    for (const value of ['ture', '', 'off', null, undefined, 1, {}, []]) {
+      const result = parseBooleanStrict(value, 'enabled');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.message).toContain('enabled');
+        expect(result.message).toContain('true, false, 1, 0, yes, no');
+      }
+    }
+  });
+});
+
+describe('parseBooleanField', () => {
+  test('returns undefined for missing fields and parses present values', () => {
+    expect(parseBooleanField({}, 'enabled')).toEqual({ ok: true, value: undefined });
+    expect(parseBooleanField({ enabled: 'true' }, 'enabled')).toEqual({
+      ok: true,
+      value: true,
+    });
+    expect(parseBooleanField({ enabled: false }, 'enabled')).toEqual({
+      ok: true,
+      value: false,
+    });
+  });
+
+  test('rejects present null, undefined, and invalid strings', () => {
+    for (const source of [{ enabled: null }, { enabled: undefined }, { enabled: 'ture' }]) {
+      const result = parseBooleanField(source, 'enabled');
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.message).toContain('enabled');
+    }
+  });
+});
+
 describe('optionalBoolean', () => {
   test('returns null for undefined/null/empty', () => {
     expect(optionalBoolean(undefined)).toBeNull();
@@ -482,7 +526,7 @@ describe('optionalBoolean', () => {
     expect(optionalBoolean('no')).toBe(false);
   });
 
-  test('returns false for unrecognized non-empty input (strict parseBoolean)', () => {
+  test('returns false for unrecognized non-empty input (lenient parseBoolean)', () => {
     expect(optionalBoolean(1)).toBe(false);
     expect(optionalBoolean('maybe')).toBe(false);
   });

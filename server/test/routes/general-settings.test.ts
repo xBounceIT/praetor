@@ -204,7 +204,7 @@ describe('PUT /api/general-settings', () => {
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
   });
 
-  test('200 boolean strings parsed via parseBoolean', async () => {
+  test('200 boolean strings parsed via strict boolean field validation', async () => {
     settingsUpdateMock.mockResolvedValue(SETTINGS_WITH_KEYS);
 
     const res = await testApp.inject({
@@ -226,6 +226,36 @@ describe('PUT /api/general-settings', () => {
         allowWeekendSelection: true,
       }),
     );
+  });
+
+  test('200 omitted boolean fields are preserved instead of coerced to false', async () => {
+    settingsUpdateMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { currency: 'USD' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = settingsUpdateMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(patch.currency).toBe('USD');
+    expect(patch.treatSaturdayAsHoliday).toBeUndefined();
+    expect(patch.enableAiReporting).toBeUndefined();
+    expect(patch.allowWeekendSelection).toBeUndefined();
+  });
+
+  test('400 invalid boolean value does not update settings', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { enableAiReporting: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('400 invalid aiProvider enum', async () => {

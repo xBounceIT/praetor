@@ -12,7 +12,7 @@ import {
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
-  parseBoolean,
+  parseBooleanField,
 } from '../utils/validation.ts';
 
 const generalSettingsSchema = {
@@ -140,20 +140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const {
-        currency,
-        dailyLimit,
-        startOfWeek,
-        treatSaturdayAsHoliday,
-        enableAiReporting,
-        geminiApiKey,
-        aiProvider,
-        openrouterApiKey,
-        geminiModelId,
-        openrouterModelId,
-        allowWeekendSelection,
-        defaultLocation,
-      } = request.body as {
+      const body = (request.body ?? {}) as {
         currency?: string;
         dailyLimit?: number;
         startOfWeek?: string;
@@ -167,6 +154,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
       };
+      const {
+        currency,
+        dailyLimit,
+        startOfWeek,
+        geminiApiKey,
+        aiProvider,
+        openrouterApiKey,
+        geminiModelId,
+        openrouterModelId,
+        defaultLocation,
+      } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
 
@@ -207,22 +205,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (geminiApiKey !== undefined && geminiApiKey !== null && typeof geminiApiKey !== 'string')
         return badRequest(reply, 'geminiApiKey must be a string');
 
-      const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
-      const enableAiReportingValue = parseBoolean(enableAiReporting);
-      const allowWeekendSelectionValue = parseBoolean(allowWeekendSelection);
+      const treatSaturdayAsHolidayResult = parseBooleanField(body, 'treatSaturdayAsHoliday');
+      if (!treatSaturdayAsHolidayResult.ok) {
+        return badRequest(reply, treatSaturdayAsHolidayResult.message);
+      }
+      const enableAiReportingResult = parseBooleanField(body, 'enableAiReporting');
+      if (!enableAiReportingResult.ok) return badRequest(reply, enableAiReportingResult.message);
+      const allowWeekendSelectionResult = parseBooleanField(body, 'allowWeekendSelection');
+      if (!allowWeekendSelectionResult.ok) {
+        return badRequest(reply, allowWeekendSelectionResult.message);
+      }
 
       const settings = await generalSettingsRepo.update({
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
         startOfWeek: startOfWeekResult.value,
-        treatSaturdayAsHoliday: treatSaturdayAsHolidayValue,
-        enableAiReporting: enableAiReportingValue,
+        treatSaturdayAsHoliday: treatSaturdayAsHolidayResult.value,
+        enableAiReporting: enableAiReportingResult.value,
         geminiApiKey,
         aiProvider: aiProviderResult.value,
         openrouterApiKey,
         geminiModelId,
         openrouterModelId,
-        allowWeekendSelection: allowWeekendSelectionValue,
+        allowWeekendSelection: allowWeekendSelectionResult.value,
         defaultLocation: defaultLocationResult.value,
       });
 

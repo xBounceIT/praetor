@@ -339,6 +339,23 @@ describe('PUT /api/ldap/config - autoProvisionAll', () => {
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.autoProvisionAll).toBe(false);
   });
+
+  test('invalid enabled value does not update LDAP config', async () => {
+    const response = await putConfig({ enabled: 'ture' } as unknown as object);
+
+    expect(response.statusCode).toBe(400);
+    expect(ldapUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('invalid autoProvisionAll value does not update LDAP config', async () => {
+    const response = await putConfig({
+      enabled: false,
+      autoProvisionAll: 'ture',
+    } as unknown as object);
+
+    expect(response.statusCode).toBe(400);
+    expect(ldapUpdateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/ldap/config - tlsCaCertificate', () => {
