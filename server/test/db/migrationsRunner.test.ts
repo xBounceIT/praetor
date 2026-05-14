@@ -64,7 +64,10 @@ const removeMigrationsDir = (dir: string) => {
   rmSync(dir, { recursive: true, force: true });
 };
 
-const makeClient = (appliedHashes: readonly string[] = []): FakeClient => {
+const makeClient = (
+  appliedHashes: readonly string[] = [],
+  options: { failOnSql?: string } = {},
+): FakeClient => {
   const calls: QueryCall[] = [];
 
   return {
@@ -74,6 +77,10 @@ const makeClient = (appliedHashes: readonly string[] = []): FakeClient => {
       params: unknown[] = [],
     ): Promise<QueryResult<T>> {
       calls.push({ text, params });
+
+      if (options.failOnSql !== undefined && text === options.failOnSql) {
+        throw new Error(`query failed: ${text}`);
+      }
 
       if (text.includes('SELECT hash') && text.includes('__drizzle_migrations')) {
         return makeQueryResult(appliedHashes.map((hash) => ({ hash }) as unknown as T));
@@ -133,6 +140,30 @@ describe('runDrizzleMigrationsWithClient', () => {
       expect(client.calls.some((call) => call.text === 'BEGIN')).toBe(false);
       expect(client.calls.some((call) => call.text === firstSql)).toBe(false);
       expect(client.calls.some((call) => call.text === secondSql)).toBe(false);
+    } finally {
+      removeMigrationsDir(dir);
+    }
+  });
+
+  test('rolls back when a pending migration statement fails', async () => {
+    const failingSql = 'SELECT fail;';
+    const dir = makeMigrationsDir([{ tag: '0000_failing', when: 1_000, sql: failingSql }]);
+    const client = makeClient([], { failOnSql: failingSql });
+
+    try {
+      await expect(
+        runDrizzleMigrationsWithClient(client as unknown as PoolClient, {
+          migrationsDir: dir,
+        }),
+      ).rejects.toThrow(`query failed: ${failingSql}`);
+
+      expect(client.calls.some((call) => call.text === 'BEGIN')).toBe(true);
+      expect(client.calls.some((call) => call.text === 'ROLLBACK')).toBe(true);
+      expect(
+        client.calls.some((call) =>
+          call.text.includes('INSERT INTO "drizzle"."__drizzle_migrations"'),
+        ),
+      ).toBe(false);
     } finally {
       removeMigrationsDir(dir);
     }
