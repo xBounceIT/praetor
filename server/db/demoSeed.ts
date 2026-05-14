@@ -168,7 +168,8 @@ const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<st
         ('t1', 'Initial Design', 'p1', 'Lo-fi wireframes and moodboards.'),
         ('t2', 'Frontend Dev', 'p1', 'React component implementation.'),
         ('t3', 'API Integration', 'p2', 'Connecting the app to the backend services.'),
-        ('t4', 'General Support', 'p3', 'Misc administrative tasks and support.')
+        ('t4', 'General Support', 'p3', 'Misc administrative tasks and support.'),
+        ('t5', 'Market Analysis', 'p3', 'Competitive landscape and pricing research.')
      ON CONFLICT (id) DO NOTHING`,
   );
   incrementCount(counts, 'tasks', tasksResult.rowCount ?? 0);
