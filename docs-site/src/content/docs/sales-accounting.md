@@ -11,6 +11,8 @@ I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condi
 
 Quando un documento viene accettato, prosegui creando l'ordine o il documento collegato invece di reinserire manualmente le stesse righe.
 
+Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riportate in **Bozza** dal menu azioni solo da Top Manager o admin. Praetor richiede conferma, permette di indicare un motivo e registra il cambio nello storico/audit; l'azione non è disponibile se dall'offerta è già nato un ordine di vendita.
+
 ## Preventivi fornitori
 
 I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Associa le righe ai prodotti corretti quando possibile, così i dati restano tracciabili nei flussi successivi.

@@ -619,6 +619,7 @@ export interface AuditLogDetails {
   counts?: Record<string, number>;
   fromValue?: string;
   toValue?: string;
+  reason?: string;
 }
 
 export interface ReportChatMessage {

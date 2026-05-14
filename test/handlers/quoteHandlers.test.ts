@@ -20,6 +20,9 @@ const apiMocks = {
     (id: string, updates: unknown): Promise<unknown> =>
       Promise.resolve({ id, ...(updates as object) }),
   ),
+  clientOffersRevertToDraft: mock(
+    (id: string, _reason?: string): Promise<unknown> => Promise.resolve({ id, status: 'draft' }),
+  ),
   clientOffersDelete: mock((_id: string): Promise<void> => Promise.resolve()),
   clientsOrdersList: mock((): Promise<unknown[]> => Promise.resolve([])),
   clientsOrdersCreate: mock(
@@ -53,6 +56,8 @@ mock.module('../../services/api', () => ({
       list: () => apiMocks.clientOffersList(),
       create: (data: unknown) => apiMocks.clientOffersCreate(data),
       update: (id: string, updates: unknown) => apiMocks.clientOffersUpdate(id, updates),
+      revertToDraft: (id: string, reason?: string) =>
+        apiMocks.clientOffersRevertToDraft(id, reason),
       delete: (id: string) => apiMocks.clientOffersDelete(id),
     },
     clientsOrders: {
@@ -314,6 +319,22 @@ describe('makeQuoteHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('revertClientOfferToDraft calls dedicated API and refreshes flow', async () => {
+    apiMocks.clientOffersRevertToDraft.mockImplementation((id: string) =>
+      Promise.resolve({ id, status: 'draft' }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers({ clientOfferFilterId: 'of-1' });
+
+    await ctx.handlers.revertClientOfferToDraft('of-1', 'wrong status');
+
+    expect(apiMocks.clientOffersRevertToDraft).toHaveBeenCalledWith('of-1', 'wrong status');
+    expect(ctx.clientOfferFilterId.get()).toBe('of-1');
+    expect(ctx.clientOffers.get()).toEqual([{ id: 'of-1' }]);
   });
 
   test('deleteClientOffer removes offer and unlinks affected quotes', async () => {

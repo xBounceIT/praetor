@@ -11,6 +11,8 @@ Quotes and offers include products, quantities, prices, discounts, and terms. Us
 
 When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
 
+Customer offers in **Accepted** or **Denied** status can be moved back to **Draft** from the row actions menu only by Top Manager or admin users. Praetor requires confirmation, lets the user enter a reason, and records the change in history/audit; the action is unavailable once a sale order has already been created from the offer.
+
 ## Supplier quotes
 
 Supplier quotes help compare purchase costs and conditions. Link rows to the correct products when possible so data remains traceable in later workflows.

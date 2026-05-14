@@ -120,6 +120,7 @@
         "roles_updated": "Ruoli aggiornati",
         "assignments_updated": "Assegnazioni aggiornate",
         "permissions_updated": "Permessi aggiornati",
+        "reverted_to_draft": "Riportato in bozza",
         "synced": "Sincronizzato",
         "login": "Accesso effettuato",
         "role_switched": "Ruolo cambiato"

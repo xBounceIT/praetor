@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -65,10 +66,12 @@ export interface ClientOffersViewProps {
   offerIdsWithOrders: ReadonlySet<string>;
   onAddOffer?: (offerData: Partial<ClientOffer>) => void | Promise<void>;
   onUpdateOffer: (id: string, updates: Partial<ClientOffer>) => void | Promise<void>;
+  onRevertOfferToDraft?: (id: string, reason?: string) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
   onOfferRestored?: (offer: ClientOffer) => void;
   onCreateClientsOrder?: (offer: ClientOffer) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
+  canRevertTerminalStatus?: boolean;
   currency: string;
   quoteFilterId?: string | null;
   offerFilterId?: string | null;
@@ -101,10 +104,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offerIdsWithOrders,
   onAddOffer,
   onUpdateOffer,
+  onRevertOfferToDraft,
   onDeleteOffer,
   onOfferRestored,
   onCreateClientsOrder,
   onViewQuote,
+  canRevertTerminalStatus = false,
   currency,
   quoteFilterId,
   offerFilterId,
@@ -243,15 +248,19 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
+  const [offerToRevert, setOfferToRevert] = useState<ClientOffer | null>(null);
+  const [revertReason, setRevertReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
 
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -349,6 +358,35 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       await onUpdateOffer(id, updates);
     } catch (err) {
       toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
+    }
+  };
+
+  const openRevertConfirm = (offer: ClientOffer) => {
+    setOfferToRevert(offer);
+    setRevertReason('');
+    setIsRevertConfirmOpen(true);
+  };
+
+  const closeRevertConfirm = () => {
+    if (isReverting) return;
+    setIsRevertConfirmOpen(false);
+    setOfferToRevert(null);
+    setRevertReason('');
+  };
+
+  const handleRevertToDraft = async () => {
+    if (!offerToRevert || !onRevertOfferToDraft || isReverting) return;
+    setIsReverting(true);
+    try {
+      const reason = revertReason.trim();
+      await onRevertOfferToDraft(offerToRevert.id, reason || undefined);
+      setIsRevertConfirmOpen(false);
+      setOfferToRevert(null);
+      setRevertReason('');
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
+    } finally {
+      setIsReverting(false);
     }
   };
 
@@ -517,6 +555,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => {
         const hasOrder = offerIdsWithOrders.has(row.id);
+        const canRevertRowToDraft =
+          canRevertTerminalStatus &&
+          Boolean(onRevertOfferToDraft) &&
+          !hasOrder &&
+          (row.status === 'accepted' || row.status === 'denied');
 
         return (
           <div className="flex justify-end gap-2">
@@ -635,6 +678,40 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   {t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {canRevertRowToDraft && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('sales:clientOffers.revertToDraft', {
+                        defaultValue: 'Revert to Draft',
+                      })}
+                      data-testid={`client-offer-revert-${row.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRevertConfirm(row);
+                      }}
+                      className="text-amber-700 hover:text-amber-700 hover:bg-amber-50"
+                    >
+                      <RotateCcw className="size-4" aria-hidden="true" />
+                      <span className="sr-only">
+                        {t('sales:clientOffers.revertToDraft', {
+                          defaultValue: 'Revert to Draft',
+                        })}
+                      </span>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientOffers.revertToDraft', {
+                    defaultValue: 'Revert to Draft',
+                  })}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -1546,6 +1623,70 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             />
           )}
         </div>
+      </Modal>
+
+      <Modal isOpen={isRevertConfirmOpen} onClose={closeRevertConfirm} ariaLabel={null}>
+        {() => (
+          <ModalContent size="sm">
+            <ModalHeader>
+              <ModalTitle>
+                {t('sales:clientOffers.revertToDraftTitle', {
+                  defaultValue: 'Revert offer to Draft?',
+                })}
+              </ModalTitle>
+              <ModalCloseButton onClick={closeRevertConfirm} />
+            </ModalHeader>
+            <ModalBody className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {t('sales:clientOffers.revertToDraftDescription', {
+                  defaultValue:
+                    'This moves {{offerId}} from {{status}} back to Draft and records the change in the audit trail.',
+                  offerId: offerToRevert?.id ?? '',
+                  status: offerToRevert ? getStatusLabel(offerToRevert.status) : '',
+                })}
+              </p>
+              <Field>
+                <FieldLabel htmlFor="client-offer-revert-reason">
+                  {t('sales:clientOffers.revertReasonLabel', {
+                    defaultValue: 'Reason',
+                  })}
+                </FieldLabel>
+                <Textarea
+                  id="client-offer-revert-reason"
+                  value={revertReason}
+                  onChange={(event) => setRevertReason(event.target.value)}
+                  disabled={isReverting}
+                  placeholder={t('sales:clientOffers.revertReasonPlaceholder', {
+                    defaultValue: 'Optional note for the audit trail',
+                  })}
+                  className="min-h-24 resize-none"
+                />
+              </Field>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeRevertConfirm}
+                disabled={isReverting}
+              >
+                {t('common:buttons.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleRevertToDraft}
+                disabled={isReverting}
+              >
+                {isReverting
+                  ? t('common:buttons.saving')
+                  : t('sales:clientOffers.confirmRevertToDraft', {
+                      defaultValue: 'Revert to Draft',
+                    })}
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        )}
       </Modal>
 
       <DeleteConfirmModal

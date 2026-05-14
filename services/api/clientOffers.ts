@@ -20,6 +20,12 @@ export const clientOffersApi = {
       body: JSON.stringify(updates),
     }).then(normalizeClientOffer),
 
+  revertToDraft: (id: string, reason?: string): Promise<ClientOffer> =>
+    fetchApi<ClientOffer>(`/sales/client-offers/${id}/revert-to-draft`, {
+      method: 'POST',
+      body: JSON.stringify(reason ? { reason } : {}),
+    }).then(normalizeClientOffer),
+
   delete: (id: string): Promise<void> =>
     fetchApi(`/sales/client-offers/${id}`, { method: 'DELETE' }),
 
