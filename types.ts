@@ -138,10 +138,10 @@ export interface Client {
   isDisabled?: boolean;
   type?: 'individual' | 'company';
   contacts?: ClientContact[];
-  contactName?: string;
+  contactName?: string | null;
   clientCode?: string;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   address?: string;
   addressCountry?: string;
   addressState?: string;
@@ -149,9 +149,9 @@ export interface Client {
   addressProvince?: string;
   addressCivicNumber?: string;
   addressLine?: string;
-  description?: string;
-  atecoCode?: string;
-  website?: string;
+  description?: string | null;
+  atecoCode?: string | null;
+  website?: string | null;
   sector?: string | null;
   numberOfEmployees?: string | null;
   revenue?: string | null;
@@ -839,3 +839,43 @@ export interface SupplierInvoice {
   createdAt: number;
   updatedAt: number;
 }
+
+// Canonical list of `entityType` values written by `logAudit`/`replyError`. Mirrored from
+// `server/utils/audit.ts`'s `AUDIT_ENTITY_TYPES`; the two MUST stay in sync. A drift check
+// runs in `test/types/auditEntityTypes.test.ts`.
+export const AUDIT_ENTITY_TYPES = [
+  'auth',
+  'route',
+  'client',
+  'client_offer',
+  'client_order',
+  'client_profile_option',
+  'client_quote',
+  'email_config',
+  'invoice',
+  'ldap',
+  'ldap_config',
+  'mcp_token',
+  'notification',
+  'product',
+  'product_category',
+  'product_subcategory',
+  'product_type',
+  'project',
+  'reports_ai',
+  'reports_ai_message',
+  'reports_ai_session',
+  'role',
+  'settings',
+  'sso_provider',
+  'supplier',
+  'supplier_invoice',
+  'supplier_order',
+  'supplier_quote',
+  'supplier_quote_attachment',
+  'task',
+  'user',
+  'work_unit',
+] as const;
+
+export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];

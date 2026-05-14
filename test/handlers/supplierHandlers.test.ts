@@ -72,14 +72,14 @@ describe('makeSupplierHandlers', () => {
     expect(suppliers.get()).toEqual([{ id: 's1' }, { id: 's-new', name: 'Acme' }]);
   });
 
-  test('add swallows errors', async () => {
+  test('add rethrows api error and keeps suppliers list unchanged', async () => {
     apiMocks.suppliersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const suppliers = makeStubSetter<SupplierLike>([]);
     const handlers = makeSupplierHandlers({ setSuppliers: suppliers.setter });
 
     const restore = silenceConsole();
     try {
-      await handlers.add({ name: 'Acme' } as never);
+      await expect(handlers.add({ name: 'Acme' } as never)).rejects.toThrow('boom');
       expect(suppliers.get()).toEqual([]);
     } finally {
       restore();
@@ -101,14 +101,14 @@ describe('makeSupplierHandlers', () => {
     expect(suppliers.get()[1]).toEqual({ id: 's2', name: 'B' });
   });
 
-  test('update swallows errors', async () => {
+  test('update rethrows api error and keeps supplier unchanged', async () => {
     apiMocks.suppliersUpdate.mockImplementation(() => Promise.reject(new Error('nope')));
     const suppliers = makeStubSetter<SupplierLike>([{ id: 's1', name: 'Old' }]);
     const handlers = makeSupplierHandlers({ setSuppliers: suppliers.setter });
 
     const restore = silenceConsole();
     try {
-      await handlers.update('s1', { name: 'X' } as never);
+      await expect(handlers.update('s1', { name: 'X' } as never)).rejects.toThrow('nope');
       expect(suppliers.get()).toEqual([{ id: 's1', name: 'Old' }]);
     } finally {
       restore();
@@ -125,14 +125,14 @@ describe('makeSupplierHandlers', () => {
     expect(suppliers.get()).toEqual([{ id: 's2' }]);
   });
 
-  test('delete swallows errors', async () => {
+  test('delete rethrows api error and keeps supplier in list', async () => {
     apiMocks.suppliersDelete.mockImplementation(() => Promise.reject(new Error('fail')));
     const suppliers = makeStubSetter<SupplierLike>([{ id: 's1' }]);
     const handlers = makeSupplierHandlers({ setSuppliers: suppliers.setter });
 
     const restore = silenceConsole();
     try {
-      await handlers.delete('s1');
+      await expect(handlers.delete('s1')).rejects.toThrow('fail');
       expect(suppliers.get()).toEqual([{ id: 's1' }]);
     } finally {
       restore();

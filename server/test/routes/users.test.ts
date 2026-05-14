@@ -668,7 +668,7 @@ describe('DELETE /api/users/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  test('403 without delete permission for target type', async () => {
+  test('403 without delete permission for target type (audits the denial)', async () => {
     findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, employeeType: 'internal' });
     // grant only app_user delete, not internal delete
     getRolePermissionsMock.mockResolvedValue([
@@ -683,6 +683,13 @@ describe('DELETE /api/users/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.delete.denied',
+        entityType: 'user',
+        entityId: 'u-target',
+      }),
+    );
   });
 
   test('401 missing token', async () => {
@@ -797,7 +804,7 @@ describe('PUT /api/users/:id', () => {
     );
   });
 
-  test('403 cannot change own role', async () => {
+  test('403 cannot change own role (audits the denial)', async () => {
     findCoreByIdMock.mockResolvedValue({
       ...SAMPLE_USER_CORE,
       id: ADMIN_USER.id,
@@ -812,6 +819,14 @@ describe('PUT /api/users/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).error).toBe('Cannot change your own role');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.update.denied',
+        entityType: 'user',
+        entityId: ADMIN_USER.id,
+        details: expect.objectContaining({ secondaryLabel: 'self_role_change_forbidden' }),
+      }),
+    );
   });
 
   test('400 cannot disable own account', async () => {

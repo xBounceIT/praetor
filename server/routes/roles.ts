@@ -14,6 +14,7 @@ import {
   normalizePermission,
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, ensureArrayOfStrings, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleSchema = {
@@ -238,11 +239,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const roleRow = await rolesRepo.findById(idResult.value);
       if (!roleRow) {
-        return reply.code(404).send({ error: 'Role not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Role not found',
+          action: 'role.rename.not_found',
+          entityType: 'role',
+          entityId: idResult.value,
+        });
       }
 
       if (roleRow.isAdmin || roleRow.isSystem) {
-        return reply.code(403).send({ error: 'System roles cannot be renamed' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'System roles cannot be renamed',
+          action: 'role.rename.denied',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: { secondaryLabel: roleRow.isAdmin ? 'admin_role' : 'system_role' },
+        });
       }
 
       await rolesRepo.updateRoleName(idResult.value, nameResult.value);
@@ -285,15 +299,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const roleRow = await rolesRepo.findById(idResult.value);
       if (!roleRow) {
-        return reply.code(404).send({ error: 'Role not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Role not found',
+          action: 'role.delete.not_found',
+          entityType: 'role',
+          entityId: idResult.value,
+        });
       }
 
       if (roleRow.isAdmin || roleRow.isSystem) {
-        return reply.code(403).send({ error: 'System roles cannot be deleted' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'System roles cannot be deleted',
+          action: 'role.delete.denied',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: { secondaryLabel: roleRow.isAdmin ? 'admin_role' : 'system_role' },
+        });
       }
 
       if (await rolesRepo.isRoleInUse(idResult.value)) {
-        return reply.code(409).send({ error: 'Role is in use by existing users' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Role is in use by existing users',
+          action: 'role.delete.conflict',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'role_in_use' },
+        });
       }
 
       await rolesRepo.deleteRole(idResult.value);
@@ -347,10 +381,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const roleRow = await rolesRepo.findById(idResult.value);
       if (!roleRow) {
-        return reply.code(404).send({ error: 'Role not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Role not found',
+          action: 'role.update_permissions.not_found',
+          entityType: 'role',
+          entityId: idResult.value,
+        });
       }
       if (roleRow.isAdmin) {
-        return reply.code(403).send({ error: 'Admin role permissions are locked' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Admin role permissions are locked',
+          action: 'role.update_permissions.denied',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'admin_role' },
+        });
       }
       const forbiddenPermission = findForbiddenAdministrationPermission(normalizedPermissions);
       if (forbiddenPermission) {

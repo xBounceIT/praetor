@@ -10,6 +10,7 @@ import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalEmail,
@@ -314,7 +315,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updated = await suppliersRepo.update(idResult.value, patch);
       if (!updated) {
-        return reply.code(404).send({ error: 'Supplier not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier not found',
+          action: 'supplier.update.not_found',
+          entityType: 'supplier',
+          entityId: idResult.value,
+        });
       }
 
       const changedFields = [
@@ -378,15 +385,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // supplier with any such document errors at the FK layer. Translate to a 409 so the
         // UI can surface a clear "supplier has financial documents" message.
         if (getForeignKeyViolation(err)) {
-          return reply.code(409).send({
-            error:
+          return replyError(request, reply, {
+            statusCode: 409,
+            message:
               'Cannot delete supplier because it has financial documents (invoices, quotes, or sales). Remove them first.',
+            action: 'supplier.delete.conflict',
+            entityType: 'supplier',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'has_financial_documents' },
           });
         }
         throw err;
       }
       if (!deleted) {
-        return reply.code(404).send({ error: 'Supplier not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier not found',
+          action: 'supplier.delete.not_found',
+          entityType: 'supplier',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({

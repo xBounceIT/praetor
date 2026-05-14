@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import type { ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
+import type { Client, ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -93,6 +93,10 @@ describe('<ClientsView /> contact validation', () => {
     await submitClientForm(user);
 
     await waitFor(() => expect(props.onAddClient).toHaveBeenCalledTimes(1));
+    // On create, empty optional fields must be omitted (sent as `undefined`,
+    // stripped by normalizeClientPayload). `clientCreateBodySchema` only
+    // accepts strings, so sending `null` would 400 the request — see
+    // the edit-path test below for why update uses `null` instead.
     expect(props.onAddClient).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Acme Srl',
@@ -104,7 +108,52 @@ describe('<ClientsView /> contact validation', () => {
         phone: undefined,
       }),
     );
+    const createPayload = (props.onAddClient as ReturnType<typeof mock>).mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    for (const field of ['contactName', 'email', 'phone', 'description', 'atecoCode', 'website']) {
+      expect(createPayload[field]).not.toBeNull();
+    }
     expect(screen.queryByText('common:validation.required')).not.toBeInTheDocument();
+  });
+
+  test('regression #405: edit submit sends null for cleared email/phone/contactName', async () => {
+    // Render a client whose primary contact is already cleared (no legacy
+    // contactName/email/phone, no contacts array). Opening edit and submitting
+    // without changes used to send `undefined` for these fields, which
+    // `normalizeClientPayload` stripped from the wire body — so the server
+    // never saw the keys and never cleared the columns. The fix sends
+    // explicit `null` for cleared fields.
+    const existingClient: Client = {
+      id: 'client-1',
+      name: 'Acme Srl',
+      clientCode: 'ACME',
+      fiscalCode: 'IT12345678901',
+      contacts: [],
+    };
+    const props = renderClientsView({ clients: [existingClient] });
+
+    const user = userEvent.setup();
+    const nameCell = await screen.findByText('Acme Srl');
+    const row = nameCell.closest('tr');
+    if (!row) throw new Error('row for existing client not found');
+    await user.click(row);
+
+    await screen.findByText('crm:clients.editClient');
+
+    await submitClientForm(user);
+
+    await waitFor(() => expect(props.onUpdateClient).toHaveBeenCalledTimes(1));
+    expect(props.onUpdateClient).toHaveBeenCalledWith(
+      'client-1',
+      expect.objectContaining({
+        contacts: [],
+        contactName: null,
+        email: null,
+        phone: null,
+      }),
+    );
   });
 
   test('requires a contact name when submitting a partially filled contact draft', async () => {

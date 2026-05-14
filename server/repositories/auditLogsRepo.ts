@@ -19,7 +19,15 @@ export type AuditLog = {
 export type AuditLogFilter = {
   startDate?: string;
   endDate?: string;
+  userId?: string;
+  action?: string;
+  entityType?: string;
 };
+
+// Escape LIKE wildcards (`%` and `_`) so user-supplied filter strings perform a literal prefix
+// match. The backslash is itself escaped first to avoid mangling pre-existing `\` characters.
+const escapeLikePattern = (input: string): string =>
+  input.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 
 export const list = async (filter: AuditLogFilter, exec: DbExecutor = db): Promise<AuditLog[]> => {
   const conditions: SQL[] = [];
@@ -35,6 +43,20 @@ export const list = async (filter: AuditLogFilter, exec: DbExecutor = db): Promi
   }
   if (filter.endDate) {
     conditions.push(sql`al.created_at <= ${filter.endDate}::timestamptz AT TIME ZONE 'UTC'`);
+  }
+  if (filter.userId) {
+    conditions.push(sql`al.user_id = ${filter.userId}`);
+  }
+  if (filter.entityType) {
+    conditions.push(sql`al.entity_type = ${filter.entityType}`);
+  }
+  // Action filter is prefix-match so investigators can drill from `client_offer` → `client_offer.update` → `client_offer.update.conflict`.
+  // `ESCAPE '\'` explicitly designates the backslash as the LIKE escape character so the
+  // `escapeLikePattern` output is interpreted as Postgres expects, regardless of any
+  // `standard_conforming_strings` setting on the connection.
+  if (filter.action) {
+    const pattern = `${escapeLikePattern(filter.action)}%`;
+    conditions.push(sql`al.action LIKE ${pattern} ESCAPE '\\'`);
   }
 
   const whereClause =

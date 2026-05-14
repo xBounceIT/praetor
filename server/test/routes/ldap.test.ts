@@ -499,7 +499,11 @@ describe('POST /api/ldap/sync', () => {
 
     expect(response.statusCode).toBe(400);
     expect(syncUsersMock).not.toHaveBeenCalled();
-    expect(logAuditMock).not.toHaveBeenCalled();
+    // The denial is audited via `replyError` so investigators can see failed sync attempts.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ldap.sync.invalid', entityType: 'ldap_config' }),
+    );
     expect(JSON.parse(response.body)).toEqual({
       success: false,
       error: 'LDAP is not enabled',
@@ -526,7 +530,11 @@ describe('POST /api/ldap/sync', () => {
     const response = await syncLdap();
 
     expect(response.statusCode).toBe(400);
-    expect(logAuditMock).not.toHaveBeenCalled();
+    // The skipped sync is audited so investigators can see when sync was attempted but bailed.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ldap.sync.invalid', entityType: 'ldap_config' }),
+    );
     expect(JSON.parse(response.body)).toEqual({
       success: false,
       error: 'LDAP config not loaded',
