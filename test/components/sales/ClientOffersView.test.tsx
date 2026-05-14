@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Client, ClientOffer, Product, SupplierQuote } from '../../types';
-import { installI18nMock } from '../helpers/i18n';
-import { render } from '../helpers/render';
+import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
+import { installI18nMock } from '../../helpers/i18n';
+import { render } from '../../helpers/render';
 
 installI18nMock({ includeInterpolatedValues: true });
 
-mock.module('../../components/sales/OfferVersionsPanel', () => ({
+mock.module('../../../components/sales/OfferVersionsPanel', () => ({
   default: () => null,
 }));
 
-const ClientOffersView = (await import('../../components/sales/ClientOffersView')).default;
+const ClientOffersView = (await import('../../../components/sales/ClientOffersView')).default;
 
 const clients: Client[] = [
   { id: 'c-1', name: 'Acme Corp' },
@@ -43,6 +43,7 @@ const buildOffer = (overrides: Partial<ClientOffer>): ClientOffer => ({
   discount: 0,
   discountType: 'percentage',
   status: 'draft',
+  deliveryDate: null,
   expirationDate: '2099-12-31',
   notes: '',
   createdAt: 1_700_000_000_000,
@@ -56,6 +57,22 @@ const globexSent = buildOffer({
   clientId: 'c-2',
   clientName: 'Globex Industries',
   status: 'sent',
+  deliveryDate: '2026-05-14',
+  discount: 10,
+  items: [
+    {
+      id: 'item-2',
+      offerId: 'O-GLOBEX-SENT',
+      productId: 'p-2',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 60,
+      productMolPercentage: 40,
+      unitType: 'unit',
+    },
+  ],
+  paymentTerms: '30gg',
 });
 const terminalAccepted = buildOffer({
   id: 'O-ACME-ACCEPTED',
@@ -95,6 +112,45 @@ afterEach(() => {
 });
 
 describe('<ClientOffersView /> list', () => {
+  test('renders issue 461 offer-list columns in the requested order', () => {
+    render(<ClientOffersView {...baseProps} />);
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers.slice(0, 11)).toEqual([
+      'sales:clientOffers.offerColumn',
+      'sales:clientOffers.deliveryDateColumn',
+      'sales:clientOffers.clientColumn',
+      'sales:clientOffers.subtotal',
+      'sales:clientOffers.discountPercentColumn',
+      'common:labels.discount',
+      'sales:clientOffers.discountedTotalColumn',
+      'sales:clientOffers.margin',
+      'sales:clientOffers.molColumn',
+      'sales:clientOffers.paymentTermsColumn',
+      'sales:clientOffers.statusColumn',
+    ]);
+  });
+
+  test('renders delivery date, MOL, and payment terms in offer rows', () => {
+    render(<ClientOffersView {...baseProps} />);
+    expect(screen.getByText('5/14/2026')).toBeInTheDocument();
+    expect(screen.getByText('33.3%')).toBeInTheDocument();
+    expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
+  });
+
+  test('renders fixed discounts as equivalent percentages in offer rows', () => {
+    const fixedDiscountOffer = buildOffer({
+      id: 'O-FIXED-DISCOUNT',
+      discount: 15,
+      discountType: 'currency',
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[fixedDiscountOffer]} />);
+
+    expect(screen.getByText('15%')).toBeInTheDocument();
+    expect(screen.queryByText('15 EUR')).not.toBeInTheDocument();
+    expect(screen.getByText('-15.00 EUR')).toBeInTheDocument();
+  });
+
   test('renders every offer passed in (no external search/status filter)', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();

@@ -21,6 +21,7 @@ const OFFER_BASE: readonly unknown[] = [
   '5',
   'percentage',
   'draft',
+  null,
   '2026-06-01',
   null,
   new Date('2026-01-01T00:00:00Z'),
@@ -57,7 +58,14 @@ describe('listAll', () => {
     expect(exec.calls[0].sql).toContain('from "customer_offers"');
     expect(exec.calls[0].sql).toContain('order by "customer_offers"."created_at" desc');
     expect(result[0].discount).toBe(5);
+    expect(result[0].deliveryDate).toBeNull();
     expect(result[0].expirationDate).toBe('2026-06-01');
+  });
+
+  test('maps delivery_date as a date-only string', async () => {
+    exec.enqueue({ rows: [offerRow({ 8: '2026-05-14' })] });
+    const result = await clientOffersRepo.listAll(testDb);
+    expect(result[0].deliveryDate).toBe('2026-05-14');
   });
 });
 
@@ -88,7 +96,7 @@ describe('existsById / findIdConflict', () => {
 
 describe('findExisting', () => {
   test('returns existing offer fields needed for permission checks', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
     const result = await clientOffersRepo.findExisting('co-1', testDb);
     expect(result?.linkedQuoteId).toBe('cq-1');
     expect(result?.status).toBe('draft');
@@ -102,14 +110,14 @@ describe('findExisting', () => {
 
 describe('lockExistingById', () => {
   test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
     await clientOffersRepo.lockExistingById('co-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].params).toContain('co-1');
   });
 
   test('returns mapped row when present', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
     const result = await clientOffersRepo.lockExistingById('co-1', testDb);
     expect(result?.id).toBe('co-1');
     expect(result?.status).toBe('draft');
@@ -183,7 +191,7 @@ describe('findLinkedSaleId', () => {
 });
 
 describe('create', () => {
-  test('inserts 10 fields and returns mapped offer', async () => {
+  test('inserts 11 fields and returns mapped offer', async () => {
     exec.enqueue({ rows: [offerRow()] });
     const result = await clientOffersRepo.create(
       {
@@ -195,30 +203,31 @@ describe('create', () => {
         discount: 5,
         discountType: 'percentage',
         status: 'draft',
+        deliveryDate: null,
         expirationDate: '2026-06-01',
         notes: null,
       },
       testDb,
     );
     expect(exec.calls[0].sql).toContain('insert into "customer_offers"');
-    expect(exec.calls[0].params).toHaveLength(10);
+    expect(exec.calls[0].params).toHaveLength(11);
     expect(exec.calls[0].params[5]).toBe('5'); // discount via numericForDb
     expect(result.id).toBe('co-1');
   });
 });
 
 describe('update', () => {
-  test('binds 9 patch values via COALESCE, WHERE id last', async () => {
+  test('binds 10 patch values via COALESCE, WHERE id last', async () => {
     exec.enqueue({ rows: [offerRow()] });
     await clientOffersRepo.update('co-1', { status: 'accepted' }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "customer_offers"');
     expect(sql).toContain('COALESCE');
     expect(sql).toContain('CURRENT_TIMESTAMP');
-    expect(sql).toContain('"id" = $10');
-    expect(exec.calls[0].params).toHaveLength(10);
+    expect(sql).toContain('"id" = $11');
+    expect(exec.calls[0].params).toHaveLength(11);
     expect(exec.calls[0].params[6]).toBe('accepted'); // status
-    expect(exec.calls[0].params[9]).toBe('co-1'); // where id
+    expect(exec.calls[0].params[10]).toBe('co-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -374,6 +383,7 @@ describe('restoreSnapshotOffer', () => {
         discount: 5,
         discountType: 'percentage',
         status: 'draft',
+        deliveryDate: null,
         expirationDate: '2026-06-01',
         notes: null,
       },
@@ -397,6 +407,7 @@ describe('restoreSnapshotOffer', () => {
         discount: 5,
         discountType: 'percentage',
         status: 'draft',
+        deliveryDate: null,
         expirationDate: '2026-06-01',
         notes: null,
       },
@@ -428,6 +439,7 @@ describe('mapOffer (exercised via create return path)', () => {
     discount: 5,
     discountType: 'percentage',
     status: 'draft',
+    deliveryDate: null,
     expirationDate: '2026-06-01',
     notes: null,
   };
@@ -445,7 +457,7 @@ describe('mapOffer (exercised via create return path)', () => {
   });
 
   test('null createdAt/updatedAt fall back to 0', async () => {
-    exec.enqueue({ rows: [offerRow({ 10: null, 11: null })] });
+    exec.enqueue({ rows: [offerRow({ 11: null, 12: null })] });
     const result = await clientOffersRepo.create(baseInput, testDb);
     expect(result.createdAt).toBe(0);
     expect(result.updatedAt).toBe(0);

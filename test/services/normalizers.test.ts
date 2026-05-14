@@ -87,6 +87,7 @@ const baseClientOffer: ClientOffer = {
   discount: 0,
   discountType: 'percentage',
   status: 'draft',
+  deliveryDate: null,
   expirationDate: '2026-12-31',
   createdAt: 0,
   updatedAt: 0,
@@ -579,10 +580,12 @@ describe('normalizeClientOffer', () => {
   test('happy path with items', () => {
     const offer = make<ClientOffer>(baseClientOffer, {
       discount: 15,
+      deliveryDate: '2026-05-14T00:00:00.000Z',
       items: [make<ClientOfferItem>(baseOfferItem, { quantity: 3, unitPrice: 20 })],
     });
     const result = normalizeClientOffer(offer);
     expect(result.discount).toBe(15);
+    expect(result.deliveryDate).toBe('2026-05-14');
     expect(result.items).toHaveLength(1);
     expect(result.items[0].quantity).toBe(3);
   });

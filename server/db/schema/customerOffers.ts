@@ -33,6 +33,7 @@ export const customerOffers = pgTable(
       .notNull()
       .default('percentage'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
+    deliveryDate: date('delivery_date', { mode: 'string' }),
     expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),

@@ -20160,6 +20160,13 @@
                       "status": {
                         "type": "string"
                       },
+                      "deliveryDate": {
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "format": "date"
+                      },
                       "expirationDate": {
                         "type": [
                           "null",
@@ -20534,6 +20541,13 @@
                   "status": {
                     "type": "string"
                   },
+                  "deliveryDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
                   "expirationDate": {
                     "type": "string",
                     "format": "date"
@@ -20592,6 +20606,13 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "deliveryDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
                     },
                     "expirationDate": {
                       "type": [
@@ -20944,6 +20965,13 @@
                   "status": {
                     "type": "string"
                   },
+                  "deliveryDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
                   "expirationDate": {
                     "type": "string",
                     "format": "date"
@@ -21004,6 +21032,13 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "deliveryDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
                     },
                     "expirationDate": {
                       "type": [
@@ -21475,6 +21510,13 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "deliveryDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
                     },
                     "expirationDate": {
                       "type": [
@@ -22218,6 +22260,13 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "deliveryDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
                     },
                     "expirationDate": {
                       "type": [
@@ -37001,6 +37050,75 @@
             },
             "in": "query",
             "name": "endDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "in": "query",
+            "name": "userId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "in": "query",
+            "name": "username",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "action",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auth",
+                "route",
+                "client",
+                "client_offer",
+                "client_order",
+                "client_profile_option",
+                "client_quote",
+                "email_config",
+                "invoice",
+                "ldap",
+                "ldap_config",
+                "mcp_token",
+                "notification",
+                "product",
+                "product_category",
+                "product_subcategory",
+                "product_type",
+                "project",
+                "reports_ai",
+                "reports_ai_message",
+                "reports_ai_session",
+                "role",
+                "settings",
+                "sso_provider",
+                "supplier",
+                "supplier_invoice",
+                "supplier_order",
+                "supplier_quote",
+                "supplier_quote_attachment",
+                "task",
+                "user",
+                "work_unit"
+              ]
+            },
+            "in": "query",
+            "name": "entityType",
             "required": false
           }
         ],
