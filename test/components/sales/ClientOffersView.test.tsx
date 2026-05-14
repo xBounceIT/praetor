@@ -151,6 +151,61 @@ describe('<ClientOffersView /> list', () => {
     expect(screen.getByText('-15.00 EUR')).toBeInTheDocument();
   });
 
+  test('sorts the global discount column by equivalent percentage', async () => {
+    const user = userEvent.setup();
+    const percentageDiscountOffer = buildOffer({
+      id: 'O-PERCENT-10',
+      discount: 10,
+      discountType: 'percentage',
+    });
+    const fixedDiscountOffer = buildOffer({
+      id: 'O-FIXED-5',
+      discount: 10,
+      discountType: 'currency',
+      items: [
+        {
+          id: 'item-fixed',
+          offerId: 'O-FIXED-5',
+          productId: 'p-fixed',
+          productName: 'Fixed discount service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          unitType: 'unit',
+        },
+      ],
+    });
+    const zeroDiscountOffer = buildOffer({
+      id: 'O-ZERO',
+      discount: 0,
+      discountType: 'percentage',
+    });
+
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[zeroDiscountOffer, fixedDiscountOffer, percentageDiscountOffer]}
+      />,
+    );
+
+    const sortButton = screen.getByRole('button', {
+      name: 'sales:clientOffers.discountPercentColumn',
+    });
+    expect(sortButton).toBeEnabled();
+    await user.click(sortButton);
+
+    await waitFor(() => {
+      const rows = screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.textContent ?? '');
+      expect(rows[0]).toContain('O-PERCENT-10');
+      expect(rows[1]).toContain('O-FIXED-5');
+      expect(rows[2]).toContain('O-ZERO');
+    });
+  });
+
   test('renders every offer passed in (no external search/status filter)', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();

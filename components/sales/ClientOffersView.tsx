@@ -101,22 +101,32 @@ const formatPercentageLabelValue = (value: number): string => {
   return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 };
 
+const getDiscountPercentageValue = (
+  discount: number,
+  discountType: DiscountType,
+  subtotal: number,
+  discountAmount: number,
+): number => {
+  if (discountType === 'percentage') {
+    return Number.isFinite(discount) ? discount : 0;
+  }
+
+  if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount)) {
+    return 0;
+  }
+
+  return (discountAmount / subtotal) * 100;
+};
+
 const getDiscountPercentageLabelValue = (
   discount: number,
   discountType: DiscountType,
   subtotal: number,
   discountAmount: number,
-): string => {
-  if (discountType === 'percentage') {
-    return `${formatPercentageLabelValue(Number.isFinite(discount) ? discount : 0)}%`;
-  }
-
-  if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount)) {
-    return '0%';
-  }
-
-  return `${formatPercentageLabelValue((discountAmount / subtotal) * 100)}%`;
-};
+): string =>
+  `${formatPercentageLabelValue(
+    getDiscountPercentageValue(discount, discountType, subtotal, discountAmount),
+  )}%`;
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
@@ -456,9 +466,17 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.discountPercentColumn', { defaultValue: 'Discount %' }),
       id: 'globalDiscount',
+      accessorFn: (row) => {
+        const { subtotal, discountAmount } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return getDiscountPercentageValue(row.discount, row.discountType, subtotal, discountAmount);
+      },
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
-      disableSorting: true,
       disableFiltering: true,
       cell: ({ row }) => {
         const { subtotal, discountAmount } = calculatePricingTotals(
