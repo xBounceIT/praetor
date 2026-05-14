@@ -21,6 +21,10 @@ Review discounts, discount type, units, quantities, and unit price. If the docum
 
 Sign in again. Sessions expire to protect data when the application is left idle.
 
+## An upgrade stops during migrations
+
+The backend applies database migrations before accepting traffic. If a deployment is interrupted halfway through, run the same upgrade command again: recorded migrations are skipped and missing entries are detected by hash. If startup still fails, inspect backend logs before rolling back.
+
 ## Is technical documentation still available?
 
 Yes. API documentation remains available at `/docs/api` and frontend documentation remains available at `/docs/frontend`.
