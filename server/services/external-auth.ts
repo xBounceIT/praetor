@@ -5,6 +5,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
@@ -43,6 +44,15 @@ const assertUserAllowsExternalProvider = (
   ) {
     throw new Error('External identity is not allowed for this Praetor user');
   }
+};
+
+const isUsernameUniqueViolation = (err: unknown): boolean => {
+  const dup = getUniqueViolation(err);
+  return (
+    dup?.constraint === 'users_username_unique' ||
+    dup?.constraint === 'users_username_key' ||
+    !!dup?.detail?.includes('(username)')
+  );
 };
 
 export const normalizeExternalUsername = (username: string): string =>
@@ -162,114 +172,123 @@ export const resolveExternalIdentity = async (
   );
   const primaryRole = mappedRoleIds[0];
 
-  return withDbTransaction(async (tx) => {
-    const existingIdentity = await externalIdentitiesRepo.findByIdentity(
-      {
-        providerId: input.providerId,
-        protocol: input.protocol,
-        issuer: input.issuer,
-        subject: input.subject,
-      },
-      tx,
-    );
+  const resolveInTransaction = () =>
+    withDbTransaction(async (tx) => {
+      const existingIdentity = await externalIdentitiesRepo.findByIdentity(
+        {
+          providerId: input.providerId,
+          protocol: input.protocol,
+          issuer: input.issuer,
+          subject: input.subject,
+        },
+        tx,
+      );
 
-    let user: usersRepo.LoginUserWithAuth | null = null;
-    let wasCreated = false;
-    let wasBound = false;
+      let user: usersRepo.LoginUserWithAuth | null = null;
+      let wasCreated = false;
+      let wasBound = false;
 
-    if (existingIdentity) {
-      user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
-      if (!user) throw new Error('Bound Praetor user no longer exists');
-      assertUserAllowsExternalProvider(user, input);
-    } else {
-      user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
-      if (!user) {
-        const name = input.name?.trim() || username;
-        const avatarInitials = computeAvatarInitials(name);
-        const id = generatePrefixedId('u');
-        await usersRepo.insertUser(
-          {
+      if (existingIdentity) {
+        user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
+        if (!user) throw new Error('Bound Praetor user no longer exists');
+        assertUserAllowsExternalProvider(user, input);
+      } else {
+        user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
+        if (!user) {
+          const name = input.name?.trim() || username;
+          const avatarInitials = computeAvatarInitials(name);
+          const id = generatePrefixedId('u');
+          await usersRepo.insertUser(
+            {
+              id,
+              name,
+              username,
+              passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+              role: primaryRole,
+              avatarInitials,
+              costPerHour: 0,
+              isDisabled: false,
+              employeeType: 'app_user',
+              authMethod: input.protocol,
+              authProviderId: input.providerId,
+            },
+            tx,
+          );
+          await settingsRepo.upsertForUser(
+            id,
+            { fullName: name, email: input.email?.trim() || '', language: null },
+            tx,
+          );
+          user = {
             id,
             name,
             username,
-            passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: primaryRole,
             avatarInitials,
-            costPerHour: 0,
             isDisabled: false,
+            sessionVersion: 1,
+            passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             employeeType: 'app_user',
             authMethod: input.protocol,
             authProviderId: input.providerId,
+          };
+          wasCreated = true;
+        } else {
+          assertUserAllowsExternalProvider(user, input);
+        }
+
+        await externalIdentitiesRepo.insert(
+          {
+            id: generatePrefixedId('eid'),
+            providerId: input.providerId,
+            protocol: input.protocol,
+            issuer: input.issuer,
+            subject: input.subject,
+            userId: user.id,
           },
           tx,
         );
-        await settingsRepo.upsertForUser(
-          id,
-          { fullName: name, email: input.email?.trim() || '', language: null },
+        const persistedIdentity = await externalIdentitiesRepo.findByIdentity(
+          {
+            providerId: input.providerId,
+            protocol: input.protocol,
+            issuer: input.issuer,
+            subject: input.subject,
+          },
           tx,
         );
-        user = {
-          id,
-          name,
-          username,
-          role: primaryRole,
-          avatarInitials,
-          isDisabled: false,
-          sessionVersion: 1,
-          passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-          employeeType: 'app_user',
-          authMethod: input.protocol,
-          authProviderId: input.providerId,
-        };
-        wasCreated = true;
-      } else {
-        assertUserAllowsExternalProvider(user, input);
+        if (!persistedIdentity || persistedIdentity.userId !== user.id) {
+          throw new Error('External identity is already bound to another user');
+        }
+        wasBound = true;
       }
 
-      await externalIdentitiesRepo.insert(
-        {
-          id: generatePrefixedId('eid'),
-          providerId: input.providerId,
-          protocol: input.protocol,
-          issuer: input.issuer,
-          subject: input.subject,
-          userId: user.id,
-        },
-        tx,
-      );
-      const persistedIdentity = await externalIdentitiesRepo.findByIdentity(
-        {
-          providerId: input.providerId,
-          protocol: input.protocol,
-          issuer: input.issuer,
-          subject: input.subject,
-        },
-        tx,
-      );
-      if (!persistedIdentity || persistedIdentity.userId !== user.id) {
-        throw new Error('External identity is already bound to another user');
+      if (user.isDisabled) {
+        throw new Error('User is disabled');
       }
-      wasBound = true;
-    }
 
-    if (user.isDisabled) {
-      throw new Error('User is disabled');
-    }
+      await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
+      await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
+      await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id, tx);
 
-    await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
-    await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
-    await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id, tx);
+      return {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        role: primaryRole,
+        avatarInitials: user.avatarInitials,
+        isDisabled: user.isDisabled,
+        sessionVersion: user.sessionVersion,
+        wasCreated,
+        wasBound,
+      };
+    });
 
-    return {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      role: primaryRole,
-      avatarInitials: user.avatarInitials,
-      isDisabled: user.isDisabled,
-      sessionVersion: user.sessionVersion,
-      wasCreated,
-      wasBound,
-    };
-  });
+  try {
+    return await resolveInTransaction();
+  } catch (err) {
+    if (!isUsernameUniqueViolation(err)) throw err;
+    // A Postgres unique violation aborts the active transaction, so retry outside it.
+    return resolveInTransaction();
+  }
 };

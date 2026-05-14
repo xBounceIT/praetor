@@ -5,6 +5,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const drizzleSnap = { ...realDrizzle };
@@ -135,6 +136,45 @@ describe('resolveExternalIdentity auth method enforcement', () => {
 
     expect(result.wasBound).toBe(true);
     expect(insertIdentityMock).toHaveBeenCalled();
+  });
+
+  test('retries after a concurrent first-time SSO username insert conflict', async () => {
+    findByIdentityMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'eid-1',
+        providerId: 'sso-1',
+        protocol: 'oidc',
+        issuer: input.issuer,
+        subject: input.subject,
+        userId: 'u1',
+      });
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(matchingSsoUser);
+    insertUserMock.mockRejectedValueOnce(makeDbError('23505', 'users_username_unique'));
+
+    const result = await resolveExternalIdentity(input);
+
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(2);
+    expect(result.id).toBe('u1');
+    expect(result.wasCreated).toBe(false);
+    expect(result.wasBound).toBe(true);
+    expect(insertUserMock).toHaveBeenCalledTimes(1);
+    expect(upsertForUserMock).not.toHaveBeenCalled();
+    expect(insertIdentityMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not retry unrelated unique violations', async () => {
+    findByIdentityMock.mockResolvedValueOnce(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValueOnce(null);
+    insertUserMock.mockRejectedValueOnce(makeDbError('23505', 'users_pkey'));
+
+    await expect(resolveExternalIdentity(input)).rejects.toThrow('boom');
+
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(insertIdentityMock).not.toHaveBeenCalled();
   });
 
   test('rejects existing username when provider does not match', async () => {
