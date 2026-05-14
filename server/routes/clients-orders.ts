@@ -635,19 +635,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           const autoCreated = await withDbTransaction(async (tx) => {
             // Lock the supplier quote so concurrent client-order POSTs that reference the
-            // same quote serialize here; then re-read the linked-order state under the lock
-            // to make the gating authoritative. The supplier-quote columns we copy onto the
-            // new supplier order can't change concurrently (the lock covers them), so
-            // `fastFailQuote` from the pre-tx read is reused instead of re-fetching.
+            // same quote serialize here, then re-read the gating state AND the metadata we
+            // copy onto the new supplier order under the lock. `fastFailQuote` from the
+            // pre-tx read isn't reused because a metadata update could have committed
+            // between that read and lock acquisition, landing stale supplier name / payment
+            // terms on the auto-created order.
             const lockedStatus = await supplierQuotesRepo.lockStatusById(sqId, tx);
             if (!lockedStatus || lockedStatus.status !== 'accepted') return false;
-            const [linkedUnderLock, supplierItems] = await Promise.all([
+            const [linkedUnderLock, supplierQuote, supplierItems] = await Promise.all([
               supplierQuotesRepo.findLinkedOrderId(sqId, tx),
+              supplierQuotesRepo.findById(sqId, tx),
               supplierQuotesRepo.findItemsForQuote(sqId, tx),
             ]);
             if (linkedUnderLock) return false;
-
-            const supplierQuote = fastFailQuote;
+            if (!supplierQuote) return false;
 
             const supplierOrderId = await generateSupplierOrderId(tx);
             await clientsOrdersRepo.createSupplierOrder(
