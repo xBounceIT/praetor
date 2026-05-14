@@ -248,6 +248,7 @@
     "viewQuote": "View quote",
     "failedToSave": "Failed to save the supplier quote. Please retry.",
     "failedToDelete": "Failed to delete the supplier quote. Please retry.",
+    "failedToUpdateStatus": "Failed to update the supplier quote status. Please retry.",
     "readOnlyLinked": "This quote is read-only because an order was created from it.",
     "readOnlyStatus": "Read-only due to non-draft status",
     "linkedOrderTitle": "Linked Order",

@@ -305,6 +305,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
+  const handleStatusUpdate = useCallback(
+    async (id: string, updates: Partial<SupplierQuote>) => {
+      try {
+        await onUpdateQuote(id, updates);
+      } catch (err) {
+        toastError((err as Error).message || t('sales:supplierQuotes.failedToUpdateStatus'));
+      }
+    },
+    [onUpdateQuote, t],
+  );
+
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
@@ -490,7 +501,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <button
                         onClick={(event) => {
                           event.stopPropagation();
-                          onUpdateQuote(row.id, { status: 'sent' });
+                          handleStatusUpdate(row.id, { status: 'sent' });
                         }}
                         className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
                       >
@@ -511,7 +522,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
-                            onUpdateQuote(row.id, { status: 'accepted' });
+                            handleStatusUpdate(row.id, { status: 'accepted' });
                           }}
                           className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
                         >
@@ -531,7 +542,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
-                            onUpdateQuote(row.id, { status: 'denied' });
+                            handleStatusUpdate(row.id, { status: 'denied' });
                           }}
                           className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                         >
@@ -596,7 +607,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         onClick={(event) => {
                           event.stopPropagation();
                           if (hasOrder) return;
-                          onUpdateQuote(row.id, { status: 'draft' });
+                          handleStatusUpdate(row.id, { status: 'draft' });
                         }}
                         disabled={hasOrder}
                         className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
@@ -623,7 +634,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       currency,
       getStatusLabel,
       onCreateOrder,
-      onUpdateQuote,
+      handleStatusUpdate,
       onViewOrders,
       openEditModal,
       t,
