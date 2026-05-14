@@ -21,6 +21,8 @@ import {
 } from '../utils/validation.ts';
 
 const UNIT_OF_MEASURE_VALUES = ['unit', 'hours'] as const;
+const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
+const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
 
 const idParamSchema = {
   type: 'object',
@@ -347,7 +349,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
       const amountPaidValue = amountPaidResult.value || 0;
       if (amountPaidValue > computedTotal) {
-        return badRequest(reply, 'amountPaid cannot exceed total');
+        return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+      }
+      const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
+      if (statusValue === 'paid' && amountPaidValue < computedTotal) {
+        return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
       }
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
@@ -366,7 +372,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               clientName: clientNameResult.value,
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
-              status: (status as string) || 'draft',
+              status: statusValue,
               subtotal: computedSubtotal,
               taxTotal: computedTaxTotal,
               total: computedTotal,
@@ -545,25 +551,58 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         patch.total = computed.total;
       }
 
+      let persistedTotal: number | null | undefined;
+      let persistedAmountPaid: number | null | undefined;
+      const getTotalForPaymentCheck = async () => {
+        if (patch.total !== undefined) return patch.total;
+        if (persistedTotal === undefined) {
+          persistedTotal = await invoicesRepo.findTotal(idResult.value);
+        }
+        return persistedTotal;
+      };
+      const getAmountPaidForPaymentCheck = async () => {
+        if (amountPaidValue !== undefined) return amountPaidValue;
+        if (persistedAmountPaid === undefined) {
+          persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);
+        }
+        return persistedAmountPaid;
+      };
+
       if (amountPaidValue !== undefined) {
-        const totalForCheck = patch.total ?? (await invoicesRepo.findTotal(idResult.value));
+        const totalForCheck = await getTotalForPaymentCheck();
         if (totalForCheck === null) {
           return reply.code(404).send({ error: 'Invoice not found' });
         }
         if (amountPaidValue > totalForCheck) {
-          return badRequest(reply, 'amountPaid cannot exceed total');
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
         }
         patch.amountPaid = amountPaidValue;
       } else if (patch.total !== undefined) {
         // Items replaced (so total may be lower) but amountPaid not in this patch - verify the
         // persisted amountPaid still fits under the new total. Without this, paying-down to a
         // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
-        const persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);
-        if (persistedAmountPaid === null) {
+        const amountPaidForCheck = await getAmountPaidForPaymentCheck();
+        if (amountPaidForCheck === null) {
           return reply.code(404).send({ error: 'Invoice not found' });
         }
-        if (persistedAmountPaid > patch.total) {
-          return badRequest(reply, 'amountPaid cannot exceed total');
+        if (amountPaidForCheck > patch.total) {
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+        }
+      }
+
+      if (patch.status === 'paid') {
+        const [totalForCheck, amountPaidForCheck] = await Promise.all([
+          getTotalForPaymentCheck(),
+          getAmountPaidForPaymentCheck(),
+        ]);
+        if (totalForCheck === null || amountPaidForCheck === null) {
+          return reply.code(404).send({ error: 'Invoice not found' });
+        }
+        if (amountPaidForCheck > totalForCheck) {
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+        }
+        if (amountPaidForCheck < totalForCheck) {
+          return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
         }
       }
 

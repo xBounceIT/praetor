@@ -378,6 +378,21 @@ describe('POST /api/invoices', () => {
     );
   });
 
+  test('400 paid status requires amountPaid to cover computed total', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: { ...validBody, status: 'paid', amountPaid: 50 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'amountPaid must be at least total when status is paid',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('400 dueDate before issueDate', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -802,6 +817,44 @@ describe('PUT /api/invoices/:id', () => {
     expect(findTotalMock).toHaveBeenCalledWith('inv-1');
     const patch = updateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.amountPaid).toBe(50);
+  });
+
+  test('400 paid status requires persisted amountPaid to cover persisted total', async () => {
+    findTotalMock.mockResolvedValue(100);
+    findAmountPaidMock.mockResolvedValue(0);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'amountPaid must be at least total when status is paid',
+    });
+    expect(findTotalMock).toHaveBeenCalledWith('inv-1');
+    expect(findAmountPaidMock).toHaveBeenCalledWith('inv-1');
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 paid status rejects persisted amountPaid above persisted total', async () => {
+    findTotalMock.mockResolvedValue(100);
+    findAmountPaidMock.mockResolvedValue(101);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(findTotalMock).toHaveBeenCalledWith('inv-1');
+    expect(findAmountPaidMock).toHaveBeenCalledWith('inv-1');
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('200 status-only update skips findTotal entirely', async () => {
