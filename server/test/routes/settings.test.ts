@@ -557,6 +557,30 @@ describe('PUT /api/settings/password', () => {
     expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
 
+  // Regression: rotate succeeded, so the rotated x-auth-token must be on the
+  // response even when a downstream side effect fails — otherwise the admin's
+  // own password change forcibly logs them out via stale sliding-window token.
+  test('500 from admin warning still ships the rotated x-auth-token', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, username: 'admin' });
+    getPasswordHashMock.mockResolvedValue('$2a$existing');
+    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$newhash');
+    rotatePasswordAndBumpSessionMock.mockResolvedValue(2);
+    deleteAdminPasswordWarningMock.mockRejectedValue(new Error('notifications down'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'password', newPassword: 'new-secure-pw' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    const rotated = res.headers['x-auth-token'];
+    expect(typeof rotated).toBe('string');
+    expect(decodeForAssertion(rotated as string).sessionVersion).toBe(2);
+  });
+
   test('400 missing currentPassword', async () => {
     const res = await testApp.inject({
       method: 'PUT',

@@ -350,18 +350,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         newHash,
       );
 
-      if (request.user.username === ADMIN_USERNAME) {
-        if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
-          await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
-        } else {
-          await notificationsRepo.deleteAdminPasswordWarning();
-        }
-      }
-
-      // authenticateToken's sliding-window refresh already wrote an x-auth-token
-      // signed with the pre-bump sessionVersion; overwrite it so the current
-      // device stays logged in while other live sessions get "Session revoked"
-      // on their next request. PAT callers have nothing to rotate.
+      // Re-sign x-auth-token before the admin-warning side effects below: the
+      // password is already rotated, and authenticateToken's sliding-window
+      // refresh wrote a pre-bump token in onRequest. If a downstream side
+      // effect throws, Fastify's 500 response still carries this rotated
+      // header — without it, the admin would be force-logged-out by their own
+      // password change. PAT callers have nothing to rotate.
       if (request.auth?.source === 'session' && request.auth.sessionStart !== undefined) {
         const refreshedToken = generateToken(
           request.user.id,
@@ -370,6 +364,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           newSessionVersion,
         );
         reply.header('x-auth-token', refreshedToken);
+      }
+
+      if (request.user.username === ADMIN_USERNAME) {
+        if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
+          await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
+        } else {
+          await notificationsRepo.deleteAdminPasswordWarning();
+        }
       }
 
       return { message: 'Password updated successfully' };

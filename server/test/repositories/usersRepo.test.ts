@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as usersRepo from '../../repositories/usersRepo.ts';
+import { NotFoundError } from '../../utils/http-errors.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
@@ -101,18 +102,20 @@ describe('findLoginUserByUsername', () => {
   });
 });
 
-describe('updatePasswordHash', () => {
-  test('passes the hash and userId in params', async () => {
-    exec.enqueue({ rows: [], rowCount: 1 });
-    await usersRepo.updatePasswordHash('user-1', 'new-hash', testDb);
+describe('rotatePasswordAndBumpSession', () => {
+  test('passes the hash and userId, returns the new session_version from RETURNING', async () => {
+    exec.enqueue({ rows: [[5]], rowCount: 1 });
+    const result = await usersRepo.rotatePasswordAndBumpSession('user-1', 'new-hash', testDb);
+    expect(result).toBe(5);
     expect(exec.calls[0].params).toContain('new-hash');
     expect(exec.calls[0].params).toContain('user-1');
   });
 
-  test('resolves to undefined', async () => {
-    exec.enqueue({ rows: [], rowCount: 1 });
-    const result = await usersRepo.updatePasswordHash('user-1', 'new-hash', testDb);
-    expect(result).toBeUndefined();
+  test('throws NotFoundError when no row matched the userId', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    await expect(
+      usersRepo.rotatePasswordAndBumpSession('user-missing', 'new-hash', testDb),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

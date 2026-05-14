@@ -166,14 +166,6 @@ export const getPasswordHash = async (
   return rows[0]?.passwordHash ?? null;
 };
 
-export const updatePasswordHash = async (
-  userId: string,
-  passwordHash: string,
-  exec: DbExecutor = db,
-): Promise<void> => {
-  await exec.update(users).set({ passwordHash }).where(eq(users.id, userId));
-};
-
 export const findCostPerHour = async (userId: string, exec: DbExecutor = db): Promise<number> => {
   const rows = await exec
     .select({ costPerHour: users.costPerHour })
