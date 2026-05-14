@@ -127,7 +127,7 @@ const validateProviderBody = async (
     validated.enabled = false;
   }
 
-  if (validated.enabled && validated.protocol === 'oidc') {
+  if (options.isCreate && validated.enabled && validated.protocol === 'oidc') {
     for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {
       const result = requireNonEmptyString(source[field], field);
       if (!result.ok) {

@@ -320,6 +320,27 @@ describe('PUT /api/sso/providers/:id — enabled SAML configuration validation',
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('rejects clearing the only config source on an enabled SAML provider', async () => {
+    const existing = samlProvider({
+      enabled: true,
+      metadataUrl: 'https://idp.example.com/metadata',
+    });
+    findByIdMock.mockResolvedValue(existing);
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { metadataUrl: '' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'SAML requires metadata URL/XML or manual entryPoint and idpCert',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('allows enabling a manual SAML provider when masked idpCert preserves the stored cert', async () => {
     const existing = samlProvider({
       enabled: false,
@@ -349,6 +370,52 @@ describe('PUT /api/sso/providers/:id — enabled SAML configuration validation',
     const [, patch] = updateMock.mock.calls[0];
     expect(patch.enabled).toBe(true);
     expect(patch).not.toHaveProperty('idpCert');
+  });
+});
+
+describe('PUT /api/sso/providers/:id — enabled OIDC configuration validation', () => {
+  test('rejects enabling an OIDC provider without required stored config', async () => {
+    findByIdMock.mockResolvedValue({
+      ...baseProvider,
+      enabled: false,
+      issuerUrl: '',
+      clientId: '',
+      usernameAttribute: '',
+    });
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { enabled: true },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({ error: 'issuerUrl is required' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('allows a partial enable update when stored OIDC config is already complete', async () => {
+    const existing = { ...baseProvider, enabled: false };
+    findByIdMock.mockResolvedValue(existing);
+    updateMock.mockImplementation(
+      async (_id: string, patch: realSsoProvidersRepo.SsoProviderPatch) => ({
+        ...existing,
+        ...patch,
+      }),
+    );
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { protocol: 'oidc', enabled: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [, patch] = updateMock.mock.calls[0];
+    expect(patch.protocol).toBe('oidc');
+    expect(patch.enabled).toBe(true);
   });
 });
 
