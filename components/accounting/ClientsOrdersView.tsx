@@ -32,6 +32,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
@@ -54,8 +55,8 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
-  onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => void;
-  onDeleteClientsOrder: (id: string) => void;
+  onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => Promise<void>;
+  onDeleteClientsOrder: (id: string) => Promise<void>;
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
@@ -230,7 +231,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     [onOrderRestored, orderToFormData],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrder) return;
 
@@ -268,8 +269,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       items: itemsWithSnapshots,
     };
 
-    onUpdateClientsOrder(editingOrder.id, payload);
-    closeEditModal();
+    try {
+      await onUpdateClientsOrder(editingOrder.id, payload);
+      closeEditModal();
+    } catch (err) {
+      toastError((err as Error).message || t('accounting:clientsOrders.failedToSave'));
+    }
   };
 
   const confirmDelete = useCallback((order: ClientsOrder) => {
@@ -277,13 +282,27 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setIsDeleteConfirmOpen(true);
   }, []);
 
-  const handleDelete = () => {
-    if (orderToDelete) {
-      onDeleteClientsOrder(orderToDelete.id);
+  const handleDelete = async () => {
+    if (!orderToDelete) return;
+    try {
+      await onDeleteClientsOrder(orderToDelete.id);
       setIsDeleteConfirmOpen(false);
       setOrderToDelete(null);
+    } catch (err) {
+      toastError((err as Error).message || t('accounting:clientsOrders.failedToDelete'));
     }
   };
+
+  const handleStatusUpdate = useCallback(
+    async (id: string, updates: Partial<ClientsOrder>) => {
+      try {
+        await onUpdateClientsOrder(id, updates);
+      } catch (err) {
+        toastError((err as Error).message || t('accounting:clientsOrders.failedToUpdateStatus'));
+      }
+    },
+    [onUpdateClientsOrder, t],
+  );
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId);
@@ -640,7 +659,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateClientsOrder(row.id, { status: 'confirmed' });
+                          void handleStatusUpdate(row.id, { status: 'confirmed' });
                         }}
                         className="p-2 text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                       >
@@ -656,7 +675,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateClientsOrder(row.id, { status: 'denied' });
+                          void handleStatusUpdate(row.id, { status: 'denied' });
                         }}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                       >
@@ -690,7 +709,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     ],
     [
       currency,
-      onUpdateClientsOrder,
+      handleStatusUpdate,
       onViewOffer,
       t,
       confirmDelete,
