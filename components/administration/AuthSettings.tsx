@@ -2,8 +2,8 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
-import { ldapApi } from '../../services/api';
 import { getApiBase } from '../../services/api/client';
+import { ldapApi } from '../../services/api/ldap';
 import type {
   LdapConfig,
   LdapTestResponse,
@@ -241,10 +241,6 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         'Test password is required',
       );
     }
-    if (!ldapForm.enabled) {
-      nextErrors.enabled = t('admin.ldap.errors.mustBeEnabled', 'LDAP must be enabled to test');
-    }
-
     if (Object.keys(nextErrors).length > 0) {
       setTestErrors(nextErrors);
       return;
@@ -975,15 +971,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       setTestErrors((prev) => ({ ...prev, testPassword: '' }));
                   }}
                 />
-                {testErrors.enabled && (
-                  <p className="text-amber-600 text-[10px] font-bold">{testErrors.enabled}</p>
-                )}
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full"
-                  disabled={isTestingLdap || !ldapForm.enabled}
-                >
+                <Button type="submit" size="lg" className="w-full" disabled={isTestingLdap}>
                   {isTestingLdap ? (
                     <i className="fa-solid fa-circle-notch fa-spin"></i>
                   ) : (
