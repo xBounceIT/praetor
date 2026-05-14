@@ -344,6 +344,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [STATUS_OPTIONS],
   );
 
+  const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
+    try {
+      await onUpdateOffer(id, updates);
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
+    }
+  };
+
   const columns: Column<ClientOffer>[] = [
     {
       header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
@@ -829,14 +837,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       setIsSubmitting(false);
     }
     setIsModalOpen(false);
-  };
-
-  const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
-    try {
-      await onUpdateOffer(id, updates);
-    } catch (err) {
-      toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
-    }
   };
 
   return (
