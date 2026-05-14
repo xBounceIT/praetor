@@ -8,6 +8,7 @@ import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -217,12 +218,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (err) {
         if (err instanceof NotFoundError) {
-          return reply.code(404).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: err.message,
+            action: 'work_unit.update.not_found',
+            entityType: 'work_unit',
+            entityId: idResult.value,
+          });
         }
         throw err;
       }
 
-      if (!w) return reply.code(404).send({ error: 'Work unit not found' });
+      if (!w) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Work unit not found',
+          action: 'work_unit.update.not_found',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+        });
+      }
 
       const action = deriveToggleAction(
         getAuditChangedFields({ name, managerIds, description, isDisabled }),
@@ -269,7 +284,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const deleted = await workUnitsRepo.deleteById(idResult.value);
       if (!deleted) {
-        return reply.code(404).send({ error: 'Work unit not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Work unit not found',
+          action: 'work_unit.delete.not_found',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -309,7 +330,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!hasPermission(request, 'hr.work_units_all.view')) {
         const isManager = await workUnitsRepo.isUserManagerOfUnit(request.user.id, idResult.value);
         if (!isManager) {
-          return reply.code(403).send({ error: 'Access denied' });
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Access denied',
+            action: 'work_unit.view.denied',
+            entityType: 'work_unit',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'not_unit_manager' },
+          });
         }
       }
 
@@ -344,7 +372,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const unitName = await workUnitsRepo.findNameById(idResult.value);
       if (unitName === null) {
-        return reply.code(404).send({ error: 'Work unit not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Work unit not found',
+          action: 'work_unit.assign_users.not_found',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+        });
       }
 
       await withDbTransaction(async (tx) => {

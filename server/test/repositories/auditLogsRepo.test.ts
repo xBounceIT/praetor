@@ -53,6 +53,61 @@ describe('list', () => {
     expect(exec.calls[0].sql).toContain(`AT TIME ZONE 'UTC'`);
   });
 
+  test('emits an exact-match user_id clause when userId is set', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list({ userId: 'user-42' }, testDb);
+    expect(exec.calls[0].sql).toContain('al.user_id = $1');
+    expect(exec.calls[0].params).toEqual(['user-42']);
+  });
+
+  test('emits an exact-match entity_type clause when entityType is set', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list({ entityType: 'invoice' }, testDb);
+    expect(exec.calls[0].sql).toContain('al.entity_type = $1');
+    expect(exec.calls[0].params).toEqual(['invoice']);
+  });
+
+  test('emits a prefix LIKE clause when action is set (underscores escaped literally)', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list({ action: 'client_offer' }, testDb);
+    expect(exec.calls[0].sql).toContain('al.action LIKE $1');
+    // `_` is a LIKE wildcard so the repo escapes it to a literal underscore in the pattern.
+    expect(exec.calls[0].params).toEqual(['client\\_offer%']);
+  });
+
+  test('escapes LIKE wildcards in the action filter so they are matched literally', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list({ action: '100%_safe\\path' }, testDb);
+    expect(exec.calls[0].params).toEqual(['100\\%\\_safe\\\\path%']);
+  });
+
+  test('combines all filters with AND in declared order', async () => {
+    exec.enqueue({ rows: [] });
+    await auditLogsRepo.list(
+      {
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        userId: 'u-1',
+        entityType: 'invoice',
+        action: 'invoice.delete',
+      },
+      testDb,
+    );
+    const sqlText = exec.calls[0].sql;
+    expect(sqlText).toContain('al.created_at >= $1');
+    expect(sqlText).toContain('al.created_at <= $2');
+    expect(sqlText).toContain('al.user_id = $3');
+    expect(sqlText).toContain('al.entity_type = $4');
+    expect(sqlText).toContain('al.action LIKE $5');
+    expect(exec.calls[0].params).toEqual([
+      '2024-01-01',
+      '2024-12-31',
+      'u-1',
+      'invoice',
+      'invoice.delete%',
+    ]);
+  });
+
   test('returns createdAt verbatim from pg as a number', async () => {
     const row = {
       id: 'a1',

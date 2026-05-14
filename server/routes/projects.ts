@@ -29,6 +29,7 @@ import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -207,7 +208,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         !hasPermission(request, 'projects.manage_all.create') &&
         !(await canAccessClient(request, clientIdResult.value))
       ) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.create.denied',
+          entityType: 'client',
+          entityId: clientIdResult.value,
+          details: { secondaryLabel: 'client_access_denied' },
+        });
       }
 
       const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
@@ -316,7 +324,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(201).send(created);
       } catch (err) {
         if (err instanceof ForeignKeyError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.create.invalid',
+            entityType: 'project',
+            details: { secondaryLabel: 'fk_violation' },
+          });
         }
         throw err;
       }
@@ -343,7 +357,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.delete'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.delete.denied',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
       }
 
       let deletedProject: { projectName: string; clientId: string };
@@ -367,7 +388,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (err) {
         if (err instanceof NotFoundError) {
-          return reply.code(404).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: err.message,
+            action: 'project.delete.not_found',
+            entityType: 'project',
+            entityId: idResult.value,
+          });
         }
         throw err;
       }
@@ -431,7 +458,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.update'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.update.denied',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
       }
       let normalizedColor = color;
       if (color !== undefined && color !== null && color !== '') {
@@ -603,22 +637,63 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (err) {
         if (err instanceof PermissionError) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Insufficient permissions',
+            action: 'project.update.denied',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'permission_error' },
+          });
         }
         if (err instanceof NotFoundError) {
-          return reply.code(404).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: err.message,
+            action: 'project.update.not_found',
+            entityType: 'project',
+            entityId: idResult.value,
+          });
         }
         if (err instanceof OrderClientMismatchError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'order_client_mismatch' },
+          });
         }
         if (err instanceof OfferClientMismatchError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'offer_client_mismatch' },
+          });
         }
         if (err instanceof DateRangeError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'date_range_invalid' },
+          });
         }
         if (err instanceof ForeignKeyError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'fk_violation' },
+          });
         }
         throw err;
       }
@@ -657,7 +732,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.assigned_users_view.denied',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
       }
       return projectsRepo.findAssignedUserIds(idResult.value);
     },
@@ -685,7 +767,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.assign_users.denied',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
       }
 
       const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
@@ -717,7 +806,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (err) {
         if (err instanceof NotFoundError) {
-          return reply.code(404).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: err.message,
+            action: 'project.assign_users.not_found',
+            entityType: 'project',
+            entityId: idResult.value,
+          });
         }
         throw err;
       }

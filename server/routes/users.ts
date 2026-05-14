@@ -28,6 +28,7 @@ import {
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -418,7 +419,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const effectiveEmployeeType = employeeTypeResult.value;
 
       if (!hasPermission(request, CREATE_PERM_BY_EMPLOYEE_TYPE[effectiveEmployeeType])) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.create.denied',
+          entityType: 'user',
+          details: { secondaryLabel: `employee_type_${effectiveEmployeeType}` },
+        });
       }
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -569,17 +576,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const user = await usersRepo.findCoreById(id);
       if (!user) {
-        return reply.code(404).send({ error: 'User not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.delete.not_found',
+          entityType: 'user',
+          entityId: id,
+        });
       }
 
       if (!hasPermission(request, DELETE_PERM_BY_EMPLOYEE_TYPE[user.employeeType])) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.delete.denied',
+          entityType: 'user',
+          entityId: id,
+          details: { secondaryLabel: `employee_type_${user.employeeType}` },
+        });
       }
 
       const deleted = await usersRepo.deleteById(id);
 
       if (!deleted) {
-        return reply.code(404).send({ error: 'User not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.delete.not_found',
+          entityType: 'user',
+          entityId: id,
+        });
       }
 
       await logAudit({
@@ -654,7 +680,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const targetUser = await usersRepo.findCoreById(idResult.value);
       if (!targetUser) {
-        return reply.code(404).send({ error: 'User not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
       }
 
       const targetEmployeeType = targetUser.employeeType;
@@ -663,7 +695,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentUsername = targetUser.username;
 
       if (!hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: `employee_type_${targetEmployeeType}` },
+        });
       }
 
       if (
@@ -672,13 +711,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value !== request.user?.id &&
         !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
       ) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
+        });
       }
 
       let roleValue: string | null = null;
       if (role !== undefined) {
         if (idResult.value === request.user?.id) {
-          return reply.code(403).send({ error: 'Cannot change your own role' });
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Cannot change your own role',
+            action: 'user.update.denied',
+            entityType: 'user',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'self_role_change_forbidden' },
+          });
         }
         const roleResult = requireNonEmptyString(role, 'role');
         if (!roleResult.ok) return badRequest(reply, roleResult.message);
@@ -716,7 +769,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
 
         if (!updatedRow) {
-          return reply.code(404).send({ error: 'User not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'User not found',
+            action: 'user.update.not_found',
+            entityType: 'user',
+            entityId: idResult.value,
+          });
         }
       }
 
@@ -749,7 +808,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const fullUser = await usersRepo.findById(idResult.value);
       if (!fullUser) {
-        return reply.code(404).send({ error: 'User not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
       }
 
       const canRevealUserEmails = canViewUserEmails(request);
@@ -809,18 +874,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!methodResult.ok) return badRequest(reply, methodResult.message);
 
       const targetUser = await usersRepo.findCoreById(idResult.value);
-      if (!targetUser) return reply.code(404).send({ error: 'User not found' });
+      if (!targetUser) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.auth_method_update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
       if (targetUser.employeeType !== 'app_user') {
-        return reply
-          .code(409)
-          .send({ error: 'Authentication method can be changed only for app users' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Authentication method can be changed only for app users',
+          action: 'user.auth_method_update.conflict',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: `employee_type_${targetUser.employeeType}` },
+        });
       }
       if (
         !hasPermission(request, 'administration.user_management_all.view') &&
         idResult.value !== request.user?.id &&
         !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
       ) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.auth_method_update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
+        });
       }
       if (idResult.value === request.user?.id) {
         return badRequest(reply, 'Cannot change your own authentication method');
@@ -846,7 +931,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         methodResult.value,
         resolvedProviderId,
       );
-      if (!updated) return reply.code(404).send({ error: 'User not found' });
+      if (!updated) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.auth_method_update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
 
       let mappedRoleIds: string[] | null = null;
       if (methodResult.value === 'ldap') {
@@ -913,7 +1006,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         usersRepo.findCoreById(idResult.value),
         usersRepo.getUserRoleIds(idResult.value),
       ]);
-      if (!user) return reply.code(404).send({ error: 'User not found' });
+      if (!user) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.roles_view.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
 
       const primaryRoleId = user.role;
       const roleIds = Array.from(
@@ -946,7 +1047,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (idResult.value === request.user?.id) {
-        return reply.code(403).send({ error: 'Cannot change your own role' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Cannot change your own role',
+          action: 'user.roles_update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'self_role_change_forbidden' },
+        });
       }
 
       const { roleIds, primaryRoleId } = request.body as {
@@ -966,7 +1074,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const user = await usersRepo.findCoreById(idResult.value);
-      if (!user) return reply.code(404).send({ error: 'User not found' });
+      if (!user) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.roles_update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
 
       const found = await rolesRepo.findExistingIds(roleIdsResult.value);
       const missing = roleIdsResult.value.filter((rid) => !found.has(rid));
@@ -1016,7 +1132,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!(await canViewTargetUserAssignments(request, idResult.value))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.assignments_view.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_view_assignments' },
+        });
       }
 
       return await usersRepo.getAssignments(idResult.value);
@@ -1043,7 +1166,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!(await canViewTargetUserAssignments(request, idResult.value))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.tracker_catalogs_view.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_view_assignments' },
+        });
       }
 
       const [assignedClients, assignedProjects, projectTasks] = await Promise.all([
@@ -1120,7 +1250,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (!canViewAllUsers(request) && idResult.value !== request.user?.id) {
         if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Insufficient permissions',
+            action: 'user.assignments_update.denied',
+            entityType: 'user',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'cannot_manage_user' },
+          });
         }
       }
 
@@ -1142,18 +1279,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taskIds: resolvedTaskIds ?? undefined,
       });
       if (!assignmentsInScope) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.assignments_update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'assignments_out_of_scope' },
+        });
       }
 
       const [targetUser, isTopManager] = await Promise.all([
         usersRepo.findCoreById(idResult.value),
         userAssignmentsRepo.userHasTopManagerRole(idResult.value),
       ]);
-      if (!targetUser) return reply.code(404).send({ error: 'User not found' });
+      if (!targetUser) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.assignments_update.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
 
       if (isTopManager) {
-        return reply.code(409).send({
-          error: 'Top Manager assignments are managed automatically and cannot be edited manually',
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Top Manager assignments are managed automatically and cannot be edited manually',
+          action: 'user.assignments_update.conflict',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'top_manager_immutable_assignments' },
         });
       }
 

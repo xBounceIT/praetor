@@ -510,6 +510,13 @@ describe('MCP token settings routes', () => {
       error: 'Maximum active MCP token limit reached',
     });
     expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'mcp_token.create.conflict',
+        entityType: 'mcp_token',
+        details: expect.objectContaining({ secondaryLabel: 'token_limit_reached' }),
+      }),
+    );
   });
 
   test('DELETE /api/settings/mcp-tokens/:id revokes only current user token', async () => {
@@ -524,7 +531,7 @@ describe('MCP token settings routes', () => {
     expect(revokeMcpTokenForUserMock).toHaveBeenCalledWith('mcp-token-1', 'u1');
   });
 
-  test('DELETE /api/settings/mcp-tokens/:id returns 404 for missing token', async () => {
+  test('DELETE /api/settings/mcp-tokens/:id returns 404 for missing token (audits the denial)', async () => {
     revokeMcpTokenForUserMock.mockResolvedValue(false);
 
     const res = await testApp.inject({
@@ -534,6 +541,13 @@ describe('MCP token settings routes', () => {
     });
 
     expect(res.statusCode).toBe(404);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'mcp_token.delete.not_found',
+        entityType: 'mcp_token',
+        entityId: 'missing',
+      }),
+    );
   });
 });
 

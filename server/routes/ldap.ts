@@ -8,6 +8,7 @@ import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, parseBooleanField, requireNonEmptyString } from '../utils/validation.ts';
 
 // 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
@@ -435,10 +436,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const config = await ldapRepo.get();
       if (!config?.enabled) {
-        return reply.code(400).send({
-          success: false,
-          error: 'LDAP is not enabled',
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: 'LDAP is not enabled',
+          action: 'ldap.sync.invalid',
+          entityType: 'ldap_config',
           errorCode: 'ldap_not_enabled',
+          extraBody: { success: false },
         });
       }
 
@@ -457,11 +461,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (stats.skipped) {
-        return reply.code(400).send({
-          ...stats,
-          success: false,
-          error: stats.reason ?? 'LDAP sync skipped',
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: stats.reason ?? 'LDAP sync skipped',
+          action: 'ldap.sync.invalid',
+          entityType: 'ldap_config',
           errorCode: 'ldap_sync_skipped',
+          extraBody: { ...stats, success: false },
         });
       }
 

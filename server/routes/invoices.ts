@@ -8,6 +8,7 @@ import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.t
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
@@ -391,7 +392,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'invoices_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Invoice ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Invoice ID already exists',
+            action: 'invoice.create.conflict',
+            entityType: 'invoice',
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw error;
       }
@@ -457,13 +464,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existingStatus = await invoicesRepo.findStatus(idResult.value);
       if (existingStatus === null) {
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'invoice.update.not_found',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
       }
 
       if (existingStatus !== 'draft') {
-        return reply.code(409).send({
-          error: 'Non-draft invoices are read-only',
-          currentStatus: existingStatus,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft invoices are read-only',
+          action: 'invoice.update.conflict',
+          entityType: 'invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_read_only', fromValue: existingStatus },
+          extraBody: { currentStatus: existingStatus },
         });
       }
 
@@ -486,7 +504,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         if (nextIdResult.value) {
           if (await invoicesRepo.findIdConflict(nextIdResult.value, idResult.value)) {
-            return reply.code(409).send({ error: 'Invoice ID already exists' });
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Invoice ID already exists',
+              action: 'invoice.update.conflict',
+              entityType: 'invoice',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'duplicate_id', toValue: nextIdResult.value },
+            });
           }
           patch.id = nextIdResult.value;
         }
@@ -518,7 +543,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (effectiveIssueDate === undefined || effectiveDueDate === undefined) {
           const persisted = await invoicesRepo.findDates(idResult.value);
           if (!persisted) {
-            return reply.code(404).send({ error: 'Invoice not found' });
+            return replyError(request, reply, {
+              statusCode: 404,
+              message: 'Invoice not found',
+              action: 'invoice.update.not_found',
+              entityType: 'invoice',
+              entityId: idResult.value,
+            });
           }
           effectiveIssueDate = effectiveIssueDate ?? persisted.issueDate;
           effectiveDueDate = effectiveDueDate ?? persisted.dueDate;
@@ -571,7 +602,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (amountPaidValue !== undefined) {
         const totalForCheck = await getTotalForPaymentCheck();
         if (totalForCheck === null) {
-          return reply.code(404).send({ error: 'Invoice not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Invoice not found',
+            action: 'invoice.update.not_found',
+            entityType: 'invoice',
+            entityId: idResult.value,
+          });
         }
         if (amountPaidValue > totalForCheck) {
           return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
@@ -583,7 +620,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
         const amountPaidForCheck = await getAmountPaidForPaymentCheck();
         if (amountPaidForCheck === null) {
-          return reply.code(404).send({ error: 'Invoice not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Invoice not found',
+            action: 'invoice.update.not_found',
+            entityType: 'invoice',
+            entityId: idResult.value,
+          });
         }
         if (amountPaidForCheck > patch.total) {
           return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
@@ -596,7 +639,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           getAmountPaidForPaymentCheck(),
         ]);
         if (totalForCheck === null || amountPaidForCheck === null) {
-          return reply.code(404).send({ error: 'Invoice not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Invoice not found',
+            action: 'invoice.update.not_found',
+            entityType: 'invoice',
+            entityId: idResult.value,
+          });
         }
         if (amountPaidForCheck > totalForCheck) {
           return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
@@ -626,7 +675,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'invoices_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Invoice ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Invoice ID already exists',
+            action: 'invoice.update.conflict',
+            entityType: 'invoice',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw error;
       }
@@ -636,12 +692,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!invoice) {
         const currentStatus = await invoicesRepo.findStatus(idResult.value);
         if (currentStatus && currentStatus !== 'draft') {
-          return reply.code(409).send({
-            error: 'Non-draft invoices are read-only',
-            currentStatus,
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Non-draft invoices are read-only',
+            action: 'invoice.update.conflict',
+            entityType: 'invoice',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'non_draft_read_only', fromValue: currentStatus },
+            extraBody: { currentStatus },
           });
         }
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'invoice.update.not_found',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -680,10 +747,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existing = await invoicesRepo.findStatusAndClientName(idResult.value);
       if (!existing) {
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'invoice.delete.not_found',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
       }
       if (existing.status !== 'draft') {
-        return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only draft invoices can be deleted',
+          action: 'invoice.delete.conflict',
+          entityType: 'invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_status', fromValue: existing.status },
+        });
       }
 
       // Invoice items will be deleted automatically via CASCADE
@@ -693,9 +773,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!result) {
           const currentStatus = await invoicesRepo.findStatus(idResult.value);
           if (currentStatus && currentStatus !== 'draft') {
-            return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Only draft invoices can be deleted',
+              action: 'invoice.delete.conflict',
+              entityType: 'invoice',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'non_draft_status', fromValue: currentStatus },
+            });
           }
-          return reply.code(404).send({ error: 'Invoice not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Invoice not found',
+            action: 'invoice.delete.not_found',
+            entityType: 'invoice',
+            entityId: idResult.value,
+          });
         }
 
         await logAudit({
@@ -711,8 +804,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(204).send();
       } catch (err) {
         if (getForeignKeyViolation(err)) {
-          return reply.code(409).send({
-            error: 'Cannot delete invoice because it is referenced by other records',
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Cannot delete invoice because it is referenced by other records',
+            action: 'invoice.delete.conflict',
+            entityType: 'invoice',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'fk_violation' },
           });
         }
         throw err;
