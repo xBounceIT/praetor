@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -171,11 +172,13 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       setIsModalOpen(false);
     } catch (err) {
       const message = (err as Error).message;
+      const fallback = t('crm:suppliers.failedToSave');
       if (message.toLowerCase().includes('supplier code')) {
         setErrors({ ...newErrors, supplierCode: t('crm:suppliers.codeUnique') });
       } else {
-        setErrors({ ...newErrors, general: message });
+        setErrors({ ...newErrors, general: message || fallback });
       }
+      toastError(message || fallback);
     }
   };
 
@@ -184,15 +187,27 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     setIsDeleteConfirmOpen(true);
   }, []);
 
-  const handleDelete = () => {
-    if (!canDeleteSuppliers) return;
-    if (supplierToDelete) {
-      onDeleteSupplier(supplierToDelete.id).then(() => {
-        setIsDeleteConfirmOpen(false);
-        setSupplierToDelete(null);
-      });
+  const handleDelete = async () => {
+    if (!supplierToDelete) return;
+    try {
+      await onDeleteSupplier(supplierToDelete.id);
+      setIsDeleteConfirmOpen(false);
+      setSupplierToDelete(null);
+    } catch (err) {
+      toastError((err as Error).message || t('crm:suppliers.failedToDelete'));
     }
   };
+
+  const handleStatusUpdate = useCallback(
+    async (id: string, updates: Partial<Supplier>) => {
+      try {
+        await onUpdateSupplier(id, updates);
+      } catch (err) {
+        toastError((err as Error).message || t('crm:suppliers.failedToUpdateStatus'));
+      }
+    },
+    [onUpdateSupplier, t],
+  );
 
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
 
@@ -326,7 +341,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canUpdateSuppliers) return;
-                      onUpdateSupplier(row.id, { isDisabled: !row.isDisabled });
+                      void handleStatusUpdate(row.id, { isDisabled: !row.isDisabled });
                     }}
                     disabled={!canUpdateSuppliers}
                     className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -369,7 +384,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       t,
       canUpdateSuppliers,
       canDeleteSuppliers,
-      onUpdateSupplier,
+      handleStatusUpdate,
       confirmDelete,
       supplierOrders,
       currency,
