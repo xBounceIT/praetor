@@ -1,26 +1,26 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
-import type { LdapConfig, Role } from '../../../types';
+import type { LdapConfig } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
 
 installI18nMock();
 
-const testAuthenticationMock = mock(async () => ({
-  success: true,
-  authenticated: true,
-  username: 'alice',
-  message: 'ok',
-  groups: [],
-  roleIds: [],
-}));
+const ldapApiMock = {
+  testAuthentication: mock(async (_username: string, _password: string) => ({
+    success: true,
+    authenticated: true,
+    username: 'alice',
+    message: 'LDAP authentication succeeded',
+    groups: [],
+    roleIds: ['user'],
+  })),
+};
 
 mock.module('../../../services/api/ldap', () => ({
-  ldapApi: {
-    testAuthentication: testAuthenticationMock,
-  },
+  ldapApi: ldapApiMock,
 }));
 
 clearSpyStateAfterAll();
@@ -31,8 +31,8 @@ const ldapConfig: LdapConfig = {
   enabled: false,
   serverUrl: 'ldap://ldap.example.com:389',
   baseDn: 'dc=example,dc=com',
-  bindDn: '',
-  bindPassword: '',
+  bindDn: 'cn=admin,dc=example,dc=com',
+  bindPassword: 'secret',
   userFilter: '(uid={0})',
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
@@ -41,46 +41,15 @@ const ldapConfig: LdapConfig = {
   autoProvisionAll: false,
 };
 
-const roles: Role[] = [
-  {
-    id: 'user',
-    name: 'User',
-    isSystem: true,
-    isAdmin: false,
-    permissions: [],
-  },
-];
-
 const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSettings>> = {}) => {
   const props: ComponentProps<typeof AuthSettings> = {
     config: ldapConfig,
     onSave: mock(async () => {}),
-    roles,
+    roles: [],
     ssoProviders: [],
-    onSaveSsoProvider: mock(async (provider) => ({
-      id: 'sso-1',
-      protocol: provider.protocol ?? 'oidc',
-      slug: provider.slug ?? 'provider',
-      name: provider.name ?? 'Provider',
-      enabled: provider.enabled ?? false,
-      issuerUrl: provider.issuerUrl ?? '',
-      clientId: provider.clientId ?? '',
-      clientSecret: provider.clientSecret ?? '',
-      scopes: provider.scopes ?? '',
-      metadataUrl: provider.metadataUrl ?? '',
-      metadataXml: provider.metadataXml ?? '',
-      entryPoint: provider.entryPoint ?? '',
-      idpIssuer: provider.idpIssuer ?? '',
-      idpCert: provider.idpCert ?? '',
-      spIssuer: provider.spIssuer ?? '',
-      privateKey: provider.privateKey ?? '',
-      publicCert: provider.publicCert ?? '',
-      usernameAttribute: provider.usernameAttribute ?? '',
-      nameAttribute: provider.nameAttribute ?? '',
-      emailAttribute: provider.emailAttribute ?? '',
-      groupsAttribute: provider.groupsAttribute ?? '',
-      roleMappings: provider.roleMappings ?? [],
-    })),
+    onSaveSsoProvider: mock(async () => {
+      throw new Error('not used');
+    }),
     onDeleteSsoProvider: mock(async () => {}),
     ...overrides,
   };
@@ -89,9 +58,30 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
   return props;
 };
 
-describe('<AuthSettings /> LDAP save', () => {
+const inputForLabel = (label: string): HTMLInputElement => {
+  const input = screen.getByText(label).parentElement?.querySelector('input');
+  if (!input) throw new Error(`Input not found for label ${label}`);
+  return input;
+};
+
+describe('<AuthSettings />', () => {
   beforeEach(() => {
-    testAuthenticationMock.mockClear();
+    ldapApiMock.testAuthentication.mockClear();
+  });
+
+  test('allows testing the saved LDAP configuration before LDAP is enabled', async () => {
+    renderAuthSettings();
+
+    const testButton = screen.getByRole('button', { name: 'admin.ldap.testAuthentication' });
+    expect(testButton).toBeEnabled();
+
+    fireEvent.change(inputForLabel('admin.ldap.testUsername'), { target: { value: ' alice ' } });
+    fireEvent.change(inputForLabel('admin.ldap.testPassword'), { target: { value: 'secret' } });
+    fireEvent.click(testButton);
+
+    await waitFor(() => {
+      expect(ldapApiMock.testAuthentication).toHaveBeenCalledWith('alice', 'secret');
+    });
   });
 
   test('shows the server error instead of the saved notification when LDAP save fails', async () => {

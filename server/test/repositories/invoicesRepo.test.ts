@@ -181,6 +181,36 @@ describe('findAmountPaid', () => {
   });
 });
 
+describe('findStatus', () => {
+  test('returns status when row exists', async () => {
+    exec.enqueue({ rows: [['paid']] });
+    const result = await invoicesRepo.findStatus('INV-1', testDb);
+    expect(result).toBe('paid');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "status" from "invoices"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findStatus('INV-X', testDb)).toBeNull();
+  });
+});
+
+describe('findStatusAndClientName', () => {
+  test('returns status and clientName when row exists', async () => {
+    exec.enqueue({ rows: [['sent', 'Acme']] });
+    const result = await invoicesRepo.findStatusAndClientName('INV-1', testDb);
+    expect(result).toEqual({ status: 'sent', clientName: 'Acme' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "status", "client_name"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findStatusAndClientName('INV-X', testDb)).toBeNull();
+  });
+});
+
 describe('findIdConflict', () => {
   test('excludes self with both id-equality and id-inequality predicates', async () => {
     exec.enqueue({ rows: [] });
@@ -251,6 +281,23 @@ describe('update', () => {
   });
 });
 
+describe('updateDraft', () => {
+  test('scopes update to the draft row', async () => {
+    exec.enqueue({ rows: [invoiceRow({ 6: 'sent' })] });
+    await invoicesRepo.updateDraft('INV-2026-0001', { status: 'sent' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "invoices"');
+    expect(sql).toContain('"status" =');
+    expect(exec.calls[0].params).toContain('INV-2026-0001');
+    expect(exec.calls[0].params).toContain('draft');
+  });
+
+  test('returns null when no draft row updated', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.updateDraft('INV-X', { status: 'sent' }, testDb)).toBeNull();
+  });
+});
+
 describe('replaceItems', () => {
   test('issues DELETE then a single multi-row INSERT and preserves order', async () => {
     exec.enqueue({ rows: [] });
@@ -311,6 +358,24 @@ describe('deleteById', () => {
   test('returns null when no row deleted', async () => {
     exec.enqueue({ rows: [] });
     expect(await invoicesRepo.deleteById('INV-X', testDb)).toBeNull();
+  });
+});
+
+describe('deleteDraftById', () => {
+  test('returns id and clientName when a draft row is deleted', async () => {
+    exec.enqueue({ rows: [['INV-1', 'Acme']] });
+    expect(await invoicesRepo.deleteDraftById('INV-1', testDb)).toEqual({
+      id: 'INV-1',
+      clientName: 'Acme',
+    });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from "invoices"');
+    expect(exec.calls[0].params).toContain('INV-1');
+    expect(exec.calls[0].params).toContain('draft');
+  });
+
+  test('returns null when no draft row is deleted', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.deleteDraftById('INV-X', testDb)).toBeNull();
   });
 });
 

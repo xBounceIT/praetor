@@ -417,6 +417,20 @@ describe('PUT /api/sso/providers/:id — enabled OIDC configuration validation',
     expect(patch.protocol).toBe('oidc');
     expect(patch.enabled).toBe(true);
   });
+
+  test('rejects invalid enabled value without updating provider', async () => {
+    findByIdMock.mockResolvedValue({ ...baseProvider, enabled: false });
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { enabled: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/sso/providers — validateProviderBody', () => {
@@ -478,5 +492,22 @@ describe('POST /api/sso/providers — validateProviderBody', () => {
     expect(insertMock).not.toHaveBeenCalled();
     expect(bodySnapshots.before).toEqual(payload);
     expect(bodySnapshots.after).toEqual(payload);
+  });
+
+  test('rejects invalid enabled value without creating provider', async () => {
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/sso/providers',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: {
+        protocol: 'oidc',
+        slug: 'bad-enabled',
+        name: 'Bad Enabled',
+        enabled: 'ture',
+      } as unknown as Record<string, unknown>,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

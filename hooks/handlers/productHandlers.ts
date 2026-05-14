@@ -35,6 +35,7 @@ export const makeProductHandlers = (deps: ProductHandlersDeps) => {
       setProducts((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       console.error('Failed to delete product:', err);
+      throw err;
     }
   };
 

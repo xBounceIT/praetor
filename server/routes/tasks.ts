@@ -33,7 +33,7 @@ import {
   optionalDateString,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
-  parseBoolean,
+  parseBooleanField,
   parseDateString,
   requireNonEmptyArrayOfStrings,
   requireNonEmptyString,
@@ -180,21 +180,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-      const {
-        name,
-        projectId,
-        description,
-        isRecurring,
-        recurrencePattern,
-        recurrenceStart,
-        recurrenceDuration,
-        expectedEffort,
-        monthlyEffort,
-        revenue,
-        notes,
-        billingType,
-        billingFrequency,
-      } = request.body as {
+      const body = (request.body ?? {}) as {
         name: string;
         projectId: string;
         description?: string;
@@ -209,6 +195,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
       };
+      const {
+        name,
+        projectId,
+        description,
+        recurrencePattern,
+        recurrenceStart,
+        recurrenceDuration,
+        expectedEffort,
+        monthlyEffort,
+        revenue,
+        notes,
+        billingType,
+        billingFrequency,
+      } = body;
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
@@ -261,7 +261,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           DEFAULT_BILLING_FREQUENCY,
       );
 
-      const isRecurringValue = parseBoolean(isRecurring);
+      const isRecurringResult = parseBooleanField(body, 'isRecurring');
+      if (!isRecurringResult.ok) return badRequest(reply, isRecurringResult.message);
+      const isRecurringValue = isRecurringResult.value ?? false;
       let start: string | null = null;
       if (isRecurringValue) {
         const patternResult = requireNonEmptyString(recurrencePattern, 'recurrencePattern');
@@ -481,7 +483,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
+      const body = (request.body ?? {}) as {
         name?: string;
         description?: string;
         isRecurring?: boolean;
@@ -500,7 +502,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const {
         name,
         description,
-        isRecurring,
         recurrencePattern,
         recurrenceStart,
         recurrenceEnd,
@@ -558,8 +559,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'recurrenceStart must be on or before recurrenceEnd');
       }
 
-      const isRecurringValue =
-        isRecurring === undefined || isRecurring === null ? undefined : parseBoolean(isRecurring);
+      const isRecurringResult = parseBooleanField(body, 'isRecurring');
+      if (!isRecurringResult.ok) return badRequest(reply, isRecurringResult.message);
+      const isRecurringValue = isRecurringResult.value;
 
       const updated = await tasksRepo.update(idResult.value, {
         name: name || undefined,
@@ -589,7 +591,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         getAuditChangedFields({
           name,
           description,
-          isRecurring,
+          isRecurring: isRecurringValue,
           recurrencePattern,
           recurrenceStart,
           recurrenceEnd,

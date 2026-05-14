@@ -117,6 +117,21 @@ describe('makeProductHandlers', () => {
     expect(products.get()).toEqual([{ id: 'p2' }]);
   });
 
+  test('delete rethrows api error and keeps product in list', async () => {
+    apiMocks.productsDelete.mockImplementation(() => Promise.reject(new Error('boom')));
+    const products = makeStubSetter<ProductLike>([{ id: 'p1' }, { id: 'p2' }]);
+    const handlers = makeProductHandlers({ setProducts: products.setter });
+
+    const originalError = console.error;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    try {
+      await expect(handlers.delete('p1')).rejects.toThrow('boom');
+      expect(products.get()).toEqual([{ id: 'p1' }, { id: 'p2' }]);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('updateInternalCategory refetches products list', async () => {
     apiMocks.productsUpdateInternalCategory.mockImplementation(() => Promise.resolve());
     apiMocks.productsList.mockImplementation(() =>

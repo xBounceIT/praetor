@@ -46,6 +46,7 @@ import DailyView from './components/timesheet/DailyView';
 import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
+import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
 import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
@@ -149,12 +150,14 @@ const canonicalizeLegacyHash = (hash: string) => {
   return hash;
 };
 
+type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+
 const TrackerView: React.FC<{
   entries: TimeEntry[];
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
-  onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
+  onAddEntry: (entry: TimeEntryDraft) => void;
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   startOfWeek: 'Monday' | 'Sunday';
@@ -173,7 +176,7 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
-  onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
+  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
   onAddCustomTask: (
@@ -2711,9 +2714,13 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <ErrorBoundary>
-    <AppContent />
-  </ErrorBoundary>
+  <>
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+    {/* Outside the boundary so toasts keep rendering if the boundary trips. */}
+    <Toaster richColors closeButton position="top-right" />
+  </>
 );
 
 export default App;

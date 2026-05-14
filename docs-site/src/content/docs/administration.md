@@ -11,7 +11,7 @@ Gli amministratori gestiscono utenti, ruoli e permessi. Ogni ruolo dovrebbe conc
 
 Le righe di permesso con ambito **All** concedono accesso trasversale a tutti i record della stessa area, ad esempio tutti i clienti, fornitori, progetti, task, consuntivi o work unit. L'azione **View** abilita la vista e la consultazione su tutti i record; quando selezionate, anche **Create**, **Update** e **Delete** sono permessi reali e consentono scritture su record non assegnati. I permessi senza **All** mantengono l'ambito assegnato all'utente.
 
-Quando modifichi un ruolo, considera l'impatto su tutti gli utenti assegnati. Dopo modifiche importanti, verifica l'accesso con un profilo di prova o con un utente rappresentativo.
+Quando modifichi un ruolo, considera l'impatto su tutti gli utenti assegnati. Praetor impedisce l'eliminazione di un ruolo ancora assegnato a un utente, sia come ruolo principale sia come ruolo aggiuntivo. Dopo modifiche importanti, verifica l'accesso con un profilo di prova o con un utente rappresentativo.
 
 ## Autenticazione
 
@@ -28,6 +28,8 @@ Quando vincoli un utente a LDAP, Praetor consulta la directory e applica subito 
 La sincronizzazione LDAP aggiorna solo utenti applicativi già impostati su LDAP. Un utente locale con lo stesso username resta locale finché un amministratore non cambia esplicitamente il suo metodo di autenticazione.
 
 La sincronizzazione LDAP manuale richiede una configurazione LDAP abilitata. Se LDAP è disabilitato o non configurato, la richiesta viene respinta e non viene registrata come sincronizzazione riuscita; se la directory non è raggiungibile, Praetor segnala l'errore invece di riportare un successo.
+
+Il tester di connessione LDAP usa la configurazione salvata e può essere eseguito anche quando LDAP è ancora disabilitato. Salva prima le modifiche alla configurazione, verifica credenziali e gruppi con il tester, poi abilita LDAP quando la validazione è riuscita.
 
 A ogni accesso LDAP e a ogni sincronizzazione periodica, Praetor ricalcola il ruolo dell'utente partendo dal mapping dei gruppi LDAP. Se almeno uno dei gruppi LDAP dell'utente corrisponde a un mapping configurato, i ruoli mappati prevalgono e sostituiscono l'assegnazione corrente. **Se nessun gruppo LDAP corrisponde ad alcun mapping configurato, il ruolo esistente viene preservato** — l'assegnazione manuale dell'amministratore non viene silenziosamente declassata al ruolo predefinito `Utente`. Per forzare un cambio di ruolo a un utente senza mapping corrispondente, aggiorna l'appartenenza al gruppo LDAP oppure la configurazione del mapping dei ruoli.
 

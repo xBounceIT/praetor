@@ -15,7 +15,7 @@ import {
   isWeekendDate,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
-  parseBoolean,
+  parseBooleanField,
   parseDateString,
   parseLocalizedNonNegativeNumber,
   parseQueryBoolean,
@@ -173,6 +173,7 @@ export const createTimeEntry = async (
   }
 
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
+  const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
   return entriesRepo.create({
     id: generatePrefixedId('te'),
@@ -187,7 +188,7 @@ export const createTimeEntry = async (
     notes: typeof input.notes === 'string' ? input.notes : null,
     duration: duration ?? 0,
     hourlyCost,
-    isPlaceholder: parseBoolean(input.isPlaceholder),
+    isPlaceholder: parsedIsPlaceholder ?? false,
     location,
   });
 };
@@ -224,11 +225,12 @@ export const updateTimeEntry = async (
       (await tasksRepo.findIdByProjectAndName(context.projectId, context.task)) ?? undefined;
   }
 
+  const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
+
   const updated = await entriesRepo.update(entryId, {
     duration: parsedDuration,
     notes: validatedNotes,
-    isPlaceholder:
-      input.isPlaceholder === undefined ? undefined : parseBoolean(input.isPlaceholder),
+    isPlaceholder: parsedIsPlaceholder,
     location: parseOptionalLocation(input.location, fail),
     taskId: backfilledTaskId,
   });

@@ -312,6 +312,7 @@ describe('<WeeklyView /> submit mutations', () => {
       expect(updateCalls.map((c) => c.id)).toEqual(['entry-today']);
       expect(addCalls).toHaveLength(1);
       expect(addCalls[0]).toHaveLength(1);
+      expect(addCalls[0][0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');
     });
   });
 

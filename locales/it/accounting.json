@@ -46,6 +46,9 @@
     "noSupplierOrder": "Nessun ordine fornitore",
     "supplierOrderBadge": "Ordine fornitore",
     "paymentDueDate": "Data scadenza pagamento",
+    "failedToSave": "Impossibile salvare l'ordine. Riprova.",
+    "failedToDelete": "Impossibile eliminare l'ordine. Riprova.",
+    "failedToUpdateStatus": "Impossibile aggiornare lo stato dell'ordine. Riprova.",
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",

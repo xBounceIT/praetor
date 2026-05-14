@@ -37,6 +37,8 @@ const findItemsForInvoiceMock = mock();
 const findDatesMock = mock();
 const findTotalMock = mock();
 const findAmountPaidMock = mock();
+const findStatusMock = mock();
+const findStatusAndClientNameMock = mock();
 const findIdConflictMock = mock();
 const deleteByIdMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -66,13 +68,17 @@ beforeAll(async () => {
     create: createMock,
     insertItems: insertItemsMock,
     update: updateMock,
+    updateDraft: updateMock,
     replaceItems: replaceItemsMock,
     findItemsForInvoice: findItemsForInvoiceMock,
     findDates: findDatesMock,
     findTotal: findTotalMock,
     findAmountPaid: findAmountPaidMock,
+    findStatus: findStatusMock,
+    findStatusAndClientName: findStatusAndClientNameMock,
     findIdConflict: findIdConflictMock,
     deleteById: deleteByIdMock,
+    deleteDraftById: deleteByIdMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -156,6 +162,8 @@ const allMocks = [
   findDatesMock,
   findTotalMock,
   findAmountPaidMock,
+  findStatusMock,
+  findStatusAndClientNameMock,
   findIdConflictMock,
   deleteByIdMock,
   logAuditMock,
@@ -169,6 +177,8 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  findStatusMock.mockResolvedValue('draft');
+  findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
 
@@ -812,6 +822,51 @@ describe('PUT /api/invoices/:id', () => {
     expect(patch).not.toHaveProperty('total');
   });
 
+  test('409 non-draft invoice with locked field updates is read-only', async () => {
+    findStatusMock.mockResolvedValue('paid');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { clientName: 'Renamed Client' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 non-draft invoice status cannot be changed', async () => {
+    findStatusMock.mockResolvedValue('paid');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'draft' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 non-draft invoice status cannot be re-saved', async () => {
+    findStatusMock.mockResolvedValue('paid');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('400 dueDate < issueDate using stored findDates for missing side', async () => {
     findDatesMock.mockResolvedValue({ issueDate: '2025-07-01', dueDate: '2025-08-01' });
 
@@ -841,6 +896,36 @@ describe('PUT /api/invoices/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+  });
+
+  test('409 when invoice leaves draft before update write', async () => {
+    findStatusMock.mockResolvedValueOnce('draft').mockResolvedValueOnce('sent');
+    updateMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+  });
+
+  test('404 when status lookup does not find invoice', async () => {
+    findStatusMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/missing',
+      headers: authHeader(),
+      payload: { status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('409 unique violation on rename', async () => {
@@ -879,6 +964,20 @@ describe('DELETE /api/invoices/:id', () => {
   });
 
   test('404 not found', async () => {
+    findStatusAndClientNameMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/invoices/missing',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+    expect(deleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('404 when invoice disappears before delete', async () => {
     deleteByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -889,6 +988,41 @@ describe('DELETE /api/invoices/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invoice not found' });
+  });
+
+  test('409 non-draft invoice cannot be deleted', async () => {
+    findStatusAndClientNameMock.mockResolvedValue({
+      status: 'paid',
+      clientName: 'Client',
+    });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Only draft invoices can be deleted',
+    });
+    expect(deleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when invoice leaves draft before delete write', async () => {
+    deleteByIdMock.mockResolvedValue(null);
+    findStatusMock.mockResolvedValue('sent');
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Only draft invoices can be deleted',
+    });
   });
 
   test('409 FK violation maps to referenced-by message', async () => {

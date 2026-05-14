@@ -14,6 +14,8 @@ export type GenerateRecurringResponse = {
   range: { fromDate: string; toDate: string };
 };
 
+type CreateTimeEntryInput = Omit<TimeEntry, 'id' | 'createdAt' | 'hourlyCost' | 'cost'>;
+
 export const entriesApi = {
   listPage: async (
     options: { userId?: string; cursor?: string | null; limit?: number } = {},
@@ -26,7 +28,7 @@ export const entriesApi = {
     return { entries: page.entries.map(normalizeTimeEntry), nextCursor: page.nextCursor };
   },
 
-  create: (entry: Omit<TimeEntry, 'id' | 'createdAt'>): Promise<TimeEntry> =>
+  create: (entry: CreateTimeEntryInput): Promise<TimeEntry> =>
     fetchApi<TimeEntry>('/entries', {
       method: 'POST',
       body: JSON.stringify(entry),

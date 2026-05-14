@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
+import { toastError } from '../../utils/toast';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 
@@ -44,6 +45,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
   const [filterClientId, setFilterClientId] = useState('all');
   const [filterProjectId, setFilterProjectId] = useState('all');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  // True when the most recent assignments fetch failed. While true, the Save
+  // button stays disabled — sending the (empty) state would wipe real data.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !user) return;
@@ -52,13 +56,17 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
 
     const loadAssignments = async () => {
       setIsLoadingAssignments(true);
+      setLoadFailed(false);
       try {
         const data = await usersApi.getAssignments(user.id);
         if (isCancelled) return;
         setAssignments(data);
         setInitialAssignments(data);
       } catch (err) {
+        if (isCancelled) return;
         console.error('Failed to load assignments', err);
+        setLoadFailed(true);
+        toastError(t('hr:workforce.failedToLoadAssignments'));
       } finally {
         if (!isCancelled) {
           setIsLoadingAssignments(false);
@@ -84,6 +92,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     setFilterClientId('all');
     setFilterProjectId('all');
     setIsLoadingAssignments(false);
+    setLoadFailed(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -317,7 +326,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       onClose();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      alert((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
+      toastError((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
     }
   };
 
@@ -348,6 +357,13 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           {isLoadingAssignments ? (
             <div className="flex items-center justify-center py-12">
               <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+            </div>
+          ) : loadFailed ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+              <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
+              <p className="text-sm text-zinc-600 max-w-sm">
+                {t('hr:workforce.failedToLoadAssignments')}
+              </p>
             </div>
           ) : (
             <>
@@ -591,9 +607,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           </button>
           <button
             onClick={saveAssignments}
-            disabled={!isDirty}
+            disabled={!isDirty || loadFailed}
             className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
-              !isDirty
+              !isDirty || loadFailed
                 ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
                 : 'bg-praetor text-white hover:bg-zinc-800'
             }`}

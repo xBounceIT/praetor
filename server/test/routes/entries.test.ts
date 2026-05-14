@@ -429,8 +429,20 @@ describe('POST /api/entries', () => {
 
     expect(res.statusCode).toBe(201);
     expect(entriesCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 0, taskId: null }),
+      expect.objectContaining({ duration: 0, taskId: null, isPlaceholder: false }),
     );
+  });
+
+  test('400 invalid isPlaceholder value does not create entry', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, isPlaceholder: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
   test('400 weekend date when allowWeekendSelection=false', async () => {
@@ -512,7 +524,7 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
-  test('201 manager creating for managed user', async () => {
+  test('201 manager creating for managed user uses target user cost', async () => {
     isUserManagedByMock.mockResolvedValue(true);
     findCostPerHourMock.mockResolvedValue(60);
     findIdByProjectAndNameMock.mockResolvedValue('t1');
@@ -525,12 +537,14 @@ describe('POST /api/entries', () => {
       method: 'POST',
       url: '/api/entries',
       headers: authHeader(),
-      payload: { ...validBody, userId: 'u2' },
+      payload: { ...validBody, userId: 'u2', hourlyCost: 999 },
     });
 
     expect(res.statusCode).toBe(201);
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
-    expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u2', hourlyCost: 60 }),
+    );
   });
 
   test('400 when project belongs to a different client', async () => {
@@ -702,6 +716,18 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
+  });
+
+  test('400 invalid isPlaceholder value does not update entry', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { isPlaceholder: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {

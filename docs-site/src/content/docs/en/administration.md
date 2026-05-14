@@ -11,7 +11,7 @@ Administrators manage users, roles, and permissions. Each role should grant only
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or work units. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 
-When changing a role, consider the impact on every assigned user. After major changes, verify access with a test profile or representative user.
+When changing a role, consider the impact on every assigned user. Praetor blocks deletion of any role still assigned to a user, either as the primary role or as an additional role. After major changes, verify access with a test profile or representative user.
 
 ## Authentication
 
@@ -28,6 +28,8 @@ When you bind a user to LDAP, Praetor looks them up in the directory and immedia
 LDAP synchronization updates only application users that are already set to LDAP. A local user with the same username remains local until an administrator explicitly changes their authentication method.
 
 Manual LDAP synchronization requires an enabled LDAP configuration. If LDAP is disabled or not configured, the request is rejected and is not recorded as a successful sync; if the directory is unreachable, Praetor reports the error instead of reporting success.
+
+The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds.
 
 On every LDAP login and on each periodic synchronization, Praetor recomputes the user's role from the LDAP group role mapping. If at least one of the user's LDAP groups matches a configured mapping, those mapped roles win and replace the user's current assignment. **If no LDAP group matches any configured mapping, the user's existing role is preserved** — the administrator's manual role assignment is not silently demoted to the default `User` role. To force a role change for a user with no matching mapping, update either the LDAP group membership or the role mapping configuration.
 
