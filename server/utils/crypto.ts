@@ -5,9 +5,9 @@ const IV_LENGTH = 16;
 
 export const MASKED_SECRET = '********';
 
-// SHA-256 of ENCRYPTION_KEY: a stable 32-byte buffer used as the AES-256 key for
-// encrypt/decrypt and as the HMAC key for PAT / MCP-token hashing. Memoized because PAT auth
-// runs on every authenticated request; ENCRYPTION_KEY is process-stable so this is safe.
+// AES-256 key for encrypt/decrypt: SHA-256 of ENCRYPTION_KEY. Kept as a plain SHA-256
+// derivation (rather than HKDF) for backward-compat with secrets already encrypted at rest
+// (SMTP / LDAP / SSO). Memoized because ENCRYPTION_KEY is process-stable.
 let cachedEncryptionKey: Buffer | null = null;
 export function getEncryptionKey(): Buffer {
   if (cachedEncryptionKey !== null) return cachedEncryptionKey;
@@ -21,6 +21,32 @@ export function getEncryptionKey(): Buffer {
 
 export const __resetEncryptionKeyCacheForTests = () => {
   cachedEncryptionKey = null;
+};
+
+// HMAC key for PAT / MCP-token hashing: HKDF-derived from ENCRYPTION_KEY with a
+// domain-separation label, independent from the AES key (issue #416). Memoized because PAT/MCP
+// auth runs on every authenticated request.
+const HMAC_HKDF_INFO = 'praetor:hmac-token-hashing:v1';
+let cachedHmacKey: Buffer | null = null;
+export function getHmacKey(): Buffer {
+  if (cachedHmacKey !== null) return cachedHmacKey;
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('ENCRYPTION_KEY environment variable is required');
+  }
+  const derived = crypto.hkdfSync(
+    'sha256',
+    Buffer.from(key, 'utf8'),
+    Buffer.alloc(0),
+    HMAC_HKDF_INFO,
+    32,
+  );
+  cachedHmacKey = Buffer.from(derived);
+  return cachedHmacKey;
+}
+
+export const __resetHmacKeyCacheForTests = () => {
+  cachedHmacKey = null;
 };
 
 // Heuristic test for `encrypt()`'s output shape. Validates the IV and auth-tag base64

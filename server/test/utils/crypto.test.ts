@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   __resetEncryptionKeyCacheForTests,
+  __resetHmacKeyCacheForTests,
   decrypt,
   encrypt,
+  getEncryptionKey,
+  getHmacKey,
   MASKED_SECRET,
 } from '../../utils/crypto.ts';
 
@@ -11,12 +14,14 @@ const ORIGINAL_KEY = process.env.ENCRYPTION_KEY;
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = 'test-encryption-key-for-unit-tests';
   __resetEncryptionKeyCacheForTests();
+  __resetHmacKeyCacheForTests();
 });
 
 afterAll(() => {
   if (ORIGINAL_KEY === undefined) delete process.env.ENCRYPTION_KEY;
   else process.env.ENCRYPTION_KEY = ORIGINAL_KEY;
   __resetEncryptionKeyCacheForTests();
+  __resetHmacKeyCacheForTests();
 });
 
 describe('encrypt', () => {
@@ -50,16 +55,60 @@ describe('encrypt without ENCRYPTION_KEY', () => {
     savedKey = process.env.ENCRYPTION_KEY;
     delete process.env.ENCRYPTION_KEY;
     __resetEncryptionKeyCacheForTests();
+    __resetHmacKeyCacheForTests();
   });
 
   afterAll(() => {
     if (savedKey === undefined) delete process.env.ENCRYPTION_KEY;
     else process.env.ENCRYPTION_KEY = savedKey;
     __resetEncryptionKeyCacheForTests();
+    __resetHmacKeyCacheForTests();
   });
 
   test('throws when ENCRYPTION_KEY is missing', () => {
     expect(() => encrypt('whatever')).toThrow(/ENCRYPTION_KEY/);
+  });
+
+  test('getHmacKey throws when ENCRYPTION_KEY is missing', () => {
+    expect(() => getHmacKey()).toThrow(/ENCRYPTION_KEY/);
+  });
+});
+
+describe('getHmacKey', () => {
+  test('returns a 32-byte Buffer', () => {
+    const k = getHmacKey();
+    expect(Buffer.isBuffer(k)).toBe(true);
+    expect(k.length).toBe(32);
+  });
+
+  test('is deterministic across calls (cache hit)', () => {
+    const a = getHmacKey();
+    const b = getHmacKey();
+    expect(a.equals(b)).toBe(true);
+  });
+
+  test('produces the same bytes after a cache reset with the same ENCRYPTION_KEY', () => {
+    const before = Buffer.from(getHmacKey());
+    __resetHmacKeyCacheForTests();
+    const after = getHmacKey();
+    expect(before.equals(after)).toBe(true);
+  });
+
+  test('differs from the AES key derived by getEncryptionKey (key separation, issue #416)', () => {
+    expect(getHmacKey().equals(getEncryptionKey())).toBe(false);
+  });
+
+  test('produces different output when ENCRYPTION_KEY changes', () => {
+    const original = Buffer.from(getHmacKey());
+    const savedKey = process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = `${savedKey}-rotated`;
+    __resetHmacKeyCacheForTests();
+    try {
+      expect(getHmacKey().equals(original)).toBe(false);
+    } finally {
+      process.env.ENCRYPTION_KEY = savedKey;
+      __resetHmacKeyCacheForTests();
+    }
   });
 });
 
