@@ -352,7 +352,6 @@ const TrackerView: React.FC<{
         id: 'duration',
         header: t('entry.hours'),
         accessorKey: 'duration',
-        align: 'right',
         cell: ({ row }) => (
           <span className="font-black text-zinc-900">
             {row.isPlaceholder && row.duration === 0 ? '--' : row.duration.toFixed(2)}
