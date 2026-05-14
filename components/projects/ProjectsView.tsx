@@ -876,7 +876,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     manual: t('projects:projects.revenueManualHint'),
   };
   const displayedRevenue = revenueBySource[revenueSource];
-  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;
+  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
