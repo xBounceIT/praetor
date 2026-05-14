@@ -11,6 +11,17 @@ import {
 
 installI18nMock();
 
+mock.module('sonner', () => ({
+  toast: {
+    error: () => {},
+    success: () => {},
+    info: () => {},
+    warning: () => {},
+    message: () => {},
+  },
+  Toaster: () => null,
+}));
+
 const ClientsOrdersView = (await import('../../../components/accounting/ClientsOrdersView'))
   .default;
 
@@ -50,8 +61,8 @@ describe('<ClientsOrdersView />', () => {
         clients={clients}
         products={[]}
         currency="EUR"
-        onUpdateClientsOrder={mock(() => {})}
-        onDeleteClientsOrder={mock(() => {})}
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
       />,
     );
 
@@ -78,8 +89,8 @@ describe('<ClientsOrdersView />', () => {
         clients={clients}
         products={[]}
         currency="EUR"
-        onUpdateClientsOrder={mock(() => {})}
-        onDeleteClientsOrder={mock(() => {})}
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
       />,
     );
 
@@ -132,6 +143,25 @@ describe('<ClientsOrdersView />', () => {
       '<span className="size-1.5 rounded-full bg-primary"></span>',
       '<FieldLabel htmlFor="client-order-notes" className="sr-only">',
       'id="client-order-notes"',
+    ]);
+  });
+
+  test('handleSubmit/handleDelete/handleStatusUpdate await + try/catch + toast', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+
+    expectSourceContainsAll(source, [
+      "import { toastError } from '../../utils/toast';",
+      'const handleSubmit = async (e: React.FormEvent)',
+      'await onUpdateClientsOrder(editingOrder.id, payload);',
+      'const handleDelete = async () =>',
+      'await onDeleteClientsOrder(orderToDelete.id);',
+      'const handleStatusUpdate = useCallback(',
+      'await onUpdateClientsOrder(id, updates);',
+      "t('accounting:clientsOrders.failedToSave')",
+      "t('accounting:clientsOrders.failedToDelete')",
+      "t('accounting:clientsOrders.failedToUpdateStatus')",
+      "void handleStatusUpdate(row.id, { status: 'confirmed' });",
+      "void handleStatusUpdate(row.id, { status: 'denied' });",
     ]);
   });
 });

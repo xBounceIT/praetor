@@ -46,6 +46,9 @@
     "noSupplierOrder": "No supplier order",
     "supplierOrderBadge": "Supplier order",
     "paymentDueDate": "Payment due date",
+    "failedToSave": "Failed to save the order. Please retry.",
+    "failedToDelete": "Failed to delete the order. Please retry.",
+    "failedToUpdateStatus": "Failed to update the order status. Please retry.",
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
