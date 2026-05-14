@@ -8792,6 +8792,7 @@
       },
       "delete": {
         "summary": "Bulk delete time entries",
+        "description": "Deletes entries matching `projectId` and `task`. Callers with only `timesheets.recurring.delete` are limited to placeholder entries, even if `placeholderOnly=false` is supplied; tracker delete permissions can delete all matching entries allowed by their scope.",
         "tags": [
           "entries"
         ],
@@ -8830,23 +8831,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
+          "204": {
+            "description": "Default Response"
           },
           "400": {
             "description": "Default Response",
