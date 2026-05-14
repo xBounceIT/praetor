@@ -11,6 +11,8 @@ Quotes and offers include products, quantities, prices, discounts, and terms. Us
 
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
+In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
+
 When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
 
 ## Supplier quotes

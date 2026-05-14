@@ -93,6 +93,20 @@ const getDefaultFormData = (): Partial<ClientOffer> => ({
   notes: '',
 });
 
+const formatPercentageLabelValue = (value: number): string => {
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+};
+
+const getDiscountPercentageLabelValue = (subtotal: number, discountAmount: number): string => {
+  if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount)) {
+    return '0%';
+  }
+
+  return `${formatPercentageLabelValue((discountAmount / subtotal) * 100)}%`;
+};
+
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
@@ -1498,10 +1512,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             discountAmount > 0
                               ? {
                                   label: t('sales:clientOffers.discountAmount', {
-                                    value: formatDiscountValue(
-                                      formData.discount ?? 0,
-                                      formData.discountType ?? 'percentage',
-                                      currency,
+                                    value: getDiscountPercentageLabelValue(
+                                      subtotal,
+                                      discountAmount,
                                     ),
                                   }),
                                   amount: discountAmount,
