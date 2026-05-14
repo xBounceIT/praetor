@@ -11,6 +11,7 @@ import type {
   Client,
   ClientOffer,
   ClientOfferItem,
+  DiscountType,
   OfferVersion,
   Product,
   SupplierQuote,
@@ -99,7 +100,16 @@ const formatPercentageLabelValue = (value: number): string => {
   return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 };
 
-const getDiscountPercentageLabelValue = (subtotal: number, discountAmount: number): string => {
+const getDiscountPercentageLabelValue = (
+  discount: number,
+  discountType: DiscountType,
+  subtotal: number,
+  discountAmount: number,
+): string => {
+  if (discountType === 'percentage') {
+    return `${formatPercentageLabelValue(Number.isFinite(discount) ? discount : 0)}%`;
+  }
+
   if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount)) {
     return '0%';
   }
@@ -1513,6 +1523,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               ? {
                                   label: t('sales:clientOffers.discountAmount', {
                                     value: getDiscountPercentageLabelValue(
+                                      discountValue,
+                                      formData.discountType ?? 'percentage',
                                       subtotal,
                                       discountAmount,
                                     ),

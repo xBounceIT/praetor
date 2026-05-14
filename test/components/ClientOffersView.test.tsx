@@ -69,6 +69,18 @@ const baseProps = {
   currency: 'EUR',
 };
 
+const tinySubtotalItem: ClientOffer['items'][number] = {
+  id: 'tiny-item',
+  offerId: 'O-base',
+  productId: 'p-1',
+  productName: 'Tiny Widget',
+  quantity: 1,
+  unitPrice: 0.03,
+  productCost: 0,
+  productMolPercentage: 0,
+  unitType: 'unit',
+};
+
 afterEach(() => {
   document.body.style.overflow = '';
 });
@@ -140,8 +152,27 @@ describe('<ClientOffersView /> discount summary', () => {
 
     expect(screen.getByText('sales:clientOffers.editOffer')).toBeInTheDocument();
     expect(screen.getByText('sales:clientOffers.discountAmount (15%)')).toBeInTheDocument();
+    expect(screen.getAllByText('-15.00 EUR').length).toBeGreaterThan(0);
     expect(
       screen.queryByText('sales:clientOffers.discountAmount (15 EUR)'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps the entered percentage label when the rounded discount amount differs', () => {
+    const percentageDiscountOffer = buildOffer({
+      id: 'O-PERCENT-DISCOUNT',
+      discount: 50,
+      discountType: 'percentage',
+      items: [tinySubtotalItem],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[percentageDiscountOffer]} />);
+
+    fireEvent.click(screen.getByText('O-PERCENT-DISCOUNT'));
+
+    expect(screen.getByText('sales:clientOffers.discountAmount (50%)')).toBeInTheDocument();
+    expect(
+      screen.queryByText('sales:clientOffers.discountAmount (66.67%)'),
     ).not.toBeInTheDocument();
   });
 });
