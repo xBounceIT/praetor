@@ -217,7 +217,18 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
               className="grid-cols-1 sm:grid-cols-2 md:grid-cols-2 xl:grid-cols-2"
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px] gap-4 items-start">
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="entry-edit-notes">{t('entry.notesDescription')}</FieldLabel>
+                <Input
+                  id="entry-edit-notes"
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={t('entry.notesPlaceholder')}
+                  className="h-10 rounded-lg"
+                />
+              </Field>
               <Field className="min-w-0">
                 <FieldLabel htmlFor="entry-edit-hours">
                   {t('entry.hours')} <span className="text-destructive">*</span>
@@ -232,20 +243,9 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
                   placeholder="0.0"
                   aria-invalid={durationInvalid}
                   className={cn(
-                    'h-10 rounded-lg',
+                    'h-10 rounded-lg text-right tabular-nums',
                     durationInvalid && 'border-destructive focus-visible:ring-destructive',
                   )}
-                />
-              </Field>
-              <Field className="min-w-0">
-                <FieldLabel htmlFor="entry-edit-notes">{t('entry.notesDescription')}</FieldLabel>
-                <Input
-                  id="entry-edit-notes"
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={t('entry.notesPlaceholder')}
-                  className="h-10 rounded-lg"
                 />
               </Field>
             </div>
