@@ -134,10 +134,17 @@ export const clearPermissions = async (roleId: string, exec: DbExecutor = db): P
 };
 
 export const isRoleInUse = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
-  const rows = await exec
+  const primaryRows = await exec
     .select({ exists: sql`1` })
     .from(users)
     .where(eq(users.role, roleId))
     .limit(1);
-  return rows.length > 0;
+  if (primaryRows.length > 0) return true;
+
+  const secondaryRows = await exec
+    .select({ exists: sql`1` })
+    .from(userRoles)
+    .where(eq(userRoles.roleId, roleId))
+    .limit(1);
+  return secondaryRows.length > 0;
 };

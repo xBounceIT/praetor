@@ -231,9 +231,21 @@ describe('isRoleInUse', () => {
     expect(exec.calls[0].params).toContain('manager');
   });
 
+  test('returns true when the role is assigned through user_roles', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [[1]] });
+    const result = await rolesRepo.isRoleInUse('manager', testDb);
+    expect(result).toBe(true);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[1].sql.toLowerCase()).toContain('from "user_roles"');
+    expect(exec.calls[1].params).toContain('manager');
+  });
+
   test('returns false when no user has the role', async () => {
+    exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
     const result = await rolesRepo.isRoleInUse('manager', testDb);
     expect(result).toBe(false);
+    expect(exec.calls).toHaveLength(2);
   });
 });
