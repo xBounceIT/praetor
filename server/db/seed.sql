@@ -36,7 +36,8 @@ INSERT INTO tasks (id, name, project_id, description) VALUES
     ('t1', 'Initial Design', 'p1', 'Lo-fi wireframes and moodboards.'),
     ('t2', 'Frontend Dev', 'p1', 'React component implementation.'),
     ('t3', 'API Integration', 'p2', 'Connecting the app to the backend services.'),
-    ('t4', 'General Support', 'p3', 'Misc administrative tasks and support.')
+    ('t4', 'General Support', 'p3', 'Misc administrative tasks and support.'),
+    ('t5', 'Market Analysis', 'p3', 'Competitive landscape and pricing research.')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO settings (user_id, full_name, email) VALUES
@@ -1145,7 +1146,12 @@ INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES
     ('u6', 't2', 'manual'),
     ('u6', 't3', 'manual'),
     ('u7', 't4', 'manual'),
-    ('u8', 't4', 'manual')
+    ('u8', 't4', 'manual'),
+    ('u2', 't5', 'manual'),
+    ('u3', 't5', 'manual'),
+    ('u4', 't5', 'manual'),
+    ('u7', 't5', 'manual'),
+    ('u8', 't5', 'manual')
 ON CONFLICT (user_id, task_id) DO NOTHING;
 
 INSERT INTO time_entries (

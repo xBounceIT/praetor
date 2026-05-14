@@ -94,7 +94,7 @@ export const DEMO_USERNAMES = DEMO_USERS.map((user) => user.username);
 export const COMPATIBILITY_DEFAULTS = {
   clients: ['c1', 'c2'],
   projects: ['p1', 'p2', 'p3'],
-  tasks: ['t1', 't2', 't3', 't4'],
+  tasks: ['t1', 't2', 't3', 't4', 't5'],
 } as const;
 
 export const DEMO_CLIENTS = [
