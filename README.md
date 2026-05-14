@@ -108,7 +108,7 @@ The workflow runs on `v*` git tags and can also be run manually.
 ## Usage Guide
 
 - **Login**:
-  - Bootstrap Admin: `admin` / `password`
+  - Bootstrap Admin: `admin` / value of `ADMIN_DEFAULT_PASSWORD` (falls back to `password` when the env var is unset; an in-app warning surfaces until the admin password is changed away from any insecure default)
   - Demo Manager: `manager` / `password` when `DEMO_SEEDING=true`
   - Demo User: `user` / `password` when `DEMO_SEEDING=true`
   

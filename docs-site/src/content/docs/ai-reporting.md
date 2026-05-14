@@ -40,6 +40,8 @@ Praetor espone un endpoint MCP remoto su `/api/mcp` per agenti compatibili con M
 
 Il token viene mostrato una sola volta al momento della creazione. Praetor conserva solo un hash, quindi revoca e ricrea il token se viene perso.
 
+> Nota di aggiornamento: la release che introduce la separazione delle chiavi crittografiche (issue #416) cambia la chiave HMAC usata per gli hash dei token MCP. Dopo l'aggiornamento i token MCP esistenti smettono di funzionare e vanno rigenerati da Impostazioni > MCP.
+
 Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, preventivi, offerte, ordini, fatture, consuntivi e notifiche.
 
 Ogni token MCP viene creato con un **ambito**:

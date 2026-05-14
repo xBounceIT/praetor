@@ -17,14 +17,18 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
 }) => {
   const { t } = useTranslation('auth');
   const [showWarning, setShowWarning] = useState(false);
-  const [, setLastActivity] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const warningTimerRef = useRef<NodeJS.Timeout | null>(null);
   const logoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const showWarningRef = useRef(false);
+  const resetTimersRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    showWarningRef.current = showWarning;
+  }, [showWarning]);
 
   const resetTimers = useCallback(() => {
-    setLastActivity(Date.now());
     setShowWarning(false);
 
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
@@ -40,22 +44,23 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   }, [onLogout, warnAfterMs, logoutAfterMs]);
 
   useEffect(() => {
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+    resetTimersRef.current = resetTimers;
+  }, [resetTimers]);
+
+  useEffect(() => {
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'] as const;
 
     const handleActivity = () => {
-      if (!showWarning) {
-        resetTimers();
+      if (!showWarningRef.current) {
+        resetTimersRef.current();
       }
     };
 
     events.forEach((event) => {
-      window.addEventListener(event, handleActivity);
+      window.addEventListener(event, handleActivity, { passive: true });
     });
 
-    // Only reset timers on initial mount
-    if (!showWarning) {
-      resetTimers();
-    }
+    resetTimersRef.current();
 
     return () => {
       events.forEach((event) => {
@@ -64,7 +69,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
       if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
     };
-  }, [resetTimers, showWarning]);
+  }, []);
 
   const handleStayLoggedIn = async () => {
     setIsRefreshing(true);

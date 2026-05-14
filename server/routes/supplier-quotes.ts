@@ -402,24 +402,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const isIdOnlyUpdate =
-        nextId !== undefined &&
-        supplierId === undefined &&
-        supplierName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        status === undefined &&
-        expirationDate === undefined &&
-        notes === undefined;
-
-      const hasContentUpdate =
+      // Two related flags with different jobs: `hasNonStatusOrIdUpdates` drives the
+      // non-draft read-only guard (status transitions and id renames must still be allowed
+      // on sent/accepted/denied quotes); `hasContentUpdate` drives whether to take a
+      // version snapshot before writing (status transitions DO want a snapshot, id-only
+      // renames do not).
+      const hasNonStatusOrIdUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
         items !== undefined ||
         paymentTerms !== undefined ||
-        status !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined;
+      const hasContentUpdate = hasNonStatusOrIdUpdates || status !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
@@ -461,16 +456,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
-      const [linkedOrderId, idConflict] = await Promise.all([
-        isIdOnlyUpdate
-          ? Promise.resolve(null)
-          : supplierQuotesRepo.findLinkedOrderId(idResult.value),
+      const [current, linkedOrderId, idConflict] = await Promise.all([
+        supplierQuotesRepo.findById(idResult.value),
+        supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
       ]);
-      if (linkedOrderId && !isIdOnlyUpdate) {
+      if (!current) {
+        return reply.code(404).send({ error: 'Supplier quote not found' });
+      }
+      if (linkedOrderId) {
         return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      }
+      if (normalizeSupplierQuoteStatus(current.status) !== 'draft' && hasNonStatusOrIdUpdates) {
+        return reply.code(409).send({ error: 'Non-draft supplier quotes are read-only' });
       }
       if (idConflict) {
         return reply.code(409).send({ error: 'Quote ID already exists' });

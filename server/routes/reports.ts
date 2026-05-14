@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { DbExecutor } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import pool from '../db/index.ts';
 import * as schema from '../db/schema/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
@@ -1223,11 +1223,58 @@ const startSseResponse = (reply: FastifyReply) => {
   if (typeof reply.raw.flushHeaders === 'function') reply.raw.flushHeaders();
 };
 
-const writeSseEvent = (reply: FastifyReply, event: string, payload: unknown) => {
+// Writes a single chunk to the underlying response socket and waits for downstream
+// readiness before resolving. If `reply.raw.write` returns false (Node stream buffer full),
+// we await a `'drain'` event so the AI provider stream can pause feeding bytes — without
+// this, a slow SSE client would let Node buffer unbounded data and risk OOM. Resolves to
+// `false` if the socket closes or errors before draining so callers can abort the stream.
+export const writeSseChunk = (
+  raw: Pick<FastifyReply['raw'], 'write' | 'once' | 'off'>,
+  chunk: string,
+): Promise<boolean> =>
+  new Promise<boolean>((resolve) => {
+    let ok: boolean;
+    try {
+      ok = raw.write(chunk);
+    } catch {
+      resolve(false);
+      return;
+    }
+    if (ok) {
+      resolve(true);
+      return;
+    }
+    const cleanup = () => {
+      raw.off('drain', onDrain);
+      raw.off('close', onClose);
+      raw.off('error', onError);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onClose = () => {
+      cleanup();
+      resolve(false);
+    };
+    const onError = () => {
+      cleanup();
+      resolve(false);
+    };
+    raw.once('drain', onDrain);
+    raw.once('close', onClose);
+    raw.once('error', onError);
+  });
+
+export const writeSseEvent = async (
+  reply: FastifyReply,
+  event: string,
+  payload: unknown,
+): Promise<boolean> => {
   if (reply.raw.destroyed || reply.raw.writableEnded) return false;
   try {
-    reply.raw.write(`event: ${event}\n`);
-    reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    if (!(await writeSseChunk(reply.raw, `event: ${event}\n`))) return false;
+    if (!(await writeSseChunk(reply.raw, `data: ${JSON.stringify(payload)}\n\n`))) return false;
     return true;
   } catch {
     return false;
@@ -1305,14 +1352,14 @@ const createSseStreamHandlers = (
     onThoughtDelta: async (delta: string) => {
       if (abortController.signal.aborted) return;
       accumulated.thoughtContent += delta;
-      if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+      if (!(await writeSseEvent(reply, 'thought_delta', { delta }))) {
         abortController.abort();
       }
     },
     onAnswerDelta: async (delta: string) => {
       if (abortController.signal.aborted) return;
       accumulated.text += delta;
-      if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+      if (!(await writeSseEvent(reply, 'answer_delta', { delta }))) {
         abortController.abort();
       }
     },
@@ -1629,10 +1676,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         startSseResponse(reply);
         streamStarted = true;
         if (
-          !writeSseEvent(reply, 'start', {
+          !(await writeSseEvent(reply, 'start', {
             sessionId: resolvedSessionId,
             messageId: assistantMessageId,
-          })
+          }))
         ) {
           streamAbortController.abort();
           return;
@@ -1641,7 +1688,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const emitThoughtDone = async () => {
           if (thoughtDoneSent || streamAbortController.signal.aborted) return;
           thoughtDoneSent = true;
-          if (!writeSseEvent(reply, 'thought_done', {})) {
+          if (!(await writeSseEvent(reply, 'thought_done', {}))) {
             streamAbortController.abort();
           }
         };
@@ -1717,11 +1764,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         if (
-          !writeSseEvent(reply, 'done', {
+          !(await writeSseEvent(reply, 'done', {
             sessionId: resolvedSessionId,
             text: assistantText,
             thoughtContent: assistantThoughtContent || undefined,
-          })
+          }))
         ) {
           streamAbortController.abort();
         }
@@ -1733,7 +1780,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const msg = err instanceof Error ? err.message : 'AI request failed';
         if (!streamStarted) return reply.code(502).send({ error: msg });
-        writeSseEvent(reply, 'error', { message: msg });
+        await writeSseEvent(reply, 'error', { message: msg });
         endSseResponse(reply);
       } finally {
         request.raw.removeListener('aborted', handleClientDisconnect);
@@ -1820,14 +1867,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         userMsgCreatedAt,
       );
 
-      let savedAssistantCreatedAt: Date;
-      if (pairedAssistant) {
-        savedAssistantCreatedAt = new Date(pairedAssistant.createdAt);
-        await reportsAiChatRepo.deleteMessage(pairedAssistant.id);
-      } else {
-        savedAssistantCreatedAt = new Date(new Date(userMsgCreatedAt).getTime() + 1000);
-      }
+      const savedAssistantCreatedAt = pairedAssistant
+        ? new Date(pairedAssistant.createdAt)
+        : new Date(new Date(userMsgCreatedAt).getTime() + 1000);
 
+      // Persist the user's edited content immediately so the edit is visible even if the AI
+      // stream subsequently fails. The old paired assistant message is NOT deleted here —
+      // deletion is deferred until the atomic swap below, so a streaming failure leaves the
+      // previous assistant response intact.
       await reportsAiChatRepo.updateMessageContent(messageIdResult.value, contentResult.value);
 
       const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
@@ -1858,10 +1905,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         startSseResponse(reply);
         streamStarted = true;
         if (
-          !writeSseEvent(reply, 'start', {
+          !(await writeSseEvent(reply, 'start', {
             sessionId: sessionIdResult.value,
             messageId: assistantMessageId,
-          })
+          }))
         ) {
           streamAbortController.abort();
           return;
@@ -1870,7 +1917,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const emitThoughtDone = async () => {
           if (thoughtDoneSent || streamAbortController.signal.aborted) return;
           thoughtDoneSent = true;
-          if (!writeSseEvent(reply, 'thought_done', {})) {
+          if (!(await writeSseEvent(reply, 'thought_done', {}))) {
             streamAbortController.abort();
           }
         };
@@ -1914,22 +1961,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           generatedThought || streamHandlers.accumulated.thoughtContent.trim();
         if (streamAbortController.signal.aborted) return;
 
-        await reportsAiChatRepo.insertAssistantMessage({
-          id: assistantMessageId,
-          sessionId: sessionIdResult.value,
-          content: assistantText,
-          thoughtContent: assistantThoughtContent || null,
-          createdAt: savedAssistantCreatedAt.toISOString(),
+        // Atomic swap: delete the old paired assistant (if any) and insert the new one in
+        // a single transaction. Deferring the delete until here means a mid-stream failure
+        // leaves the previous assistant response intact (the swap simply never runs).
+        await withDbTransaction(async (tx) => {
+          if (pairedAssistant) {
+            await reportsAiChatRepo.deleteMessage(pairedAssistant.id, tx);
+          }
+          await reportsAiChatRepo.insertAssistantMessage(
+            {
+              id: assistantMessageId,
+              sessionId: sessionIdResult.value,
+              content: assistantText,
+              thoughtContent: assistantThoughtContent || null,
+              createdAt: savedAssistantCreatedAt.toISOString(),
+            },
+            tx,
+          );
         });
 
         await reportsAiChatRepo.touchSession(sessionIdResult.value, userId);
 
         if (
-          !writeSseEvent(reply, 'done', {
+          !(await writeSseEvent(reply, 'done', {
             sessionId: sessionIdResult.value,
             text: assistantText,
             thoughtContent: assistantThoughtContent || undefined,
-          })
+          }))
         ) {
           streamAbortController.abort();
         }
@@ -1941,7 +1999,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const msg = err instanceof Error ? err.message : 'AI request failed';
         if (!streamStarted) return reply.code(502).send({ error: msg });
-        writeSseEvent(reply, 'error', { message: msg });
+        await writeSseEvent(reply, 'error', { message: msg });
         endSseResponse(reply);
       } finally {
         request.raw.removeListener('aborted', handleClientDisconnect);

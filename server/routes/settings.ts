@@ -18,7 +18,7 @@ import {
   getPersonalAccessTokenDisplayPrefix,
   hashPersonalAccessToken,
 } from '../utils/personal-access-token.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { LOGIN_RATE_LIMIT, STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   forbidden,
@@ -296,11 +296,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // PUT /password - Update user password
+  // PUT /password - Update user password. LOGIN_RATE_LIMIT (not the standard
+  // per-route limit) because this verifies the current password — same threat
+  // model as login, so it gets the same anti-brute-force budget.
   fastify.put(
     '/password',
     {
-      onRequest: [authenticateToken],
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken],
       schema: {
         tags: ['settings'],
         summary: 'Update password',
