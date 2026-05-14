@@ -51,6 +51,7 @@ import WorkUnitsView from './components/WorkUnitsView';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
 import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
 import { makeInvoiceHandlers } from './hooks/handlers/invoiceHandlers';
+import { makeLdapHandlers } from './hooks/handlers/ldapHandlers';
 import { makeProductHandlers } from './hooks/handlers/productHandlers';
 import { makeProjectHandlers } from './hooks/handlers/projectHandlers';
 import { makeQuoteHandlers } from './hooks/handlers/quoteHandlers';
@@ -981,6 +982,8 @@ const AppContent: React.FC = () => {
   );
 
   const invoiceHandlers = useMemo(() => makeInvoiceHandlers({ setInvoices }), []);
+
+  const ldapHandlers = useMemo(() => makeLdapHandlers({ setLdapConfig }), []);
 
   const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), []);
 
@@ -2066,14 +2069,7 @@ const AppContent: React.FC = () => {
     setActiveView(getNotFoundReturnView(currentUser?.permissions || [], VALID_VIEWS));
   };
 
-  const handleSaveLdapConfig = async (config: LdapConfig) => {
-    try {
-      const updated = await api.ldap.updateConfig(config);
-      setLdapConfig(updated);
-    } catch (err) {
-      console.error('Failed to save LDAP config:', err);
-    }
-  };
+  const handleSaveLdapConfig = ldapHandlers.saveConfig;
 
   const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
     try {

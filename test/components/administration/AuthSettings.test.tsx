@@ -143,6 +143,22 @@ describe('<AuthSettings />', () => {
     });
   });
 
+  test('shows the server error instead of the saved notification when LDAP save fails', async () => {
+    const onSave = mock(async () => {
+      throw new Error('Role mapping references a missing role');
+    });
+
+    renderAuthSettings({ onSave });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert')).toHaveTextContent('Role mapping references a missing role');
+    });
+    expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
+  });
+
   test('surfaces SSO provider save failures inline and restores the save button', async () => {
     const onSaveSsoProvider = mock(async () => {
       throw new Error('OIDC save failed');

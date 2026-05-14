@@ -17,6 +17,8 @@ When changing a role, consider the impact on every assigned user. Praetor blocks
 
 Praetor supports local authentication and company integrations such as LDAP or SSO when configured. Keep endpoints, role mappings, and security settings updated.
 
+When saving LDAP configuration, Praetor confirms the save only after the settings are persisted successfully. If the server rejects the settings, the page shows the error message and keeps the values visible for correction.
+
 Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration.
 
 If saving an OIDC or SAML provider fails, the provider tab shows an error message with the detail returned by the server. Correct the reported fields or retry when the service is available before treating the configuration as updated.

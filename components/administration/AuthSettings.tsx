@@ -107,6 +107,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [testResult, setTestResult] = useState<LdapTestResponse | null>(null);
   const [isTestingLdap, setIsTestingLdap] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSavingLdap, setIsSavingLdap] = useState(false);
   const [savingProvider, setSavingProvider] = useState<SsoProtocol | null>(null);
   const [providerSaveErrors, setProviderSaveErrors] = useState<
     Partial<Record<SsoProtocol, string>>
@@ -223,8 +224,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const handleSaveLdap = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!validateLdap()) return;
-    await onSave(ldapForm);
-    showSaved();
+    setIsSaved(false);
+    setIsSavingLdap(true);
+    try {
+      await onSave(ldapForm);
+      showSaved();
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        general:
+          err instanceof Error && err.message
+            ? err.message
+            : t('admin.ldap.errors.saveFailed', 'Failed to save LDAP configuration'),
+      }));
+    } finally {
+      setIsSavingLdap(false);
+    }
   };
 
   const handleTestLdap = async (event: React.FormEvent) => {
@@ -958,8 +973,17 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
               </div>
             </section>
 
+            {errors.general && (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
+              >
+                {errors.general}
+              </div>
+            )}
+
             <div className="flex justify-end">
-              <Button type="submit" size="lg">
+              <Button type="submit" size="lg" disabled={isSavingLdap}>
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
               </Button>
             </div>
