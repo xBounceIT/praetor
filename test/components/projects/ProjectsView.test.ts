@@ -89,7 +89,7 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     expect(source).toContain("readOnly={revenueSource !== 'manual'}");
     // Submit reuses the render-scope `persistedRevenue` (no duplicate computation)
     expect(source).toContain(
-      "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;",
+      "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;",
     );
   });
 
