@@ -150,6 +150,7 @@ beforeEach(async () => {
     groups: [],
     matchedRoleIds: [],
   });
+  syncUsersMock.mockResolvedValue({ synced: 0, created: 0 });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ldap');
 });
@@ -174,6 +175,13 @@ const testLdapAuth = (payload: object): Promise<LightMyRequestResponse> =>
     url: '/api/ldap/test',
     headers: { ...authHeader(), 'content-type': 'application/json' },
     payload,
+  });
+
+const syncLdap = (): Promise<LightMyRequestResponse> =>
+  testApp.inject({
+    method: 'POST',
+    url: '/api/ldap/sync',
+    headers: authHeader(),
   });
 
 describe('GET /api/ldap/config', () => {
@@ -463,5 +471,66 @@ describe('POST /api/ldap/test', () => {
     expect(response.statusCode).toBe(400);
     expect(authenticateWithProfileMock).not.toHaveBeenCalled();
     expect(JSON.parse(response.body).error).toMatch(/username/i);
+  });
+});
+
+describe('POST /api/ldap/sync', () => {
+  test('rejects manual sync when LDAP is disabled without calling the service', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, enabled: false });
+
+    const response = await syncLdap();
+
+    expect(response.statusCode).toBe(400);
+    expect(syncUsersMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(JSON.parse(response.body)).toEqual({
+      success: false,
+      error: 'LDAP is not enabled',
+      errorCode: 'ldap_not_enabled',
+    });
+  });
+
+  test('returns success and writes an audit entry when LDAP sync completes', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, enabled: true });
+    syncUsersMock.mockResolvedValue({ synced: 2, created: 1 });
+
+    const response = await syncLdap();
+
+    expect(response.statusCode).toBe(200);
+    expect(syncUsersMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(response.body)).toEqual({ success: true, synced: 2, created: 1 });
+  });
+
+  test('does not report success when the LDAP service skips sync', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, enabled: true });
+    syncUsersMock.mockResolvedValue({ skipped: true, reason: 'LDAP config not loaded' });
+
+    const response = await syncLdap();
+
+    expect(response.statusCode).toBe(400);
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(JSON.parse(response.body)).toEqual({
+      success: false,
+      error: 'LDAP config not loaded',
+      errorCode: 'ldap_sync_skipped',
+      skipped: true,
+      reason: 'LDAP config not loaded',
+    });
+  });
+
+  test('returns a non-success service-unavailable response when LDAP sync fails', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, enabled: true });
+    syncUsersMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const response = await syncLdap();
+
+    expect(response.statusCode).toBe(503);
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(JSON.parse(response.body)).toEqual({
+      success: false,
+      error: 'LDAP sync failed: connect ECONNREFUSED',
+      errorCode: 'ldap_sync_failed',
+    });
   });
 });

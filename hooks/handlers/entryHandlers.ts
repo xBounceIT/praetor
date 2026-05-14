@@ -37,19 +37,29 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
 
   const addBulk = async (newEntries: TimeEntryDraft[]) => {
     if (!currentUser) return;
-    try {
-      const targetUserId = viewingUserId || currentUser.id;
-      const createdEntries = await Promise.all(
-        newEntries.map((entry) =>
-          api.entries.create({
-            ...entry,
-            userId: targetUserId,
-          }),
-        ),
-      );
-      setEntries((prev) => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
-    } catch (err) {
-      console.error('Failed to add bulk entries:', err);
+    const targetUserId = viewingUserId || currentUser.id;
+    const results = await Promise.allSettled(
+      newEntries.map((entry) =>
+        api.entries.create({
+          ...entry,
+          userId: targetUserId,
+        }),
+      ),
+    );
+
+    const created: TimeEntry[] = [];
+    const failures: unknown[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') created.push(r.value);
+      else failures.push(r.reason);
+    }
+
+    if (created.length > 0) {
+      setEntries((prev) => [...created, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+    }
+
+    if (failures.length > 0) {
+      for (const err of failures) console.error('Failed to add bulk entry:', err);
       alert('Failed to add some time entries');
     }
   };

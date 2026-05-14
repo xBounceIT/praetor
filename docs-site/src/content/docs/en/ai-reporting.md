@@ -40,7 +40,14 @@ Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol c
 
 The token is shown only once when it is created. Praetor stores only a hash, so revoke and recreate the token if it is lost.
 
+> Upgrade note: the release that introduces cryptographic key separation (issue #416) changes the HMAC key used for MCP-token hashes. After the upgrade, existing MCP tokens stop working and must be regenerated from Settings > MCP.
+
 MCP tools always respect the permissions of your current role. The first release includes tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, quotes, offers, orders, invoices, time entries, and notifications.
+
+Each MCP token is created with a **scope**:
+
+- **Full access** — the token can call any tool your role grants, including write tools (create / update / delete).
+- **Read-only** — the token can only call tools that map to `*.view` permissions. Write tools return "Insufficient permissions" even if your role has write access.
 
 Configure the MCP client with the endpoint URL and this header:
 
@@ -51,7 +58,7 @@ Authorization: Bearer praetor_mcp_...
 Use these steps to connect an external agent:
 
 1. Open Settings > MCP.
-2. Create a token with a recognizable name, such as the agent or device name.
+2. Create a token with a recognizable name, such as the agent or device name. Pick **Read-only** if the agent only needs to read data; pick **Full access** if it needs to create or update entries.
 3. Copy the token immediately; it will not be shown again.
 4. Use the displayed MCP Server URL field for the exact endpoint, usually `https://your-praetor-host/api/mcp`.
 5. Copy the Agent Setup Prompt if you want an AI agent to configure the server automatically.
@@ -85,7 +92,9 @@ Bulk time-entry tools accept up to 100 items per call. They process each item in
 
 Security notes:
 
-- MCP tokens inherit your current role permissions at call time.
+- MCP tokens inherit your current role permissions at call time, filtered by the token's scope (full or read-only).
+- Tokens expire automatically after 30 days of inactivity. Operators can override the window with the `MCP_IDLE_TIMEOUT_MS` environment variable (milliseconds).
+- The MCP endpoint is rate-limited at the standard authenticated-route limit (600 requests/minute per client IP); excess requests get a 429 response.
 - Store MCP tokens like passwords or API keys.
 - Revoke tokens when an agent is retired, a device is lost, or access is no longer needed.
 - Time-entry and notification tools can write data; review agent prompts and automation rules before enabling unattended use.

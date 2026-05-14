@@ -17,11 +17,15 @@ Quando modifichi un ruolo, considera l'impatto su tutti gli utenti assegnati. Do
 
 Praetor supporta autenticazione locale e integrazioni aziendali come LDAP o SSO quando configurate. Mantieni aggiornati endpoint, mapping dei ruoli e impostazioni di sicurezza.
 
+Prima di abilitare un provider SAML, configura una sorgente metadata valida (URL o XML) oppure la configurazione manuale con **Entry Point** e **Certificato IdP**. Praetor rifiuta il salvataggio di provider SAML abilitati senza questi dati minimi.
+
 Nella lista utenti puoi usare il menu azioni e scegliere **Cambia metodo di autenticazione** per vincolare un utente applicativo a credenziali locali, LDAP, OIDC o SAML. Per OIDC e SAML seleziona anche il provider specifico: l'utente potrà accedere solo tramite quel provider. Dipendenti interni o esterni non sono account applicativi e non possono essere vincolati a LDAP/SSO.
 
 Quando vincoli un utente a LDAP, Praetor consulta la directory e applica subito i ruoli configurati nel mapping dei gruppi LDAP, sovrascrivendo il ruolo locale. Se la directory non è raggiungibile o l'utente non vi è presente, il ruolo esistente viene mantenuto e il prossimo accesso o sincronizzazione riapplicherà il mapping.
 
 La sincronizzazione LDAP aggiorna solo utenti applicativi già impostati su LDAP. Un utente locale con lo stesso username resta locale finché un amministratore non cambia esplicitamente il suo metodo di autenticazione.
+
+La sincronizzazione LDAP manuale richiede una configurazione LDAP abilitata. Se LDAP è disabilitato o non configurato, la richiesta viene respinta e non viene registrata come sincronizzazione riuscita; se la directory non è raggiungibile, Praetor segnala l'errore invece di riportare un successo.
 
 A ogni accesso LDAP e a ogni sincronizzazione periodica, Praetor ricalcola il ruolo dell'utente partendo dal mapping dei gruppi LDAP. Se almeno uno dei gruppi LDAP dell'utente corrisponde a un mapping configurato, i ruoli mappati prevalgono e sostituiscono l'assegnazione corrente. **Se nessun gruppo LDAP corrisponde ad alcun mapping configurato, il ruolo esistente viene preservato** — l'assegnazione manuale dell'amministratore non viene silenziosamente declassata al ruolo predefinito `Utente`. Per forzare un cambio di ruolo a un utente senza mapping corrispondente, aggiorna l'appartenenza al gruppo LDAP oppure la configurazione del mapping dei ruoli.
 

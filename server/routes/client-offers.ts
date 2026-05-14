@@ -23,6 +23,10 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+// Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
+// violation; keep them identical so the error doesn't drift between paths.
+const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -403,7 +407,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (await clientOffersRepo.findExistingForQuote(linkedQuoteIdResult.value)) {
-        return reply.code(409).send({ error: 'An offer already exists for this quote' });
+        return reply.code(409).send({ error: LINKED_OFFER_CONFLICT });
       }
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
@@ -415,12 +419,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
 
-      let result: {
-        offer: clientOffersRepo.ClientOffer;
-        items: clientOffersRepo.ClientOfferItem[];
-      };
+      type CreateOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            offer: clientOffersRepo.ClientOffer;
+            items: clientOffersRepo.ClientOfferItem[];
+          };
+
+      let result: CreateOutcome;
       try {
-        result = await withDbTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+          // Lock the source quote so a concurrent quote-restore (which gates on
+          // "no linked offer exists") serializes against this insert.
+          const lockedQuote = await clientQuotesRepo.lockCurrentById(linkedQuoteIdResult.value, tx);
+          if (!lockedQuote) {
+            return { ok: false, status: 404, body: { error: 'Source quote not found' } };
+          }
+          if (lockedQuote.status !== 'accepted') {
+            return {
+              ok: false,
+              status: 409,
+              body: { error: 'Offers can only be created from accepted quotes' },
+            };
+          }
+          const existing = await clientOffersRepo.findExistingForQuote(
+            linkedQuoteIdResult.value,
+            tx,
+          );
+          if (existing) {
+            return {
+              ok: false,
+              status: 409,
+              body: { error: LINKED_OFFER_CONFLICT },
+            };
+          }
+
           const offer = await clientOffersRepo.create(
             {
               id: nextIdResult.value,
@@ -442,16 +476,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(normalizedItems),
             tx,
           );
-          return { offer, items: createdItems };
+          return { ok: true, offer, items: createdItems };
         });
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return reply.code(409).send({ error: 'Offer ID already exists' });
         }
+        if (
+          dup &&
+          (dup.constraint === 'idx_customer_offers_linked_quote_id' ||
+            dup.detail?.includes('(linked_quote_id)'))
+        ) {
+          return reply.code(409).send({ error: LINKED_OFFER_CONFLICT });
+        }
         throw err;
       }
 
+      if (!result.ok) {
+        return reply.code(result.status).send(result.body);
+      }
       const createdOffer = result.offer;
       const createdItems = result.items;
 
@@ -864,14 +908,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             items: clientOffersRepo.ClientOfferItem[];
           };
 
-      // Re-check gates inside the tx so the read happens against the same DB connection
-      // as the write - narrows (but does not eliminate) the TOCTOU window vs. reading
-      // outside the tx. A sale insert that commits between this read and this tx's commit
-      // can still slip through, since the offer row isn't locked here. Closing that fully
-      // would need SELECT ... FOR UPDATE here AND matching locking in the sale-create path.
+      // Lock the offer row up front, then run remaining gate reads inside the tx. The lock
+      // serializes against the sale-create path (which locks this row before inserting a
+      // sale with linked_offer_id), closing the TOCTOU window between the linked-sale check
+      // and the restore write.
       const result: RestoreOutcome = await withDbTransaction(async (tx) => {
-        const [current, linkedSaleId, version] = await Promise.all([
-          clientOffersRepo.findExisting(idResult.value, tx),
+        const current = await clientOffersRepo.lockExistingById(idResult.value, tx);
+        const [linkedSaleId, version] = await Promise.all([
           clientOffersRepo.findLinkedSaleId(idResult.value, tx),
           offerVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
         ]);

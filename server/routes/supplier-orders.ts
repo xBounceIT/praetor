@@ -200,8 +200,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   const findMissingSnapshotReference = async (
     snapshot: supplierOrderVersionsRepo.SupplierOrderVersionSnapshot,
+    exec: DbExecutor,
   ): Promise<string | null> => {
-    const supplierExists = await suppliersRepo.existsById(snapshot.order.supplierId);
+    const supplierExists = await suppliersRepo.existsById(snapshot.order.supplierId, exec);
     if (!supplierExists) {
       return `Snapshot supplier "${snapshot.order.supplierId}" no longer exists`;
     }
@@ -211,7 +212,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
     if (productIds.length === 0) return null;
 
-    const products = await productsRepo.getSnapshots(productIds);
+    const products = await productsRepo.getSnapshots(productIds, exec);
     const missingProductId = productIds.find((id) => !products.has(id));
     return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
   };
@@ -332,12 +333,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const orderId = nextIdResult.value || (await generateSupplierOrderId());
 
-      let result: {
-        order: supplierOrdersRepo.SupplierOrder;
-        items: supplierOrdersRepo.SupplierOrderItem[];
-      };
+      type CreateOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            order: supplierOrdersRepo.SupplierOrder;
+            items: supplierOrdersRepo.SupplierOrderItem[];
+          };
+
+      let result: CreateOutcome;
       try {
-        result = await withDbTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+          // Lock the source supplier quote so a concurrent auto-create from a client order
+          // (which also locks this row) serializes with this insert.
+          const lockedQuote = await supplierQuotesRepo.lockStatusById(
+            linkedQuoteIdResult.value,
+            tx,
+          );
+          if (!lockedQuote) {
+            return { ok: false, status: 404, body: { error: 'Source quote not found' } };
+          }
+          if (lockedQuote.status !== 'accepted') {
+            return {
+              ok: false,
+              status: 409,
+              body: { error: 'Supplier orders can only be created from accepted quotes' },
+            };
+          }
+          const existing = await supplierOrdersRepo.findExistingByLinkedQuote(
+            linkedQuoteIdResult.value,
+            tx,
+          );
+          if (existing) {
+            return {
+              ok: false,
+              status: 409,
+              body: { error: 'A supplier order already exists for this quote' },
+            };
+          }
+
           const order = await supplierOrdersRepo.create(
             {
               id: orderId,
@@ -356,7 +390,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
           const createdItems = await supplierOrdersRepo.insertItems(order.id, normalizedItems, tx);
-          return { order, items: createdItems };
+          return { ok: true, order, items: createdItems };
         });
       } catch (error) {
         const dup = getUniqueViolation(error);
@@ -374,6 +408,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         }
         throw error;
+      }
+
+      if (!result.ok) {
+        return reply.code(result.status).send(result.body);
       }
 
       await logAudit({
@@ -702,43 +740,60 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const versionIdResult = requireNonEmptyString(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
-      const [linkedInvoiceId, current, version] = await Promise.all([
-        supplierOrdersRepo.findLinkedInvoiceId(idResult.value),
-        supplierOrdersRepo.findExisting(idResult.value),
-        supplierOrderVersionsRepo.findById(idResult.value, versionIdResult.value),
-      ]);
+      type RestoreOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            order: supplierOrdersRepo.SupplierOrder;
+            items: supplierOrdersRepo.SupplierOrderItem[];
+          };
 
-      if (linkedInvoiceId) {
-        return reply
-          .code(409)
-          .send({ error: 'Cannot restore an order once an invoice has been created from it' });
-      }
-      if (!current) {
-        return reply.code(404).send({ error: 'Order not found' });
-      }
-      if (current.status !== 'draft') {
-        return reply
-          .code(409)
-          .send({ error: 'Non-draft orders are read-only', currentStatus: current.status });
-      }
-      if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
-      }
-      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
-      if (missingSnapshotReference) {
-        return reply.code(409).send({ error: missingSnapshotReference });
-      }
+      // Run all gate reads inside the tx and lock the order row up front. The lock serializes
+      // against the supplier-invoice create path (which locks this row before inserting an
+      // invoice with linked_sale_id), closing the TOCTOU window between the linked-invoice
+      // check and the restore write.
+      const result: RestoreOutcome = await withDbTransaction(async (tx) => {
+        const current = await supplierOrdersRepo.lockExistingById(idResult.value, tx);
+        if (!current) {
+          return { ok: false, status: 404, body: { error: 'Order not found' } };
+        }
+        if (current.status !== 'draft') {
+          return {
+            ok: false,
+            status: 409,
+            body: { error: 'Non-draft orders are read-only', currentStatus: current.status },
+          };
+        }
 
-      const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
-        ({ orderId: _o, ...rest }) => ({
-          ...rest,
-          id: generateItemId('ssi-'),
-          // Empty-string productIds slip through some snapshots; the DB column needs NULL.
-          productId: rest.productId || null,
-        }),
-      );
+        const [linkedInvoiceId, version] = await Promise.all([
+          supplierOrdersRepo.findLinkedInvoiceId(idResult.value, tx),
+          supplierOrderVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
+        ]);
 
-      const restored = await withDbTransaction(async (tx) => {
+        if (linkedInvoiceId) {
+          return {
+            ok: false,
+            status: 409,
+            body: { error: 'Cannot restore an order once an invoice has been created from it' },
+          };
+        }
+        if (!version) {
+          return { ok: false, status: 404, body: { error: 'Version not found' } };
+        }
+        const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
+        if (missingSnapshotReference) {
+          return { ok: false, status: 409, body: { error: missingSnapshotReference } };
+        }
+
+        const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
+          ({ orderId: _o, ...rest }) => ({
+            ...rest,
+            id: generateItemId('ssi-'),
+            // Empty-string productIds slip through some snapshots; the DB column needs NULL.
+            productId: rest.productId || null,
+          }),
+        );
+
         await snapshotPreState(idResult.value, 'restore', request, tx);
 
         const order = await supplierOrdersRepo.restoreSnapshotOrder(
@@ -754,14 +809,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           },
           tx,
         );
-        if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+        if (!order) {
+          return { ok: false, status: 404, body: { error: 'Order not found' } };
+        }
         const items = await supplierOrdersRepo.replaceItems(order.id, snapshotItems, tx);
-        return { order, items };
+        return { ok: true, order, items };
       });
 
-      if (!restored.order) {
-        return reply.code(404).send({ error: 'Order not found' });
+      if (!result.ok) {
+        return reply.code(result.status).send(result.body);
       }
+      const restored = { order: result.order, items: result.items };
 
       await logAudit({
         request,

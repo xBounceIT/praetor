@@ -13,7 +13,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
-import { signToken } from '../helpers/jwt.ts';
+import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 // hashPersonalAccessToken (HMAC-keyed, exercised via the settings routes) requires
 // ENCRYPTION_KEY at call time.
@@ -35,7 +35,7 @@ const getRolePermissionsMock = mock();
 const getOrCreateForUserMock = mock();
 const upsertForUserMock = mock();
 const getPasswordHashMock = mock();
-const updatePasswordHashMock = mock();
+const rotatePasswordAndBumpSessionMock = mock();
 const upsertAdminPasswordWarningMock = mock();
 const deleteAdminPasswordWarningMock = mock();
 const listMcpTokensForUserMock = mock();
@@ -58,7 +58,7 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     findCoreById: findCoreByIdMock,
     getPasswordHash: getPasswordHashMock,
-    updatePasswordHash: updatePasswordHashMock,
+    rotatePasswordAndBumpSession: rotatePasswordAndBumpSessionMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -147,7 +147,7 @@ const allMocks = [
   getOrCreateForUserMock,
   upsertForUserMock,
   getPasswordHashMock,
-  updatePasswordHashMock,
+  rotatePasswordAndBumpSessionMock,
   upsertAdminPasswordWarningMock,
   deleteAdminPasswordWarningMock,
   listMcpTokensForUserMock,
@@ -187,6 +187,7 @@ beforeEach(async () => {
     id: 'mcp-token-1',
     name: 'Agent',
     tokenPrefix: 'praetor_mcp_raw',
+    scope: 'full',
     createdAt: 1000,
     lastUsedAt: null,
   });
@@ -369,6 +370,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -386,6 +388,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -407,6 +410,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_raw',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -417,8 +421,59 @@ describe('MCP token settings routes', () => {
         userId: 'u1',
         name: 'Agent',
         rawToken: 'praetor_mcp_raw',
+        scope: 'full',
       }),
     );
+  });
+
+  test('POST /api/settings/mcp-tokens defaults scope to full when omitted', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'full' }),
+    );
+  });
+
+  test('POST /api/settings/mcp-tokens forwards explicit read_only scope', async () => {
+    createMcpTokenForUserMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      name: 'Agent',
+      tokenPrefix: 'praetor_mcp_raw',
+      scope: 'read_only',
+      createdAt: 1000,
+      lastUsedAt: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent', scope: 'read_only' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'read_only' }),
+    );
+    expect(JSON.parse(res.body).token.scope).toBe('read_only');
+  });
+
+  test('POST /api/settings/mcp-tokens rejects unknown scope', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent', scope: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
   });
 
   test('POST /api/settings/mcp-tokens rejects when current user has too many active tokens', async () => {
@@ -427,6 +482,7 @@ describe('MCP token settings routes', () => {
         id: `mcp-token-${i}`,
         name: `Agent ${i}`,
         tokenPrefix: `praetor_mcp_${i}`,
+        scope: 'full' as const,
         createdAt: 1000 + i,
         lastUsedAt: null,
       })),
@@ -472,11 +528,11 @@ describe('MCP token settings routes', () => {
 });
 
 describe('PUT /api/settings/password', () => {
-  test('200 happy password change', async () => {
+  test('200 happy password change bumps sessionVersion and rotates x-auth-token', async () => {
     getPasswordHashMock.mockResolvedValue('$2a$existing');
     bcryptCompareMock.mockResolvedValue(true);
     bcryptHashMock.mockResolvedValue('$2a$newhash');
-    updatePasswordHashMock.mockResolvedValue(undefined);
+    rotatePasswordAndBumpSessionMock.mockResolvedValue(2);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -489,7 +545,14 @@ describe('PUT /api/settings/password', () => {
     expect(JSON.parse(res.body)).toEqual({ message: 'Password updated successfully' });
     expect(bcryptCompareMock).toHaveBeenCalledWith('old-pw1', '$2a$existing');
     expect(bcryptHashMock).toHaveBeenCalledWith('new-secure-pw', 12);
-    expect(updatePasswordHashMock).toHaveBeenCalledWith('u1', '$2a$newhash');
+    expect(rotatePasswordAndBumpSessionMock).toHaveBeenCalledWith('u1', '$2a$newhash');
+
+    const rotated = res.headers['x-auth-token'];
+    expect(typeof rotated).toBe('string');
+    const decoded = decodeForAssertion(rotated as string);
+    expect(decoded.sessionVersion).toBe(2);
+    expect(decoded.userId).toBe('u1');
+
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
@@ -499,7 +562,7 @@ describe('PUT /api/settings/password', () => {
     getPasswordHashMock.mockResolvedValue('$2a$existing');
     bcryptCompareMock.mockResolvedValue(true);
     bcryptHashMock.mockResolvedValue('$2a$newhash');
-    updatePasswordHashMock.mockResolvedValue(undefined);
+    rotatePasswordAndBumpSessionMock.mockResolvedValue(2);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -518,7 +581,7 @@ describe('PUT /api/settings/password', () => {
     getPasswordHashMock.mockResolvedValue('$2a$existing');
     bcryptCompareMock.mockResolvedValue(true);
     bcryptHashMock.mockResolvedValue('$2a$newhash');
-    updatePasswordHashMock.mockResolvedValue(undefined);
+    rotatePasswordAndBumpSessionMock.mockResolvedValue(2);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -530,6 +593,48 @@ describe('PUT /api/settings/password', () => {
     expect(res.statusCode).toBe(200);
     expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
     expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+  });
+
+  test('500 when rotatePasswordAndBumpSession throws — no admin-warning side effects', async () => {
+    getPasswordHashMock.mockResolvedValue('$2a$existing');
+    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$newhash');
+    rotatePasswordAndBumpSessionMock.mockRejectedValue(new Error('db down'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'old-pw1', newPassword: 'new-secure-pw' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+  });
+
+  // Regression: rotate succeeded, so the rotated x-auth-token must be on the
+  // response even when a downstream side effect fails — otherwise the admin's
+  // own password change forcibly logs them out via stale sliding-window token.
+  test('500 from admin warning still ships the rotated x-auth-token', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, username: 'admin' });
+    getPasswordHashMock.mockResolvedValue('$2a$existing');
+    bcryptCompareMock.mockResolvedValue(true);
+    bcryptHashMock.mockResolvedValue('$2a$newhash');
+    rotatePasswordAndBumpSessionMock.mockResolvedValue(2);
+    deleteAdminPasswordWarningMock.mockRejectedValue(new Error('notifications down'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings/password',
+      headers: authHeader(),
+      payload: { currentPassword: 'password', newPassword: 'new-secure-pw' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    const rotated = res.headers['x-auth-token'];
+    expect(typeof rotated).toBe('string');
+    expect(decodeForAssertion(rotated as string).sessionVersion).toBe(2);
   });
 
   test('400 missing currentPassword', async () => {
@@ -589,7 +694,7 @@ describe('PUT /api/settings/password', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/Incorrect current password/);
-    expect(updatePasswordHashMock).not.toHaveBeenCalled();
+    expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
   });
 
   test('400 newPassword equals currentPassword', async () => {
@@ -604,7 +709,7 @@ describe('PUT /api/settings/password', () => {
     expect(getPasswordHashMock).not.toHaveBeenCalled();
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     expect(bcryptHashMock).not.toHaveBeenCalled();
-    expect(updatePasswordHashMock).not.toHaveBeenCalled();
+    expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {
@@ -630,7 +735,7 @@ describe('PUT /api/settings/password', () => {
     expect(JSON.parse(res.body).error).toMatch(/identity provider/);
     expect(getPasswordHashMock).not.toHaveBeenCalled();
     expect(bcryptCompareMock).not.toHaveBeenCalled();
-    expect(updatePasswordHashMock).not.toHaveBeenCalled();
+    expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
   });
 });
 

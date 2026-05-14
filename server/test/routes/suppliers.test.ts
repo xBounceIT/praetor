@@ -1,4 +1,14 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
@@ -193,6 +203,47 @@ describe('POST /api/suppliers', () => {
     );
   });
 
+  test('201 generates unique ids for same-millisecond supplier creates', async () => {
+    const fixedNow = 1_700_000_000_000;
+    const dateNowSpy = spyOn(Date, 'now').mockReturnValue(fixedNow);
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_SUPPLIER,
+      ...input,
+    }));
+
+    try {
+      const [firstRes, secondRes] = await Promise.all([
+        testApp.inject({
+          method: 'POST',
+          url: '/api/suppliers',
+          headers: authHeader(),
+          payload: { name: 'ACME 1', vatNumber: 'IT123' },
+        }),
+        testApp.inject({
+          method: 'POST',
+          url: '/api/suppliers',
+          headers: authHeader(),
+          payload: { name: 'ACME 2', vatNumber: 'IT456' },
+        }),
+      ]);
+
+      expect(firstRes.statusCode).toBe(201);
+      expect(secondRes.statusCode).toBe(201);
+      expect(createMock).toHaveBeenCalledTimes(2);
+
+      const firstInput = createMock.mock.calls[0]?.[0] as { id: string; createdAt: number };
+      const secondInput = createMock.mock.calls[1]?.[0] as { id: string; createdAt: number };
+
+      expect(firstInput.id).toMatch(/^s-/);
+      expect(secondInput.id).toMatch(/^s-/);
+      expect(firstInput.id).not.toBe(secondInput.id);
+      expect(firstInput.createdAt).toBe(fixedNow);
+      expect(secondInput.createdAt).toBe(fixedNow);
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+  });
+
   test('201 accepts crm.suppliers_all.create without base create', async () => {
     getRolePermissionsMock.mockResolvedValue(['crm.suppliers_all.create']);
     createMock.mockResolvedValue(SAMPLE_SUPPLIER);
@@ -326,6 +377,86 @@ describe('PUT /api/suppliers/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ name: 'ACME 2' }));
+  });
+
+  test('200 clears optional fields when sent as empty strings', async () => {
+    updateMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      email: null,
+      phone: null,
+      address: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { email: '', phone: '', address: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      's-1',
+      expect.objectContaining({ email: null, phone: null, address: null }),
+    );
+  });
+
+  test('200 clearing one field leaves others untouched (only the listed field is in the patch)', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, email: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { email: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(patch).toEqual({ email: null });
+  });
+
+  test('200 name="" is treated as "no change" (NOT NULL column)', async () => {
+    updateMock.mockResolvedValue(SAMPLE_SUPPLIER);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { name: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('name');
+  });
+
+  // POST requires vatNumber; PUT keeps that contract so an empty payload can't drop a
+  // supplier into a state the create endpoint would reject.
+  test('400 vatNumber="" is rejected (mirrors POST contract)', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { vatNumber: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 vatNumber update with a valid value', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, vatNumber: 'IT999' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { vatNumber: 'IT999' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ vatNumber: 'IT999' }));
   });
 
   test('404 when repo returns null', async () => {

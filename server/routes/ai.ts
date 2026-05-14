@@ -3,6 +3,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
 
 const googleModelExists = async (apiKey: string, modelPath: string): Promise<boolean> => {
@@ -43,7 +44,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/validate-model',
     {
-      onRequest: [authenticateToken, requirePermission('administration.general.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.general.update'),
+      ],
       schema: {
         tags: ['ai'],
         summary: 'Validate that a model exists on the selected provider',

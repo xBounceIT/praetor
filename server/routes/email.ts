@@ -1,10 +1,11 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as emailRepo from '../repositories/emailRepo.ts';
 import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import emailService, { type EmailConfigInput } from '../services/email.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 
 const sharedConfigProperties = {
   enabled: { type: 'boolean' },
@@ -80,7 +81,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('administration.email.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.email.view'),
+      ],
       schema: {
         tags: ['email'],
         summary: 'Get email configuration',
@@ -98,7 +103,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('administration.email.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.email.update'),
+      ],
       schema: {
         tags: ['email'],
         summary: 'Update email configuration',
@@ -109,7 +118,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply) => {
+    async (request, _reply) => {
       const updated = await emailService.saveConfig(request.body as EmailConfigInput);
 
       await logAudit({
@@ -127,7 +136,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test',
     {
-      onRequest: [authenticateToken, requirePermission('administration.email.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.email.update'),
+      ],
       schema: {
         tags: ['email'],
         summary: 'Send test email',
@@ -169,7 +182,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test-connection',
     {
-      onRequest: [authenticateToken, requirePermission('administration.email.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.email.update'),
+      ],
       schema: {
         tags: ['email'],
         summary: 'Test SMTP connection',

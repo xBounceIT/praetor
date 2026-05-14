@@ -14,6 +14,7 @@ import {
   INSECURE_DEFAULT_JWT_SECRETS,
   isInsecureEnvValue,
   readRequiredNonDefaultEnv,
+  resolvePositiveDurationMs,
   TEST_JWT_SECRET,
 } from '../utils/runtimeConfig.ts';
 
@@ -37,14 +38,6 @@ const JWT_ALGORITHM = 'HS256' as const;
 
 const DEFAULT_SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
 const DEFAULT_PAT_IDLE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-const resolvePositiveDurationMs = (name: string, fallback: number): number => {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return parsed;
-};
 
 // Resolved lazily on the first authenticated request and cached for the lifetime of the
 // process, so we avoid re-parsing env on every request without forcing tests to set

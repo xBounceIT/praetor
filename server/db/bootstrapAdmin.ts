@@ -8,18 +8,33 @@ import { query } from './index.ts';
 export const ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_USER_ID = 'u1';
 export const DEFAULT_BOOTSTRAP_ADMIN_PASSWORD = 'password';
+const INSECURE_BOOTSTRAP_ADMIN_PASSWORDS = [
+  DEFAULT_BOOTSTRAP_ADMIN_PASSWORD,
+  'change-me-strong-admin-password',
+] as const;
 
 const logger = createChildLogger({ module: 'db:bootstrap-admin' });
+
+const resolveBootstrapAdminPassword = (): string => {
+  const fromEnv = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_BOOTSTRAP_ADMIN_PASSWORD;
+};
+
+const matchesInsecureBootstrapPassword = async (passwordHash: string): Promise<boolean> => {
+  for (const candidate of INSECURE_BOOTSTRAP_ADMIN_PASSWORDS) {
+    if (await bcrypt.compare(candidate, passwordHash)) return true;
+  }
+  return false;
+};
 
 export const syncDefaultAdminPasswordWarning = async (
   adminId: string,
   passwordHash: string | null | undefined,
 ) => {
-  const usesDefaultPassword =
-    typeof passwordHash === 'string' &&
-    (await bcrypt.compare(DEFAULT_BOOTSTRAP_ADMIN_PASSWORD, passwordHash));
+  const usesInsecurePassword =
+    typeof passwordHash === 'string' && (await matchesInsecureBootstrapPassword(passwordHash));
 
-  if (usesDefaultPassword) {
+  if (usesInsecurePassword) {
     await notificationsRepo.upsertAdminPasswordWarning(adminId);
   } else {
     await notificationsRepo.deleteAdminPasswordWarning();
@@ -44,7 +59,7 @@ export const ensureBootstrapAdmin = async () => {
     ]);
     adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : generatePrefixedId('u');
 
-    adminPasswordHash = await bcrypt.hash(DEFAULT_BOOTSTRAP_ADMIN_PASSWORD, 12);
+    adminPasswordHash = await bcrypt.hash(resolveBootstrapAdminPassword(), 12);
 
     await usersRepo.createUser({
       id: adminId,

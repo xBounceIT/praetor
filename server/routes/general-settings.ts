@@ -2,9 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { VALID_LOCATIONS } from '../services/timeEntries.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalEnum,
@@ -100,7 +102,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
       schema: {
         tags: ['general-settings'],
         summary: 'Get global settings',
@@ -122,7 +124,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('administration.general.update')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.general.update'),
+      ],
       schema: {
         tags: ['general-settings'],
         summary: 'Update global settings',
@@ -170,6 +176,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const aiProviderResult = optionalEnum(aiProvider, ['gemini', 'openrouter'], 'aiProvider');
       if (!aiProviderResult.ok) return badRequest(reply, aiProviderResult.message);
 
+      const startOfWeekResult = optionalEnum(startOfWeek, ['Monday', 'Sunday'], 'startOfWeek');
+      if (!startOfWeekResult.ok) return badRequest(reply, startOfWeekResult.message);
+
+      const defaultLocationResult = optionalEnum(
+        defaultLocation,
+        VALID_LOCATIONS,
+        'defaultLocation',
+      );
+      if (!defaultLocationResult.ok) return badRequest(reply, defaultLocationResult.message);
+
       if (
         geminiModelId !== undefined &&
         geminiModelId !== null &&
@@ -198,7 +214,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const settings = await generalSettingsRepo.update({
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
-        startOfWeek,
+        startOfWeek: startOfWeekResult.value,
         treatSaturdayAsHoliday: treatSaturdayAsHolidayValue,
         enableAiReporting: enableAiReportingValue,
         geminiApiKey,
@@ -207,7 +223,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         geminiModelId,
         openrouterModelId,
         allowWeekendSelection: allowWeekendSelectionValue,
-        defaultLocation,
+        defaultLocation: defaultLocationResult.value,
       });
 
       await logAudit({
