@@ -443,8 +443,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   const findMissingSnapshotReference = async (
     snapshot: quoteVersionsRepo.QuoteVersionSnapshot,
+    exec: DbExecutor,
   ): Promise<string | null> => {
-    const clientExists = await clientsRepo.existsById(snapshot.quote.clientId);
+    const clientExists = await clientsRepo.existsById(snapshot.quote.clientId, exec);
     if (!clientExists) {
       return `Snapshot client "${snapshot.quote.clientId}" no longer exists`;
     }
@@ -458,7 +459,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     );
     if (productIds.length === 0) return null;
 
-    const products = await productsRepo.getSnapshots(productIds);
+    const products = await productsRepo.getSnapshots(productIds, exec);
     const missingProductId = productIds.find((id) => !products.has(id));
     return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
   };
@@ -1032,52 +1033,74 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const versionIdResult = requireNonEmptyString(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
-      // Independent reads - fan out, then run the gating ladder against resolved values.
-      // Same read-only rules as PUT.
-      const [linkedOfferId, current, nonDraftLinkedSale, version] = await Promise.all([
-        clientQuotesRepo.findLinkedOfferId(idResult.value),
-        clientQuotesRepo.findCurrent(idResult.value),
-        clientQuotesRepo.findNonDraftLinkedSale(idResult.value),
-        quoteVersionsRepo.findById(idResult.value, versionIdResult.value),
-      ]);
+      type RestoreOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            quote: clientQuotesRepo.ClientQuote;
+            items: clientQuotesRepo.ClientQuoteItem[];
+          };
 
-      if (linkedOfferId) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
-      }
-      if (!current) {
-        return reply.code(404).send({ error: 'Quote not found' });
-      }
-      if (current.status === 'confirmed') {
-        return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
-      }
-      if (nonDraftLinkedSale) {
-        return reply.code(409).send({
-          error: 'Restore is only possible when linked sale orders are in draft status',
-        });
-      }
-      if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
-      }
-      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
-      if (missingSnapshotReference) {
-        return reply.code(409).send({ error: missingSnapshotReference });
-      }
-      const snapshotExpirationDate = version.snapshot.quote.expirationDate;
-      if (!snapshotExpirationDate) {
-        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
-      }
+      // Run all gate reads inside the tx and lock the quote row up front. The lock serializes
+      // against concurrent offer-create / sale-create paths that also lock this row, closing
+      // the TOCTOU window between the linked-offer / linked-sale checks and the restore write.
+      const result: RestoreOutcome = await withDbTransaction(async (tx) => {
+        const current = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+        if (!current) {
+          return { ok: false, status: 404, body: { error: 'Quote not found' } };
+        }
+        if (current.status === 'confirmed') {
+          return { ok: false, status: 409, body: { error: 'Confirmed quotes are read-only' } };
+        }
 
-      const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
-        ({ quoteId: _q, ...rest }) => ({
-          ...rest,
-          id: generateQuoteItemId(),
-          // `productId: ''` slips through the snapshot when sourced from a supplier quote;
-          // the `quote_items` row needs NULL there.
-          productId: rest.productId || null,
-        }),
-      );
+        const [linkedOfferId, nonDraftLinkedSale, version] = await Promise.all([
+          clientQuotesRepo.findLinkedOfferId(idResult.value, tx),
+          clientQuotesRepo.findNonDraftLinkedSale(idResult.value, tx),
+          quoteVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
+        ]);
 
-      const restored = await withDbTransaction(async (tx) => {
+        if (linkedOfferId) {
+          return {
+            ok: false,
+            status: 409,
+            body: { error: 'Quotes become read-only once an offer exists' },
+          };
+        }
+        if (nonDraftLinkedSale) {
+          return {
+            ok: false,
+            status: 409,
+            body: {
+              error: 'Restore is only possible when linked sale orders are in draft status',
+            },
+          };
+        }
+        if (!version) {
+          return { ok: false, status: 404, body: { error: 'Version not found' } };
+        }
+        const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
+        if (missingSnapshotReference) {
+          return { ok: false, status: 409, body: { error: missingSnapshotReference } };
+        }
+        const snapshotExpirationDate = version.snapshot.quote.expirationDate;
+        if (!snapshotExpirationDate) {
+          return {
+            ok: false,
+            status: 409,
+            body: { error: 'Snapshot expiration date is missing' },
+          };
+        }
+
+        const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
+          ({ quoteId: _q, ...rest }) => ({
+            ...rest,
+            id: generateQuoteItemId(),
+            // `productId: ''` slips through the snapshot when sourced from a supplier quote;
+            // the `quote_items` row needs NULL there.
+            productId: rest.productId || null,
+          }),
+        );
+
         // Drop draft sales inside the tx - historical line items may not line up with the
         // current draft sale's row references, but if the snapshot/update later fails the
         // rollback must take the deletes with it (otherwise users lose draft orders for
@@ -1100,14 +1123,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           },
           tx,
         );
-        if (!quote) return { quote: null, items: [] };
+        if (!quote) {
+          return { ok: false, status: 404, body: { error: 'Quote not found' } };
+        }
         const items = await clientQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
-        return { quote, items };
+        return { ok: true, quote, items };
       });
 
-      if (!restored.quote) {
-        return reply.code(404).send({ error: 'Quote not found' });
+      if (!result.ok) {
+        return reply.code(result.status).send(result.body);
       }
+      const restored = { quote: result.quote, items: result.items };
 
       await logAudit({
         request,

@@ -100,6 +100,27 @@ describe('findExisting', () => {
   });
 });
 
+describe('lockExistingById', () => {
+  test('uses FOR UPDATE in the emitted SQL', async () => {
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    await clientOffersRepo.lockExistingById('co-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[0].params).toContain('co-1');
+  });
+
+  test('returns mapped row when present', async () => {
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft']] });
+    const result = await clientOffersRepo.lockExistingById('co-1', testDb);
+    expect(result?.id).toBe('co-1');
+    expect(result?.status).toBe('draft');
+  });
+
+  test('returns null when row missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientOffersRepo.lockExistingById('co-x', testDb)).toBeNull();
+  });
+});
+
 describe('findExistingForQuote', () => {
   test('returns offer id when one exists for the quote', async () => {
     exec.enqueue({ rows: [['co-1']] });

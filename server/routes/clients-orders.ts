@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as orderVersionsRepo from '../repositories/orderVersionsRepo.ts';
@@ -522,10 +523,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const orderId = nextIdResult.value || (await generateClientOrderId());
 
+      type CreateOutcome =
+        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: true;
+            order: clientsOrdersRepo.ClientOrder;
+            items: clientsOrdersRepo.ClientOrderItem[];
+          };
+
       let createdOrder: clientsOrdersRepo.ClientOrder;
       let insertedItems: clientsOrdersRepo.ClientOrderItem[];
       try {
-        const result = await withDbTransaction(async (tx) => {
+        const result = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+          // Lock the source offer so a concurrent offer-restore (which gates on
+          // "no linked sale exists") serializes against this insert.
+          if (linkedOfferIdResult.value) {
+            const lockedOffer = await clientOffersRepo.lockExistingById(
+              linkedOfferIdResult.value,
+              tx,
+            );
+            if (!lockedOffer) {
+              return { ok: false, status: 404, body: { error: 'Source offer not found' } };
+            }
+            if (lockedOffer.status !== 'accepted') {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: 'Sale orders can only be created from accepted offers' },
+              };
+            }
+            const existing = await clientsOrdersRepo.findExistingForOffer(
+              linkedOfferIdResult.value,
+              null,
+              tx,
+            );
+            if (existing) {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: 'A sale order already exists for this offer' },
+              };
+            }
+          }
+
           const order = await clientsOrdersRepo.create(
             {
               id: orderId,
@@ -547,8 +587,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(normalizedItems),
             tx,
           );
-          return { order, items };
+          return { ok: true, order, items };
         });
+        if (!result.ok) {
+          return reply.code(result.status).send(result.body);
+        }
         createdOrder = result.order;
         insertedItems = result.items;
       } catch (error) {
@@ -580,16 +623,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       for (const sqId of supplierQuoteIds) {
         try {
-          const [supplierQuote, existingSupplierOrderId, supplierItems] = await Promise.all([
+          // Cheap fast-fail outside any tx: skip if the quote isn't accepted or already has a
+          // linked order. The authoritative decision is repeated inside the tx below under a
+          // row lock; this read just avoids opening an empty transaction in the common case.
+          const [fastFailQuote, fastFailLinked] = await Promise.all([
             supplierQuotesRepo.findById(sqId),
             supplierQuotesRepo.findLinkedOrderId(sqId),
-            supplierQuotesRepo.findItemsForQuote(sqId),
           ]);
+          if (!fastFailQuote || fastFailQuote.status !== 'accepted') continue;
+          if (fastFailLinked) continue;
 
-          if (!supplierQuote || supplierQuote.status !== 'accepted') continue;
-          if (existingSupplierOrderId) continue;
+          const autoCreated = await withDbTransaction(async (tx) => {
+            // Lock the supplier quote so concurrent client-order POSTs that reference the
+            // same quote serialize here, then re-read the gating state AND the metadata we
+            // copy onto the new supplier order under the lock. `fastFailQuote` from the
+            // pre-tx read isn't reused because a metadata update could have committed
+            // between that read and lock acquisition, landing stale supplier name / payment
+            // terms on the auto-created order.
+            const lockedStatus = await supplierQuotesRepo.lockStatusById(sqId, tx);
+            if (!lockedStatus || lockedStatus.status !== 'accepted') return false;
+            const [linkedUnderLock, supplierQuote, supplierItems] = await Promise.all([
+              supplierQuotesRepo.findLinkedOrderId(sqId, tx),
+              supplierQuotesRepo.findById(sqId, tx),
+              supplierQuotesRepo.findItemsForQuote(sqId, tx),
+            ]);
+            if (linkedUnderLock) return false;
+            if (!supplierQuote) return false;
 
-          await withDbTransaction(async (tx) => {
             const supplierOrderId = await generateSupplierOrderId(tx);
             await clientsOrdersRepo.createSupplierOrder(
               {
@@ -652,8 +712,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 secondaryLabel: `${supplierQuote.supplierName} (from client order ${orderId}, supplier quote ${sqId})`,
               },
             });
+            return true;
           });
-          didAutoCreate = true;
+          if (autoCreated) didAutoCreate = true;
         } catch (err) {
           request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
           supplierOrderWarnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
