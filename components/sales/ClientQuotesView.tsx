@@ -155,6 +155,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     clientName: string;
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -302,6 +304,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (isReadOnly) {
       return;
     }
+    if (isSubmitting) return;
 
     const newErrors: Record<string, string> = {};
     const discountValue = formTotals.discountValue;
@@ -382,6 +385,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       items: itemsWithSnapshots,
     };
 
+    setIsSubmitting(true);
     try {
       if (editingQuote) {
         await onUpdateQuote(editingQuote.id, payload);
@@ -391,6 +395,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     } catch (err) {
       toastError((err as Error).message || t('sales:clientQuotes.failedToSave'));
       return;
+    } finally {
+      setIsSubmitting(false);
     }
     closeModal();
   };
@@ -410,14 +416,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const handleDelete = async () => {
     if (!quoteToDelete) return;
+    if (isDeleting) return;
+    setIsDeleting(true);
     try {
       await onDeleteQuote(quoteToDelete.id);
+      setIsDeleteConfirmOpen(false);
+      setQuoteToDelete(null);
     } catch (err) {
       toastError((err as Error).message || t('sales:clientQuotes.failedToDelete'));
-      return;
+    } finally {
+      setIsDeleting(false);
     }
-    setIsDeleteConfirmOpen(false);
-    setQuoteToDelete(null);
   };
 
   const applyClientChange = (clientId: string, clientName: string, shouldReprice: boolean) => {
@@ -1949,14 +1958,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   {t('common:buttons.cancel')}
                 </Button>
                 {!previewVersion && (
-                  <Button type="submit" disabled={isReadOnly}>
+                  <Button type="submit" disabled={isReadOnly || isSubmitting}>
                     {isReadOnly
                       ? t('sales:clientQuotes.statusQuote', {
                           status: getStatusLabel(editingQuote?.status || ''),
                         })
-                      : editingQuote
-                        ? t('sales:clientQuotes.updateQuote')
-                        : t('sales:clientQuotes.createQuote')}
+                      : isSubmitting
+                        ? t('common:buttons.saving')
+                        : editingQuote
+                          ? t('sales:clientQuotes.updateQuote')
+                          : t('sales:clientQuotes.createQuote')}
                   </Button>
                 )}
               </ModalFooter>
@@ -2014,8 +2025,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setIsDeleteConfirmOpen(false);
+        }}
         onConfirm={handleDelete}
+        isDeleting={isDeleting}
         title={`${t('sales:clientQuotes.deleteQuote')}?`}
         description={t('sales:clientQuotes.deleteConfirm', {
           clientName: quoteToDelete?.clientName,
