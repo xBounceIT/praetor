@@ -449,6 +449,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const existingStatus = await invoicesRepo.findStatus(idResult.value);
+      if (existingStatus === null) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+
+      if (existingStatus !== 'draft') {
+        return reply.code(409).send({
+          error: 'Non-draft invoices are read-only',
+          currentStatus: existingStatus,
+        });
+      }
+
       const patch: invoicesRepo.InvoiceUpdate = {};
 
       if (clientId !== undefined) {
@@ -561,7 +573,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const updated = await invoicesRepo.update(idResult.value, patch, tx);
+          const updated = await invoicesRepo.updateDraft(idResult.value, patch, tx);
           if (!updated) return { invoice: null, items: [] };
           const itemsOut = normalizedItemsForUpdate
             ? await invoicesRepo.replaceItems(
@@ -583,6 +595,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const invoice = result.invoice;
       const updatedItems = result.items;
       if (!invoice) {
+        const currentStatus = await invoicesRepo.findStatus(idResult.value);
+        if (currentStatus && currentStatus !== 'draft') {
+          return reply.code(409).send({
+            error: 'Non-draft invoices are read-only',
+            currentStatus,
+          });
+        }
         return reply.code(404).send({ error: 'Invoice not found' });
       }
 
@@ -620,11 +639,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const existing = await invoicesRepo.findStatusAndClientName(idResult.value);
+      if (!existing) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+      if (existing.status !== 'draft') {
+        return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+      }
+
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await invoicesRepo.deleteById(idResult.value);
+        const result = await invoicesRepo.deleteDraftById(idResult.value);
 
         if (!result) {
+          const currentStatus = await invoicesRepo.findStatus(idResult.value);
+          if (currentStatus && currentStatus !== 'draft') {
+            return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+          }
           return reply.code(404).send({ error: 'Invoice not found' });
         }
 
@@ -635,7 +666,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
           details: {
             targetLabel: idResult.value,
-            secondaryLabel: result.clientName ?? '',
+            secondaryLabel: existing.clientName,
           },
         });
         return reply.code(204).send();
