@@ -9,7 +9,7 @@ import {
   normalizeBillingFrequency,
   type StoredBillingType,
 } from '../utils/billing.ts';
-import { getForeignKeyViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
 import {
@@ -236,6 +236,32 @@ const PROJECT_ORDER_FK_CONSTRAINTS = new Set<string | undefined>([
   'projects_order_id_sales_id_fk',
 ]);
 const PROJECT_OFFER_FK_CONSTRAINT = 'projects_offer_id_customer_offers_id_fk';
+const PROJECT_COLOR_UNIQUE_CONSTRAINT = 'idx_projects_color_unique';
+
+export const isColorUniqueViolation = (err: unknown): boolean => {
+  const dup = getUniqueViolation(err);
+  if (!dup) return false;
+  return (
+    dup.constraint === PROJECT_COLOR_UNIQUE_CONSTRAINT ||
+    (dup.constraint === undefined && dup.detail?.includes('(color)') === true) ||
+    dup.detail?.includes('projects.color') === true
+  );
+};
+
+export const lockColorAllocation = async (exec: DbExecutor = db): Promise<void> => {
+  await executeRows(
+    exec,
+    sql`SELECT pg_advisory_xact_lock(hashtext('praetor.projects.color')::bigint)`,
+  );
+};
+
+export const listColorsForAllocation = async (exec: DbExecutor = db): Promise<string[]> => {
+  const rows = await executeRows<{ color: string }>(
+    exec,
+    sql`SELECT color FROM projects ORDER BY created_at, id`,
+  );
+  return rows.map((row) => row.color);
+};
 
 export const create = async (project: NewProject, exec: DbExecutor = db): Promise<Project> => {
   try {

@@ -963,12 +963,11 @@ const AppContent: React.FC = () => {
   const projectHandlers = useMemo(
     () =>
       makeProjectHandlers({
-        projects,
         setProjects,
         setProjectTasks,
         setEntries,
       }),
-    [projects],
+    [],
   );
 
   const entryHandlers = useMemo(

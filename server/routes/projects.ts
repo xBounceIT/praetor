@@ -28,6 +28,7 @@ import {
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
+import { normalizeProjectColor, pickAvailableProjectColor } from '../utils/project-colors.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -63,7 +64,7 @@ const projectSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     clientId: { type: 'string' },
-    color: { type: 'string' },
+    color: { type: 'string', description: 'Unique project display color as a hex value.' },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
@@ -84,7 +85,11 @@ const projectCreateBodySchema = {
     name: { type: 'string' },
     clientId: { type: 'string' },
     description: { type: 'string' },
-    color: { type: 'string' },
+    color: {
+      type: 'string',
+      description:
+        'Optional hex color. If omitted, the server assigns the next available unique color.',
+    },
     orderId: { type: 'string' },
     offerId: { type: 'string' },
     startDate: { type: ['string', 'null'] },
@@ -102,7 +107,10 @@ const projectUpdateBodySchema = {
     name: { type: 'string' },
     clientId: { type: 'string' },
     description: { type: 'string' },
-    color: { type: 'string' },
+    color: {
+      type: 'string',
+      description: 'Unique project display color as a hex value.',
+    },
     isDisabled: { type: 'boolean' },
     orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
@@ -118,6 +126,10 @@ class PermissionError extends Error {}
 class OrderClientMismatchError extends Error {}
 class OfferClientMismatchError extends Error {}
 class DateRangeError extends Error {}
+class ProjectColorConflictError extends Error {}
+
+const PROJECT_COLOR_CONFLICT_MESSAGE = 'Project color already exists';
+const MAX_COLOR_ALLOCATION_ATTEMPTS = 4;
 
 const canAccessClient = makeAccessChecker(
   (userId, clientId) => userAssignmentsRepo.isClientAssignedToUser(userId, clientId),
@@ -251,11 +263,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const id = generatePrefixedId('p');
-      let projectColor = '#3b82f6';
+      let requestedColor: string | null = null;
       if (color) {
         const colorResult = validateHexColor(color, 'color');
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
-        projectColor = colorResult.value;
+        requestedColor = normalizeProjectColor(colorResult.value);
       }
 
       // The two FK lookups are independent — run them concurrently.
@@ -274,40 +286,68 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Atomicity: project insert + auto-assignments must all succeed or all roll back.
         // Without the transaction, an assignment failure left the project committed but
         // unassigned (orphan) while the handler still returned 500.
-        const created = await withDbTransaction(async (tx) => {
-          const project = await projectsRepo.create(
-            {
-              id,
-              name: nameResult.value,
-              clientId: clientIdResult.value,
-              color: projectColor,
-              description: description || null,
-              isDisabled: false,
-              orderId: orderId || null,
-              offerId: offerIdResult.value,
-              startDate: startDateResult.value,
-              endDate: endDateResult.value,
-              revenue: revenueResult.value,
-              billingType,
-              billingFrequency,
-            },
-            tx,
-          );
+        let created: projectsRepo.Project | null = null;
+        for (let attempt = 0; attempt < MAX_COLOR_ALLOCATION_ATTEMPTS; attempt++) {
+          try {
+            created = await withDbTransaction(async (tx) => {
+              await projectsRepo.lockColorAllocation(tx);
+              const existingColors = await projectsRepo.listColorsForAllocation(tx);
+              const projectColor = requestedColor ?? pickAvailableProjectColor(existingColors);
+              if (
+                requestedColor &&
+                existingColors.some((existing) => normalizeProjectColor(existing) === projectColor)
+              ) {
+                throw new ProjectColorConflictError();
+              }
 
-          await Promise.all([
-            userAssignmentsRepo.assignClientToUser(
-              request.user.id,
-              clientIdResult.value,
-              undefined,
-              tx,
-            ),
-            userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
-            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
-            userAssignmentsRepo.assignProjectToTopManagers(id, tx),
-          ]);
+              const project = await projectsRepo.create(
+                {
+                  id,
+                  name: nameResult.value,
+                  clientId: clientIdResult.value,
+                  color: projectColor,
+                  description: description || null,
+                  isDisabled: false,
+                  orderId: orderId || null,
+                  offerId: offerIdResult.value,
+                  startDate: startDateResult.value,
+                  endDate: endDateResult.value,
+                  revenue: revenueResult.value,
+                  billingType,
+                  billingFrequency,
+                },
+                tx,
+              );
 
-          return project;
-        });
+              await Promise.all([
+                userAssignmentsRepo.assignClientToUser(
+                  request.user.id,
+                  clientIdResult.value,
+                  undefined,
+                  tx,
+                ),
+                userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
+                userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+                userAssignmentsRepo.assignProjectToTopManagers(id, tx),
+              ]);
+
+              return project;
+            });
+            break;
+          } catch (err) {
+            if (
+              !requestedColor &&
+              projectsRepo.isColorUniqueViolation(err) &&
+              attempt < MAX_COLOR_ALLOCATION_ATTEMPTS - 1
+            ) {
+              continue;
+            }
+            throw err;
+          }
+        }
+        if (!created) {
+          throw new Error('Project color allocation failed');
+        }
 
         // Audit log is best-effort and intentionally outside the transaction: a logging
         // failure must not roll back the resource that was successfully created.
@@ -323,6 +363,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(created);
       } catch (err) {
+        if (err instanceof ProjectColorConflictError || projectsRepo.isColorUniqueViolation(err)) {
+          return reply.code(409).send({ error: PROJECT_COLOR_CONFLICT_MESSAGE });
+        }
         if (err instanceof ForeignKeyError) {
           return replyError(request, reply, {
             statusCode: 400,
@@ -471,7 +514,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (color !== undefined && color !== null && color !== '') {
         const colorResult = validateHexColor(color, 'color');
         if (!colorResult.ok) return badRequest(reply, colorResult.message);
-        normalizedColor = colorResult.value;
+        normalizedColor = normalizeProjectColor(colorResult.value);
       }
 
       const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
@@ -684,6 +727,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
             details: { secondaryLabel: 'date_range_invalid' },
           });
+        }
+        if (projectsRepo.isColorUniqueViolation(err)) {
+          return reply.code(409).send({ error: PROJECT_COLOR_CONFLICT_MESSAGE });
         }
         if (err instanceof ForeignKeyError) {
           return replyError(request, reply, {

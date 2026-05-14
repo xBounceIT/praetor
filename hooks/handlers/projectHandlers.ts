@@ -1,11 +1,9 @@
 import type React from 'react';
 import type { AddProjectFormInput } from '../../components/projects/ProjectsView';
-import { COLORS } from '../../constants';
 import api from '../../services/api';
 import type { Project, ProjectTask, TimeEntry } from '../../types';
 
 export type ProjectHandlersDeps = {
-  projects: Project[];
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
@@ -15,24 +13,16 @@ export type ProjectHandlersDeps = {
 export type AddProjectInput = AddProjectFormInput;
 
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
-  const { projects, setProjects, setProjectTasks, setEntries } = deps;
+  const { setProjects, setProjectTasks, setEntries } = deps;
 
   const add = async (input: AddProjectInput) => {
     try {
       if (!input.clientId) throw new Error('Client is required');
 
-      const usedColors = projects.map((p) => p.color);
-      const availableColors = COLORS.filter((c) => !usedColors.includes(c));
-      const color =
-        availableColors.length > 0
-          ? availableColors[Math.floor(Math.random() * availableColors.length)]
-          : COLORS[Math.floor(Math.random() * COLORS.length)];
-
       const project = await api.projects.create({
         name: input.name,
         clientId: input.clientId,
         description: input.description,
-        color,
         orderId: input.orderId || undefined,
         offerId: input.offerId,
         startDate: input.startDate ?? null,

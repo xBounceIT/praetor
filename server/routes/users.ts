@@ -141,7 +141,7 @@ const trackerCatalogsSchema = {
           id: { type: 'string' },
           name: { type: 'string' },
           clientId: { type: 'string' },
-          color: { type: 'string' },
+          color: { type: 'string', description: 'Unique project display color as a hex value.' },
           isDisabled: { type: 'boolean' },
           billingType: { type: 'string' },
           billingFrequency: { type: 'string' },

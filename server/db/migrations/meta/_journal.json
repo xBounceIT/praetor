@@ -302,6 +302,13 @@
       "when": 1778788482946,
       "tag": "0042_add_mcp_token_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1778795459932,
+      "tag": "0043_add_project_color_unique",
+      "breakpoints": true
     }
   ]
 }
