@@ -101,9 +101,9 @@ describe('getHmacKey', () => {
   test('produces different output when ENCRYPTION_KEY changes', () => {
     const original = Buffer.from(getHmacKey());
     const savedKey = process.env.ENCRYPTION_KEY;
-    process.env.ENCRYPTION_KEY = `${savedKey}-rotated`;
-    __resetHmacKeyCacheForTests();
     try {
+      process.env.ENCRYPTION_KEY = `${savedKey}-rotated`;
+      __resetHmacKeyCacheForTests();
       expect(getHmacKey().equals(original)).toBe(false);
     } finally {
       process.env.ENCRYPTION_KEY = savedKey;

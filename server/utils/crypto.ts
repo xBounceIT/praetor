@@ -8,6 +8,10 @@ export const MASKED_SECRET = '********';
 // AES-256 key for encrypt/decrypt: SHA-256 of ENCRYPTION_KEY. Kept as a plain SHA-256
 // derivation (rather than HKDF) for backward-compat with secrets already encrypted at rest
 // (SMTP / LDAP / SSO). Memoized because ENCRYPTION_KEY is process-stable.
+//
+// Do NOT use this key for HMAC or other non-AES primitives — use `getHmacKey()` for
+// HMAC-keyed hashing (issue #416). Reusing the same key across primitives couples
+// otherwise-independent security boundaries.
 let cachedEncryptionKey: Buffer | null = null;
 export function getEncryptionKey(): Buffer {
   if (cachedEncryptionKey !== null) return cachedEncryptionKey;
