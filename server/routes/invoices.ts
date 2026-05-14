@@ -454,17 +454,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
 
-      const hasLockedFieldUpdates =
-        nextId !== undefined ||
-        clientId !== undefined ||
-        clientName !== undefined ||
-        issueDate !== undefined ||
-        dueDate !== undefined ||
-        amountPaid !== undefined ||
-        notes !== undefined ||
-        items !== undefined;
-      const hasStatusChange = typeof status === 'string' && status !== existingStatus;
-      if (existingStatus !== 'draft' && (hasLockedFieldUpdates || hasStatusChange)) {
+      if (existingStatus !== 'draft') {
         return reply.code(409).send({
           error: 'Non-draft invoices are read-only',
           currentStatus: existingStatus,
@@ -583,7 +573,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const updated = await invoicesRepo.update(idResult.value, patch, tx);
+          const updated = await invoicesRepo.updateDraft(idResult.value, patch, tx);
           if (!updated) return { invoice: null, items: [] };
           const itemsOut = normalizedItemsForUpdate
             ? await invoicesRepo.replaceItems(
@@ -605,6 +595,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const invoice = result.invoice;
       const updatedItems = result.items;
       if (!invoice) {
+        const currentStatus = await invoicesRepo.findStatus(idResult.value);
+        if (currentStatus && currentStatus !== 'draft') {
+          return reply.code(409).send({
+            error: 'Non-draft invoices are read-only',
+            currentStatus,
+          });
+        }
         return reply.code(404).send({ error: 'Invoice not found' });
       }
 
@@ -652,9 +649,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await invoicesRepo.deleteById(idResult.value);
+        const result = await invoicesRepo.deleteDraftById(idResult.value);
 
         if (!result) {
+          const currentStatus = await invoicesRepo.findStatus(idResult.value);
+          if (currentStatus && currentStatus !== 'draft') {
+            return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+          }
           return reply.code(404).send({ error: 'Invoice not found' });
         }
 

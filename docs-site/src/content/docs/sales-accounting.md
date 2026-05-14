@@ -23,7 +23,7 @@ Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di c
 
 Le fatture clienti e fornitori devono riflettere ordini e consegne effettive. Controlla imponibili, IVA, totale e riferimenti al documento collegato.
 
-Quando una fattura esce dallo stato bozza diventa in sola lettura: non puo' essere riportata in bozza o eliminata. Elimina solo le bozze create per errore, prima dell'emissione.
+Quando una fattura esce dallo stato bozza diventa in sola lettura: non può essere riportata in bozza o eliminata. Elimina solo le bozze create per errore, prima dell'emissione.
 
 ### IVA per riga
 
