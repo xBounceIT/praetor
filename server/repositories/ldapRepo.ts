@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { ldapConfig } from '../db/schema/ldapConfig.ts';
 import { decrypt, encrypt, isEncrypted } from '../utils/crypto.ts';
@@ -126,10 +126,7 @@ export const get = async (exec: DbExecutor = db): Promise<LdapConfig | null> => 
   return mapRow(rows[0]);
 };
 
-export const update = async (
-  patch: LdapConfigPatch,
-  exec: DbExecutor = db,
-): Promise<LdapConfig> => {
+const buildUpdateSet = (patch: LdapConfigPatch) => {
   // COALESCE preserves the existing column when the patch value is undefined (legacy
   // "undefined leaves column unchanged" semantic). Same pattern as settingsRepo.upsertForUser.
   // `role_mappings` needs the explicit `::jsonb` cast on the bound text param so COALESCE's
@@ -149,26 +146,54 @@ export const update = async (
   // semantic is preserved; `undefined` keeps the COALESCE preserve-existing branch.
   // Callers must pass plaintext — the route layer converts the masked sentinel to undefined.
   const bindPasswordParam = patch.bindPassword === undefined ? null : encrypt(patch.bindPassword);
+  return {
+    enabled: sql`COALESCE(${patch.enabled ?? null}, ${ldapConfig.enabled})`,
+    serverUrl: sql`COALESCE(${patch.serverUrl ?? null}, ${ldapConfig.serverUrl})`,
+    baseDn: sql`COALESCE(${patch.baseDn ?? null}, ${ldapConfig.baseDn})`,
+    bindDn: sql`COALESCE(${patch.bindDn ?? null}, ${ldapConfig.bindDn})`,
+    bindPassword: sql`COALESCE(${bindPasswordParam}, ${ldapConfig.bindPassword})`,
+    userFilter: sql`COALESCE(${patch.userFilter ?? null}, ${ldapConfig.userFilter})`,
+    groupBaseDn: sql`COALESCE(${patch.groupBaseDn ?? null}, ${ldapConfig.groupBaseDn})`,
+    groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
+    roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
+    tlsCaCertificate: tlsCaParam,
+    autoProvisionAll: sql`COALESCE(${patch.autoProvisionAll ?? null}, ${ldapConfig.autoProvisionAll})`,
+    updatedAt: sql`CURRENT_TIMESTAMP`,
+  };
+};
+
+const updateWhere = async (
+  patch: LdapConfigPatch,
+  whereClause: SQL,
+  exec: DbExecutor,
+): Promise<LdapConfig | null> => {
   const result = await exec
     .update(ldapConfig)
-    .set({
-      enabled: sql`COALESCE(${patch.enabled ?? null}, ${ldapConfig.enabled})`,
-      serverUrl: sql`COALESCE(${patch.serverUrl ?? null}, ${ldapConfig.serverUrl})`,
-      baseDn: sql`COALESCE(${patch.baseDn ?? null}, ${ldapConfig.baseDn})`,
-      bindDn: sql`COALESCE(${patch.bindDn ?? null}, ${ldapConfig.bindDn})`,
-      bindPassword: sql`COALESCE(${bindPasswordParam}, ${ldapConfig.bindPassword})`,
-      userFilter: sql`COALESCE(${patch.userFilter ?? null}, ${ldapConfig.userFilter})`,
-      groupBaseDn: sql`COALESCE(${patch.groupBaseDn ?? null}, ${ldapConfig.groupBaseDn})`,
-      groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
-      roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
-      tlsCaCertificate: tlsCaParam,
-      autoProvisionAll: sql`COALESCE(${patch.autoProvisionAll ?? null}, ${ldapConfig.autoProvisionAll})`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .where(eq(ldapConfig.id, 1))
+    .set(buildUpdateSet(patch))
+    .where(whereClause)
     .returning(LDAP_PROJECTION);
-  if (result.length === 0) {
+  return result[0] ? mapRow(result[0]) : null;
+};
+
+export const update = async (
+  patch: LdapConfigPatch,
+  exec: DbExecutor = db,
+): Promise<LdapConfig> => {
+  const updated = await updateWhere(patch, eq(ldapConfig.id, 1), exec);
+  if (!updated) {
     throw new Error('ldap_config row (id=1) not found; seed missing');
   }
-  return mapRow(result[0]);
+  return updated;
+};
+
+export const updatePreservingStoredBindPassword = async (
+  patch: LdapConfigPatch,
+  exec: DbExecutor = db,
+): Promise<LdapConfig | null> => {
+  const result = await updateWhere(
+    { ...patch, bindPassword: undefined },
+    sql`${ldapConfig.id} = ${1} AND ${ldapConfig.bindPassword} IS NOT NULL AND ${ldapConfig.bindPassword} <> ''`,
+    exec,
+  );
+  return result;
 };

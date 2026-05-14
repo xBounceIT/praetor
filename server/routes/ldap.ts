@@ -212,24 +212,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const { serverUrl, baseDn, userFilter, groupBaseDn, groupFilter, roleMappings } = body;
       // bindPassword === MASKED_SECRET means "preserve the stored secret" (the UI round-trips
-      // the masked value when the operator did not edit the field). To satisfy the paired
-      // validation below, bindDn is also dropped from the patch, but only when the client's
-      // bindDn matches what is currently stored - otherwise a request that changes bindDn
-      // while keeping the masked password would silently swallow the DN edit and return 200.
-      // To actually rotate bindDn, the operator must re-enter bindPassword (supply a non-mask
-      // value) so the credentials are updated together.
+      // the masked value when the operator did not edit the password field). Bind DN remains
+      // editable in that flow: a DN rename often keeps the same service-account password.
+      // The paired validation below checks the effective post-save credential pair so a
+      // masked password cannot invent a missing stored secret or leave only one side set.
       const isBindPasswordMasked = body.bindPassword === MASKED_SECRET;
+      let storedConfigForMaskedPassword: ldapRepo.LdapConfig | undefined;
       let bindDn: string | undefined;
       let bindPassword: string | undefined;
       if (isBindPasswordMasked) {
-        const storedConfig = (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG;
-        if (body.bindDn !== undefined && body.bindDn !== storedConfig.bindDn) {
-          return badRequest(
-            reply,
-            'bindDn cannot be changed while bindPassword is masked; re-enter bindPassword to rotate credentials',
-          );
-        }
-        bindDn = undefined;
+        storedConfigForMaskedPassword = (await ldapRepo.get()) ?? ldapRepo.DEFAULT_CONFIG;
+        bindDn =
+          body.bindDn !== undefined && body.bindDn !== storedConfigForMaskedPassword.bindDn
+            ? body.bindDn
+            : undefined;
         bindPassword = undefined;
       } else {
         bindDn = body.bindDn;
@@ -272,9 +268,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         normalizedGroupFilter = groupFilterTemplateResult.value;
       }
 
-      const hasBindDn = bindDn !== undefined && bindDn !== null && bindDn !== '';
-      const hasBindPassword =
-        bindPassword !== undefined && bindPassword !== null && bindPassword !== '';
+      const hasCredentialValue = (value: string | undefined | null): boolean =>
+        value !== undefined && value !== null && value !== '';
+      const hasBindDn = isBindPasswordMasked
+        ? hasCredentialValue(bindDn ?? storedConfigForMaskedPassword?.bindDn)
+        : hasCredentialValue(bindDn);
+      const hasBindPassword = isBindPasswordMasked
+        ? hasCredentialValue(storedConfigForMaskedPassword?.bindPassword)
+        : hasCredentialValue(bindPassword);
       if (hasBindDn !== hasBindPassword) {
         return badRequest(reply, 'bindDn and bindPassword must be provided together or not at all');
       }
@@ -319,7 +320,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, autoProvisionAllResult.message);
       }
 
-      const updated = await ldapRepo.update({
+      const updatePatch: ldapRepo.LdapConfigPatch = {
         enabled: enabledValue,
         serverUrl,
         baseDn,
@@ -331,7 +332,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings: validatedMappings,
         autoProvisionAll: autoProvisionAllResult.value,
         ...tlsCaResult.patch,
-      });
+      };
+
+      const updated = isBindPasswordMasked
+        ? await ldapRepo.updatePreservingStoredBindPassword(updatePatch)
+        : await ldapRepo.update(updatePatch);
+
+      if (!updated) {
+        return reply.code(409).send({
+          error:
+            'LDAP bind credentials changed while saving; reload the configuration and try again',
+          errorCode: 'ldap_bind_credentials_changed',
+        });
+      }
 
       // Drop the cached config in the singleton LDAPService so the next
       // authenticate()/syncUsers() call re-reads from the DB. Without this,

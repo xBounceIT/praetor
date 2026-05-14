@@ -161,6 +161,37 @@ describe('update', () => {
   });
 });
 
+describe('updatePreservingStoredBindPassword', () => {
+  test('guards masked-password saves with a non-empty bindPassword predicate', async () => {
+    const ciphertext = encrypt('stored-secret');
+    exec.enqueue({ rows: [buildRow({ bindDn: 'cn=rotated', bindPassword: ciphertext })] });
+
+    const result = await ldapRepo.updatePreservingStoredBindPassword(
+      { bindDn: 'cn=rotated', bindPassword: 'must-not-be-written' },
+      testDb,
+    );
+
+    expect(result?.bindDn).toBe('cn=rotated');
+    expect(result?.bindPassword).toBe('stored-secret');
+    expect(exec.calls[0].sql).toMatch(/"id"\s*=\s*\$\d+/);
+    expect(exec.calls[0].sql).toMatch(/"bind_password"\s+is\s+not\s+null/i);
+    expect(exec.calls[0].sql).toMatch(/"bind_password"\s*<>\s*''/i);
+    expect(exec.calls[0].params).not.toContain('must-not-be-written');
+    expect(exec.calls[0].params.some((p) => typeof p === 'string' && isEncrypted(p))).toBe(false);
+  });
+
+  test('returns null when the conditional masked-password update matches no row', async () => {
+    exec.enqueue({ rows: [] });
+
+    const result = await ldapRepo.updatePreservingStoredBindPassword(
+      { bindDn: 'cn=rotated' },
+      testDb,
+    );
+
+    expect(result).toBeNull();
+  });
+});
+
 describe('DEFAULT_CONFIG', () => {
   test('matches the schema-default shape used as a fallback when seed is absent', () => {
     expect(ldapRepo.DEFAULT_CONFIG).toEqual({
