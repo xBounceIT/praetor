@@ -750,6 +750,38 @@ describe('PUT /api/clients/:id', () => {
     expect(patch.vatNumberProvided).toBe(false);
   });
 
+  test('200 null email/phone/contactName clears the columns (regression for #405)', async () => {
+    // Regression for #405: when the edit form blanks out email/phone/contactName,
+    // the frontend now sends explicit `null` instead of omitting the keys. The
+    // route must translate that into `{value: null, *Provided: true}` so the
+    // repo's CASE-WHEN clears the columns instead of preserving the old values.
+    findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
+    updateClientMock.mockResolvedValue(SAMPLE_CLIENT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/c-1',
+      headers: authHeader(),
+      payload: { email: null, phone: null, contactName: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateClientMock.mock.calls[0][1] as {
+      email: string | null;
+      emailProvided: boolean;
+      phone: string | null;
+      phoneProvided: boolean;
+      contactName: string | null;
+      contactNameProvided: boolean;
+    };
+    expect(patch.email).toBeNull();
+    expect(patch.emailProvided).toBe(true);
+    expect(patch.phone).toBeNull();
+    expect(patch.phoneProvided).toBe(true);
+    expect(patch.contactName).toBeNull();
+    expect(patch.contactNameProvided).toBe(true);
+  });
+
   test('200 vatNumber-only PUT updates fiscal_code shadow to vatNumber', async () => {
     findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
     findByFiscalCodeMock.mockResolvedValue(false);

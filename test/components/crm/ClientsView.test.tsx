@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import type { ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
+import type { Client, ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -93,18 +93,59 @@ describe('<ClientsView /> contact validation', () => {
     await submitClientForm(user);
 
     await waitFor(() => expect(props.onAddClient).toHaveBeenCalledTimes(1));
+    // Regression for #405: empty primary-contact fields must be sent as explicit
+    // `null` (not stripped to `undefined`) so the server clears the columns
+    // instead of silently keeping the previous values.
     expect(props.onAddClient).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Acme Srl',
         clientCode: 'ACME',
         fiscalCode: 'IT12345678901',
         contacts: [],
-        contactName: undefined,
-        email: undefined,
-        phone: undefined,
+        contactName: null,
+        email: null,
+        phone: null,
       }),
     );
     expect(screen.queryByText('common:validation.required')).not.toBeInTheDocument();
+  });
+
+  test('regression #405: edit submit sends null for cleared email/phone/contactName', async () => {
+    // Render a client whose primary contact is already cleared (no legacy
+    // contactName/email/phone, no contacts array). Opening edit and submitting
+    // without changes used to send `undefined` for these fields, which
+    // `normalizeClientPayload` stripped from the wire body — so the server
+    // never saw the keys and never cleared the columns. The fix sends
+    // explicit `null` for cleared fields.
+    const existingClient: Client = {
+      id: 'client-1',
+      name: 'Acme Srl',
+      clientCode: 'ACME',
+      fiscalCode: 'IT12345678901',
+      contacts: [],
+    };
+    const props = renderClientsView({ clients: [existingClient] });
+
+    const user = userEvent.setup();
+    const nameCell = await screen.findByText('Acme Srl');
+    const row = nameCell.closest('tr');
+    if (!row) throw new Error('row for existing client not found');
+    await user.click(row);
+
+    await screen.findByText('crm:clients.editClient');
+
+    await submitClientForm(user);
+
+    await waitFor(() => expect(props.onUpdateClient).toHaveBeenCalledTimes(1));
+    expect(props.onUpdateClient).toHaveBeenCalledWith(
+      'client-1',
+      expect.objectContaining({
+        contacts: [],
+        contactName: null,
+        email: null,
+        phone: null,
+      }),
+    );
   });
 
   test('requires a contact name when submitting a partially filled contact draft', async () => {

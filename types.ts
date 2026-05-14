@@ -138,10 +138,10 @@ export interface Client {
   isDisabled?: boolean;
   type?: 'individual' | 'company';
   contacts?: ClientContact[];
-  contactName?: string;
+  contactName?: string | null;
   clientCode?: string;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   address?: string;
   addressCountry?: string;
   addressState?: string;
@@ -149,9 +149,9 @@ export interface Client {
   addressProvince?: string;
   addressCivicNumber?: string;
   addressLine?: string;
-  description?: string;
-  atecoCode?: string;
-  website?: string;
+  description?: string | null;
+  atecoCode?: string | null;
+  website?: string | null;
   sector?: string | null;
   numberOfEmployees?: string | null;
   revenue?: string | null;
