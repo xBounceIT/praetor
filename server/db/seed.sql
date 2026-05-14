@@ -989,6 +989,20 @@ ON CONFLICT (id) DO UPDATE SET
     is_disabled = EXCLUDED.is_disabled,
     created_at = EXCLUDED.created_at;
 
+-- Tasks for the demo projects above. Without these rows the second time_entries block
+-- below resolves task_id to NULL because it looks up tasks by (project_id, name). See
+-- GitHub issue #423.
+INSERT INTO tasks (id, name, project_id, description) VALUES
+    ('dm_task_01', 'Security audit review',    'dm_proj_01', 'Pen-test findings walkthrough with the client.'),
+    ('dm_task_02', 'Assessment report draft',  'dm_proj_01', 'Executive summary and remediation roadmap.'),
+    ('dm_task_03', 'Final review sign-off',    'dm_proj_01', 'Client sign-off and deliverable handoff.'),
+    ('dm_task_04', 'Deployment configuration', 'dm_proj_02', 'CI pipeline and staging environment setup.'),
+    ('dm_task_05', 'Infra provisioning',       'dm_proj_02', 'Cloud resources for the first deployment wave.')
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    project_id = EXCLUDED.project_id,
+    description = EXCLUDED.description;
+
 INSERT INTO notifications (
     id,
     user_id,
@@ -1145,7 +1159,12 @@ INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES
     ('u6', 't2', 'manual'),
     ('u6', 't3', 'manual'),
     ('u7', 't4', 'manual'),
-    ('u8', 't4', 'manual')
+    ('u8', 't4', 'manual'),
+    ('u2', 'dm_task_01', 'manual'),
+    ('u6', 'dm_task_02', 'manual'),
+    ('u2', 'dm_task_03', 'manual'),
+    ('u5', 'dm_task_04', 'manual'),
+    ('u3', 'dm_task_05', 'manual')
 ON CONFLICT (user_id, task_id) DO NOTHING;
 
 INSERT INTO time_entries (
