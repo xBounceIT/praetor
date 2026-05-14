@@ -328,6 +328,58 @@ describe('PUT /api/suppliers/:id', () => {
     expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ name: 'ACME 2' }));
   });
 
+  test('200 clears optional fields when sent as empty strings', async () => {
+    updateMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      email: null,
+      phone: null,
+      address: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { email: '', phone: '', address: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      's-1',
+      expect.objectContaining({ email: null, phone: null, address: null }),
+    );
+  });
+
+  test('200 clearing one field leaves others untouched (only the listed field is in the patch)', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, email: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { email: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(patch).toEqual({ email: null });
+  });
+
+  test('200 name="" is treated as "no change" (NOT NULL column)', async () => {
+    updateMock.mockResolvedValue(SAMPLE_SUPPLIER);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { name: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('name');
+  });
+
   test('404 when repo returns null', async () => {
     updateMock.mockResolvedValue(null);
 

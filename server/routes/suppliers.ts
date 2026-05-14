@@ -287,26 +287,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
 
       const patch: suppliersRepo.SupplierUpdate = {};
+      // `name` is NOT NULL in the DB - an empty payload here means "don't change",
+      // not "clear it". Every other field below is nullable; an explicit "" from the
+      // client must round-trip to NULL so users can actually unset stale data.
       if (Object.hasOwn(body, 'name') && nameResult.value !== null) patch.name = nameResult.value;
       if (isDisabledValue !== undefined) patch.isDisabled = isDisabledValue;
-      if (Object.hasOwn(body, 'supplierCode') && supplierCodeResult.value !== null)
-        patch.supplierCode = supplierCodeResult.value;
-      if (Object.hasOwn(body, 'contactName') && contactNameResult.value !== null)
-        patch.contactName = contactNameResult.value;
-      if (Object.hasOwn(body, 'email') && emailResult.value !== null)
-        patch.email = emailResult.value;
-      if (Object.hasOwn(body, 'phone') && phoneResult.value !== null)
-        patch.phone = phoneResult.value;
-      if (Object.hasOwn(body, 'address') && addressResult.value !== null)
-        patch.address = addressResult.value;
-      if (Object.hasOwn(body, 'vatNumber') && vatNumberResult.value !== null)
-        patch.vatNumber = vatNumberResult.value;
-      if (Object.hasOwn(body, 'taxCode') && taxCodeResult.value !== null)
-        patch.taxCode = taxCodeResult.value;
-      if (Object.hasOwn(body, 'paymentTerms') && paymentTermsResult.value !== null)
-        patch.paymentTerms = paymentTermsResult.value;
-      if (Object.hasOwn(body, 'notes') && notesResult.value !== null)
-        patch.notes = notesResult.value;
+      if (Object.hasOwn(body, 'supplierCode')) patch.supplierCode = supplierCodeResult.value;
+      if (Object.hasOwn(body, 'contactName')) patch.contactName = contactNameResult.value;
+      if (Object.hasOwn(body, 'email')) patch.email = emailResult.value;
+      if (Object.hasOwn(body, 'phone')) patch.phone = phoneResult.value;
+      if (Object.hasOwn(body, 'address')) patch.address = addressResult.value;
+      if (Object.hasOwn(body, 'vatNumber')) patch.vatNumber = vatNumberResult.value;
+      if (Object.hasOwn(body, 'taxCode')) patch.taxCode = taxCodeResult.value;
+      if (Object.hasOwn(body, 'paymentTerms')) patch.paymentTerms = paymentTermsResult.value;
+      if (Object.hasOwn(body, 'notes')) patch.notes = notesResult.value;
 
       const updated = await suppliersRepo.update(idResult.value, patch);
       if (!updated) {
