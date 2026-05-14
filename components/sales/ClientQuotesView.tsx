@@ -37,6 +37,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -65,7 +66,7 @@ export interface ClientQuotesViewProps {
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onQuoteRestored?: (quote: Quote) => void;
-  onDeleteQuote: (id: string) => void;
+  onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: Quote) => void;
   onViewOffer?: (offerId: string) => void;
   quoteFilterId?: string | null;
@@ -381,10 +382,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       items: itemsWithSnapshots,
     };
 
-    if (editingQuote) {
-      await onUpdateQuote(editingQuote.id, payload);
-    } else {
-      await onAddQuote(payload);
+    try {
+      if (editingQuote) {
+        await onUpdateQuote(editingQuote.id, payload);
+      } else {
+        await onAddQuote(payload);
+      }
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientQuotes.failedToSave'));
+      return;
     }
     closeModal();
   };
@@ -394,12 +400,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setIsDeleteConfirmOpen(true);
   }, []);
 
-  const handleDelete = () => {
-    if (quoteToDelete) {
-      onDeleteQuote(quoteToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setQuoteToDelete(null);
+  const handleStatusUpdate = async (id: string, updates: Partial<Quote>) => {
+    try {
+      await onUpdateQuote(id, updates);
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
     }
+  };
+
+  const handleDelete = async () => {
+    if (!quoteToDelete) return;
+    try {
+      await onDeleteQuote(quoteToDelete.id);
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientQuotes.failedToDelete'));
+      return;
+    }
+    setIsDeleteConfirmOpen(false);
+    setQuoteToDelete(null);
   };
 
   const applyClientChange = (clientId: string, clientName: string, shouldReprice: boolean) => {
@@ -1108,7 +1126,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (history) return;
-                        onUpdateQuote(row.id, { status: 'sent' });
+                        handleStatusUpdate(row.id, { status: 'sent' });
                       }}
                       disabled={history}
                       className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
@@ -1135,7 +1153,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (history) return;
-                          onUpdateQuote(row.id, { status: 'accepted' });
+                          handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
                         disabled={history}
                         className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
@@ -1159,7 +1177,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (history) return;
-                          onUpdateQuote(row.id, { status: 'denied' });
+                          handleStatusUpdate(row.id, { status: 'denied' });
                         }}
                         disabled={history}
                         className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
@@ -1207,7 +1225,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!canRestore) return;
-                          onUpdateQuote(row.id, { status: 'draft', isExpired: false });
+                          handleStatusUpdate(row.id, { status: 'draft', isExpired: false });
                         }}
                         disabled={!canRestore}
                         className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}

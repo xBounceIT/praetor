@@ -46,6 +46,7 @@ import DailyView from './components/timesheet/DailyView';
 import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
+import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
 import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
@@ -2714,9 +2715,13 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <ErrorBoundary>
-    <AppContent />
-  </ErrorBoundary>
+  <>
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+    {/* Outside the boundary so toasts keep rendering if the boundary trips. */}
+    <Toaster richColors closeButton position="top-right" />
+  </>
 );
 
 export default App;
