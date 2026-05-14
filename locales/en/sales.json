@@ -129,6 +129,8 @@
     "quoteCodeColumn": "Code",
     "statusColumn": "Status",
     "totalColumn": "Total",
+    "discountPercentColumn": "Discount %",
+    "discountedTotalColumn": "Discounted Total",
     "paymentTermsColumn": "Payment Terms",
     "expirationColumn": "Expiration",
     "actionsColumn": "Actions",

@@ -9,6 +9,8 @@ sidebar:
 
 I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condizioni. Usa il catalogo per partire da dati coerenti e controlla sempre totali, margini e validità prima di inviare il documento.
 
+La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
+
 Quando un documento viene accettato, prosegui creando l'ordine o il documento collegato invece di reinserire manualmente le stesse righe.
 
 ## Preventivi fornitori

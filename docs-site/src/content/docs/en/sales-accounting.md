@@ -9,6 +9,8 @@ sidebar:
 
 Quotes and offers include products, quantities, prices, discounts, and terms. Use the catalog to start from consistent data and always check totals, margins, and validity before sending a document.
 
+The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
+
 When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
 
 ## Supplier quotes
