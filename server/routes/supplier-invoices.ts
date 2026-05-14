@@ -23,6 +23,9 @@ import {
 const isSupplierInvoiceIdConflict = (databaseError: DatabaseError) =>
   databaseError.constraint === 'supplier_invoices_pkey' || databaseError.detail?.includes('(id)');
 
+const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
+const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
+
 const duplicateInvoiceError = (databaseError: DatabaseError) => {
   if (databaseError.constraint === 'idx_supplier_invoices_linked_sale_id_unique') {
     return 'An invoice already exists for this order';
@@ -316,6 +319,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!totalResult.ok) return badRequest(reply, totalResult.message);
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
+      const totalValue = totalResult.value ?? 0;
+      const amountPaidValue = amountPaidResult.value ?? 0;
+      const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
+
+      if (amountPaidValue > totalValue) {
+        return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+      }
+      if (statusValue === 'paid' && amountPaidValue < totalValue) {
+        return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
+      }
 
       if (linkedSaleIdResult.value) {
         const [sourceOrder, existingInvoiceId] = await Promise.all([
@@ -415,10 +428,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   supplierName: supplierNameResult.value,
                   issueDate: issueDateResult.value,
                   dueDate: dueDateResult.value,
-                  status: typeof status === 'string' && status.length > 0 ? status : 'draft',
-                  subtotal: subtotalResult.value || 0,
-                  total: totalResult.value || 0,
-                  amountPaid: amountPaidResult.value || 0,
+                  status: statusValue,
+                  subtotal: subtotalResult.value ?? 0,
+                  total: totalValue,
+                  amountPaid: amountPaidValue,
                   notes: typeof notes === 'string' ? notes : null,
                 },
                 tx,
@@ -646,6 +659,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (typeof status === 'string') patch.status = status;
       if (typeof notes === 'string') patch.notes = notes;
+
+      const effectiveTotal = patch.total ?? existingInvoice.total;
+      const effectiveAmountPaid = patch.amountPaid ?? existingInvoice.amountPaid;
+      if (
+        (patch.total !== undefined || patch.amountPaid !== undefined || patch.status === 'paid') &&
+        effectiveAmountPaid > effectiveTotal
+      ) {
+        return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+      }
+      if (patch.status === 'paid' && effectiveAmountPaid < effectiveTotal) {
+        return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
+      }
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
       if (items !== undefined) {

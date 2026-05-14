@@ -15,7 +15,7 @@ import {
   badRequest,
   optionalEmail,
   optionalNonEmptyString,
-  parseBoolean,
+  parseBooleanField,
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
@@ -226,7 +226,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
+      const body = (request.body ?? {}) as {
         name?: string;
         isDisabled?: boolean;
         supplierCode?: string;
@@ -241,7 +241,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const {
         name,
-        isDisabled,
         supplierCode,
         contactName,
         email,
@@ -294,7 +293,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const notesResult = optionalNonEmptyString(notes, 'notes');
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
-      const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
+      const isDisabledResult = parseBooleanField(body, 'isDisabled');
+      if (!isDisabledResult.ok) return badRequest(reply, isDisabledResult.message);
+      const isDisabledValue = isDisabledResult.value;
 
       const patch: suppliersRepo.SupplierUpdate = {};
       // `name` is NOT NULL in the DB - an empty payload here means "don't change",
@@ -339,7 +340,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let action = 'supplier.updated';
       if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-        action = body.isDisabled ? 'supplier.disabled' : 'supplier.enabled';
+        action = isDisabledValue ? 'supplier.disabled' : 'supplier.enabled';
       }
 
       await logAudit({

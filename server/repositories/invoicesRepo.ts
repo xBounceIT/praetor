@@ -141,6 +141,28 @@ export const findAmountPaid = async (
   return parseDbNumber(rows[0].amountPaid, 0);
 };
 
+export const findStatus = async (
+  invoiceId: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  return rows[0]?.status ?? null;
+};
+
+export const findStatusAndClientName = async (
+  invoiceId: string,
+  exec: DbExecutor = db,
+): Promise<{ status: string; clientName: string } | null> => {
+  const rows = await exec
+    .select({ status: invoices.status, clientName: invoices.clientName })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  return rows[0] ?? null;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,
@@ -215,6 +237,21 @@ export type InvoiceUpdate = {
   notes?: string | null;
 };
 
+const invoiceUpdateValues = (patch: InvoiceUpdate) => ({
+  id: sql`COALESCE(${patch.id ?? null}, ${invoices.id})`,
+  clientId: sql`COALESCE(${patch.clientId ?? null}, ${invoices.clientId})`,
+  clientName: sql`COALESCE(${patch.clientName ?? null}, ${invoices.clientName})`,
+  issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${invoices.issueDate})`,
+  dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${invoices.dueDate})`,
+  status: sql`COALESCE(${patch.status ?? null}, ${invoices.status})`,
+  subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${invoices.subtotal})`,
+  taxTotal: sql`COALESCE(${numericForDb(patch.taxTotal) ?? null}::numeric, ${invoices.taxTotal})`,
+  total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${invoices.total})`,
+  amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${invoices.amountPaid})`,
+  notes: sql`COALESCE(${patch.notes ?? null}, ${invoices.notes})`,
+  updatedAt: sql`CURRENT_TIMESTAMP`,
+});
+
 export const update = async (
   id: string,
   patch: InvoiceUpdate,
@@ -222,21 +259,21 @@ export const update = async (
 ): Promise<Invoice | null> => {
   const rows = await exec
     .update(invoices)
-    .set({
-      id: sql`COALESCE(${patch.id ?? null}, ${invoices.id})`,
-      clientId: sql`COALESCE(${patch.clientId ?? null}, ${invoices.clientId})`,
-      clientName: sql`COALESCE(${patch.clientName ?? null}, ${invoices.clientName})`,
-      issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${invoices.issueDate})`,
-      dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${invoices.dueDate})`,
-      status: sql`COALESCE(${patch.status ?? null}, ${invoices.status})`,
-      subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${invoices.subtotal})`,
-      taxTotal: sql`COALESCE(${numericForDb(patch.taxTotal) ?? null}::numeric, ${invoices.taxTotal})`,
-      total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${invoices.total})`,
-      amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${invoices.amountPaid})`,
-      notes: sql`COALESCE(${patch.notes ?? null}, ${invoices.notes})`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
+    .set(invoiceUpdateValues(patch))
     .where(eq(invoices.id, id))
+    .returning();
+  return rows[0] ? mapInvoice(rows[0]) : null;
+};
+
+export const updateDraft = async (
+  id: string,
+  patch: InvoiceUpdate,
+  exec: DbExecutor = db,
+): Promise<Invoice | null> => {
+  const rows = await exec
+    .update(invoices)
+    .set(invoiceUpdateValues(patch))
+    .where(and(eq(invoices.id, id), eq(invoices.status, 'draft')))
     .returning();
   return rows[0] ? mapInvoice(rows[0]) : null;
 };
@@ -294,6 +331,17 @@ export const deleteById = async (
   const rows = await exec
     .delete(invoices)
     .where(eq(invoices.id, id))
+    .returning({ id: invoices.id, clientName: invoices.clientName });
+  return rows[0] ?? null;
+};
+
+export const deleteDraftById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ id: string; clientName: string } | null> => {
+  const rows = await exec
+    .delete(invoices)
+    .where(and(eq(invoices.id, id), eq(invoices.status, 'draft')))
     .returning({ id: invoices.id, clientName: invoices.clientName });
   return rows[0] ?? null;
 };

@@ -555,6 +555,18 @@ describe('PUT /api/products/:id', () => {
     );
   });
 
+  test('400 invalid isDisabled value does not update product', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/products/p-1',
+      headers: authHeader(),
+      payload: { isDisabled: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateProductDynamicMock).not.toHaveBeenCalled();
+  });
+
   test('200 type change loads currentProduct + recomputes costUnit', async () => {
     findProductCoreByIdMock.mockResolvedValue({
       type: 'goods',

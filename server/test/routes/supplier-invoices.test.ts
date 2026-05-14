@@ -150,6 +150,25 @@ const SAMPLE_ITEM = {
   discount: 0,
 };
 
+const existingInvoiceForUpdate = (
+  overrides: Partial<{
+    id: string;
+    status: string;
+    issueDate: string;
+    dueDate: string;
+    total: number;
+    amountPaid: number;
+  }> = {},
+) => ({
+  id: 'SINV-2025-0001',
+  status: 'draft',
+  issueDate: '2025-06-01',
+  dueDate: '2025-07-01',
+  total: 100,
+  amountPaid: 0,
+  ...overrides,
+});
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -337,6 +356,34 @@ describe('POST /api/supplier-invoices', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  test('400 amountPaid cannot exceed total', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, total: 100, amountPaid: 101 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('400 paid status requires amountPaid to cover total', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, status: 'paid', total: 100, amountPaid: 50 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'amountPaid must be at least total when status is paid',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('404 linkedSaleId points to missing source order', async () => {
     findOrderByIdMock.mockResolvedValue(null);
     findInvoiceForLinkedSaleMock.mockResolvedValue(null);
@@ -425,12 +472,7 @@ describe('POST /api/supplier-invoices', () => {
 
 describe('PUT /api/supplier-invoices/:id', () => {
   test('200 partial update on draft invoice', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
     findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
 
@@ -450,12 +492,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('200 update with new items uses replaceItems', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     updateMock.mockResolvedValue(SAMPLE_INVOICE);
     replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
@@ -487,12 +524,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('409 non-draft invoice with locked field updates is read-only', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'sent',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ status: 'sent' }));
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -507,12 +539,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('409 id conflict on rename', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     findIdConflictMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -527,12 +554,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('400 dueDate before issueDate using effective dates', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -547,13 +569,70 @@ describe('PUT /api/supplier-invoices/:id', () => {
     });
   });
 
-  test('400 empty items array on update', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
+  test('400 amountPaid cannot exceed existing total', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { amountPaid: 101 },
     });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 total cannot be lowered below existing amountPaid', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ amountPaid: 80 }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { total: 50 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 paid status requires amountPaid to cover total', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ amountPaid: 50 }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'amountPaid must be at least total when status is paid',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 paid status rejects existing amountPaid above total', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ amountPaid: 101 }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 empty items array on update', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -567,12 +646,7 @@ describe('PUT /api/supplier-invoices/:id', () => {
   });
 
   test('404 update returns null after transaction', async () => {
-    findExistingMock.mockResolvedValue({
-      id: 'SINV-2025-0001',
-      status: 'draft',
-      issueDate: '2025-06-01',
-      dueDate: '2025-07-01',
-    });
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     updateMock.mockResolvedValue(null);
 
     const res = await testApp.inject({

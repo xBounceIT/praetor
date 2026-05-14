@@ -430,6 +430,21 @@ describe('POST /api/tasks', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'recurrencePattern is required' });
   });
 
+  test('400: invalid isRecurring value does not create task', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', isRecurring: 'ture' } as unknown as Record<
+        string,
+        unknown
+      >,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('400: recurring task with invalid recurrenceStart format', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -800,6 +815,18 @@ describe('PUT /api/tasks/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400: invalid isRecurring value does not update task', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { isRecurring: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('404: task not found', async () => {

@@ -429,8 +429,20 @@ describe('POST /api/entries', () => {
 
     expect(res.statusCode).toBe(201);
     expect(entriesCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 0, taskId: null }),
+      expect.objectContaining({ duration: 0, taskId: null, isPlaceholder: false }),
     );
+  });
+
+  test('400 invalid isPlaceholder value does not create entry', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, isPlaceholder: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
   test('400 weekend date when allowWeekendSelection=false', async () => {
@@ -704,6 +716,18 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
+  });
+
+  test('400 invalid isPlaceholder value does not update entry', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { isPlaceholder: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
@@ -1374,13 +1398,13 @@ describe('DELETE /api/entries (bulk)', () => {
     );
   });
 
-  test('204 with only timesheets.recurring.delete stays restricted to actor', async () => {
+  test('204 with only timesheets.recurring.delete is restricted to actor placeholders', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.recurring.delete']);
     entriesBulkDeleteMock.mockResolvedValue(2);
 
     const res = await testApp.inject({
       method: 'DELETE',
-      url: '/api/entries?projectId=p1&task=Dev',
+      url: '/api/entries?projectId=p1&task=Dev&placeholderOnly=false',
       headers: authHeader(),
     });
 
@@ -1391,6 +1415,7 @@ describe('DELETE /api/entries (bulk)', () => {
         projectId: 'p1',
         task: 'Dev',
         restrictToManagerScopeOf: 'u1',
+        placeholderOnly: true,
       }),
     );
   });

@@ -11,7 +11,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
-  parseBoolean,
+  parseBooleanField,
   parseLocalizedNonNegativeNumber,
   requireNonEmptyString,
   validateEnum,
@@ -268,7 +268,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
+      const body = (request.body ?? {}) as {
         name?: unknown;
         productCode?: unknown;
         description?: unknown;
@@ -406,8 +406,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fields.costUnit = costUnitResult.value;
       }
 
-      if (body.isDisabled !== undefined) {
-        fields.isDisabled = parseBoolean(body.isDisabled);
+      const isDisabledResult = parseBooleanField(body, 'isDisabled');
+      if (!isDisabledResult.ok) return badRequest(reply, isDisabledResult.message);
+      if (isDisabledResult.value !== undefined) {
+        fields.isDisabled = isDisabledResult.value;
       }
 
       const product =
@@ -439,13 +441,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body.subcategory !== undefined ? 'subcategory' : null,
         body.type !== undefined ? 'type' : null,
         body.costUnit !== undefined ? 'costUnit' : null,
-        body.isDisabled !== undefined ? 'isDisabled' : null,
+        isDisabledResult.value !== undefined ? 'isDisabled' : null,
         body.supplierId !== undefined ? 'supplierId' : null,
       ].filter((field): field is string => field !== null);
 
       let action = 'product.updated';
       if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-        action = body.isDisabled ? 'product.disabled' : 'product.enabled';
+        action = isDisabledResult.value ? 'product.disabled' : 'product.enabled';
       }
 
       await logAudit({

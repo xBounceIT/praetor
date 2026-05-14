@@ -9,7 +9,7 @@ import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { replyError } from '../utils/replyError.ts';
-import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
+import { badRequest, parseBooleanField, requireNonEmptyString } from '../utils/validation.ts';
 
 // 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
 // sync prevents a save flow where a 32-64 KB chain passes the picker but fails the API.
@@ -197,7 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as {
+      const body = (request.body ?? {}) as {
         enabled?: boolean;
         serverUrl?: string;
         baseDn?: string;
@@ -210,16 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tlsCaCertificate?: string | null;
         autoProvisionAll?: boolean;
       };
-      const {
-        enabled,
-        serverUrl,
-        baseDn,
-        userFilter,
-        groupBaseDn,
-        groupFilter,
-        roleMappings,
-        autoProvisionAll,
-      } = body;
+      const { serverUrl, baseDn, userFilter, groupBaseDn, groupFilter, roleMappings } = body;
       // bindPassword === MASKED_SECRET means "preserve the stored secret" (the UI round-trips
       // the masked value when the operator did not edit the field). To satisfy the paired
       // validation below, bindDn is also dropped from the patch, but only when the client's
@@ -244,7 +235,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         bindDn = body.bindDn;
         bindPassword = body.bindPassword;
       }
-      const enabledValue = parseBoolean(enabled);
+      const enabledResult = parseBooleanField(body, 'enabled');
+      if (!enabledResult.ok) return badRequest(reply, enabledResult.message);
+      const enabledValue = enabledResult.value;
       const tlsCaResult = parseTlsCaForPatch(body.tlsCaCertificate);
       if (!tlsCaResult.ok) {
         return badRequest(reply, tlsCaResult.message);
@@ -252,7 +245,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let normalizedUserFilter = userFilter;
       let normalizedGroupFilter = groupFilter;
 
-      if (enabledValue) {
+      if (enabledValue === true) {
         const serverUrlResult = requireNonEmptyString(serverUrl, 'serverUrl');
         if (!serverUrlResult.ok) return badRequest(reply, serverUrlResult.message);
 
@@ -321,6 +314,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const autoProvisionAllResult = parseBooleanField(body, 'autoProvisionAll');
+      if (!autoProvisionAllResult.ok) {
+        return badRequest(reply, autoProvisionAllResult.message);
+      }
+
       const updated = await ldapRepo.update({
         enabled: enabledValue,
         serverUrl,
@@ -331,8 +329,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupBaseDn,
         groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
-        autoProvisionAll:
-          autoProvisionAll === undefined ? undefined : parseBoolean(autoProvisionAll),
+        autoProvisionAll: autoProvisionAllResult.value,
         ...tlsCaResult.patch,
       });
 

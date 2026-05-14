@@ -113,6 +113,8 @@ export const findExisting = async (
   status: string;
   issueDate: string;
   dueDate: string;
+  total: number;
+  amountPaid: number;
 } | null> => {
   const rows = await exec
     .select({
@@ -120,6 +122,8 @@ export const findExisting = async (
       status: supplierInvoices.status,
       issueDate: supplierInvoices.issueDate,
       dueDate: supplierInvoices.dueDate,
+      total: supplierInvoices.total,
+      amountPaid: supplierInvoices.amountPaid,
     })
     .from(supplierInvoices)
     .where(eq(supplierInvoices.id, id));
@@ -129,6 +133,8 @@ export const findExisting = async (
     status: rows[0].status,
     issueDate: requireDateOnly(rows[0].issueDate, 'supplierInvoice.issueDate'),
     dueDate: requireDateOnly(rows[0].dueDate, 'supplierInvoice.dueDate'),
+    total: parseDbNumber(rows[0].total, 0),
+    amountPaid: parseDbNumber(rows[0].amountPaid, 0),
   };
 };
 

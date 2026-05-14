@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import type {
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Switch } from '../ui/switch';
 
@@ -105,7 +107,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [testResult, setTestResult] = useState<LdapTestResponse | null>(null);
   const [isTestingLdap, setIsTestingLdap] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSavingLdap, setIsSavingLdap] = useState(false);
   const [savingProvider, setSavingProvider] = useState<SsoProtocol | null>(null);
+  const [providerSaveErrors, setProviderSaveErrors] = useState<
+    Partial<Record<SsoProtocol, string>>
+  >({});
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -218,8 +224,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const handleSaveLdap = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!validateLdap()) return;
-    await onSave(ldapForm);
-    showSaved();
+    setIsSaved(false);
+    setIsSavingLdap(true);
+    try {
+      await onSave(ldapForm);
+      showSaved();
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        general:
+          err instanceof Error && err.message
+            ? err.message
+            : t('admin.ldap.errors.saveFailed', 'Failed to save LDAP configuration'),
+      }));
+    } finally {
+      setIsSavingLdap(false);
+    }
   };
 
   const handleTestLdap = async (event: React.FormEvent) => {
@@ -267,7 +287,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
+  const clearProviderSaveError = (protocol: SsoProtocol) => {
+    setProviderSaveErrors((current) => {
+      if (!current[protocol]) return current;
+      const next = { ...current };
+      delete next[protocol];
+      return next;
+    });
+  };
+
+  const getProviderSaveErrorMessage = (err: unknown) =>
+    err instanceof Error && err.message.trim()
+      ? err.message
+      : t('admin.sso.errors.saveFailed', 'Could not save provider');
+
   const updateProviderDraft = (protocol: SsoProtocol, patch: Partial<SsoProvider>) => {
+    clearProviderSaveError(protocol);
     setProviderDrafts((current) => ({
       ...current,
       [protocol]: { ...current[protocol], ...patch, protocol },
@@ -340,6 +375,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
   const handleSaveProvider = async (protocol: SsoProtocol, event: React.FormEvent) => {
     event.preventDefault();
+    clearProviderSaveError(protocol);
     const draft = providerDrafts[protocol];
     if (!validateProvider(draft)) return;
     setSavingProvider(protocol);
@@ -352,6 +388,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       });
       setProviderDrafts((current) => ({ ...current, [protocol]: saved }));
       showSaved();
+    } catch (err) {
+      setProviderSaveErrors((current) => ({
+        ...current,
+        [protocol]: getProviderSaveErrorMessage(err),
+      }));
     } finally {
       setSavingProvider(null);
     }
@@ -470,6 +511,16 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         </div>
 
         <div className="p-6 space-y-6">
+          {providerSaveErrors[protocol] && (
+            <Alert variant="destructive" className="border-destructive/30">
+              <CircleAlert />
+              <AlertTitle>
+                {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
+              </AlertTitle>
+              <AlertDescription>{providerSaveErrors[protocol]}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Field
               label={t('admin.sso.name', 'Name')}
@@ -922,8 +973,17 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
               </div>
             </section>
 
+            {errors.general && (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
+              >
+                {errors.general}
+              </div>
+            )}
+
             <div className="flex justify-end">
-              <Button type="submit" size="lg">
+              <Button type="submit" size="lg" disabled={isSavingLdap}>
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
               </Button>
             </div>

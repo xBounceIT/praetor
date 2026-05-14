@@ -22,6 +22,8 @@ import {
 } from '../utils/validation.ts';
 
 const UNIT_OF_MEASURE_VALUES = ['unit', 'hours'] as const;
+const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
+const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
 
 const idParamSchema = {
   type: 'object',
@@ -348,7 +350,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
       const amountPaidValue = amountPaidResult.value || 0;
       if (amountPaidValue > computedTotal) {
-        return badRequest(reply, 'amountPaid cannot exceed total');
+        return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+      }
+      const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
+      if (statusValue === 'paid' && amountPaidValue < computedTotal) {
+        return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
       }
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
@@ -367,7 +373,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               clientName: clientNameResult.value,
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
-              status: (status as string) || 'draft',
+              status: statusValue,
               subtotal: computedSubtotal,
               taxTotal: computedTaxTotal,
               total: computedTotal,
@@ -455,6 +461,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const existingStatus = await invoicesRepo.findStatus(idResult.value);
+      if (existingStatus === null) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'invoice.update.not_found',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
+      }
+
+      if (existingStatus !== 'draft') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft invoices are read-only',
+          action: 'invoice.update.conflict',
+          entityType: 'invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_read_only', fromValue: existingStatus },
+          extraBody: { currentStatus: existingStatus },
+        });
+      }
 
       const patch: invoicesRepo.InvoiceUpdate = {};
 
@@ -553,8 +582,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         patch.total = computed.total;
       }
 
+      let persistedTotal: number | null | undefined;
+      let persistedAmountPaid: number | null | undefined;
+      const getTotalForPaymentCheck = async () => {
+        if (patch.total !== undefined) return patch.total;
+        if (persistedTotal === undefined) {
+          persistedTotal = await invoicesRepo.findTotal(idResult.value);
+        }
+        return persistedTotal;
+      };
+      const getAmountPaidForPaymentCheck = async () => {
+        if (amountPaidValue !== undefined) return amountPaidValue;
+        if (persistedAmountPaid === undefined) {
+          persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);
+        }
+        return persistedAmountPaid;
+      };
+
       if (amountPaidValue !== undefined) {
-        const totalForCheck = patch.total ?? (await invoicesRepo.findTotal(idResult.value));
+        const totalForCheck = await getTotalForPaymentCheck();
         if (totalForCheck === null) {
           return replyError(request, reply, {
             statusCode: 404,
@@ -565,15 +611,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
         if (amountPaidValue > totalForCheck) {
-          return badRequest(reply, 'amountPaid cannot exceed total');
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
         }
         patch.amountPaid = amountPaidValue;
       } else if (patch.total !== undefined) {
         // Items replaced (so total may be lower) but amountPaid not in this patch - verify the
         // persisted amountPaid still fits under the new total. Without this, paying-down to a
         // partial total would leave amountPaid > total and skew SUM(GREATEST(total - paid, 0)).
-        const persistedAmountPaid = await invoicesRepo.findAmountPaid(idResult.value);
-        if (persistedAmountPaid === null) {
+        const amountPaidForCheck = await getAmountPaidForPaymentCheck();
+        if (amountPaidForCheck === null) {
           return replyError(request, reply, {
             statusCode: 404,
             message: 'Invoice not found',
@@ -582,8 +628,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
           });
         }
-        if (persistedAmountPaid > patch.total) {
-          return badRequest(reply, 'amountPaid cannot exceed total');
+        if (amountPaidForCheck > patch.total) {
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+        }
+      }
+
+      if (patch.status === 'paid') {
+        const [totalForCheck, amountPaidForCheck] = await Promise.all([
+          getTotalForPaymentCheck(),
+          getAmountPaidForPaymentCheck(),
+        ]);
+        if (totalForCheck === null || amountPaidForCheck === null) {
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Invoice not found',
+            action: 'invoice.update.not_found',
+            entityType: 'invoice',
+            entityId: idResult.value,
+          });
+        }
+        if (amountPaidForCheck > totalForCheck) {
+          return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
+        }
+        if (amountPaidForCheck < totalForCheck) {
+          return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
         }
       }
 
@@ -593,7 +661,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const updated = await invoicesRepo.update(idResult.value, patch, tx);
+          const updated = await invoicesRepo.updateDraft(idResult.value, patch, tx);
           if (!updated) return { invoice: null, items: [] };
           const itemsOut = normalizedItemsForUpdate
             ? await invoicesRepo.replaceItems(
@@ -622,6 +690,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const invoice = result.invoice;
       const updatedItems = result.items;
       if (!invoice) {
+        const currentStatus = await invoicesRepo.findStatus(idResult.value);
+        if (currentStatus && currentStatus !== 'draft') {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Non-draft invoices are read-only',
+            action: 'invoice.update.conflict',
+            entityType: 'invoice',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'non_draft_read_only', fromValue: currentStatus },
+            extraBody: { currentStatus },
+          });
+        }
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Invoice not found',
@@ -665,11 +745,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const existing = await invoicesRepo.findStatusAndClientName(idResult.value);
+      if (!existing) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'invoice.delete.not_found',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
+      }
+      if (existing.status !== 'draft') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only draft invoices can be deleted',
+          action: 'invoice.delete.conflict',
+          entityType: 'invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_status', fromValue: existing.status },
+        });
+      }
+
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await invoicesRepo.deleteById(idResult.value);
+        const result = await invoicesRepo.deleteDraftById(idResult.value);
 
         if (!result) {
+          const currentStatus = await invoicesRepo.findStatus(idResult.value);
+          if (currentStatus && currentStatus !== 'draft') {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Only draft invoices can be deleted',
+              action: 'invoice.delete.conflict',
+              entityType: 'invoice',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'non_draft_status', fromValue: currentStatus },
+            });
+          }
           return replyError(request, reply, {
             statusCode: 404,
             message: 'Invoice not found',
@@ -686,7 +798,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
           details: {
             targetLabel: idResult.value,
-            secondaryLabel: result.clientName ?? '',
+            secondaryLabel: existing.clientName,
           },
         });
         return reply.code(204).send();

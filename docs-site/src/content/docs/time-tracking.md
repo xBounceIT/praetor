@@ -48,3 +48,7 @@ L'endpoint è idempotente: rieseguirlo con la stessa finestra non crea duplicati
 Per evitare generazioni accidentalmente troppo ampie, il server limita la finestra a 366 giorni per chiamata.
 
 Il permesso richiesto è `timesheets.recurring.create`.
+
+### Pulizia delle registrazioni generate
+
+La pulizia massiva delle registrazioni ricorrenti usa `DELETE /api/entries` con `projectId`, `task` e, quando necessario, `futureOnly` o `placeholderOnly`. Un ruolo con solo `timesheets.recurring.delete` può eliminare esclusivamente registrazioni segnaposto generate da ricorrenze: il server applica sempre `placeholderOnly=true` per quel caso. Per eliminare registrazioni effettive non segnaposto serve `timesheets.tracker.delete` nell'ambito assegnato, oppure `timesheets.tracker_all.delete` per l'ambito completo.

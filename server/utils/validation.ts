@@ -276,25 +276,53 @@ export function optionalLocalizedPositiveNumber(
   return result;
 }
 
-/**
- * Parse a boolean strictly. Accepts native booleans and a fixed allow-list of strings
- * ('true'/'false'/'1'/'0'/'yes'/'no', case-insensitive, trimmed). Anything else — numbers,
- * objects, unrecognized strings — returns `false` rather than relying on JS truthiness,
- * which previously coerced truthy strings like `'off'` or stray numbers into `true`.
- */
 const TRUE_STRINGS = new Set(['true', '1', 'yes']);
 const FALSE_STRINGS = new Set(['false', '0', 'no']);
+const BOOLEAN_VALUES_DESCRIPTION = 'true, false, 1, 0, yes, no';
 
+/**
+ * Lenient boolean coercion for legacy callers. Use parseBooleanStrict or parseBooleanField
+ * when an invalid value should be rejected instead of treated as false.
+ */
 export function parseBoolean(value: unknown): boolean {
+  const result = parseBooleanStrict(value);
+  return result.ok ? result.value : false;
+}
+
+/**
+ * Parse a boolean strictly. Accepts native booleans and a fixed allow-list of strings
+ * ('true'/'false'/'1'/'0'/'yes'/'no', case-insensitive, trimmed). Anything else is invalid.
+ */
+export function parseBooleanStrict(
+  value: unknown,
+  fieldName: string = 'value',
+): { ok: true; value: boolean } | { ok: false; message: string } {
   if (typeof value === 'boolean') {
-    return value;
+    return { ok: true, value };
   }
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (TRUE_STRINGS.has(normalized)) return true;
-    if (FALSE_STRINGS.has(normalized)) return false;
+    if (TRUE_STRINGS.has(normalized)) return { ok: true, value: true };
+    if (FALSE_STRINGS.has(normalized)) return { ok: true, value: false };
   }
-  return false;
+  return {
+    ok: false,
+    message: `${fieldName} must be a boolean or one of: ${BOOLEAN_VALUES_DESCRIPTION}`,
+  };
+}
+
+/**
+ * Parse an optional PATCH-style boolean field. A missing property means "not provided";
+ * if the property is present, even as null or undefined, it must be a valid boolean value.
+ */
+export function parseBooleanField(
+  source: object,
+  fieldName: string,
+): { ok: true; value: boolean | undefined } | { ok: false; message: string } {
+  if (!Object.hasOwn(source, fieldName)) {
+    return { ok: true, value: undefined };
+  }
+  return parseBooleanStrict((source as Record<string, unknown>)[fieldName], fieldName);
 }
 
 /**
