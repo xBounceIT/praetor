@@ -19,6 +19,7 @@ import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from 
 import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
+import { toastError } from '../../utils/toast';
 import Calendar from '../shared/Calendar';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -488,10 +489,21 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       for (const id of entriesToDelete) {
         pending.push(Promise.resolve(onDeleteEntry(id)));
       }
-      await Promise.all(pending);
-      setPendingEdits({});
-      setWeekNote('');
-      setShowSuccess(true);
+      // allSettled (not all): a single failure shouldn't abort the rest. Successful
+      // writes already update local entry state via their handlers; we only gate the
+      // "clear pendingEdits / show success" path on every write succeeding.
+      const results = await Promise.allSettled(pending);
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (rejected.length === 0) {
+        setPendingEdits({});
+        setWeekNote('');
+        setShowSuccess(true);
+      } else {
+        const firstReason = rejected[0].reason;
+        toastError(
+          firstReason instanceof Error ? firstReason.message : t('entry.entryUpdateFailed'),
+        );
+      }
     } finally {
       setIsLoading(false);
     }

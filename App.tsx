@@ -43,6 +43,7 @@ import SelectControl from './components/shared/SelectControl';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
+import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
@@ -237,6 +238,7 @@ const TrackerView: React.FC<{
   }, [filteredEntries]);
 
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
   const handleDeleteClick = useCallback(
     (entry: TimeEntry) => {
@@ -358,31 +360,52 @@ const TrackerView: React.FC<{
         ),
       },
       {
-        id: 'delete',
+        id: 'actions',
         header: t('common:labels.actions', { defaultValue: 'Actions' }),
         disableSorting: true,
         disableFiltering: true,
         sticky: 'right',
         cell: ({ row }) => (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteClick(row);
-                  }}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-          </Tooltip>
+          <div className="inline-flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingEntry(row);
+                    }}
+                    className="text-muted-foreground hover:text-praetor"
+                  >
+                    <i className="fa-solid fa-pen text-xs"></i>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClick(row);
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <i className="fa-solid fa-trash-can text-xs"></i>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+            </Tooltip>
+          </div>
         ),
       },
     ],
@@ -551,6 +574,18 @@ const TrackerView: React.FC<{
           </div>
         </div>
       )}
+
+      <EntryEditDialog
+        entry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+        onSave={onUpdateEntry}
+        clients={clients}
+        projects={projects}
+        projectTasks={projectTasks}
+        permissions={permissions}
+        currency={currency}
+        onAddCustomTask={onAddCustomTask}
+      />
 
       {/* Recurring Delete Modal */}
       {pendingDeleteEntry && (

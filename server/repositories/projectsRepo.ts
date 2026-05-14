@@ -188,6 +188,17 @@ export const findClientId = async (id: string, exec: DbExecutor = db): Promise<s
   return rows[0]?.clientId ?? null;
 };
 
+export const findClientIdAndName = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ clientId: string; name: string } | null> => {
+  const rows = await exec
+    .select({ clientId: projects.clientId, name: projects.name })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
+};
+
 export const lockClientIdById = async (
   id: string,
   exec: DbExecutor = db,

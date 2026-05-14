@@ -32,6 +32,7 @@
     "addToTimesheet": "Aggiungi al Timesheet",
     "entryAdded": "Voce timesheet aggiunta con successo",
     "entryUpdated": "Voce timesheet aggiornata con successo",
+    "entryUpdateFailed": "Impossibile aggiornare la voce timesheet",
     "entryDeleted": "Voce timesheet eliminata",
     "deleteConfirm": "Sei sicuro di voler eliminare questa voce timesheet?",
     "recurring": "Questa è un'attività ricorrente",

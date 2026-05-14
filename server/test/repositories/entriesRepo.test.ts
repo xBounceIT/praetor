@@ -238,17 +238,25 @@ describe('findOwner', () => {
 
 describe('findContext', () => {
   test('returns full context including taskId when present', async () => {
-    exec.enqueue({ rows: [['u-1', 'p-1', 'Dev', 't-1']] });
+    exec.enqueue({
+      rows: [['u-1', '2026-04-30', 'c-1', 'Acme', 'p-1', 'Alpha', 'Dev', 't-1']],
+    });
     expect(await entriesRepo.findContext('e-1', testDb)).toEqual({
       userId: 'u-1',
+      date: '2026-04-30',
+      clientId: 'c-1',
+      clientName: 'Acme',
       projectId: 'p-1',
+      projectName: 'Alpha',
       task: 'Dev',
       taskId: 't-1',
     });
   });
 
   test('returns context with null taskId for orphaned entries', async () => {
-    exec.enqueue({ rows: [['u-1', 'p-1', 'Dev', null]] });
+    exec.enqueue({
+      rows: [['u-1', '2026-04-30', 'c-1', 'Acme', 'p-1', 'Alpha', 'Dev', null]],
+    });
     expect((await entriesRepo.findContext('e-1', testDb))?.taskId).toBeNull();
   });
 
