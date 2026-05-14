@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken } from '../middleware/auth.ts';
+import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
@@ -345,13 +345,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const newHash = await bcrypt.hash(newPasswordResult.value, 12);
 
-      await usersRepo.updatePasswordHash(request.user.id, newHash);
+      const newSessionVersion = await usersRepo.rotatePasswordAndBumpSession(
+        request.user.id,
+        newHash,
+      );
+
       if (request.user.username === ADMIN_USERNAME) {
         if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
           await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
         } else {
           await notificationsRepo.deleteAdminPasswordWarning();
         }
+      }
+
+      // authenticateToken's sliding-window refresh already wrote an x-auth-token
+      // signed with the pre-bump sessionVersion; overwrite it so the current
+      // device stays logged in while other live sessions get "Session revoked"
+      // on their next request. PAT callers have nothing to rotate.
+      if (request.auth?.source === 'session' && request.auth.sessionStart !== undefined) {
+        const refreshedToken = generateToken(
+          request.user.id,
+          request.auth.sessionStart,
+          request.user.role,
+          newSessionVersion,
+        );
+        reply.header('x-auth-token', refreshedToken);
       }
 
       return { message: 'Password updated successfully' };

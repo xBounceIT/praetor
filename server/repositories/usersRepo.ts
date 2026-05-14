@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import type { UserAuthMethod } from '../db/schema/users.ts';
 import { users } from '../db/schema/users.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
@@ -102,6 +103,24 @@ export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db):
     .update(users)
     .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.id, userId));
+};
+
+// Atomic credential rotation: bumping `session_version` in the same UPDATE that
+// stores the new hash guarantees no window in which the new password is live but
+// stolen tokens still validate. Returns the new session_version so the caller
+// can re-sign their own x-auth-token and stay logged in.
+export const rotatePasswordAndBumpSession = async (
+  userId: string,
+  passwordHash: string,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const rows = await exec
+    .update(users)
+    .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, userId))
+    .returning({ sessionVersion: users.sessionVersion });
+  if (!rows[0]) throw new NotFoundError('User');
+  return rows[0].sessionVersion;
 };
 
 export const findLoginUserByUsername = async (
