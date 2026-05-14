@@ -8,10 +8,11 @@
 // stderr is left empty when migrations fail. This blocks CI diagnosis and
 // breaks any deploy script that relies on stderr to surface failures.
 //
-// drizzle-orm's `migrate` function reads the same `db/migrations/` directory
-// and `meta/_journal.json` as drizzle-kit, applies migrations in the same
+// The runtime runner reads the same `db/migrations/` directory and
+// `meta/_journal.json` as drizzle-kit, applies missing migrations in journal
 // order, and records them in the same `__drizzle_migrations` tracking table.
-// The behaviour is identical; only the framing differs.
+// Pending detection is hash-based so out-of-order journal timestamps do not
+// skip lower-timestamp migrations during incremental upgrades.
 
 import 'dotenv/config';
 import { runDrizzleMigrations } from '../db/migrationsRunner.ts';
