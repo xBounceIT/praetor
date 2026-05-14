@@ -1,15 +1,19 @@
 import crypto from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
-import { mcpTokens } from '../db/schema/mcpTokens.ts';
+import { type McpTokenScope, mcpTokens } from '../db/schema/mcpTokens.ts';
 import { getHmacKey } from '../utils/crypto.ts';
 
 export const MCP_TOKEN_PREFIX = 'praetor_mcp_';
+
+export const MCP_TOKEN_SCOPES: readonly McpTokenScope[] = ['read_only', 'full'] as const;
+export type { McpTokenScope };
 
 export type McpTokenSummary = {
   id: string;
   name: string;
   tokenPrefix: string;
+  scope: McpTokenScope;
   createdAt: number;
   lastUsedAt: number | null;
 };
@@ -18,6 +22,9 @@ export type ActiveMcpToken = {
   id: string;
   userId: string;
   name: string;
+  scope: McpTokenScope;
+  createdAt: Date | null;
+  lastUsedAt: Date | null;
 };
 
 export const generateRawToken = (): string =>
@@ -32,6 +39,7 @@ const mapSummary = (row: typeof mcpTokens.$inferSelect): McpTokenSummary => ({
   id: row.id,
   name: row.name,
   tokenPrefix: row.tokenPrefix,
+  scope: row.scope,
   createdAt: row.createdAt?.getTime() ?? 0,
   lastUsedAt: row.lastUsedAt?.getTime() ?? null,
 });
@@ -49,7 +57,13 @@ export const listForUser = async (
 };
 
 export const createForUser = async (
-  input: { id: string; userId: string; name: string; rawToken: string },
+  input: {
+    id: string;
+    userId: string;
+    name: string;
+    rawToken: string;
+    scope?: McpTokenScope;
+  },
   exec: DbExecutor = db,
 ): Promise<McpTokenSummary> => {
   const [row] = await exec
@@ -60,6 +74,7 @@ export const createForUser = async (
       name: input.name,
       tokenPrefix: displayPrefix(input.rawToken),
       tokenHash: hashToken(input.rawToken),
+      scope: input.scope ?? 'full',
     })
     .returning();
   return mapSummary(row);
@@ -71,7 +86,14 @@ export const findActiveByRawToken = async (
 ): Promise<ActiveMcpToken | null> => {
   if (!rawToken.startsWith(MCP_TOKEN_PREFIX)) return null;
   const rows = await exec
-    .select({ id: mcpTokens.id, userId: mcpTokens.userId, name: mcpTokens.name })
+    .select({
+      id: mcpTokens.id,
+      userId: mcpTokens.userId,
+      name: mcpTokens.name,
+      scope: mcpTokens.scope,
+      createdAt: mcpTokens.createdAt,
+      lastUsedAt: mcpTokens.lastUsedAt,
+    })
     .from(mcpTokens)
     .where(and(eq(mcpTokens.tokenHash, hashToken(rawToken)), isNull(mcpTokens.revokedAt)))
     .limit(1);

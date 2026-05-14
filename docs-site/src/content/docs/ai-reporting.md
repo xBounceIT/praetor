@@ -44,6 +44,11 @@ Il token viene mostrato una sola volta al momento della creazione. Praetor conse
 
 Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, preventivi, offerte, ordini, fatture, consuntivi e notifiche.
 
+Ogni token MCP viene creato con un **ambito**:
+
+- **Accesso completo** — il token può richiamare qualsiasi strumento concesso dal tuo ruolo, inclusi gli strumenti di scrittura (create / update / delete).
+- **Sola lettura** — il token può richiamare solo gli strumenti corrispondenti ai permessi `*.view`. Gli strumenti di scrittura restituiscono "Insufficient permissions" anche se il tuo ruolo ha accesso in scrittura.
+
 Configura il client MCP con l'URL dell'endpoint e l'header:
 
 ```text
@@ -53,7 +58,7 @@ Authorization: Bearer praetor_mcp_...
 Per collegare un agente esterno:
 
 1. Apri Impostazioni > MCP.
-2. Crea un token con un nome riconoscibile, ad esempio il nome dell'agente o del dispositivo.
+2. Crea un token con un nome riconoscibile, ad esempio il nome dell'agente o del dispositivo. Scegli **Sola lettura** se l'agente deve solo leggere dati; scegli **Accesso completo** se deve creare o aggiornare voci.
 3. Copia subito il token; non verrà più mostrato.
 4. Usa il campo URL server MCP mostrato nella pagina per l'endpoint esatto, di solito `https://host-praetor/api/mcp`.
 5. Copia il prompt di configurazione agente se vuoi far configurare automaticamente il server a un agente AI.
@@ -87,7 +92,9 @@ Gli strumenti bulk per i consuntivi accettano fino a 100 elementi per chiamata. 
 
 Note di sicurezza:
 
-- I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata.
+- I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata, filtrati dall'ambito del token (completo o sola lettura).
+- I token scadono automaticamente dopo 30 giorni di inattività. Gli operatori possono modificare la finestra tramite la variabile d'ambiente `MCP_IDLE_TIMEOUT_MS` (millisecondi).
+- L'endpoint MCP è limitato alla soglia standard delle route autenticate (600 richieste/minuto per IP client); le richieste in eccesso ricevono una risposta 429.
 - Conserva i token MCP come password o chiavi API.
 - Revoca i token quando un agente viene dismesso, un dispositivo viene perso o l'accesso non serve più.
 - Gli strumenti per consuntivi e notifiche possono modificare dati; controlla prompt e automazioni dell'agente prima di abilitarne l'uso non presidiato.

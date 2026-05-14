@@ -17,6 +17,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 let authenticateMcpToken: typeof import('../../middleware/mcpAuth.ts').authenticateMcpToken;
+let __resetMcpIdleTimeoutCacheForTests: typeof import('../../middleware/mcpAuth.ts').__resetMcpIdleTimeoutCacheForTests;
 
 beforeAll(async () => {
   mock.module('../../repositories/mcpTokensRepo.ts', () => ({
@@ -38,7 +39,9 @@ beforeAll(async () => {
     getRolePermissions: getRolePermissionsMock,
   }));
 
-  authenticateMcpToken = (await import('../../middleware/mcpAuth.ts')).authenticateMcpToken;
+  const mod = await import('../../middleware/mcpAuth.ts');
+  authenticateMcpToken = mod.authenticateMcpToken;
+  __resetMcpIdleTimeoutCacheForTests = mod.__resetMcpIdleTimeoutCacheForTests;
 });
 
 afterAll(() => {
@@ -84,6 +87,9 @@ beforeEach(() => {
     id: 'mcp-token-1',
     userId: 'u1',
     name: 'Agent',
+    scope: 'full',
+    createdAt: new Date(),
+    lastUsedAt: null,
   });
   findAuthUserByIdMock.mockResolvedValue({
     id: 'u1',
@@ -96,6 +102,8 @@ beforeEach(() => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
   touchLastUsedMock.mockResolvedValue(undefined);
+  delete process.env.MCP_IDLE_TIMEOUT_MS;
+  __resetMcpIdleTimeoutCacheForTests();
 });
 
 describe('authenticateMcpToken', () => {
@@ -158,5 +166,124 @@ describe('authenticateMcpToken', () => {
       }),
     );
     expect(touchLastUsedMock).toHaveBeenCalledWith('mcp-token-1');
+  });
+
+  test('403 when token has been idle beyond the timeout', async () => {
+    process.env.MCP_IDLE_TIMEOUT_MS = String(60 * 60 * 1000); // 1 hour
+    __resetMcpIdleTimeoutCacheForTests();
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      lastUsedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    });
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'MCP token expired due to inactivity' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when both lastUsedAt and createdAt are null (fail closed)', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: null,
+      lastUsedAt: null,
+    });
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'MCP token expired due to inactivity' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('falls back to createdAt for fresh tokens that have not been used yet', async () => {
+    process.env.MCP_IDLE_TIMEOUT_MS = String(60 * 60 * 1000); // 1 hour
+    __resetMcpIdleTimeoutCacheForTests();
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+      lastUsedAt: null,
+    });
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user).toEqual(
+      expect.objectContaining({ id: 'u1', permissions: ['timesheets.tracker.view'] }),
+    );
+  });
+
+  test('read_only scope filters permissions to view-only', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'read_only',
+      createdAt: new Date(),
+      lastUsedAt: null,
+    });
+    getRolePermissionsMock.mockResolvedValue([
+      'timesheets.tracker.view',
+      'timesheets.tracker.create',
+      'timesheets.tracker.update',
+      'timesheets.tracker.delete',
+      'crm.clients.view',
+      'crm.clients.delete',
+    ]);
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user?.permissions).toEqual(['timesheets.tracker.view', 'crm.clients.view']);
+    expect(request.raw.auth).toEqual(
+      expect.objectContaining({
+        scopes: ['timesheets.tracker.view', 'crm.clients.view'],
+        extra: expect.objectContaining({ tokenScope: 'read_only' }),
+      }),
+    );
+  });
+
+  test('full scope passes all role permissions through unchanged', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: new Date(),
+      lastUsedAt: null,
+    });
+    getRolePermissionsMock.mockResolvedValue([
+      'timesheets.tracker.view',
+      'timesheets.tracker.create',
+    ]);
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user?.permissions).toEqual([
+      'timesheets.tracker.view',
+      'timesheets.tracker.create',
+    ]);
   });
 });

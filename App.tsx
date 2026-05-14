@@ -60,7 +60,7 @@ import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
-import api, { type PersonalAccessToken, type Settings } from './services/api';
+import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import type {
   Client,
   ClientOffer,
@@ -2044,7 +2044,8 @@ const AppContent: React.FC = () => {
 
   const handleListMcpTokens = () => api.settings.listMcpTokens();
 
-  const handleCreateMcpToken = (name: string) => api.settings.createMcpToken(name);
+  const handleCreateMcpToken = (name: string, scope: McpTokenScope) =>
+    api.settings.createMcpToken(name, scope);
 
   const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
 

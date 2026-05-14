@@ -295,6 +295,13 @@
       "when": 1778715267639,
       "tag": "0041_add_user_session_version",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1778788482946,
+      "tag": "0042_add_mcp_token_scope",
+      "breakpoints": true
     }
   ]
 }
