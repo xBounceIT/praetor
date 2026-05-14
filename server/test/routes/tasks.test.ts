@@ -776,6 +776,21 @@ describe('PUT /api/tasks/:id', () => {
     expect(JSON.parse(res.body).error).toMatch(/recurrenceEnd must be in YYYY-MM-DD format/);
   });
 
+  test('400: recurrenceStart after recurrenceEnd', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { recurrenceStart: '2026-12-31', recurrenceEnd: '2025-01-01' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(
+      /recurrenceStart must be on or before recurrenceEnd/,
+    );
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('400: invalid recurrenceDuration', async () => {
     const res = await testApp.inject({
       method: 'PUT',

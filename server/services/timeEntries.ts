@@ -27,8 +27,9 @@ export type AuthenticatedActor = {
   permissions: string[];
 };
 
-// Mirrors the DB check constraint on time_entries.location.
-const VALID_LOCATIONS = ['remote', 'office', 'customer_premise', 'transfer'] as const;
+// Mirrors the DB check constraint on time_entries.location. Also reused by
+// `PUT /api/general-settings` to validate the `defaultLocation` field.
+export const VALID_LOCATIONS = ['remote', 'office', 'customer_premise', 'transfer'] as const;
 type ValidLocation = (typeof VALID_LOCATIONS)[number];
 
 const parseOptionalLocation = (

@@ -240,6 +240,58 @@ describe('PUT /api/general-settings', () => {
     expect(JSON.parse(res.body).error).toMatch(/aiProvider must be one of/);
   });
 
+  test('400 invalid startOfWeek enum, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { startOfWeek: 'Tuesday' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/startOfWeek must be one of/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid defaultLocation enum, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { defaultLocation: 'space_station' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/defaultLocation must be one of/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 accepts valid Sunday + customer_premise round-trip', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      startOfWeek: 'Sunday',
+      defaultLocation: 'customer_premise',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { startOfWeek: 'Sunday', defaultLocation: 'customer_premise' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startOfWeek: 'Sunday',
+        defaultLocation: 'customer_premise',
+      }),
+    );
+    const body = JSON.parse(res.body);
+    expect(body.startOfWeek).toBe('Sunday');
+    expect(body.defaultLocation).toBe('customer_premise');
+  });
+
   test('403 missing administration.general.update', async () => {
     getRolePermissionsMock.mockResolvedValue([]); // no perm
 

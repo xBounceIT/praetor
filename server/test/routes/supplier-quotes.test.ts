@@ -1,0 +1,360 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
+import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
+import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
+import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realAudit from '../../utils/audit.ts';
+import * as realPermissions from '../../utils/permissions.ts';
+import {
+  installAuthMiddlewareMock,
+  restoreAuthMiddlewareMock,
+} from '../helpers/authMiddlewareMock.ts';
+import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
+import { signToken } from '../helpers/jwt.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
+
+const usersRepoSnap = { ...realUsersRepo };
+const rolesRepoSnap = { ...realRolesRepo };
+const permissionsSnap = { ...realPermissions };
+const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const auditSnap = { ...realAudit };
+const drizzleSnap = { ...realDrizzle };
+
+const findAuthUserByIdMock = mock();
+const userHasRoleMock = mock();
+const getRolePermissionsMock = mock();
+
+const sqFindByIdMock = mock();
+const sqFindLinkedOrderIdMock = mock();
+const sqFindIdConflictMock = mock();
+const sqFindFullForSnapshotMock = mock();
+const sqFindItemsForQuoteMock = mock();
+const sqUpdateMock = mock();
+const sqReplaceItemsMock = mock();
+
+const sqvInsertMock = mock();
+const sqvBuildSnapshotMock = mock();
+
+const logAuditMock = mock(async () => undefined);
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
+
+let routePlugin: FastifyPluginAsync;
+
+beforeAll(async () => {
+  installAuthMiddlewareMock();
+
+  mock.module('../../repositories/usersRepo.ts', () => ({
+    ...usersRepoSnap,
+    findAuthUserById: findAuthUserByIdMock,
+  }));
+  mock.module('../../repositories/rolesRepo.ts', () => ({
+    ...rolesRepoSnap,
+    userHasRole: userHasRoleMock,
+  }));
+  mock.module('../../utils/permissions.ts', () => ({
+    ...permissionsSnap,
+    getRolePermissions: getRolePermissionsMock,
+  }));
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
+    ...supplierQuotesRepoSnap,
+    findById: sqFindByIdMock,
+    findLinkedOrderId: sqFindLinkedOrderIdMock,
+    findIdConflict: sqFindIdConflictMock,
+    findFullForSnapshot: sqFindFullForSnapshotMock,
+    findItemsForQuote: sqFindItemsForQuoteMock,
+    update: sqUpdateMock,
+    replaceItems: sqReplaceItemsMock,
+  }));
+  mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
+    ...supplierQuoteVersionsRepoSnap,
+    insert: sqvInsertMock,
+    buildSnapshot: sqvBuildSnapshotMock,
+  }));
+  mock.module('../../utils/audit.ts', () => ({
+    ...auditSnap,
+    logAudit: logAuditMock,
+  }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
+
+  routePlugin = (await import('../../routes/supplier-quotes.ts')).default as FastifyPluginAsync;
+});
+
+afterAll(() => {
+  restoreAuthMiddlewareMock();
+  mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
+  mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
+  mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module(
+    '../../repositories/supplierQuoteVersionsRepo.ts',
+    () => supplierQuoteVersionsRepoSnap,
+  );
+  mock.module('../../utils/audit.ts', () => auditSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
+});
+
+const HAPPY_USER = {
+  id: 'u1',
+  name: 'Alice',
+  username: 'alice',
+  role: 'manager',
+  avatarInitials: 'AL',
+  isDisabled: false,
+  sessionVersion: 1,
+};
+
+const FULL_PERMS = [
+  'sales.supplier_quotes.view',
+  'sales.supplier_quotes.create',
+  'sales.supplier_quotes.update',
+  'sales.supplier_quotes.delete',
+];
+
+const DRAFT_QUOTE = {
+  id: 'sq-1',
+  supplierId: 's1',
+  supplierName: 'Acme',
+  paymentTerms: 'immediate',
+  status: 'draft',
+  expirationDate: '2026-12-31',
+  linkedOrderId: null,
+  notes: null,
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_000_000,
+};
+
+const SAMPLE_ITEM = {
+  id: 'sqi-1',
+  quoteId: 'sq-1',
+  productId: 'p-1',
+  productName: 'Service',
+  quantity: 2,
+  unitPrice: 100,
+  note: null,
+  unitType: 'unit' as const,
+};
+
+const allMocks = [
+  findAuthUserByIdMock,
+  userHasRoleMock,
+  getRolePermissionsMock,
+  sqFindByIdMock,
+  sqFindLinkedOrderIdMock,
+  sqFindIdConflictMock,
+  sqFindFullForSnapshotMock,
+  sqFindItemsForQuoteMock,
+  sqUpdateMock,
+  sqReplaceItemsMock,
+  sqvInsertMock,
+  sqvBuildSnapshotMock,
+  logAuditMock,
+  withDbTransactionMock,
+];
+
+let testApp: FastifyInstance;
+
+beforeEach(async () => {
+  for (const m of allMocks) m.mockReset();
+  findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
+  userHasRoleMock.mockResolvedValue(true);
+  getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  resetWithDbTransactionMock();
+  logAuditMock.mockImplementation(async () => undefined);
+  sqvBuildSnapshotMock.mockImplementation((quote, items) => ({
+    schemaVersion: 1,
+    quote,
+    items,
+  }));
+  sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
+  sqFindIdConflictMock.mockResolvedValue(false);
+  // snapshotPreState calls findFullForSnapshot; default to the current draft so the
+  // pre-save snapshot path doesn't crash on tests that update content.
+  sqFindFullForSnapshotMock.mockResolvedValue({ quote: DRAFT_QUOTE, items: [SAMPLE_ITEM] });
+
+  testApp = await buildRouteTestApp(routePlugin, '/api/sales/supplier-quotes');
+});
+
+afterEach(async () => {
+  await testApp.close();
+});
+
+const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('PUT /api/sales/supplier-quotes/:id', () => {
+  test('200 updates a draft quote with content edits', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, paymentTerms: '30 days' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ paymentTerms: '30 days' }),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'supplier_quote.updated' }),
+    );
+  });
+
+  test('409 rejects content edits when current status is non-draft', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 3,
+            unitPrice: 50,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Non-draft supplier quotes are read-only',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects supplier reassignment when current status is accepted', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { supplierId: 's-other', supplierName: 'Other Co' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows status-only transition from sent to accepted', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { status: 'accepted' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ status: 'accepted' }),
+    );
+  });
+
+  test('200 allows denied → draft transition (status only)', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'denied' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'draft' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { status: 'draft' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('409 rejects ID rename when a linked order exists', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue('ss-1');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: 'sq-renamed' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Quotes become read-only once an order exists',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects content edits when a linked order exists', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue('ss-1');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  // When a non-draft quote has both a non-status edit AND a conflicting id rename,
+  // the status guard runs first and the response surfaces status as the reason. The
+  // id-conflict 409 from the surviving idConflict branch should NEVER appear in this
+  // case - asserting the response copy locks in the precedence order.
+  test('409 status guard takes precedence over id-conflict on a non-draft quote', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindIdConflictMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: 'sq-other', paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Non-draft supplier quotes are read-only',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('404 when quote does not exist', async () => {
+    sqFindByIdMock.mockResolvedValue(null);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/missing',
+      headers: authHeader(),
+      payload: { paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Supplier quote not found' });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+});
