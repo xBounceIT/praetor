@@ -539,6 +539,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       cell: ({ row }) => {
         return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
       },
+      filterFormat: (value) => getStatusLabel(String(value ?? '')),
     },
     {
       header: 'linkedQuoteId',

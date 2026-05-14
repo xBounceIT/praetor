@@ -108,6 +108,18 @@ describe('<ClientOffersView /> list', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('sales:clientOffers.filterByStatus')).not.toBeInTheDocument();
   });
+
+  test('column status filter shows localized labels, not raw status keys', () => {
+    render(<ClientOffersView {...baseProps} />);
+    const statusFilterTrigger = screen.getByLabelText(
+      `table.filters sales:clientOffers.statusColumn`,
+    );
+    fireEvent.click(statusFilterTrigger);
+    expect(screen.getByText('sales:clientOffers.statusDraft')).toBeInTheDocument();
+    expect(screen.getByText('sales:clientOffers.statusSent')).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'sent' })).not.toBeInTheDocument();
+  });
 });
 
 describe('<ClientOffersView /> terminal status revert action', () => {
