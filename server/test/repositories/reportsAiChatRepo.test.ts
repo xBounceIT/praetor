@@ -102,6 +102,12 @@ describe('getActiveSessionForUser', () => {
     expect(result).toEqual({ title: 'Hello' });
   });
 
+  test('coerces null title to empty string', async () => {
+    exec.enqueue({ rows: [[null]] });
+    const result = await repo.getActiveSessionForUser('s1', 'user-1', testDb);
+    expect(result).toEqual({ title: '' });
+  });
+
   test('filters on is_archived=false (bound as a param) and binds [id, userId]', async () => {
     exec.enqueue({ rows: [] });
     await repo.getActiveSessionForUser('s1', 'user-1', testDb);

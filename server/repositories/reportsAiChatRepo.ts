@@ -119,7 +119,8 @@ export const getActiveSessionForUser = async (
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  return { title: row.title };
+  // Defensive against legacy NULL rows even though the column is NOT NULL — callers .trim() this.
+  return { title: row.title ?? '' };
 };
 
 export const updateSessionTitleAndTouch = async (

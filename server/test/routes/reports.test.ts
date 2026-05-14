@@ -602,6 +602,32 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Session not found' });
   });
 
+  test('200 reuses session whose title is blank', async () => {
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: '' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+    getFirstUserMessageContentMock.mockResolvedValue('Tell me about revenue');
+
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Reply' }] } }],
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(getFirstUserMessageContentMock).toHaveBeenCalledWith('rpt-chat-1');
+    expect(updateSessionTitleAndTouchMock).toHaveBeenCalled();
+  });
+
   test('400 when message is missing', async () => {
     const res = await testApp.inject({
       method: 'POST',
