@@ -183,6 +183,29 @@ const SAMPLE_ENTRY = {
   createdAt: 1_700_000_000_000,
 };
 
+type SampleContextOverrides = Partial<{
+  userId: string;
+  date: string;
+  clientId: string;
+  clientName: string;
+  projectId: string;
+  projectName: string;
+  task: string;
+  taskId: string | null;
+}>;
+
+const sampleContext = (overrides: SampleContextOverrides = {}) => ({
+  userId: SAMPLE_ENTRY.userId,
+  date: SAMPLE_ENTRY.date,
+  clientId: SAMPLE_ENTRY.clientId,
+  clientName: SAMPLE_ENTRY.clientName,
+  projectId: SAMPLE_ENTRY.projectId,
+  projectName: SAMPLE_ENTRY.projectName,
+  task: SAMPLE_ENTRY.task,
+  taskId: SAMPLE_ENTRY.taskId as string | null,
+  ...overrides,
+});
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -599,12 +622,7 @@ describe('POST /api/entries', () => {
 
 describe('PUT /api/entries/:id', () => {
   test('200 update own entry', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, duration: 6 });
 
     const res = await testApp.inject({
@@ -622,12 +640,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('200 backfills taskId when context.taskId is null', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: null,
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext({ taskId: null }));
     findIdByProjectAndNameMock.mockResolvedValue('t-resolved');
     entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
 
@@ -661,12 +674,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('404 when update returns null', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -680,12 +688,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('403 cross-user update without manager link', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u2',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext({ userId: 'u2' }));
     isUserManagedByMock.mockResolvedValue(false);
 
     const res = await testApp.inject({
@@ -700,12 +703,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('400 invalid duration', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -731,12 +729,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
 
     const res = await testApp.inject({
@@ -753,12 +746,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('200 whitespace-only location is treated as untouched', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
 
     const res = await testApp.inject({
@@ -775,12 +763,7 @@ describe('PUT /api/entries/:id', () => {
   });
 
   test('200 valid location string is forwarded to repo', async () => {
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
 
     const res = await testApp.inject({
@@ -800,12 +783,7 @@ describe('PUT /api/entries/:id', () => {
     // Previously a non-empty invalid value passed through to the repo and
     // bubbled up as a 500 from the DB CHECK constraint. Now caught at the
     // service layer.
-    entriesFindContextMock.mockResolvedValue({
-      userId: 'u1',
-      projectId: 'p1',
-      task: 'Dev',
-      taskId: 't1',
-    });
+    entriesFindContextMock.mockResolvedValue(sampleContext());
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -817,6 +795,128 @@ describe('PUT /api/entries/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toContain('Invalid location');
     expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 reassigns client/project/task and resolves new taskId', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdMock.mockResolvedValue('c2');
+    findIdByProjectAndNameMock.mockResolvedValue('t2');
+    entriesUpdateMock.mockResolvedValue({
+      ...SAMPLE_ENTRY,
+      clientId: 'c2',
+      clientName: 'Other',
+      projectId: 'p2',
+      projectName: 'Beta',
+      task: 'QA',
+      taskId: 't2',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c2',
+        clientName: 'Other',
+        projectId: 'p2',
+        projectName: 'Beta',
+        task: 'QA',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindClientIdMock).toHaveBeenCalledWith('p2');
+    expect(findIdByProjectAndNameMock).toHaveBeenCalledWith('p2', 'QA');
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch).toMatchObject({
+      clientId: 'c2',
+      clientName: 'Other',
+      projectId: 'p2',
+      projectName: 'Beta',
+      task: 'QA',
+      taskId: 't2',
+    });
+  });
+
+  test('400 when new project does not belong to the new client', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdMock.mockResolvedValue('c-other');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c2',
+        clientName: 'Other',
+        projectId: 'p2',
+        projectName: 'Beta',
+        task: 'QA',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/Project does not belong/);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 reassigning to project the owner is not assigned to', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdMock.mockResolvedValue('c2');
+    findIdByProjectAndNameMock.mockResolvedValue('t2');
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c2',
+        clientName: 'Other',
+        projectId: 'p2',
+        projectName: 'Beta',
+        task: 'QA',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toMatch(/Not authorized to assign/);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 partial catalog patch (projectId without task) is rejected', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { projectId: 'p2', projectName: 'Beta' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/must be updated together/);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 updating only duration leaves catalog fields untouched (no client/project/task lookup)', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, duration: 7 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { duration: 7 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindClientIdMock).not.toHaveBeenCalled();
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.clientId).toBeUndefined();
+    expect(patch.projectId).toBeUndefined();
+    expect(patch.task).toBeUndefined();
+    expect(patch.duration).toBe(7);
   });
 });
 

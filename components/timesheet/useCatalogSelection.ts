@@ -8,6 +8,16 @@ export interface UseCatalogSelectionOptions {
   projects: Project[];
   projectTasks: ProjectTask[];
   defaultLocation?: TimeEntryLocation;
+  /**
+   * Seed the initial selection (used by the edit dialog so the form opens on the entry's
+   * existing client/project/task instead of the catalog's first row). Only read on mount.
+   */
+  initialSelection?: {
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    taskName?: string;
+  };
 }
 
 export interface UseCatalogSelectionResult {
@@ -30,11 +40,12 @@ export function useCatalogSelection({
   projects,
   projectTasks,
   defaultLocation = 'remote',
+  initialSelection,
 }: UseCatalogSelectionOptions): UseCatalogSelectionResult {
-  const [clientId, setClientId] = useState(clients[0]?.id ?? '');
-  const [projectId, setProjectId] = useState('');
-  const [taskId, setTaskId] = useState('');
-  const [taskName, setTaskName] = useState('');
+  const [clientId, setClientId] = useState(initialSelection?.clientId ?? clients[0]?.id ?? '');
+  const [projectId, setProjectId] = useState(initialSelection?.projectId ?? '');
+  const [taskId, setTaskId] = useState(initialSelection?.taskId ?? '');
+  const [taskName, setTaskName] = useState(initialSelection?.taskName ?? '');
   const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
 
   useEffect(() => {

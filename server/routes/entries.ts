@@ -87,8 +87,14 @@ const entryCreateBodySchema = {
 const entryUpdateBodySchema = {
   type: 'object',
   properties: {
+    date: { type: 'string', format: 'date' },
+    clientId: { type: 'string' },
+    clientName: { type: 'string' },
+    projectId: { type: 'string' },
+    projectName: { type: 'string' },
+    task: { type: 'string' },
     duration: { type: 'number' },
-    notes: { type: 'string' },
+    notes: { type: ['string', 'null'] },
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
   },

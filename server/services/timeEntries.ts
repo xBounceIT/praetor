@@ -196,7 +196,18 @@ export const createTimeEntry = async (
 export const updateTimeEntry = async (
   actor: AuthenticatedActor,
   id: unknown,
-  input: { duration?: unknown; notes?: unknown; isPlaceholder?: unknown; location?: unknown },
+  input: {
+    date?: unknown;
+    clientId?: unknown;
+    clientName?: unknown;
+    projectId?: unknown;
+    projectName?: unknown;
+    task?: unknown;
+    duration?: unknown;
+    notes?: unknown;
+    isPlaceholder?: unknown;
+    location?: unknown;
+  },
 ): Promise<TimeEntry> => {
   if (!hasTrackerPermission(actor, 'update')) fail(403, 'Insufficient permissions');
   const entryId = requireValid(requireNonEmptyString(id, 'id'));
@@ -219,20 +230,91 @@ export const updateTimeEntry = async (
     if (!allowed) fail(403, 'Not authorized to update this entry');
   }
 
-  let backfilledTaskId: string | undefined;
-  if (context.taskId === null) {
-    backfilledTaskId =
-      (await tasksRepo.findIdByProjectAndName(context.projectId, context.task)) ?? undefined;
+  const date =
+    input.date !== undefined ? requireValid(parseDateString(input.date, 'date')) : undefined;
+  const clientId =
+    input.clientId !== undefined
+      ? requireValid(requireNonEmptyString(input.clientId, 'clientId'))
+      : undefined;
+  const clientName =
+    input.clientName !== undefined
+      ? requireValid(requireNonEmptyString(input.clientName, 'clientName'))
+      : undefined;
+  const projectId =
+    input.projectId !== undefined
+      ? requireValid(requireNonEmptyString(input.projectId, 'projectId'))
+      : undefined;
+  const projectName =
+    input.projectName !== undefined
+      ? requireValid(requireNonEmptyString(input.projectName, 'projectName'))
+      : undefined;
+  const task =
+    input.task !== undefined ? requireValid(requireNonEmptyString(input.task, 'task')) : undefined;
+
+  // (clientId, projectId, task) is a tuple — partial patches risk silently orphaning taskId
+  // or 403-ing on assignment checks against a stale field. Require all three together.
+  const catalogFieldsSet = [clientId, projectId, task].filter((v) => v !== undefined).length;
+  if (catalogFieldsSet !== 0 && catalogFieldsSet !== 3) {
+    badRequest('clientId, projectId, and task must be updated together');
+  }
+  const catalogChanging = catalogFieldsSet === 3;
+
+  if (date !== undefined && isWeekendDate(date)) {
+    const settings = await generalSettingsRepo.get();
+    if (!(settings?.allowWeekendSelection ?? true)) {
+      badRequest('Time entries on weekends are not allowed');
+    }
+  }
+
+  let resolvedTaskId: string | null | undefined;
+  if (catalogChanging) {
+    // Non-null because catalogFieldsSet === 3 above.
+    const effectiveClientId = clientId as string;
+    const effectiveProjectId = projectId as string;
+    const effectiveTask = task as string;
+
+    const [projectClientId, taskFkLookup] = await Promise.all([
+      projectsRepo.findClientId(effectiveProjectId),
+      tasksRepo.findIdByProjectAndName(effectiveProjectId, effectiveTask),
+    ]);
+    if (projectClientId === null) badRequest('Project not found');
+    if (projectClientId !== effectiveClientId) {
+      badRequest('Project does not belong to the selected client');
+    }
+
+    resolvedTaskId = taskFkLookup ?? null;
+
+    if (!hasPermission(actor, 'timesheets.tracker_all.update')) {
+      const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
+        userAssignmentsRepo.isClientAssignedToUser(context.userId, effectiveClientId),
+        userAssignmentsRepo.isProjectAssignedToUser(context.userId, effectiveProjectId),
+        resolvedTaskId
+          ? userAssignmentsRepo.isTaskAssignedToUser(context.userId, resolvedTaskId)
+          : Promise.resolve(true),
+      ]);
+      if (!clientAllowed || !projectAllowed || !taskAllowed) {
+        fail(403, 'Not authorized to assign this entry to that client, project, or task');
+      }
+    }
+  } else if (context.taskId === null) {
+    const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
+    if (backfill) resolvedTaskId = backfill;
   }
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
   const updated = await entriesRepo.update(entryId, {
+    date,
+    clientId,
+    clientName,
+    projectId,
+    projectName,
+    task,
     duration: parsedDuration,
     notes: validatedNotes,
     isPlaceholder: parsedIsPlaceholder,
     location: parseOptionalLocation(input.location, fail),
-    taskId: backfilledTaskId,
+    taskId: resolvedTaskId,
   });
 
   if (updated === null) return fail(404, 'Entry not found');

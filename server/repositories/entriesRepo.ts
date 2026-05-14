@@ -259,7 +259,11 @@ export const findOwner = async (id: string, exec: DbExecutor = db): Promise<stri
 
 export type EntryContext = {
   userId: string;
+  date: string;
+  clientId: string;
+  clientName: string;
   projectId: string;
+  projectName: string;
   task: string;
   taskId: string | null;
 };
@@ -271,13 +275,21 @@ export const findContext = async (
   const rows = await exec
     .select({
       userId: timeEntries.userId,
+      date: timeEntries.date,
+      clientId: timeEntries.clientId,
+      clientName: timeEntries.clientName,
       projectId: timeEntries.projectId,
+      projectName: timeEntries.projectName,
       task: timeEntries.task,
       taskId: timeEntries.taskId,
     })
     .from(timeEntries)
     .where(eq(timeEntries.id, id));
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const date = normalizeNullableDateOnly(row.date, 'entry.date');
+  if (!date) throw new TypeError('Invalid date value for entry.date');
+  return { ...row, date };
 };
 
 export type NewEntry = {
@@ -364,13 +376,22 @@ export const createMany = async (
 };
 
 export type EntryUpdate = {
+  date?: string;
+  clientId?: string;
+  clientName?: string;
+  projectId?: string;
+  projectName?: string;
+  task?: string;
   duration?: number;
   /** `null` clears the column (the schema allows NULL); `undefined` leaves it untouched. */
   notes?: string | null;
   isPlaceholder?: boolean;
   location?: string;
-  /** Backfill-only: pass the resolved task FK on legacy rows. `undefined` leaves it untouched. */
-  taskId?: string;
+  /**
+   * `null` clears the column (orphan a legacy entry), `string` writes the resolved task FK,
+   * `undefined` leaves it untouched.
+   */
+  taskId?: string | null;
 };
 
 export const update = async (
@@ -379,6 +400,12 @@ export const update = async (
   exec: DbExecutor = db,
 ): Promise<TimeEntry | null> => {
   const setValues: Partial<typeof timeEntries.$inferInsert> = {};
+  if (patch.date !== undefined) setValues.date = patch.date;
+  if (patch.clientId !== undefined) setValues.clientId = patch.clientId;
+  if (patch.clientName !== undefined) setValues.clientName = patch.clientName;
+  if (patch.projectId !== undefined) setValues.projectId = patch.projectId;
+  if (patch.projectName !== undefined) setValues.projectName = patch.projectName;
+  if (patch.task !== undefined) setValues.task = patch.task;
   if (patch.duration !== undefined) setValues.duration = numericForDb(patch.duration);
   if (patch.notes !== undefined) setValues.notes = patch.notes;
   if (patch.isPlaceholder !== undefined) setValues.isPlaceholder = patch.isPlaceholder;
