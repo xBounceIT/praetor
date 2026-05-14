@@ -48,3 +48,7 @@ The endpoint is idempotent: re-running it with the same window does not create d
 To prevent accidentally huge generations, the server caps the window at 366 days per call.
 
 The required permission is `timesheets.recurring.create`.
+
+### Cleaning up generated entries
+
+Bulk cleanup of recurring entries uses `DELETE /api/entries` with `projectId`, `task`, and, when needed, `futureOnly` or `placeholderOnly`. A role with only `timesheets.recurring.delete` can delete placeholder entries generated from recurrences only: the server always applies `placeholderOnly=true` in that case. Deleting real non-placeholder entries requires `timesheets.tracker.delete` in the assigned scope, or `timesheets.tracker_all.delete` for full scope.

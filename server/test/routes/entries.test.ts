@@ -1398,13 +1398,13 @@ describe('DELETE /api/entries (bulk)', () => {
     );
   });
 
-  test('204 with only timesheets.recurring.delete stays restricted to actor', async () => {
+  test('204 with only timesheets.recurring.delete is restricted to actor placeholders', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.recurring.delete']);
     entriesBulkDeleteMock.mockResolvedValue(2);
 
     const res = await testApp.inject({
       method: 'DELETE',
-      url: '/api/entries?projectId=p1&task=Dev',
+      url: '/api/entries?projectId=p1&task=Dev&placeholderOnly=false',
       headers: authHeader(),
     });
 
@@ -1415,6 +1415,7 @@ describe('DELETE /api/entries (bulk)', () => {
         projectId: 'p1',
         task: 'Dev',
         restrictToManagerScopeOf: 'u1',
+        placeholderOnly: true,
       }),
     );
   });
