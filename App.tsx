@@ -2069,6 +2069,7 @@ const AppContent: React.FC = () => {
       setLdapConfig(updated);
     } catch (err) {
       console.error('Failed to save LDAP config:', err);
+      throw err;
     }
   };
 
