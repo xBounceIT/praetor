@@ -230,9 +230,6 @@
     "confirmRevertToDraft": "Riporta in bozza",
     "createOrder": "Crea ordine di vendita",
     "clientLockedByQuote": "Bloccato per preventivo collegato",
-    "searchPlaceholder": "Cerca offerte per cliente o codice...",
-    "filterByStatus": "Filtra per stato",
-    "allStatuses": "Tutti gli stati",
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",

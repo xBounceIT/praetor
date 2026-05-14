@@ -56,7 +56,6 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import OfferVersionsPanel from './OfferVersionsPanel';
 
 export interface ClientOffersViewProps {
@@ -152,16 +151,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     ],
     [t],
   );
-  const searchLabel = t('sales:clientOffers.searchPlaceholder', {
-    defaultValue: 'Search offers...',
-  });
-  const filterByStatusLabel = t('sales:clientOffers.filterByStatus', {
-    defaultValue: 'Filter by status',
-  });
-  const allStatusesLabel = t('sales:clientOffers.allStatuses', {
-    defaultValue: 'All statuses',
-  });
-
   const activeClients = useMemo(() => clients.filter((client) => !client.isDisabled), [clients]);
   const clientOptions = useMemo(
     () => activeClients.map((client) => ({ id: client.id, name: client.name })),
@@ -274,8 +263,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
   const [offerToRevert, setOfferToRevert] = useState<ClientOffer | null>(null);
   const [revertReason, setRevertReason] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
@@ -308,17 +295,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       ? clientLockedReason
       : statusEditable;
   const readOnlyStatus = isReadOnly ? readOnlyReason : statusEditable;
-
-  const filteredOffers = useMemo(() => {
-    return offers.filter((offer) => {
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        offer.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        offer.id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [offers, searchTerm, filterStatus]);
 
   const tableInitialFilterState = useMemo(() => {
     const filters: Record<string, string[]> = {};
@@ -563,6 +539,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       cell: ({ row }) => {
         return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
       },
+      filterFormat: (value) => getStatusLabel(String(value ?? '')),
     },
     {
       header: 'linkedQuoteId',
@@ -1759,33 +1736,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          type="search"
-          aria-label={searchLabel}
-          placeholder={searchLabel}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1"
-        />
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger aria-label={filterByStatusLabel} className="w-[12rem]">
-            <SelectValue placeholder={allStatusesLabel} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{allStatusesLabel}</SelectItem>
-            {STATUS_OPTIONS.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <StandardTable<ClientOffer>
         title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customer offers' })}
-        data={filteredOffers}
+        data={offers}
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
