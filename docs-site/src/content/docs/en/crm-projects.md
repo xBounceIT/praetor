@@ -31,7 +31,7 @@ Use estimated monthly effort to plan recurring load and total effort to track pr
 
 When creating or editing a project you can also fill in:
 
-- **Project start date** and **Project end date** — define the planned window; the end date must not precede the start date.
+- **Project start date** and **Project end date** — define the planned window. Both are required at creation and remain editable on existing projects so you can adjust them when the schedule shifts; the end date must not precede the start date.
 - **Offer reference** — links the project to an accepted offer. This field is required.
 - **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
 

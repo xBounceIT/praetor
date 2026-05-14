@@ -31,7 +31,7 @@ Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno
 
 Quando crei o modifichi un progetto puoi compilare anche:
 
-- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista; la data di fine non può precedere la data di inizio.
+- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie alla creazione e restano modificabili sui progetti esistenti per riflettere eventuali variazioni di pianificazione; la data di fine non può precedere la data di inizio.
 - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
 - **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
 

@@ -54,6 +54,8 @@
     "inheritedClientLabel": "Cliente (ereditato dall'ordine)",
     "startDate": "Data inizio progetto",
     "endDate": "Data fine progetto",
+    "startDateRequired": "La data di inizio progetto è obbligatoria",
+    "endDateRequired": "La data di fine progetto è obbligatoria",
     "dateRangeInvalid": "La data di fine deve essere uguale o successiva alla data di inizio",
     "offerReference": "Riferimento offerta",
     "selectOffer": "Seleziona Offerta...",

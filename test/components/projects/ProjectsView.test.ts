@@ -141,6 +141,28 @@ describe('ProjectsView lifecycle fields (issue #322)', () => {
     expect(source).toMatch(/setOfferId\(nextOfferId\)[\s\S]{0,600}['"]offer['"]/);
   });
 
+  test('start and end dates are required at creation only (issue #474)', async () => {
+    // Gated on !editingProject so legacy projects (created before this change with null
+    // dates) can still be saved on edit — matches the backend PATCH which still accepts
+    // null. The dateRange check stays unconditional in both modes.
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
+    );
+    expect(source).toContain(
+      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
+    );
+    expect(source).toMatch(
+      /if \(!editingProject\) \{\s*if \(!startDate\) newErrors\.startDate[\s\S]*?if \(!endDate\) newErrors\.endDate/,
+    );
+    expect(source).toMatch(/projects\.startDate'\)\}\s*\{!editingProject && <RequiredMark\s*\/>\}/);
+    expect(source).toMatch(/projects\.endDate'\)\}\s*\{!editingProject && <RequiredMark\s*\/>\}/);
+    expect(source).toContain('required={!editingProject}');
+  });
+
   test('edit-mode revenue resolves the effective order from editingProject.orderId', async () => {
     // Regression for the order-derived branch silently falling back to "manual" on edit:
     // the form's `orderId` state is empty in openEditModal (no order selector is shown there —

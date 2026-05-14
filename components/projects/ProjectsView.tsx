@@ -423,6 +423,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
 
+    if (!editingProject) {
+      if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
+      if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    }
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
@@ -1217,35 +1221,43 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </Field>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field data-invalid={Boolean(errors.dateRange)}>
+                    <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
                       <FieldLabel htmlFor="project-start-date">
-                        {t('projects:projects.startDate')}
+                        {t('projects:projects.startDate')} {!editingProject && <RequiredMark />}
                       </FieldLabel>
                       <Input
                         id="project-start-date"
                         type="date"
+                        required={!editingProject}
                         value={startDate}
-                        aria-invalid={Boolean(errors.dateRange)}
+                        aria-invalid={Boolean(errors.startDate || errors.dateRange)}
                         onChange={(e) => {
                           setStartDate(e.target.value);
-                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                          if (errors.startDate || errors.dateRange) {
+                            setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
+                          }
                         }}
                       />
+                      <FieldError className="text-xs">{errors.startDate}</FieldError>
                     </Field>
-                    <Field data-invalid={Boolean(errors.dateRange)}>
+                    <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
                       <FieldLabel htmlFor="project-end-date">
-                        {t('projects:projects.endDate')}
+                        {t('projects:projects.endDate')} {!editingProject && <RequiredMark />}
                       </FieldLabel>
                       <Input
                         id="project-end-date"
                         type="date"
+                        required={!editingProject}
                         value={endDate}
-                        aria-invalid={Boolean(errors.dateRange)}
+                        aria-invalid={Boolean(errors.endDate || errors.dateRange)}
                         onChange={(e) => {
                           setEndDate(e.target.value);
-                          if (errors.dateRange) setErrors((prev) => ({ ...prev, dateRange: '' }));
+                          if (errors.endDate || errors.dateRange) {
+                            setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
+                          }
                         }}
                       />
+                      <FieldError className="text-xs">{errors.endDate}</FieldError>
                     </Field>
                   </div>
                   {errors.dateRange && (

@@ -54,6 +54,8 @@
     "inheritedClientLabel": "Client (inherited from order)",
     "startDate": "Project start date",
     "endDate": "Project end date",
+    "startDateRequired": "Project start date is required",
+    "endDateRequired": "Project end date is required",
     "dateRangeInvalid": "End date must be on or after start date",
     "offerReference": "Offer reference",
     "selectOffer": "Select Offer...",

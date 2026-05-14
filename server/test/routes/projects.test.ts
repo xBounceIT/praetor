@@ -193,6 +193,14 @@ const SAMPLE_PROJECT = {
   billingFrequency: 'monthly',
 };
 
+const VALID_CREATE_PAYLOAD = {
+  name: 'Site',
+  clientId: 'c-1',
+  offerId: 'of-1',
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+};
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -315,12 +323,11 @@ describe('POST /api/projects', () => {
       url: '/api/projects',
       headers: authHeader(),
       payload: {
+        ...VALID_CREATE_PAYLOAD,
         name: 'Website',
-        clientId: 'c-1',
         description: 'A new site',
         color: '#abcdef',
         orderId: 'o-1',
-        offerId: 'of-1',
       },
     });
 
@@ -397,7 +404,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     expect(res.statusCode).toBe(201);
@@ -421,7 +428,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     const color = JSON.parse(res.body).color;
@@ -438,7 +445,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-1', color: '#ABC' },
+      payload: { ...VALID_CREATE_PAYLOAD, color: '#ABC' },
     });
 
     expect(res.statusCode).toBe(409);
@@ -459,7 +466,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     expect(res.statusCode).toBe(201);
@@ -474,7 +481,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: 'co-foreign' },
+      payload: { ...VALID_CREATE_PAYLOAD, orderId: 'co-foreign' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -492,7 +499,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: 'co-same' },
+      payload: { ...VALID_CREATE_PAYLOAD, orderId: 'co-same' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -509,7 +516,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', orderId: '' },
+      payload: { ...VALID_CREATE_PAYLOAD, orderId: '' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -527,7 +534,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Orderless', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD, name: 'Orderless' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -544,7 +551,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-foreign' },
+      payload: { ...VALID_CREATE_PAYLOAD, offerId: 'of-foreign' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -562,7 +569,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-same' },
+      payload: { ...VALID_CREATE_PAYLOAD, offerId: 'of-same' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -577,7 +584,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: '   ', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD, name: '   ' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -589,7 +596,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Website', clientId: '   ', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD, clientId: '   ' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -601,11 +608,37 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Website', clientId: 'c-1' },
+      payload: { ...VALID_CREATE_PAYLOAD, offerId: undefined },
     });
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toBe('Bad Request');
+  });
+
+  test('400: missing startDate', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, startDate: undefined },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('400: missing endDate', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, endDate: undefined },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   test('400: startDate after endDate', async () => {
@@ -613,13 +646,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: {
-        name: 'Website',
-        clientId: 'c-1',
-        offerId: 'of-1',
-        startDate: '2026-12-31',
-        endDate: '2026-01-01',
-      },
+      payload: { ...VALID_CREATE_PAYLOAD, startDate: '2026-12-31', endDate: '2026-01-01' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -633,12 +660,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: {
-        name: 'Website',
-        clientId: 'c-1',
-        offerId: 'of-1',
-        startDate: '01/01/2026',
-      },
+      payload: { ...VALID_CREATE_PAYLOAD, startDate: '01/01/2026' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -650,12 +672,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: {
-        name: 'Website',
-        clientId: 'c-1',
-        offerId: 'of-1',
-        revenue: -10,
-      },
+      payload: { ...VALID_CREATE_PAYLOAD, revenue: -10 },
     });
 
     expect(res.statusCode).toBe(400);
@@ -667,7 +684,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', color: 'not-a-hex' },
+      payload: { ...VALID_CREATE_PAYLOAD, color: 'not-a-hex' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -679,7 +696,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1', billingType: 'mixed' },
+      payload: { ...VALID_CREATE_PAYLOAD, billingType: 'mixed' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -695,7 +712,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-missing', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD, clientId: 'c-missing' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -711,7 +728,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Site', clientId: 'c-1', offerId: 'of-missing' },
+      payload: { ...VALID_CREATE_PAYLOAD, offerId: 'of-missing' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -722,7 +739,7 @@ describe('POST /api/projects', () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/projects',
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -734,7 +751,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     expect(res.statusCode).toBe(403);
@@ -748,7 +765,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'X', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     expect(res.statusCode).toBe(403);
@@ -773,7 +790,7 @@ describe('POST /api/projects', () => {
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { name: 'Website', clientId: 'c-1', offerId: 'of-1' },
+      payload: { ...VALID_CREATE_PAYLOAD },
     });
 
     // The handler propagates the error → Fastify returns 500.
