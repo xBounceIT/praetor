@@ -16,6 +16,7 @@ export type ClientOffer = {
   discount: number;
   discountType: 'percentage' | 'currency';
   status: string;
+  deliveryDate: string | null;
   expirationDate: string | null;
   notes: string | null;
   createdAt: number;
@@ -49,6 +50,7 @@ const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
   discount: parseDbNumber(row.discount, 0),
   discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: row.status,
+  deliveryDate: normalizeNullableDateOnly(row.deliveryDate, 'offer.deliveryDate'),
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
@@ -112,6 +114,7 @@ export type ExistingOffer = {
   clientId: string;
   clientName: string;
   status: string;
+  deliveryDate: string | null;
 };
 
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
@@ -128,6 +131,7 @@ export const findExisting = async (
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
       status: customerOffers.status,
+      deliveryDate: customerOffers.deliveryDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
@@ -146,6 +150,7 @@ export const lockExistingById = async (
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
       status: customerOffers.status,
+      deliveryDate: customerOffers.deliveryDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id))
@@ -232,6 +237,7 @@ export type NewClientOffer = {
   discount: number;
   discountType: 'percentage' | 'currency';
   status: string;
+  deliveryDate?: string | null;
   expirationDate: string;
   notes: string | null;
 };
@@ -251,6 +257,7 @@ export const create = async (
       discount: numericForDb(input.discount),
       discountType: input.discountType,
       status: input.status,
+      deliveryDate: input.deliveryDate ?? null,
       expirationDate: input.expirationDate,
       notes: input.notes,
     })
@@ -266,6 +273,7 @@ export type ClientOfferUpdate = {
   discount?: number | null;
   discountType?: 'percentage' | 'currency' | null;
   status?: string | null;
+  deliveryDate?: string | null;
   expirationDate?: string | null;
   notes?: string | null;
 };
@@ -275,6 +283,7 @@ export type ClientOfferRestoreFields = Pick<
   'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
 > & {
   paymentTerms: string;
+  deliveryDate: string | null;
   expirationDate: string;
 };
 
@@ -292,6 +301,7 @@ export const restoreSnapshotOffer = async (
       discount: numericForDb(snapshot.discount),
       discountType: snapshot.discountType,
       status: snapshot.status,
+      deliveryDate: snapshot.deliveryDate,
       expirationDate: snapshot.expirationDate,
       notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
@@ -316,6 +326,7 @@ export const update = async (
       discount: sql`COALESCE(${numericForDb(patch.discount) ?? null}::numeric, ${customerOffers.discount})`,
       discountType: sql`COALESCE(${patch.discountType ?? null}, ${customerOffers.discountType})`,
       status: sql`COALESCE(${patch.status ?? null}, ${customerOffers.status})`,
+      deliveryDate: sql`COALESCE(${patch.deliveryDate ?? null}::date, ${customerOffers.deliveryDate})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${customerOffers.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${customerOffers.notes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,

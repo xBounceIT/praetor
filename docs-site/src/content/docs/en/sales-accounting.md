@@ -13,6 +13,8 @@ The quote list shows code, insertion date, client, subtotal, discount percentage
 
 In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
 
+In the **Customer Offers** list, the visible date is the **Delivery Date**: it is set when an offer moves to sent status and no longer represents the technical record creation date. The table also shows subtotal, discount percent, absolute discount, discounted total, margin, MOL, and payment terms so offers can be compared without opening each record.
+
 When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
 
 Customer offers in **Accepted** or **Denied** status can be moved back to **Draft** from the row actions menu only by Top Manager or admin users. Praetor requires confirmation, lets the user enter a reason, and records the change in history/audit; the action is unavailable once a sale order has already been created from the offer.

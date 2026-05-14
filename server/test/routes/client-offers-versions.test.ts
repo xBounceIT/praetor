@@ -9,6 +9,7 @@ import * as realProductsRepo from '../../repositories/productsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
+import { todayLocalDateOnly } from '../../utils/date.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -156,6 +157,7 @@ const SAMPLE_OFFER = {
   discount: 0,
   discountType: 'percentage' as const,
   status: 'draft',
+  deliveryDate: null,
   expirationDate: '2026-12-31',
   notes: null,
   createdAt: 1_700_000_000_000,
@@ -666,6 +668,9 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ offerId: 'off-1', reason: 'update', createdByUserId: 'u1' }),
       TX_SENTINEL,
+    );
+    expect(coUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ deliveryDate: todayLocalDateOnly() }),
     );
   });
 

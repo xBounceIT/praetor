@@ -309,6 +309,13 @@
       "when": 1778795459932,
       "tag": "0043_add_project_color_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1778797333182,
+      "tag": "0044_add_customer_offer_delivery_date",
+      "breakpoints": true
     }
   ]
 }

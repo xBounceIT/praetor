@@ -456,6 +456,7 @@ export interface ClientOffer {
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
+  deliveryDate: string | null;
   expirationDate: string;
   notes?: string;
   createdAt: number;

@@ -20,7 +20,7 @@ import type {
 } from '../../types';
 import {
   addMonthsToDateOnly,
-  formatInsertDate,
+  formatDateOnlyForLocale,
   formatInsertDateTime,
   getLocalDateString,
   isDateOnlyBeforeToday,
@@ -31,7 +31,6 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
-  formatDiscountValue,
   getItemPricingContext,
   parseNumberInputValue,
 } from '../../utils/numbers';
@@ -353,6 +352,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [STATUS_OPTIONS],
   );
 
+  const getPaymentTermsLabel = useCallback(
+    (paymentTerms: string | null | undefined) => {
+      const option = paymentTermsOptions.find((entry) => entry.id === paymentTerms);
+      return option ? option.name : paymentTerms || '-';
+    },
+    [paymentTermsOptions],
+  );
+
   const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       await onUpdateOffer(id, updates);
@@ -392,30 +399,29 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const columns: Column<ClientOffer>[] = [
     {
-      header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
+      header: t('sales:clientOffers.offerColumn', { defaultValue: 'Offer' }),
       accessorKey: 'id',
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
     },
     {
-      header: t('crm:clients.tableHeaders.insertDate'),
-      id: 'createdAt',
-      accessorFn: (row) => row.createdAt ?? 0,
+      header: t('sales:clientOffers.deliveryDateColumn', { defaultValue: 'Delivery date' }),
+      id: 'deliveryDate',
+      accessorFn: (row) => row.deliveryDate ?? '',
       className: 'whitespace-nowrap',
-      headerClassName: 'min-w-[9rem]',
+      headerClassName: 'min-w-[8rem]',
       cell: ({ row }) => {
-        if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
+        if (!row.deliveryDate) return <span className="text-xs text-zinc-400">-</span>;
         return (
           <span className="text-xs text-slate-500 whitespace-nowrap">
-            {formatInsertDate(row.createdAt, i18n.language)}
+            {formatDateOnlyForLocale(row.deliveryDate, i18n.language)}
           </span>
         );
       },
       filterFormat: (value) => {
-        const timestamp = typeof value === 'number' ? value : Number(value);
-        if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
-        return formatInsertDate(timestamp, i18n.language);
+        if (typeof value !== 'string' || !value) return '-';
+        return formatDateOnlyForLocale(value, i18n.language);
       },
     },
     {
@@ -423,21 +429,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       accessorKey: 'clientName',
       cell: ({ row }) => {
         return <div className="font-bold text-zinc-800">{row.clientName}</div>;
-      },
-    },
-    {
-      header: t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount' }),
-      id: 'globalDiscount',
-      className: 'whitespace-nowrap',
-      headerClassName: 'min-w-[9rem]',
-      disableSorting: true,
-      disableFiltering: true,
-      cell: ({ row }) => {
-        return (
-          <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap">
-            {formatDiscountValue(row.discount, row.discountType, currency)}
-          </span>
-        );
       },
     },
     {
@@ -458,6 +449,32 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         return (
           <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap">
             {subtotal.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientOffers.discountPercentColumn', { defaultValue: 'Discount %' }),
+      id: 'globalDiscount',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { subtotal, discountAmount } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return (
+          <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap">
+            {getDiscountPercentageLabelValue(
+              row.discount,
+              row.discountType,
+              subtotal,
+              discountAmount,
+            )}
           </span>
         );
       },
@@ -488,6 +505,28 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       },
     },
     {
+      header: t('sales:clientOffers.discountedTotalColumn', { defaultValue: 'Discounted total' }),
+      id: 'total',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { total } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        return (
+          <span className="text-sm font-bold text-zinc-700 whitespace-nowrap">
+            {total.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
       header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
       id: 'margin',
       accessorFn: (row) =>
@@ -510,23 +549,37 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       },
     },
     {
-      header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
-      id: 'total',
+      header: t('sales:clientOffers.molColumn', { defaultValue: 'MOL' }),
+      id: 'mol',
       accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).marginPercentage,
       className: 'whitespace-nowrap',
-      headerClassName: 'min-w-[8rem]',
+      headerClassName: 'min-w-[6rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { total } = calculatePricingTotals(
+        const { marginPercentage } = calculatePricingTotals(
           row.items,
           row.discount,
           'hours',
           row.discountType,
         );
         return (
-          <span className="text-sm font-bold text-zinc-700">
-            {total.toFixed(2)} {currency}
+          <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">
+            {marginPercentage.toFixed(1)}%
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientOffers.paymentTermsColumn', { defaultValue: 'Payment terms' }),
+      id: 'paymentTerms',
+      accessorFn: (row) => getPaymentTermsLabel(row.paymentTerms),
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[11rem]',
+      cell: ({ row }) => {
+        return (
+          <span className="text-sm font-medium text-zinc-700 whitespace-nowrap">
+            {getPaymentTermsLabel(row.paymentTerms)}
           </span>
         );
       },

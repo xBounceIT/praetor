@@ -1,0 +1,1 @@
+ALTER TABLE "customer_offers" ADD COLUMN "delivery_date" date;

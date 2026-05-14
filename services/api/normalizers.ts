@@ -25,6 +25,7 @@ import type {
   User,
   UserAuthMethod,
 } from '../../types';
+import { normalizeDateOnlyString } from '../../utils/date';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
@@ -225,6 +226,7 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
 export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
   ...offer,
   discount: Number(offer.discount || 0),
+  deliveryDate: offer.deliveryDate ? normalizeDateOnlyString(offer.deliveryDate) : null,
   items: (offer.items || []).map(normalizeClientOfferItem),
 });
 

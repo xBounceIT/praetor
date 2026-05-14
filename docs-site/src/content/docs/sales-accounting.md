@@ -13,6 +13,8 @@ La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, 
 
 Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.
 
+Nella lista **Offerte Clienti**, la data visibile è la **Data Invio**: viene valorizzata quando l'offerta passa allo stato inviata e non rappresenta più la data tecnica di creazione del record. La tabella mostra anche subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL e termini di pagamento per confrontare le offerte senza aprire ogni scheda.
+
 Quando un documento viene accettato, prosegui creando l'ordine o il documento collegato invece di reinserire manualmente le stesse righe.
 
 Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riportate in **Bozza** dal menu azioni solo da Top Manager o admin. Praetor richiede conferma, permette di indicare un motivo e registra il cambio nello storico/audit; l'azione non è disponibile se dall'offerta è già nato un ordine di vendita.

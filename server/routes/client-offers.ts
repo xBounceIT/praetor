@@ -8,6 +8,7 @@ import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
@@ -78,6 +79,7 @@ const offerSchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
+    deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
@@ -131,6 +133,7 @@ const offerCreateBodySchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
+    deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
@@ -148,6 +151,7 @@ const offerUpdateBodySchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
+    deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
@@ -388,6 +392,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount,
         discountType,
         status,
+        deliveryDate,
         expirationDate,
         notes,
       } = request.body as {
@@ -400,6 +405,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount: unknown;
         discountType: unknown;
         status: unknown;
+        deliveryDate: unknown;
         expirationDate: unknown;
         notes: unknown;
       };
@@ -450,9 +456,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
+      const deliveryDateResult = optionalDateString(deliveryDate, 'deliveryDate');
+      if (!deliveryDateResult.ok) return badRequest(reply, deliveryDateResult.message);
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
+      const statusValue = typeof status === 'string' && status ? status : 'draft';
+      const deliveryDateValue =
+        deliveryDateResult.value ?? (statusValue === 'sent' ? todayLocalDateOnly() : null);
 
       const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
@@ -518,7 +529,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
               discount: discountResult.value || 0,
               discountType: discountTypeValue,
-              status: typeof status === 'string' && status ? status : 'draft',
+              status: statusValue,
+              deliveryDate: deliveryDateValue,
               expirationDate: expirationDateResult.value,
               notes: (notes as string | null | undefined) ?? null,
             },
@@ -612,6 +624,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount,
         discountType,
         status,
+        deliveryDate,
         expirationDate,
         notes,
       } = request.body as {
@@ -623,6 +636,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount?: unknown;
         discountType?: unknown;
         status?: unknown;
+        deliveryDate?: unknown;
         expirationDate?: unknown;
         notes?: unknown;
       };
@@ -659,6 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms !== undefined ||
         discount !== undefined ||
         discountType !== undefined ||
+        deliveryDate !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined;
       if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
@@ -764,6 +779,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? 'currency'
             : 'percentage';
 
+      let deliveryDateValue = deliveryDate;
+      if (deliveryDate !== undefined) {
+        const deliveryDateResult = optionalDateString(deliveryDate, 'deliveryDate');
+        if (!deliveryDateResult.ok) return badRequest(reply, deliveryDateResult.message);
+        deliveryDateValue = deliveryDateResult.value;
+      }
+
+      const nextStatusValue = typeof status === 'string' ? status : undefined;
+      const shouldStampDeliveryDate =
+        nextStatusValue === 'sent' &&
+        existingOffer.status !== 'sent' &&
+        !existingOffer.deliveryDate &&
+        !deliveryDateValue;
+      const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
+
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -782,6 +812,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount === undefined &&
         discountType === undefined &&
         status === undefined &&
+        deliveryDate === undefined &&
         expirationDate === undefined &&
         notes === undefined;
 
@@ -806,6 +837,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discount: (discountValue as number | null | undefined) ?? null,
               discountType: discountTypeValue ?? null,
               status: (status as string | null | undefined) ?? null,
+              deliveryDate:
+                (deliveryDateValue as string | null | undefined) ?? automaticDeliveryDate ?? null,
               expirationDate: (expirationDateValue as string | null | undefined) ?? null,
               notes: (notes as string | null | undefined) ?? null,
             },
@@ -1238,6 +1271,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'snapshot_expiration_missing',
           };
         }
+        const snapshotDeliveryDate = version.snapshot.offer.deliveryDate ?? null;
 
         const snapshotItems: clientOffersRepo.NewClientOfferItem[] = version.snapshot.items.map(
           ({ id: _itemId, offerId: _offerId, ...rest }) => ({
@@ -1257,6 +1291,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             discount: version.snapshot.offer.discount,
             discountType: version.snapshot.offer.discountType,
             status: version.snapshot.offer.status,
+            deliveryDate: snapshotDeliveryDate,
             expirationDate: snapshotExpirationDate,
             notes: version.snapshot.offer.notes,
           },
