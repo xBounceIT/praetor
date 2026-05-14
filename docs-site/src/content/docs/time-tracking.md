@@ -15,6 +15,8 @@ Prima di salvare, verifica che le date siano corrette e che l'attività apparten
 
 La vista settimanale aiuta a controllare rapidamente le ore distribuite sui giorni. È utile per individuare giornate mancanti, duplicazioni o attività attribuite al progetto sbagliato.
 
+Ogni registrazione esistente occupa una propria riga, così eventuali duplicazioni sulla stessa coppia cliente/progetto/attività restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni.
+
 ## Attività ricorrenti
 
 Le attività ricorrenti permettono di generare registrazioni ripetitive, per esempio riunioni settimanali o attività amministrative periodiche.

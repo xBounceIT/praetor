@@ -446,14 +446,20 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       return;
     }
 
+    // On update, send `null` for empty optional text fields so the server
+    // clears the column (clientUpdateBodySchema accepts string|null). On
+    // create, send `undefined` so the key is stripped — clientCreateBodySchema
+    // only accepts strings, and a missing key correctly defaults the column
+    // to NULL.
+    const emptySentinel: null | undefined = editingClient ? null : undefined;
     const payload: Partial<Client> = {
       name: trimmedName,
       type: formData.type,
       contacts: normalizedContacts,
-      contactName: primaryContact?.fullName,
+      contactName: primaryContact?.fullName || emptySentinel,
       clientCode: trimmedClientCode,
-      email: primaryContact?.email?.trim() || undefined,
-      phone: primaryContact?.phone?.trim() || undefined,
+      email: primaryContact?.email?.trim() || emptySentinel,
+      phone: primaryContact?.phone?.trim() || emptySentinel,
       addressCountry: formData.addressCountry?.trim() || '',
       addressState: formData.addressState?.trim() || '',
       addressCap: formData.addressCap?.trim() || '',
@@ -461,9 +467,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       addressCivicNumber: formData.addressCivicNumber?.trim() || '',
       addressLine: formData.addressLine?.trim() || '',
       address: buildAddress(formData),
-      description: formData.description?.trim() || undefined,
-      atecoCode: formData.atecoCode?.trim() || undefined,
-      website: formData.website?.trim() || undefined,
+      description: formData.description?.trim() || emptySentinel,
+      atecoCode: formData.atecoCode?.trim() || emptySentinel,
+      website: formData.website?.trim() || emptySentinel,
       sector: formData.sector,
       numberOfEmployees: formData.numberOfEmployees,
       revenue: formData.revenue,
@@ -1198,7 +1204,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     </label>
                     <Input
                       type="text"
-                      value={formData.website}
+                      value={formData.website ?? ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, website: e.target.value }))
                       }
@@ -1446,7 +1452,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     </label>
                     <Input
                       type="text"
-                      value={formData.atecoCode}
+                      value={formData.atecoCode ?? ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, atecoCode: e.target.value }))
                       }
@@ -1593,7 +1599,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     </label>
                     <Textarea
                       rows={3}
-                      value={formData.description}
+                      value={formData.description ?? ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, description: e.target.value }))
                       }

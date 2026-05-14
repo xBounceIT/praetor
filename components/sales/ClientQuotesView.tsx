@@ -244,6 +244,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     };
   }, [formData.items, formData.discount, formData.discountType]);
 
+  const formatDiscountPercentage = useCallback((quote: Quote) => {
+    if (quote.discountType !== 'currency') {
+      return `${quote.discount}%`;
+    }
+
+    const { discountAmount, subtotal } = calculatePricingTotals(
+      quote.items,
+      quote.discount,
+      'hours',
+      quote.discountType,
+    );
+    if (subtotal <= 0) return '0%';
+
+    return `${Number(((discountAmount / subtotal) * 100).toFixed(1))}%`;
+  }, []);
+
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
     setPreviewVersion(null);
@@ -833,24 +849,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       },
     },
     {
-      header: t('sales:clientQuotes.globalDiscount'),
-      id: 'globalDiscount',
-      className: 'whitespace-nowrap',
-      headerClassName: 'min-w-[9rem]',
-      disableSorting: true,
-      disableFiltering: true,
-      cell: ({ row }) => {
-        const history = isHistoryRow(row);
-        return (
-          <span
-            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
-          >
-            {formatDiscountValue(row.discount, row.discountType, currency)}
-          </span>
-        );
-      },
-    },
-    {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
       accessorFn: (row) =>
@@ -871,6 +869,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
             {subtotal.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('sales:clientQuotes.discountPercentColumn'),
+      id: 'globalDiscount',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[8rem]',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
+          >
+            {formatDiscountPercentage(row)}
           </span>
         );
       },
@@ -910,6 +926,31 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       },
     },
     {
+      header: t('sales:clientQuotes.discountedTotalColumn'),
+      id: 'total',
+      accessorFn: (row) =>
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[9rem]',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const { total } = calculatePricingTotals(
+          row.items,
+          row.discount,
+          'hours',
+          row.discountType,
+        );
+        const history = isHistoryRow(row);
+        return (
+          <span
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
+          >
+            {total.toFixed(2)} {currency}
+          </span>
+        );
+      },
+    },
+    {
       header: t('sales:clientQuotes.marginLabel'),
       id: 'margin',
       accessorFn: (row) =>
@@ -935,15 +976,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       },
     },
     {
-      header: t('sales:clientQuotes.totalColumn'),
-      id: 'total',
+      header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
+      id: 'mol',
       accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).marginPercentage,
       className: 'whitespace-nowrap',
-      headerClassName: 'min-w-[8rem]',
+      headerClassName: 'min-w-[6rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { total } = calculatePricingTotals(
+        const { marginPercentage } = calculatePricingTotals(
           row.items,
           row.discount,
           'hours',
@@ -952,9 +993,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const history = isHistoryRow(row);
         return (
           <span
-            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
+            className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {total.toFixed(2)} {currency}
+            {marginPercentage.toFixed(1)}%
           </span>
         );
       },

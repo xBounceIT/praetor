@@ -3662,7 +3662,8 @@
                             "type": "string"
                           },
                           "color": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Unique project display color as a hex value."
                           },
                           "isDisabled": {
                             "type": "boolean"
@@ -6199,7 +6200,8 @@
                         "type": "string"
                       },
                       "color": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Unique project display color as a hex value."
                       },
                       "description": {
                         "type": [
@@ -6444,7 +6446,8 @@
                     "type": "string"
                   },
                   "color": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Optional hex color. If omitted, the server assigns the next available unique color."
                   },
                   "orderId": {
                     "type": "string"
@@ -6512,7 +6515,8 @@
                       "type": "string"
                     },
                     "color": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Unique project display color as a hex value."
                     },
                     "description": {
                       "type": [
@@ -6884,7 +6888,8 @@
                     "type": "string"
                   },
                   "color": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Unique project display color as a hex value."
                   },
                   "isDisabled": {
                     "type": "boolean"
@@ -6966,7 +6971,8 @@
                       "type": "string"
                     },
                     "color": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Unique project display color as a hex value."
                     },
                     "description": {
                       "type": [

@@ -371,7 +371,7 @@ describe('PUT /api/roles/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'role.updated' }));
   });
 
-  test('404 role not found', async () => {
+  test('404 role not found (audits the denial)', async () => {
     findByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -381,9 +381,16 @@ describe('PUT /api/roles/:id', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(404);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'role.rename.not_found',
+        entityType: 'role',
+        entityId: 'missing',
+      }),
+    );
   });
 
-  test('403 cannot rename admin role', async () => {
+  test('403 cannot rename admin role (audits the denial)', async () => {
     findByIdMock.mockResolvedValue({
       id: 'admin',
       name: 'Admin',
@@ -400,6 +407,13 @@ describe('PUT /api/roles/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).error).toMatch(/cannot be renamed/);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'role.rename.denied',
+        entityType: 'role',
+        entityId: 'admin',
+      }),
+    );
   });
 
   test('403 cannot rename system role', async () => {
@@ -542,6 +556,13 @@ describe('DELETE /api/roles/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toMatch(/in use/);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'role.delete.conflict',
+        entityType: 'role',
+        entityId: 'role-x',
+      }),
+    );
   });
 
   test('403 manager without delete permission', async () => {

@@ -9,6 +9,10 @@ sidebar:
 
 Quotes and offers include products, quantities, prices, discounts, and terms. Use the catalog to start from consistent data and always check totals, margins, and validity before sending a document.
 
+The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
+
+In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
+
 When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
 
 Customer offers in **Accepted** or **Denied** status can be moved back to **Draft** from the row actions menu only by Top Manager or admin users. Praetor requires confirmation, lets the user enter a reason, and records the change in history/audit; the action is unavailable once a sale order has already been created from the offer.

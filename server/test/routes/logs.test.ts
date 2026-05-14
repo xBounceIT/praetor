@@ -20,6 +20,7 @@ const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const listMock = mock();
+const findLoginUserByNormalizedUsernameMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -29,6 +30,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
+    findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -79,7 +81,13 @@ const SAMPLE_LOG = {
   details: null,
 };
 
-const allMocks = [findAuthUserByIdMock, userHasRoleMock, getRolePermissionsMock, listMock];
+const allMocks = [
+  findAuthUserByIdMock,
+  userHasRoleMock,
+  getRolePermissionsMock,
+  listMock,
+  findLoginUserByNormalizedUsernameMock,
+];
 
 let testApp: FastifyInstance;
 
@@ -110,7 +118,13 @@ describe('GET /api/logs/audit', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual([SAMPLE_LOG]);
-    expect(listMock).toHaveBeenCalledWith({ startDate: undefined, endDate: undefined });
+    expect(listMock).toHaveBeenCalledWith({
+      startDate: undefined,
+      endDate: undefined,
+      userId: undefined,
+      action: undefined,
+      entityType: undefined,
+    });
   });
 
   test('200 forwards startDate/endDate filters', async () => {
@@ -126,7 +140,72 @@ describe('GET /api/logs/audit', () => {
     expect(listMock).toHaveBeenCalledWith({
       startDate: '2025-01-01T00:00:00Z',
       endDate: '2025-12-31T23:59:59Z',
+      userId: undefined,
+      action: undefined,
+      entityType: undefined,
     });
+  });
+
+  test('200 forwards userId, action, and entityType filters verbatim', async () => {
+    listMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/logs/audit?userId=u-7&action=client_offer&entityType=client_offer',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listMock).toHaveBeenCalledWith({
+      startDate: undefined,
+      endDate: undefined,
+      userId: 'u-7',
+      action: 'client_offer',
+      entityType: 'client_offer',
+    });
+  });
+
+  test('200 resolves username → userId via usersRepo', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ id: 'u-77' });
+    listMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/logs/audit?username=alice',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
+    expect(listMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-77' }));
+  });
+
+  test('200 with empty array when username does not resolve to a user', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/logs/audit?username=ghost',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([]);
+    expect(listMock).not.toHaveBeenCalled();
+  });
+
+  test('200 prefers explicit userId over username when both are present', async () => {
+    listMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/logs/audit?userId=u-1&username=ignored',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findLoginUserByNormalizedUsernameMock).not.toHaveBeenCalled();
+    expect(listMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-1' }));
   });
 
   test('200 with details object passes through', async () => {

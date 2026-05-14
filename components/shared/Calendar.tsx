@@ -226,7 +226,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
               {hasActivity && selectionMode === 'single' && (
                 <span
-                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-secondary-foreground' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
+                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-secondary-foreground' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-foreground'}`}
                 ></span>
               )}
               {holidayName && selectionMode === 'single' && (

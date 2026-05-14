@@ -15,6 +15,7 @@ import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalEmail,
@@ -608,7 +609,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!(await canAccessClient(request, idResult.value, 'crm.clients_all.update'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'client.update.denied',
+          entityType: 'client',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'client_access_denied' },
+        });
       }
 
       const hasName = Object.hasOwn(body, 'name');
@@ -716,7 +724,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Client ID already exists');
       }
       if (!current) {
-        return reply.code(404).send({ error: 'Client not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Client not found',
+          action: 'client.update.not_found',
+          entityType: 'client',
+          entityId: idResult.value,
+        });
       }
 
       const effectiveContacts = hasContacts ? contactsResult.value : current.contacts;
@@ -780,7 +794,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
 
         if (!client) {
-          return reply.code(404).send({ error: 'Client not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Client not found',
+            action: 'client.update.not_found',
+            entityType: 'client',
+            entityId: idResult.value,
+          });
         }
 
         const changedFields = [
@@ -852,7 +872,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!(await canAccessClient(request, idResult.value, 'crm.clients_all.delete'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'client.delete.denied',
+          entityType: 'client',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'client_access_denied' },
+        });
       }
 
       let deleted: Awaited<ReturnType<typeof clientsRepo.deleteById>>;
@@ -864,15 +891,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // such document errors at the FK layer. Translate to a 409 so the UI can surface
         // a clear "client has financial documents" message instead of leaking a 500.
         if (getForeignKeyViolation(err)) {
-          return reply.code(409).send({
-            error:
+          return replyError(request, reply, {
+            statusCode: 409,
+            message:
               'Cannot delete client because it has financial documents (invoices, quotes, offers, or sales). Remove them first.',
+            action: 'client.delete.conflict',
+            entityType: 'client',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'has_financial_documents' },
           });
         }
         throw err;
       }
       if (!deleted) {
-        return reply.code(404).send({ error: 'Client not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Client not found',
+          action: 'client.delete.not_found',
+          entityType: 'client',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -1019,7 +1057,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value,
       );
       if (!existing) {
-        return reply.code(404).send({ error: 'Profile option not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Profile option not found',
+          action: 'client_profile_option.update.not_found',
+          entityType: 'client_profile_option',
+          entityId: idResult.value,
+        });
       }
 
       if (
@@ -1047,7 +1091,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Profile option not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Profile option not found',
+          action: 'client_profile_option.update.not_found',
+          entityType: 'client_profile_option',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -1099,7 +1149,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value,
       );
       if (!existing) {
-        return reply.code(404).send({ error: 'Profile option not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Profile option not found',
+          action: 'client_profile_option.delete.not_found',
+          entityType: 'client_profile_option',
+          entityId: idResult.value,
+        });
       }
 
       const usageCount = await clientProfileOptionsRepo.getUsageCount(
@@ -1107,8 +1163,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value,
       );
       if (usageCount > 0) {
-        return reply.code(409).send({
-          error: `Cannot delete option "${existing.value}" because it is used by ${usageCount} client(s)`,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Cannot delete option "${existing.value}" because it is used by ${usageCount} client(s)`,
+          action: 'client_profile_option.delete.conflict',
+          entityType: 'client_profile_option',
+          entityId: idResult.value,
+          details: {
+            targetLabel: existing.value,
+            secondaryLabel: 'option_in_use',
+            counts: { clients: usageCount },
+          },
         });
       }
 

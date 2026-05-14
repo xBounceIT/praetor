@@ -8,6 +8,7 @@ import { logAudit } from '../utils/audit.ts';
 import type { CostUnit } from '../utils/cost-unit.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   parseBooleanField,
@@ -358,7 +359,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (needsCurrentProduct) {
         const currentProduct = await productsRepo.findProductCoreById(idResult.value);
         if (!currentProduct) {
-          return reply.code(404).send({ error: 'Product not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Product not found',
+            action: 'product.update.not_found',
+            entityType: 'product',
+            entityId: idResult.value,
+          });
         }
         updatedType = currentProduct.type;
         updatedSupplierId = currentProduct.supplierId;
@@ -411,7 +418,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : await productsRepo.updateProductDynamic(idResult.value, fields);
 
       if (!product) {
-        return reply.code(404).send({ error: 'Product not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Product not found',
+          action: 'product.update.not_found',
+          entityType: 'product',
+          entityId: idResult.value,
+        });
       }
 
       if (product.supplierId) {
@@ -474,7 +487,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const deleted = await productsRepo.deleteProductById(idResult.value);
 
       if (!deleted) {
-        return reply.code(404).send({ error: 'Product not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Product not found',
+          action: 'product.delete.not_found',
+          entityType: 'product',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -644,7 +663,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const current = await productsRepo.findInternalCategoryById(idResult.value);
       if (!current) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_category.update.not_found',
+          entityType: 'product_category',
+          entityId: idResult.value,
+        });
       }
 
       let newName = current.name;
@@ -668,10 +693,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Category with this name already exists for this type');
       }
       if (linkedCheck.linked) {
-        return reply.code(409).send({
-          error: 'Cannot rename category',
-          message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
-          linkedCount: linkedCheck.count,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot rename category',
+          action: 'product_category.update.conflict',
+          entityType: 'product_category',
+          entityId: idResult.value,
+          details: {
+            targetLabel: current.name,
+            secondaryLabel: 'linked_to_transactions',
+            counts: { products: linkedCheck.count },
+          },
+          extraBody: {
+            message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
+            linkedCount: linkedCheck.count,
+          },
         });
       }
 
@@ -696,7 +732,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_category.update.not_found',
+          entityType: 'product_category',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -746,7 +788,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const category = await productsRepo.findInternalCategoryById(idResult.value);
       if (!category) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_category.delete.not_found',
+          entityType: 'product_category',
+          entityId: idResult.value,
+        });
       }
       const { name, type } = category;
 
@@ -756,8 +804,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         undefined,
       );
       if (linkedCheck.linked) {
-        return reply.code(409).send({
-          error: `Cannot delete category "${name}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Cannot delete category "${name}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+          action: 'product_category.delete.conflict',
+          entityType: 'product_category',
+          entityId: idResult.value,
+          details: {
+            targetLabel: name,
+            secondaryLabel: 'linked_to_transactions',
+            counts: { products: linkedCheck.count },
+          },
         });
       }
 
@@ -815,7 +872,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeResult.value,
       );
       if (!categoryId) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_subcategory.list.not_found',
+          entityType: 'product_category',
+          entityId: typeResult.value,
+        });
       }
 
       return await productsRepo.listInternalSubcategoriesByType(categoryId);
@@ -866,7 +929,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeResult.value,
       );
       if (!categoryId) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_subcategory.create.not_found',
+          entityType: 'product_category',
+          entityId: typeResult.value,
+        });
       }
 
       if (
@@ -952,7 +1021,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeResult.value,
       );
       if (!categoryId) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_subcategory.update.not_found',
+          entityType: 'product_category',
+          entityId: typeResult.value,
+        });
       }
 
       if (oldNameResult.value.toLowerCase() !== newNameResult.value.toLowerCase()) {
@@ -973,10 +1048,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         oldNameResult.value,
       );
       if (linkedCheck.linked) {
-        return reply.code(409).send({
-          error: 'Cannot rename subcategory',
-          message: `Subcategory "${oldNameResult.value}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
-          linkedCount: linkedCheck.count,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot rename subcategory',
+          action: 'product_subcategory.update.conflict',
+          entityType: 'product_subcategory',
+          entityId: oldNameResult.value,
+          details: {
+            targetLabel: oldNameResult.value,
+            secondaryLabel: 'linked_to_transactions',
+            counts: { products: linkedCheck.count },
+          },
+          extraBody: {
+            message: `Subcategory "${oldNameResult.value}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
+            linkedCount: linkedCheck.count,
+          },
         });
       }
 
@@ -999,7 +1085,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!result) {
-        return reply.code(404).send({ error: 'Subcategory not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Subcategory not found',
+          action: 'product_subcategory.update.not_found',
+          entityType: 'product_subcategory',
+          entityId: oldNameResult.value,
+        });
       }
 
       await logAudit({
@@ -1077,7 +1169,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeResult.value,
       );
       if (!categoryId) {
-        return reply.code(404).send({ error: 'Category not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Category not found',
+          action: 'product_subcategory.delete.not_found',
+          entityType: 'product_category',
+          entityId: typeResult.value,
+        });
       }
 
       const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
@@ -1086,8 +1184,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         nameResult.value,
       );
       if (linkedCheck.linked) {
-        return reply.code(409).send({
-          error: `Cannot delete subcategory "${nameResult.value}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Cannot delete subcategory "${nameResult.value}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+          action: 'product_subcategory.delete.conflict',
+          entityType: 'product_subcategory',
+          entityId: nameResult.value,
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: 'linked_to_transactions',
+            counts: { products: linkedCheck.count },
+          },
         });
       }
 
@@ -1102,7 +1209,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         nameResult.value,
       );
       if (!subDeleted) {
-        return reply.code(404).send({ error: 'Subcategory not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Subcategory not found',
+          action: 'product_subcategory.delete.not_found',
+          entityType: 'product_subcategory',
+          entityId: nameResult.value,
+        });
       }
 
       await logAudit({
@@ -1244,7 +1357,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const current = await productsRepo.findProductTypeById(idResult.value);
       if (!current) {
-        return reply.code(404).send({ error: 'Product type not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Product type not found',
+          action: 'product_type.update.not_found',
+          entityType: 'product_type',
+          entityId: idResult.value,
+        });
       }
 
       let newName = current.name;
@@ -1279,7 +1398,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Product type not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Product type not found',
+          action: 'product_type.update.not_found',
+          entityType: 'product_type',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -1329,7 +1454,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const type = await productsRepo.findProductTypeById(idResult.value);
       if (!type) {
-        return reply.code(404).send({ error: 'Product type not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Product type not found',
+          action: 'product_type.delete.not_found',
+          entityType: 'product_type',
+          entityId: idResult.value,
+        });
       }
       const { name } = type;
 
@@ -1339,13 +1470,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
 
       if (productCount > 0) {
-        return reply.code(409).send({
-          error: `Cannot delete type "${name}" because ${productCount} product(s) are using it`,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Cannot delete type "${name}" because ${productCount} product(s) are using it`,
+          action: 'product_type.delete.conflict',
+          entityType: 'product_type',
+          entityId: idResult.value,
+          details: {
+            targetLabel: name,
+            secondaryLabel: 'in_use_by_products',
+            counts: { products: productCount },
+          },
         });
       }
       if (categoryCount > 0) {
-        return reply.code(409).send({
-          error: `Cannot delete type "${name}" because ${categoryCount} category(s) are using it`,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Cannot delete type "${name}" because ${categoryCount} category(s) are using it`,
+          action: 'product_type.delete.conflict',
+          entityType: 'product_type',
+          entityId: idResult.value,
+          details: {
+            targetLabel: name,
+            secondaryLabel: 'in_use_by_categories',
+            counts: { categories: categoryCount },
+          },
         });
       }
 

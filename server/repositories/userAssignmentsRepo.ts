@@ -1,6 +1,6 @@
 import { and, eq, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import {
   type AssignmentSource,
   MANUAL_ASSIGNMENT_SOURCE,
@@ -258,66 +258,72 @@ export const syncTopManagerAssignmentsForUser = async (
 ): Promise<void> => {
   const isTopManager = await userHasTopManagerRole(userId, exec);
 
-  if (!isTopManager) {
-    await Promise.all([
-      exec
-        .delete(userClients)
-        .where(
-          and(
-            eq(userClients.userId, userId),
-            eq(userClients.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+  // Each branch mutates multiple tables in parallel; the wrap rolls back the others when
+  // one Promise.all leg fails. (`runAtomically`'s default doc covers the simpler
+  // DELETE-then-INSERT case, not the multi-table parallel case.)
+  await runAtomically(exec, async (tx) => {
+    if (!isTopManager) {
+      await Promise.all([
+        tx
+          .delete(userClients)
+          .where(
+            and(
+              eq(userClients.userId, userId),
+              eq(userClients.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+            ),
           ),
-        ),
-      exec
-        .delete(userProjects)
-        .where(
-          and(
-            eq(userProjects.userId, userId),
-            eq(userProjects.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+        tx
+          .delete(userProjects)
+          .where(
+            and(
+              eq(userProjects.userId, userId),
+              eq(userProjects.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+            ),
           ),
-        ),
-      exec
-        .delete(userTasks)
-        .where(
-          and(
-            eq(userTasks.userId, userId),
-            eq(userTasks.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+        tx
+          .delete(userTasks)
+          .where(
+            and(
+              eq(userTasks.userId, userId),
+              eq(userTasks.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
+            ),
           ),
-        ),
-    ]);
-    // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
-    // modified - sequenced after the `await Promise.all(...)` so it sees the final state,
-    // never an interleaved view.
-    await applyProjectCascadeToClients(userId, exec);
-    return;
-  }
+      ]);
+      // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
+      // modified - sequenced after the `await Promise.all(...)` so it sees the final state,
+      // never an interleaved view.
+      await applyProjectCascadeToClients(userId, tx);
+      return;
+    }
 
-  await Promise.all([
-    assignAllToUserAsTopManager(ASSIGNMENT_SPECS.clients, userId, exec),
-    assignAllToUserAsTopManager(ASSIGNMENT_SPECS.projects, userId, exec),
-    assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, exec),
-  ]);
+    await Promise.all([
+      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.clients, userId, tx),
+      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.projects, userId, tx),
+      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, tx),
+    ]);
+  });
 };
 
-const replaceAssignments = async (
+const replaceAssignments = (
   spec: AssignmentSpec,
   userId: string,
   ids: string[],
   source: AssignmentSource,
   exec: DbExecutor,
-): Promise<void> => {
-  // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
-  await executeRows(exec, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
-  if (ids.length === 0) return;
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
+    // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
+    await executeRows(tx, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
+    if (ids.length === 0) return;
 
-  const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
-  await executeRows(
-    exec,
-    sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
-        VALUES ${sql.join(valueRows, sql`, `)}
-        ON CONFLICT DO NOTHING`,
-  );
-};
+    const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
+    await executeRows(
+      tx,
+      sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
+          VALUES ${sql.join(valueRows, sql`, `)}
+          ON CONFLICT DO NOTHING`,
+    );
+  });
 
 export const replaceUserClients = (
   userId: string,

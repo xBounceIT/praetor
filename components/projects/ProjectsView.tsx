@@ -876,7 +876,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     manual: t('projects:projects.revenueManualHint'),
   };
   const displayedRevenue = revenueBySource[revenueSource];
-  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : null;
+  const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
@@ -1406,66 +1406,68 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     </div>
                   )}
 
-                  <Field>
-                    <FieldLabel>{t('projects:projects.color')}</FieldLabel>
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
-                      {COLORS.map((c) => (
-                        <Tooltip key={c}>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => {
-                                  setColor(c);
-                                  setHexInput(c);
-                                }}
-                                className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
-                                style={{ backgroundColor: c }}
-                              />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{c}</TooltipContent>
-                        </Tooltip>
-                      ))}
-                      <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
-                        <Input
-                          type="color"
-                          value={color}
-                          onFocus={() => {
-                            skipPickerRef.current = false;
-                          }}
-                          onChange={(e) => {
-                            if (skipPickerRef.current) return;
-                            setColor(e.target.value);
-                            setHexInput(e.target.value);
-                          }}
-                          className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
-                        />
-                        <Input
-                          type="text"
-                          value={hexInput}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setHexInput(val);
-                            if (isValidHex(val)) {
-                              setColor(val);
-                            }
-                          }}
-                          onBlur={commitHexInput}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              commitHexInput();
-                            }
-                          }}
-                          placeholder="#000000"
-                          className="h-8 w-[90px] font-mono text-xs tabular-nums"
-                        />
+                  {editingProject && (
+                    <Field>
+                      <FieldLabel>{t('projects:projects.color')}</FieldLabel>
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+                        {COLORS.map((c) => (
+                          <Tooltip key={c}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => {
+                                    setColor(c);
+                                    setHexInput(c);
+                                  }}
+                                  className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{c}</TooltipContent>
+                          </Tooltip>
+                        ))}
+                        <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
+                          <Input
+                            type="color"
+                            value={color}
+                            onFocus={() => {
+                              skipPickerRef.current = false;
+                            }}
+                            onChange={(e) => {
+                              if (skipPickerRef.current) return;
+                              setColor(e.target.value);
+                              setHexInput(e.target.value);
+                            }}
+                            className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
+                          />
+                          <Input
+                            type="text"
+                            value={hexInput}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setHexInput(val);
+                              if (isValidHex(val)) {
+                                setColor(val);
+                              }
+                            }}
+                            onBlur={commitHexInput}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                commitHexInput();
+                              }
+                            }}
+                            placeholder="#000000"
+                            className="h-8 w-[90px] font-mono text-xs tabular-nums"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </Field>
+                    </Field>
+                  )}
 
                   {editingProject && (
                     <Field>

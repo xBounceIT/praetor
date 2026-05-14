@@ -12,6 +12,7 @@ import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -417,14 +418,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const sourceQuote = await clientQuotesRepo.findStatusAndClientName(linkedQuoteIdResult.value);
       if (!sourceQuote) {
-        return reply.code(404).send({ error: 'Source quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Source quote not found',
+          action: 'client_offer.create.not_found',
+          entityType: 'client_quote',
+          entityId: linkedQuoteIdResult.value,
+        });
       }
       if (sourceQuote.status !== 'accepted') {
-        return reply.code(409).send({ error: 'Offers can only be created from accepted quotes' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Offers can only be created from accepted quotes',
+          action: 'client_offer.create.conflict',
+          entityType: 'client_quote',
+          entityId: linkedQuoteIdResult.value,
+          details: { secondaryLabel: 'source_quote_not_accepted' },
+        });
       }
 
       if (await clientOffersRepo.findExistingForQuote(linkedQuoteIdResult.value)) {
-        return reply.code(409).send({ error: LINKED_OFFER_CONFLICT });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: LINKED_OFFER_CONFLICT,
+          action: 'client_offer.create.conflict',
+          entityType: 'client_quote',
+          entityId: linkedQuoteIdResult.value,
+          details: { secondaryLabel: 'duplicate_offer_for_quote' },
+        });
       }
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
@@ -437,7 +458,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!normalizedItems) return;
 
       type CreateOutcome =
-        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: false;
+            statusCode: 404 | 409;
+            message: string;
+            action: string;
+            secondaryLabel?: string;
+          }
         | {
             ok: true;
             offer: clientOffersRepo.ClientOffer;
@@ -451,13 +478,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // "no linked offer exists") serializes against this insert.
           const lockedQuote = await clientQuotesRepo.lockCurrentById(linkedQuoteIdResult.value, tx);
           if (!lockedQuote) {
-            return { ok: false, status: 404, body: { error: 'Source quote not found' } };
+            return {
+              ok: false,
+              statusCode: 404,
+              message: 'Source quote not found',
+              action: 'client_offer.create.not_found',
+            };
           }
           if (lockedQuote.status !== 'accepted') {
             return {
               ok: false,
-              status: 409,
-              body: { error: 'Offers can only be created from accepted quotes' },
+              statusCode: 409,
+              message: 'Offers can only be created from accepted quotes',
+              action: 'client_offer.create.conflict',
+              secondaryLabel: 'source_quote_not_accepted',
             };
           }
           const existing = await clientOffersRepo.findExistingForQuote(
@@ -467,8 +501,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (existing) {
             return {
               ok: false,
-              status: 409,
-              body: { error: LINKED_OFFER_CONFLICT },
+              statusCode: 409,
+              message: LINKED_OFFER_CONFLICT,
+              action: 'client_offer.create.conflict',
+              secondaryLabel: 'duplicate_offer_for_quote',
             };
           }
 
@@ -498,20 +534,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Offer ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Offer ID already exists',
+            action: 'client_offer.create.conflict',
+            entityType: 'client_offer',
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         if (
           dup &&
           (dup.constraint === 'idx_customer_offers_linked_quote_id' ||
             dup.detail?.includes('(linked_quote_id)'))
         ) {
-          return reply.code(409).send({ error: LINKED_OFFER_CONFLICT });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: LINKED_OFFER_CONFLICT,
+            action: 'client_offer.create.conflict',
+            entityType: 'client_quote',
+            entityId: linkedQuoteIdResult.value,
+            details: { secondaryLabel: 'duplicate_offer_for_quote' },
+          });
         }
         throw err;
       }
 
       if (!result.ok) {
-        return reply.code(result.status).send(result.body);
+        return replyError(request, reply, {
+          statusCode: result.statusCode,
+          message: result.message,
+          action: result.action,
+          entityType: 'client_quote',
+          entityId: linkedQuoteIdResult.value,
+          details: result.secondaryLabel ? { secondaryLabel: result.secondaryLabel } : undefined,
+        });
       }
       const createdOffer = result.offer;
       const createdItems = result.items;
@@ -576,7 +632,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existingOffer = await clientOffersRepo.findExisting(idResult.value);
       if (!existingOffer) {
-        return reply.code(404).send({ error: 'Offer not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Offer not found',
+          action: 'client_offer.update.not_found',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+        });
       }
 
       const isTerminalToDraftRevert =
@@ -600,9 +662,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate !== undefined ||
         notes !== undefined;
       if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
-        return reply.code(409).send({
-          error: 'Non-draft offers are read-only',
-          currentStatus: existingOffer.status,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft offers are read-only',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: existingOffer.status,
+          },
+          extraBody: { currentStatus: existingOffer.status },
         });
       }
 
@@ -613,7 +684,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
           if (await clientOffersRepo.findIdConflict(nextIdResult.value, idResult.value)) {
-            return reply.code(409).send({ error: 'Offer ID already exists' });
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Offer ID already exists',
+              action: 'client_offer.update.conflict',
+              entityType: 'client_offer',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'duplicate_id', toValue: nextIdResult.value },
+            });
           }
         }
       }
@@ -649,9 +727,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           lockedFields.push('clientName');
         }
         if (lockedFields.length > 0) {
-          return reply.code(409).send({
-            error: 'Quote-linked offer client details are read-only',
-            fields: lockedFields,
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote-linked offer client details are read-only',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: {
+              targetLabel: idResult.value,
+              secondaryLabel: 'quote_linked_locked_fields',
+              changedFields: lockedFields,
+            },
+            extraBody: { fields: lockedFields },
           });
         }
       }
@@ -737,7 +824,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Offer ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Offer ID already exists',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw err;
       }
@@ -745,7 +839,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const updatedOffer = result.offer;
       const updatedItems = result.items;
       if (!updatedOffer) {
-        return reply.code(404).send({ error: 'Offer not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Offer not found',
+          action: 'client_offer.update.not_found',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+        });
       }
 
       const nextStatus = typeof status === 'string' ? status : updatedOffer.status;
@@ -880,17 +980,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (await clientOffersRepo.findLinkedSaleId(idResult.value)) {
-        return reply
-          .code(409)
-          .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot delete an offer once a sale order has been created from it',
+          action: 'client_offer.delete.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sale_order_exists' },
+        });
       }
 
       const offer = await clientOffersRepo.findStatusAndClientName(idResult.value);
       if (!offer) {
-        return reply.code(404).send({ error: 'Offer not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Offer not found',
+          action: 'client_offer.delete.not_found',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+        });
       }
       if (offer.status !== 'draft') {
-        return reply.code(409).send({ error: 'Only draft offers can be deleted' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only draft offers can be deleted',
+          action: 'client_offer.delete.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'non_draft_status',
+            fromValue: offer.status,
+          },
+        });
       }
 
       await logAudit({
@@ -962,7 +1084,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offerVersionsRepo.listForOffer(idResult.value),
       ]);
       if (!exists) {
-        return reply.code(404).send({ error: 'Offer not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Offer not found',
+          action: 'client_offer.versions_list.not_found',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+        });
       }
       return versions;
     },
@@ -994,7 +1122,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const version = await offerVersionsRepo.findById(idResult.value, versionIdResult.value);
       if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Version not found',
+          action: 'client_offer.version_get.not_found',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: { secondaryLabel: versionIdResult.value },
+        });
       }
       return version;
     },
@@ -1022,7 +1157,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       type RestoreOutcome =
-        | { ok: false; status: number; body: Record<string, unknown> }
+        | {
+            ok: false;
+            statusCode: 404 | 409;
+            message: string;
+            action: string;
+            secondaryLabel?: string;
+            extraBody?: Record<string, unknown>;
+          }
         | {
             ok: true;
             offer: clientOffersRepo.ClientOffer;
@@ -1041,35 +1183,59 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ]);
 
         if (!current) {
-          return { ok: false, status: 404, body: { error: 'Offer not found' } };
+          return {
+            ok: false,
+            statusCode: 404,
+            message: 'Offer not found',
+            action: 'client_offer.restore.not_found',
+          };
         }
         if (current.status !== 'draft') {
           return {
             ok: false,
-            status: 409,
-            body: { error: 'Non-draft offers are read-only', currentStatus: current.status },
+            statusCode: 409,
+            message: 'Non-draft offers are read-only',
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'non_draft_read_only',
+            extraBody: { currentStatus: current.status },
           };
         }
         if (linkedSaleId) {
           return {
             ok: false,
-            status: 409,
-            body: { error: 'Cannot restore an offer once a sale order has been created from it' },
+            statusCode: 409,
+            message: 'Cannot restore an offer once a sale order has been created from it',
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'sale_order_exists',
           };
         }
         if (!version) {
-          return { ok: false, status: 404, body: { error: 'Version not found' } };
+          return {
+            ok: false,
+            statusCode: 404,
+            message: 'Version not found',
+            action: 'client_offer.restore.not_found',
+            secondaryLabel: versionIdResult.value,
+          };
         }
         const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
         if (missingSnapshotReference) {
-          return { ok: false, status: 409, body: { error: missingSnapshotReference } };
+          return {
+            ok: false,
+            statusCode: 409,
+            message: missingSnapshotReference,
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'snapshot_reference_missing',
+          };
         }
         const snapshotExpirationDate = version.snapshot.offer.expirationDate;
         if (!snapshotExpirationDate) {
           return {
             ok: false,
-            status: 409,
-            body: { error: 'Snapshot expiration date is missing' },
+            statusCode: 409,
+            message: 'Snapshot expiration date is missing',
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'snapshot_expiration_missing',
           };
         }
 
@@ -1097,14 +1263,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           tx,
         );
         if (!offer) {
-          return { ok: false, status: 404, body: { error: 'Offer not found' } };
+          return {
+            ok: false,
+            statusCode: 404,
+            message: 'Offer not found',
+            action: 'client_offer.restore.not_found',
+          };
         }
         const items = await clientOffersRepo.replaceItems(offer.id, snapshotItems, tx);
         return { ok: true, offer, items };
       });
 
       if (!result.ok) {
-        return reply.code(result.status).send(result.body);
+        return replyError(request, reply, {
+          statusCode: result.statusCode,
+          message: result.message,
+          action: result.action,
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: result.secondaryLabel
+            ? { targetLabel: idResult.value, secondaryLabel: result.secondaryLabel }
+            : { targetLabel: idResult.value },
+          extraBody: result.extraBody,
+        });
       }
 
       await logAudit({

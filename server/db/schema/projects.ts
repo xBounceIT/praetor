@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
@@ -52,6 +53,7 @@ export const projects = pgTable(
   },
   (table) => [
     index('idx_projects_client_id').on(table.clientId),
+    uniqueIndex('idx_projects_color_unique').on(table.color),
     check(
       'projects_billing_type_check',
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,

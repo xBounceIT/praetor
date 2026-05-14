@@ -70,7 +70,6 @@ describe('makeProjectHandlers', () => {
     );
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -88,6 +87,7 @@ describe('makeProjectHandlers', () => {
     expect(callArg.clientId).toBe('client-A');
     expect(callArg.orderId).toBe('order-1');
     expect(callArg.offerId).toBe('of-1');
+    expect(callArg.color).toBeUndefined();
     expect(projects.get()).toHaveLength(1);
   });
 
@@ -97,7 +97,6 @@ describe('makeProjectHandlers', () => {
     );
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -117,7 +116,6 @@ describe('makeProjectHandlers', () => {
     );
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -148,7 +146,6 @@ describe('makeProjectHandlers', () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const tasks = makeStubSetter<TaskLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -169,7 +166,6 @@ describe('makeProjectHandlers', () => {
   test('add surfaces error when clientId is missing', async () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -196,7 +192,6 @@ describe('makeProjectHandlers', () => {
     apiMocks.projectsCreate.mockImplementation(() => Promise.reject(new Error('api down')));
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -224,7 +219,6 @@ describe('makeProjectHandlers', () => {
     );
     const tasks = makeStubSetter<TaskLike>([{ id: 't1', projectId: 'p1' }]);
     const handlers = makeProjectHandlers({
-      projects: [],
       setProjects: makeStubSetter<ProjectLike>([]).setter,
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -243,7 +237,6 @@ describe('makeProjectHandlers', () => {
       { id: 'p2', clientId: 'c2', color: 'blue' },
     ]);
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
@@ -270,7 +263,6 @@ describe('makeProjectHandlers', () => {
     ]);
 
     const handlers = makeProjectHandlers({
-      projects: projects.get() as never,
       setProjects: projects.setter,
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,

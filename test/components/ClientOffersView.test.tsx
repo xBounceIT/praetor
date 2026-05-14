@@ -5,7 +5,11 @@ import type { Client, ClientOffer, Product, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
 
-installI18nMock();
+installI18nMock({ includeInterpolatedValues: true });
+
+mock.module('../../components/sales/OfferVersionsPanel', () => ({
+  default: () => null,
+}));
 
 const ClientOffersView = (await import('../../components/sales/ClientOffersView')).default;
 
@@ -72,6 +76,18 @@ const baseProps = {
   onUpdateOffer: () => {},
   onDeleteOffer: () => {},
   currency: 'EUR',
+};
+
+const tinySubtotalItem: ClientOffer['items'][number] = {
+  id: 'tiny-item',
+  offerId: 'O-base',
+  productId: 'p-1',
+  productName: 'Tiny Widget',
+  quantity: 1,
+  unitPrice: 0.03,
+  productCost: 0,
+  productMolPercentage: 0,
+  unitType: 'unit',
 };
 
 afterEach(() => {
@@ -178,5 +194,44 @@ describe('<ClientOffersView /> terminal status revert action', () => {
     await waitFor(() =>
       expect(onRevertOfferToDraft).toHaveBeenCalledWith('O-ACME-ACCEPTED', 'wrong status'),
     );
+  });
+});
+
+describe('<ClientOffersView /> discount summary', () => {
+  test('labels a fixed global discount with the equivalent percentage', () => {
+    const fixedDiscountOffer = buildOffer({
+      id: 'O-FIXED-DISCOUNT',
+      discount: 15,
+      discountType: 'currency',
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[fixedDiscountOffer]} />);
+
+    fireEvent.click(screen.getByText('O-FIXED-DISCOUNT'));
+
+    expect(screen.getByText('sales:clientOffers.editOffer')).toBeInTheDocument();
+    expect(screen.getByText('sales:clientOffers.discountAmount (15%)')).toBeInTheDocument();
+    expect(screen.getAllByText('-15.00 EUR').length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText('sales:clientOffers.discountAmount (15 EUR)'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps the entered percentage label when the rounded discount amount differs', () => {
+    const percentageDiscountOffer = buildOffer({
+      id: 'O-PERCENT-DISCOUNT',
+      discount: 50,
+      discountType: 'percentage',
+      items: [tinySubtotalItem],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[percentageDiscountOffer]} />);
+
+    fireEvent.click(screen.getByText('O-PERCENT-DISCOUNT'));
+
+    expect(screen.getByText('sales:clientOffers.discountAmount (50%)')).toBeInTheDocument();
+    expect(
+      screen.queryByText('sales:clientOffers.discountAmount (66.67%)'),
+    ).not.toBeInTheDocument();
   });
 });

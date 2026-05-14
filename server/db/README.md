@@ -68,6 +68,13 @@ Once Drizzle's migration ledger exists, startup skips `schema.sql` entirely and
 only applies pending Drizzle migrations. Migration failures are fatal: the
 backend exits instead of starting against a partially upgraded schema.
 
+The runtime runner reads Drizzle's `meta/_journal.json` and SQL files, then
+compares each migration's SQL hash against the hashes already recorded in
+`drizzle.__drizzle_migrations`. This is deliberately stricter than relying on
+the latest `created_at` value alone: if journal timestamps are ever out of
+order, incremental upgrades still apply every missing migration instead of
+skipping lower-timestamp entries.
+
 For a non-Compose local DB, apply migrations manually:
 
 ```bash
@@ -75,7 +82,9 @@ cd server
 bun run db:migrate
 ```
 
-Idempotent: re-running is a no-op if everything's applied. The runner is `db/migrationsRunner.ts` (calling `drizzle-orm/node-postgres/migrator` directly), not `drizzle-kit migrate` — see "Why not `drizzle-kit migrate`" below.
+Idempotent: re-running is a no-op if everything's applied. The runner is
+`db/migrationsRunner.ts`, not `drizzle-kit migrate` — see "Why not
+`drizzle-kit migrate`" below.
 
 ## Local DB setup
 
@@ -111,7 +120,11 @@ From `server/`:
 
 drizzle-kit 0.31's `migrate` CLI wraps the migrator in a hanji `renderWithTask` spinner that swallows error output in non-TTY environments (CI, deploy hooks, anything where stdout isn't a real terminal). When migrations fail, the CLI exits 1 with no error message — the actual exception never reaches stderr because the spinner consumes the rejected promise.
 
-We invoke `drizzle-orm/node-postgres/migrator` directly via `db/migrationsRunner.ts` instead. The migration files, journal, snapshot, and `__drizzle_migrations` tracking table all behave identically — only the framing differs. Errors propagate as normal Node exceptions.
+We invoke the same Drizzle migration file reader through `db/migrationsRunner.ts`
+instead. The migration files, journal, snapshot, and `__drizzle_migrations`
+tracking table stay compatible with Drizzle, while pending detection is based on
+recorded SQL hashes so timestamp-skipped upgrades can self-heal. Errors
+propagate as normal Node exceptions.
 
 `drizzle-kit generate`, `db:check`, and `db:studio` continue to use the drizzle-kit CLI because their failure modes are observable from interactive use.
 

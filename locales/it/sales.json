@@ -129,6 +129,8 @@
     "quoteCodeColumn": "Codice",
     "statusColumn": "Stato",
     "totalColumn": "Totale",
+    "discountPercentColumn": "Sconto %",
+    "discountedTotalColumn": "Totale Scontato",
     "paymentTermsColumn": "Termini di Pagamento",
     "expirationColumn": "Scadenza",
     "actionsColumn": "Azioni",

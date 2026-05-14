@@ -71,6 +71,12 @@ docker compose --env-file .env -f deploy/docker-compose.customer.yml pull
 docker compose --env-file .env -f deploy/docker-compose.customer.yml up -d
 ```
 
+The backend applies pending database migrations before serving requests. The migration runner
+uses the hashes recorded in `drizzle.__drizzle_migrations` to find missing journal entries, so
+re-running the same `up -d` command is safe when a deployment is interrupted after only part of
+the migration journal was applied. If startup still fails, inspect the backend logs before
+rolling back; the service exits rather than serving against a partially upgraded schema.
+
 ## Rollback
 
 Set `PRAETOR_VERSION` back to the previous tag and run the same pull/up commands.

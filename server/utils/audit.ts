@@ -3,6 +3,46 @@ import type { AuditLogDetails } from '../db/schema/auditLogs.ts';
 import * as auditLogsRepo from '../repositories/auditLogsRepo.ts';
 import { createChildLogger, serializeError } from './logger.ts';
 
+// Canonical list of `entityType` values written by `logAudit`/`replyError` calls. Shared with
+// the frontend log viewer so a typo here surfaces at compile time on both sides instead of
+// silently producing a dropdown entry that never matches any rows.
+export const AUDIT_ENTITY_TYPES = [
+  'auth',
+  'route',
+  'client',
+  'client_offer',
+  'client_order',
+  'client_profile_option',
+  'client_quote',
+  'email_config',
+  'invoice',
+  'ldap',
+  'ldap_config',
+  'mcp_token',
+  'notification',
+  'product',
+  'product_category',
+  'product_subcategory',
+  'product_type',
+  'project',
+  'reports_ai',
+  'reports_ai_message',
+  'reports_ai_session',
+  'role',
+  'settings',
+  'sso_provider',
+  'supplier',
+  'supplier_invoice',
+  'supplier_order',
+  'supplier_quote',
+  'supplier_quote_attachment',
+  'task',
+  'user',
+  'work_unit',
+] as const;
+
+export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
+
 const logger = createChildLogger({ module: 'audit' });
 
 const SENSITIVE_AUDIT_FIELDS = new Set([
@@ -125,7 +165,9 @@ export async function logAudit({
       userId: effectiveUserId,
       action,
       entityType: entityType ?? null,
-      entityId: entityId ?? null,
+      // `audit_logs.entity_id` is `varchar(100)`; truncate here so callers don't have to know
+      // the column width. The full label is also written into `details.targetLabel` if needed.
+      entityId: entityId != null ? entityId.slice(0, 100) : null,
       ipAddress: request.ip || 'unknown',
       details: normalizeAuditDetails(details),
     });

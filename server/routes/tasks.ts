@@ -28,6 +28,7 @@ import { ForeignKeyError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
@@ -218,7 +219,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         !hasPermission(request, 'projects.tasks_all.create') &&
         !(await canAccessProject(request, projectIdResult.value))
       ) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'task.create.denied',
+          entityType: 'project',
+          entityId: projectIdResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
       }
 
       const durationResult = optionalLocalizedNonNegativeNumber(
@@ -343,7 +351,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(201).send(created);
       } catch (err) {
         if (err instanceof ForeignKeyError) {
-          return reply.code(400).send({ error: err.message });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'task.create.invalid',
+            entityType: 'task',
+            details: { secondaryLabel: 'fk_violation' },
+          });
         }
         throw err;
       }
@@ -517,7 +531,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'task.update.denied',
+          entityType: 'task',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'task_access_denied' },
+        });
       }
       const durationResult = optionalLocalizedNonNegativeNumber(
         recurrenceDuration,
@@ -584,7 +605,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Task not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Task not found',
+          action: 'task.update.not_found',
+          entityType: 'task',
+          entityId: idResult.value,
+        });
       }
 
       const action = deriveToggleAction(
@@ -644,12 +671,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.delete'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'task.delete.denied',
+          entityType: 'task',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'task_access_denied' },
+        });
       }
 
       const deleted = await tasksRepo.deleteById(idResult.value);
       if (!deleted) {
-        return reply.code(404).send({ error: 'Task not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Task not found',
+          action: 'task.delete.not_found',
+          entityType: 'task',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -686,7 +726,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'task.assigned_users_view.denied',
+          entityType: 'task',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'task_access_denied' },
+        });
       }
       return tasksRepo.findAssignedUserIds(idResult.value);
     },
@@ -714,7 +761,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'task.assign_users.denied',
+          entityType: 'task',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'task_access_denied' },
+        });
       }
 
       const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
@@ -723,7 +777,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const taskMeta = await tasksRepo.findNameAndProjectId(idResult.value);
       if (!taskMeta) {
-        return reply.code(404).send({ error: 'Task not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Task not found',
+          action: 'task.assign_users.not_found',
+          entityType: 'task',
+          entityId: idResult.value,
+        });
       }
 
       await withDbTransaction(async (tx) => {

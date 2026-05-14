@@ -15,6 +15,7 @@ export const makeSupplierHandlers = (deps: SupplierHandlersDeps) => {
       setSuppliers((prev) => [...prev, supplier]);
     } catch (err) {
       console.error('Failed to add supplier:', err);
+      throw err;
     }
   };
 
@@ -24,6 +25,7 @@ export const makeSupplierHandlers = (deps: SupplierHandlersDeps) => {
       setSuppliers((prev) => prev.map((s) => (s.id === id ? updated : s)));
     } catch (err) {
       console.error('Failed to update supplier:', err);
+      throw err;
     }
   };
 
@@ -33,6 +35,7 @@ export const makeSupplierHandlers = (deps: SupplierHandlersDeps) => {
       setSuppliers((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       console.error('Failed to delete supplier:', err);
+      throw err;
     }
   };
 

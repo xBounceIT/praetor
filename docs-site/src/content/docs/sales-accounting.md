@@ -9,6 +9,10 @@ sidebar:
 
 I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condizioni. Usa il catalogo per partire da dati coerenti e controlla sempre totali, margini e validità prima di inviare il documento.
 
+La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
+
+Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.
+
 Quando un documento viene accettato, prosegui creando l'ordine o il documento collegato invece di reinserire manualmente le stesse righe.
 
 Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riportate in **Bozza** dal menu azioni solo da Top Manager o admin. Praetor richiede conferma, permette di indicare un motivo e registra il cambio nello storico/audit; l'azione non è disponibile se dall'offerta è già nato un ordine di vendita.

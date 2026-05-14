@@ -12,6 +12,7 @@ import type {
   Client,
   ClientOffer,
   ClientOfferItem,
+  DiscountType,
   OfferVersion,
   Product,
   SupplierQuote,
@@ -95,6 +96,29 @@ const getDefaultFormData = (): Partial<ClientOffer> => ({
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
   notes: '',
 });
+
+const formatPercentageLabelValue = (value: number): string => {
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+};
+
+const getDiscountPercentageLabelValue = (
+  discount: number,
+  discountType: DiscountType,
+  subtotal: number,
+  discountAmount: number,
+): string => {
+  if (discountType === 'percentage') {
+    return `${formatPercentageLabelValue(Number.isFinite(discount) ? discount : 0)}%`;
+  }
+
+  if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount)) {
+    return '0%';
+  }
+
+  return `${formatPercentageLabelValue((discountAmount / subtotal) * 100)}%`;
+};
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
@@ -1575,10 +1599,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             discountAmount > 0
                               ? {
                                   label: t('sales:clientOffers.discountAmount', {
-                                    value: formatDiscountValue(
-                                      formData.discount ?? 0,
+                                    value: getDiscountPercentageLabelValue(
+                                      discountValue,
                                       formData.discountType ?? 'percentage',
-                                      currency,
+                                      subtotal,
+                                      discountAmount,
                                     ),
                                   }),
                                   amount: discountAmount,

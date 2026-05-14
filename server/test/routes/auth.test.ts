@@ -673,7 +673,7 @@ describe('POST /api/auth/switch-role', () => {
     );
   });
 
-  test('403 user lacks the target role', async () => {
+  test('403 user lacks the target role (and audits the denial)', async () => {
     // First userHasRole (in authenticateToken) succeeds; second (in switch-role handler) fails
     userHasRoleMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
@@ -686,7 +686,15 @@ describe('POST /api/auth/switch-role', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
-    expect(logAuditMock).not.toHaveBeenCalled();
+    // The denial is audited so investigators can see failed role-switch attempts.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'auth.role_switch.denied',
+        entityType: 'role',
+        entityId: 'admin',
+      }),
+    );
   });
 
   test('403 rejects personal access tokens because role switching is session-only', async () => {

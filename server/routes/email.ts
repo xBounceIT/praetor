@@ -6,6 +6,7 @@ import emailService, { type EmailConfigInput } from '../services/email.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 
 const sharedConfigProperties = {
   enabled: { type: 'boolean' },
@@ -157,7 +158,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { recipientEmail } = request.body as { recipientEmail: string };
 
       if (!recipientEmail?.includes('@')) {
-        return reply.code(400).send({ error: 'INVALID_RECIPIENT', code: 'INVALID_RECIPIENT' });
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: 'INVALID_RECIPIENT',
+          action: 'email_config.test.invalid',
+          entityType: 'email_config',
+          details: { secondaryLabel: 'invalid_recipient' },
+          extraBody: { code: 'INVALID_RECIPIENT' },
+        });
       }
 
       const result = await emailService.sendTestEmail(recipientEmail);
