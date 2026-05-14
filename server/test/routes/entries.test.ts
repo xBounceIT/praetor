@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
@@ -25,6 +26,7 @@ const entriesRepoSnap = { ...realEntriesRepo };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
+const clientsRepoSnap = { ...realClientsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
@@ -54,7 +56,9 @@ const entriesFindExistingRecurringKeysMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
 const projectsFindClientIdMock = mock();
+const projectsFindClientIdAndNameMock = mock();
 const projectsListNamesByIdsMock = mock();
+const clientsFindNameMock = mock();
 const isClientAssignedToUserMock = mock();
 const isProjectAssignedToUserMock = mock();
 const isTaskAssignedToUserMock = mock();
@@ -108,7 +112,12 @@ beforeAll(async () => {
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     findClientId: projectsFindClientIdMock,
+    findClientIdAndName: projectsFindClientIdAndNameMock,
     listNamesByIds: projectsListNamesByIdsMock,
+  }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    findName: clientsFindNameMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -140,6 +149,7 @@ afterAll(() => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -228,7 +238,9 @@ const allMocks = [
   entriesFindExistingRecurringKeysMock,
   entriesDecodeCursorMock,
   projectsFindClientIdMock,
+  projectsFindClientIdAndNameMock,
   projectsListNamesByIdsMock,
+  clientsFindNameMock,
   isClientAssignedToUserMock,
   isProjectAssignedToUserMock,
   isTaskAssignedToUserMock,
@@ -254,6 +266,8 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TRACKER_PERMS);
   projectsFindClientIdMock.mockResolvedValue('c1');
+  projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c1', name: 'Project' });
+  clientsFindNameMock.mockResolvedValue('Client');
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isTaskAssignedToUserMock.mockResolvedValue(true);
@@ -797,16 +811,17 @@ describe('PUT /api/entries/:id', () => {
     expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('200 reassigns client/project/task and resolves new taskId', async () => {
+  test('200 reassigns client/project/task and derives names server-side, resolves new taskId', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
-    projectsFindClientIdMock.mockResolvedValue('c2');
+    projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c2', name: 'Beta (resolved)' });
+    clientsFindNameMock.mockResolvedValue('Other (resolved)');
     findIdByProjectAndNameMock.mockResolvedValue('t2');
     entriesUpdateMock.mockResolvedValue({
       ...SAMPLE_ENTRY,
       clientId: 'c2',
-      clientName: 'Other',
+      clientName: 'Other (resolved)',
       projectId: 'p2',
-      projectName: 'Beta',
+      projectName: 'Beta (resolved)',
       task: 'QA',
       taskId: 't2',
     });
@@ -815,24 +830,26 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
+      // Send caller-supplied names that the service must IGNORE and replace with repo lookups.
       payload: {
         clientId: 'c2',
-        clientName: 'Other',
+        clientName: 'stale-from-client',
         projectId: 'p2',
-        projectName: 'Beta',
+        projectName: 'stale-from-client',
         task: 'QA',
       },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(projectsFindClientIdMock).toHaveBeenCalledWith('p2');
+    expect(projectsFindClientIdAndNameMock).toHaveBeenCalledWith('p2');
+    expect(clientsFindNameMock).toHaveBeenCalledWith('c2');
     expect(findIdByProjectAndNameMock).toHaveBeenCalledWith('p2', 'QA');
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch).toMatchObject({
       clientId: 'c2',
-      clientName: 'Other',
+      clientName: 'Other (resolved)',
       projectId: 'p2',
-      projectName: 'Beta',
+      projectName: 'Beta (resolved)',
       task: 'QA',
       taskId: 't2',
     });
@@ -840,7 +857,7 @@ describe('PUT /api/entries/:id', () => {
 
   test('400 when new project does not belong to the new client', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
-    projectsFindClientIdMock.mockResolvedValue('c-other');
+    projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c-other', name: 'Beta' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -848,9 +865,7 @@ describe('PUT /api/entries/:id', () => {
       headers: authHeader(),
       payload: {
         clientId: 'c2',
-        clientName: 'Other',
         projectId: 'p2',
-        projectName: 'Beta',
         task: 'QA',
       },
     });
@@ -862,7 +877,8 @@ describe('PUT /api/entries/:id', () => {
 
   test('403 reassigning to project the owner is not assigned to', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
-    projectsFindClientIdMock.mockResolvedValue('c2');
+    projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c2', name: 'Beta' });
+    clientsFindNameMock.mockResolvedValue('Other');
     findIdByProjectAndNameMock.mockResolvedValue('t2');
     isProjectAssignedToUserMock.mockResolvedValue(false);
 
@@ -872,9 +888,7 @@ describe('PUT /api/entries/:id', () => {
       headers: authHeader(),
       payload: {
         clientId: 'c2',
-        clientName: 'Other',
         projectId: 'p2',
-        projectName: 'Beta',
         task: 'QA',
       },
     });
@@ -911,7 +925,8 @@ describe('PUT /api/entries/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(projectsFindClientIdMock).not.toHaveBeenCalled();
+    expect(projectsFindClientIdAndNameMock).not.toHaveBeenCalled();
+    expect(clientsFindNameMock).not.toHaveBeenCalled();
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.clientId).toBeUndefined();
     expect(patch.projectId).toBeUndefined();
@@ -950,7 +965,7 @@ describe('PUT /api/entries/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(projectsFindClientIdMock).not.toHaveBeenCalled();
+    expect(projectsFindClientIdAndNameMock).not.toHaveBeenCalled();
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.date).toBe('2025-06-03');
   });

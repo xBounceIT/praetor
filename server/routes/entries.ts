@@ -86,12 +86,12 @@ const entryCreateBodySchema = {
 
 const entryUpdateBodySchema = {
   type: 'object',
+  // Display names (clientName, projectName) are derived server-side from the IDs and
+  // intentionally not part of the update wire format — see `updateTimeEntry`.
   properties: {
     date: { type: 'string', format: 'date' },
     clientId: { type: 'string' },
-    clientName: { type: 'string' },
     projectId: { type: 'string' },
-    projectName: { type: 'string' },
     task: { type: 'string' },
     duration: { type: 'number' },
     notes: { type: ['string', 'null'] },

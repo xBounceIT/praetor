@@ -288,6 +288,11 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
+export const findName = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
+  const rows = await exec.select({ name: clients.name }).from(clients).where(eq(clients.id, id));
+  return rows[0]?.name ?? null;
+};
+
 export const findByFiscalCode = async (
   fiscalCode: string,
   excludeId: string | null,

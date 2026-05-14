@@ -1,4 +1,5 @@
 import { withDbTransaction } from '../db/drizzle.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
 import type { TimeEntry } from '../repositories/entriesRepo.ts';
 import * as entriesRepo from '../repositories/entriesRepo.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
@@ -199,9 +200,7 @@ export const updateTimeEntry = async (
   input: {
     date?: unknown;
     clientId?: unknown;
-    clientName?: unknown;
     projectId?: unknown;
-    projectName?: unknown;
     task?: unknown;
     duration?: unknown;
     notes?: unknown;
@@ -236,17 +235,9 @@ export const updateTimeEntry = async (
     input.clientId !== undefined
       ? requireValid(requireNonEmptyString(input.clientId, 'clientId'))
       : undefined;
-  const clientName =
-    input.clientName !== undefined
-      ? requireValid(requireNonEmptyString(input.clientName, 'clientName'))
-      : undefined;
   const projectId =
     input.projectId !== undefined
       ? requireValid(requireNonEmptyString(input.projectId, 'projectId'))
-      : undefined;
-  const projectName =
-    input.projectName !== undefined
-      ? requireValid(requireNonEmptyString(input.projectName, 'projectName'))
       : undefined;
   const task =
     input.task !== undefined ? requireValid(requireNonEmptyString(input.task, 'task')) : undefined;
@@ -267,22 +258,30 @@ export const updateTimeEntry = async (
   }
 
   let resolvedTaskId: string | null | undefined;
+  // Names are derived server-side from the IDs to keep the denormalized display fields
+  // consistent with the FK targets — any clientName/projectName the caller sent is ignored.
+  let resolvedClientName: string | undefined;
+  let resolvedProjectName: string | undefined;
   if (catalogChanging) {
     // Non-null because catalogFieldsSet === 3 above.
     const effectiveClientId = clientId as string;
     const effectiveProjectId = projectId as string;
     const effectiveTask = task as string;
 
-    const [projectClientId, taskFkLookup] = await Promise.all([
-      projectsRepo.findClientId(effectiveProjectId),
+    const [projectHeader, taskFkLookup, clientNameLookup] = await Promise.all([
+      projectsRepo.findClientIdAndName(effectiveProjectId),
       tasksRepo.findIdByProjectAndName(effectiveProjectId, effectiveTask),
+      clientsRepo.findName(effectiveClientId),
     ]);
-    if (projectClientId === null) badRequest('Project not found');
-    if (projectClientId !== effectiveClientId) {
+    if (projectHeader === null) return fail(400, 'Project not found');
+    if (clientNameLookup === null) return fail(400, 'Client not found');
+    if (projectHeader.clientId !== effectiveClientId) {
       badRequest('Project does not belong to the selected client');
     }
 
     resolvedTaskId = taskFkLookup ?? null;
+    resolvedProjectName = projectHeader.name;
+    resolvedClientName = clientNameLookup;
 
     if (!hasPermission(actor, 'timesheets.tracker_all.update')) {
       const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
@@ -306,9 +305,9 @@ export const updateTimeEntry = async (
   const updated = await entriesRepo.update(entryId, {
     date,
     clientId,
-    clientName,
+    clientName: resolvedClientName,
     projectId,
-    projectName,
+    projectName: resolvedProjectName,
     task,
     duration: parsedDuration,
     notes: validatedNotes,

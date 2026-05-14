@@ -140,15 +140,12 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     }
 
     // (clientId, projectId, task) is a tuple on the server — send all three together when
-    // any one changes so the backend never validates against a stale field.
+    // any one changes so the backend never validates against a stale field. Display names
+    // (clientName, projectName) are derived server-side from the IDs.
     const patch: Partial<TimeEntry> = {};
     if (catalogChanged) {
-      const project = projects.find((p) => p.id === selection.projectId);
-      const client = clients.find((c) => c.id === selection.clientId);
       patch.clientId = selection.clientId;
-      patch.clientName = client?.name || entry.clientName;
       patch.projectId = selection.projectId;
-      patch.projectName = project?.name || entry.projectName;
       patch.task = selection.taskName;
     }
     if (parsedDuration !== entry.duration) patch.duration = parsedDuration;
