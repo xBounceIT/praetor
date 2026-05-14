@@ -35,6 +35,8 @@ When creating or editing a project you can also fill in:
 - **Offer reference** — links the project to an accepted offer. This field is required.
 - **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
 
+Praetor assigns a unique color automatically when you create a project. You can change it later from the project record; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
+
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
 ## Work units

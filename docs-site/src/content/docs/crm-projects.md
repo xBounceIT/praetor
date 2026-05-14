@@ -35,6 +35,8 @@ Quando crei o modifichi un progetto puoi compilare anche:
 - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
 - **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
 
+Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla scheda del progetto; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
+
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 
 ## Unità di lavoro

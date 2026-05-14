@@ -157,6 +157,41 @@ describe('lockNameAndClientById', () => {
   });
 });
 
+describe('lockColorAllocation', () => {
+  test('uses a transaction-scoped advisory lock', async () => {
+    exec.enqueue({ rows: [] });
+
+    await projectsRepo.lockColorAllocation(testDb);
+
+    expect(exec.calls[0].sql).toContain('pg_advisory_xact_lock');
+    expect(exec.calls[0].sql).toContain('praetor.projects.color');
+  });
+});
+
+describe('listColorsForAllocation', () => {
+  test('returns existing project colors in stable order', async () => {
+    exec.enqueue({ rows: [{ color: '#ef4444' }, { color: '#f59e0b' }] });
+
+    const result = await projectsRepo.listColorsForAllocation(testDb);
+
+    expect(result).toEqual(['#ef4444', '#f59e0b']);
+    expect(exec.calls[0].sql).toContain('SELECT color FROM projects');
+    expect(exec.calls[0].sql).toContain('ORDER BY created_at, id');
+  });
+});
+
+describe('isColorUniqueViolation', () => {
+  test('detects the project color unique index', () => {
+    expect(
+      projectsRepo.isColorUniqueViolation(makeDbError('23505', 'idx_projects_color_unique')),
+    ).toBe(true);
+  });
+
+  test('ignores unrelated unique violations', () => {
+    expect(projectsRepo.isColorUniqueViolation(makeDbError('23505', 'projects_pkey'))).toBe(false);
+  });
+});
+
 describe('findBillingById', () => {
   test('returns stored billing fields without deriving mixed', async () => {
     exec.enqueue({ rows: [makeRow(['retainer', 'one_time'])] });
