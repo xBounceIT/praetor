@@ -423,8 +423,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
 
-    if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
-    if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    if (!editingProject) {
+      if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
+      if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    }
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
@@ -1221,12 +1223,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
                       <FieldLabel htmlFor="project-start-date">
-                        {t('projects:projects.startDate')} <RequiredMark />
+                        {t('projects:projects.startDate')} {!editingProject && <RequiredMark />}
                       </FieldLabel>
                       <Input
                         id="project-start-date"
                         type="date"
-                        required
+                        required={!editingProject}
                         value={startDate}
                         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
                         onChange={(e) => {
@@ -1240,12 +1242,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     </Field>
                     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
                       <FieldLabel htmlFor="project-end-date">
-                        {t('projects:projects.endDate')} <RequiredMark />
+                        {t('projects:projects.endDate')} {!editingProject && <RequiredMark />}
                       </FieldLabel>
                       <Input
                         id="project-end-date"
                         type="date"
-                        required
+                        required={!editingProject}
                         value={endDate}
                         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
                         onChange={(e) => {
