@@ -357,7 +357,7 @@ describe('/api/mcp', () => {
 
     expect(res.statusCode).toBe(200);
     const body = parseMcpBody(res.body);
-    expect(body.result.serverInfo).toEqual({ name: 'praetor', version: '0.6.2' });
+    expect(body.result.serverInfo).toEqual({ name: 'praetor', version: '0.6.3' });
   });
 
   test('lists tools and calls permission-scoped list tools', async () => {
