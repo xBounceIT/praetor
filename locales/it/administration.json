@@ -115,6 +115,7 @@
         "disabled": "Disabilitato",
         "enabled": "Abilitato",
         "role_changed": "Cambiato ruolo",
+        "role_switch": "Ruolo cambiato",
         "users_assigned": "Assegnati utenti",
         "users_updated": "Utenti aggiornati",
         "roles_updated": "Ruoli aggiornati",
@@ -122,7 +123,20 @@
         "permissions_updated": "Permessi aggiornati",
         "synced": "Sincronizzato",
         "login": "Accesso effettuato",
-        "role_switched": "Ruolo cambiato"
+        "role_switched": "Ruolo cambiato",
+        "permission_denied": "Permesso negato",
+        "create": "Creato",
+        "update": "Aggiornato",
+        "delete": "Eliminato",
+        "restore": "Ripristinato",
+        "versions_list": "Elencate le versioni di",
+        "version_get": "Recuperata la versione di"
+      },
+      "suffixes": {
+        "denied": "(negato)",
+        "not_found": "(non trovato)",
+        "conflict": "(conflitto)",
+        "invalid": "(non valido)"
       },
       "entities": {
         "client": "cliente",
@@ -168,7 +182,35 @@
     "filters": {
       "startDate": "Inizio",
       "endDate": "Fine",
-      "timeRange": "Intervallo"
+      "timeRange": "Intervallo",
+      "username": "Nome utente",
+      "usernamePlaceholder": "Filtra per nome utente",
+      "action": "Azione",
+      "actionPlaceholder": "Filtra per prefisso azione",
+      "entityTypeAll": "Tutti i tipi di entità"
+    },
+    "entities": {
+      "auth": "Auth",
+      "route": "Route",
+      "client": "Cliente",
+      "client_offer": "Offerta cliente",
+      "client_order": "Ordine cliente",
+      "client_quote": "Preventivo cliente",
+      "email_config": "Configurazione email",
+      "invoice": "Fattura",
+      "ldap": "LDAP",
+      "ldap_config": "Configurazione LDAP",
+      "product": "Prodotto",
+      "project": "Progetto",
+      "role": "Ruolo",
+      "settings": "Impostazioni",
+      "supplier": "Fornitore",
+      "supplier_invoice": "Fattura fornitore",
+      "supplier_order": "Ordine fornitore",
+      "supplier_quote": "Preventivo fornitore",
+      "task": "Attività",
+      "user": "Utente",
+      "work_unit": "Unità di lavoro"
     },
     "timeRanges": {
       "today": "Oggi",

@@ -3,6 +3,7 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   equivalentPermissionsFor,
   getRolePermissions,
@@ -241,6 +242,31 @@ const authenticatePersonalAccessToken = async (
   }
 };
 
+// Emits an `auth.permission_denied` audit row for an authenticated request that fails a
+// role/permission guard, then sends the standard 403. `authenticateToken` runs first and sets
+// `request.user`, so the audit entry always has a userId in this path. The 401 branches above
+// do not audit (no user identity).
+const denyForbidden = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  reason: 'role' | 'permission',
+  required: string[],
+) => {
+  const routeLabel = `${request.method} ${(request as { routeOptions?: { url?: string } }).routeOptions?.url ?? request.url}`;
+  await logAudit({
+    request,
+    action: 'auth.permission_denied',
+    entityType: 'route',
+    entityId: routeLabel,
+    details: {
+      targetLabel: routeLabel,
+      secondaryLabel: reason,
+      changedFields: [...required].sort(),
+    },
+  });
+  return reply.code(403).send({ error: 'Insufficient permissions' });
+};
+
 export const requireRole = (...roles: string[]) => {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
@@ -248,7 +274,7 @@ export const requireRole = (...roles: string[]) => {
     }
 
     if (!roles.includes(request.user.role)) {
-      return reply.code(403).send({ error: 'Insufficient permissions' });
+      return denyForbidden(request, reply, 'role', roles);
     }
   };
 };
@@ -262,7 +288,7 @@ export const requirePermission = (...permissions: string[]) => {
     const userPermissions = request.user.permissions || [];
     const hasAll = permissions.every((permission) => userPermissions.includes(permission));
     if (!hasAll) {
-      return reply.code(403).send({ error: 'Insufficient permissions' });
+      return denyForbidden(request, reply, 'permission', permissions);
     }
   };
 };
@@ -276,7 +302,7 @@ export const requireAnyPermission = (...permissions: string[]) => {
     const userPermissions = request.user.permissions || [];
     const hasAny = permissions.some((permission) => userPermissions.includes(permission));
     if (!hasAny) {
-      return reply.code(403).send({ error: 'Insufficient permissions' });
+      return denyForbidden(request, reply, 'permission', permissions);
     }
   };
 };

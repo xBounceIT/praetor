@@ -5,6 +5,7 @@ import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -266,7 +267,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       if (!input) return reply;
       const updated = await ssoService.updateProvider(id, input);
-      if (!updated) return reply.code(404).send({ error: 'SSO provider not found' });
+      if (!updated) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'SSO provider not found',
+          action: 'sso_provider.update.not_found',
+          entityType: 'sso_provider',
+          entityId: id,
+        });
+      }
       await logAudit({
         request,
         action: 'sso_provider.updated',
@@ -295,7 +304,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const deleted = await ssoService.deleteProvider(id);
-      if (!deleted) return reply.code(404).send({ error: 'SSO provider not found' });
+      if (!deleted) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'SSO provider not found',
+          action: 'sso_provider.delete.not_found',
+          entityType: 'sso_provider',
+          entityId: id,
+        });
+      }
       await logAudit({
         request,
         action: 'sso_provider.deleted',

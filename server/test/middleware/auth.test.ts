@@ -8,6 +8,7 @@ import {
   requirePermission,
   requireRole,
 } from '../../middleware/auth.ts';
+import * as realAuditLogsRepo from '../../repositories/auditLogsRepo.ts';
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -30,12 +31,14 @@ const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
 const permissionsSnapshot = { ...realPermissions };
 const personalAccessTokensRepoSnapshot = { ...realPersonalAccessTokensRepo };
+const auditLogsRepoSnapshot = { ...realAuditLogsRepo };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const findPersonalAccessTokenByHashMock = mock();
 const markPersonalAccessTokenUsedMock = mock();
+const auditLogsCreateMock = mock();
 
 beforeAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => ({
@@ -55,6 +58,10 @@ beforeAll(() => {
     findByTokenHash: findPersonalAccessTokenByHashMock,
     markUsed: markPersonalAccessTokenUsedMock,
   }));
+  mock.module('../../repositories/auditLogsRepo.ts', () => ({
+    ...auditLogsRepoSnapshot,
+    create: auditLogsCreateMock,
+  }));
 });
 
 afterAll(() => {
@@ -66,6 +73,7 @@ afterAll(() => {
     '../../repositories/personalAccessTokensRepo.ts',
     () => personalAccessTokensRepoSnapshot,
   );
+  mock.module('../../repositories/auditLogsRepo.ts', () => auditLogsRepoSnapshot);
 });
 
 const HAPPY_USER = {
@@ -141,6 +149,8 @@ beforeEach(() => {
   getRolePermissionsMock.mockReset();
   findPersonalAccessTokenByHashMock.mockReset();
   markPersonalAccessTokenUsedMock.mockReset();
+  auditLogsCreateMock.mockReset();
+  auditLogsCreateMock.mockResolvedValue(undefined);
 
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
@@ -592,16 +602,36 @@ describe('requireRole', () => {
     await requireRole('manager')({} as never, reply as never);
     expect(reply.statusCode).toBe(401);
     expect(reply.body).toEqual({ error: 'Authentication required' });
+    // 401 paths must not audit (no user identity is bound to the request).
+    expect(auditLogsCreateMock).not.toHaveBeenCalled();
   });
 
   test('403 when role is not in the allowed list', async () => {
     const reply = buildFakeReply();
     await requireRole('admin')(
-      { user: { ...HAPPY_USER, permissions: [] } } as never,
+      {
+        method: 'POST',
+        url: '/api/users',
+        routeOptions: { url: '/' },
+        ip: '10.0.0.5',
+        user: { ...HAPPY_USER, permissions: [] },
+      } as never,
       reply as never,
     );
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Insufficient permissions' });
+    expect(auditLogsCreateMock).toHaveBeenCalledTimes(1);
+    const insert = auditLogsCreateMock.mock.calls[0][0];
+    expect(insert).toMatchObject({
+      userId: 'u1',
+      action: 'auth.permission_denied',
+      entityType: 'route',
+      ipAddress: '10.0.0.5',
+    });
+    expect(insert.details).toMatchObject({
+      secondaryLabel: 'role',
+      changedFields: ['admin'],
+    });
   });
 
   test('passes when role matches one of the allowed roles', async () => {
@@ -613,6 +643,7 @@ describe('requireRole', () => {
     )({ user: { ...HAPPY_USER, permissions: [] } } as never, reply as never);
     expect(reply.statusCode).toBe(0);
     expect(reply.body).toBeUndefined();
+    expect(auditLogsCreateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -627,11 +658,29 @@ describe('requirePermission (ALL semantics)', () => {
   test('403 when missing one of two required perms', async () => {
     const reply = buildFakeReply();
     await requirePermission('timesheets.tracker.view', 'crm.clients.view')(
-      { user: { ...HAPPY_USER, permissions: ['timesheets.tracker.view'] } } as never,
+      {
+        method: 'GET',
+        url: '/api/clients',
+        routeOptions: { url: '/' },
+        ip: '10.0.0.5',
+        user: { ...HAPPY_USER, permissions: ['timesheets.tracker.view'] },
+      } as never,
       reply as never,
     );
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Insufficient permissions' });
+    expect(auditLogsCreateMock).toHaveBeenCalledTimes(1);
+    const insert = auditLogsCreateMock.mock.calls[0][0];
+    expect(insert).toMatchObject({
+      userId: 'u1',
+      action: 'auth.permission_denied',
+      entityType: 'route',
+    });
+    expect(insert.details).toMatchObject({
+      secondaryLabel: 'permission',
+      // sorted
+      changedFields: ['crm.clients.view', 'timesheets.tracker.view'],
+    });
   });
 
   test('passes when all required perms are present', async () => {
@@ -666,11 +715,22 @@ describe('requireAnyPermission (ANY semantics)', () => {
   test('403 when none of the required perms are present', async () => {
     const reply = buildFakeReply();
     await requireAnyPermission('a.view', 'b.view')(
-      { user: { ...HAPPY_USER, permissions: ['c.view'] } } as never,
+      {
+        method: 'GET',
+        url: '/api/a',
+        routeOptions: { url: '/' },
+        ip: '10.0.0.5',
+        user: { ...HAPPY_USER, permissions: ['c.view'] },
+      } as never,
       reply as never,
     );
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Insufficient permissions' });
+    expect(auditLogsCreateMock).toHaveBeenCalledTimes(1);
+    expect(auditLogsCreateMock.mock.calls[0][0]).toMatchObject({
+      action: 'auth.permission_denied',
+      entityType: 'route',
+    });
   });
 
   test('passes when at least one matches', async () => {

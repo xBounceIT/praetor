@@ -8,6 +8,7 @@ import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
@@ -322,13 +323,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           supplierInvoicesRepo.findInvoiceForLinkedSale(linkedSaleIdResult.value),
         ]);
         if (!sourceOrder) {
-          return reply.code(404).send({ error: 'Source order not found' });
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Source order not found',
+            action: 'supplier_invoice.create.not_found',
+            entityType: 'supplier_order',
+            entityId: linkedSaleIdResult.value,
+          });
         }
         if (sourceOrder.status !== 'sent') {
-          return reply.code(409).send({ error: 'Invoices can only be created from sent orders' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Invoices can only be created from sent orders',
+            action: 'supplier_invoice.create.conflict',
+            entityType: 'supplier_order',
+            entityId: linkedSaleIdResult.value,
+            details: { secondaryLabel: 'source_order_not_sent', fromValue: sourceOrder.status },
+          });
         }
         if (existingInvoiceId) {
-          return reply.code(409).send({ error: 'An invoice already exists for this order' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'An invoice already exists for this order',
+            action: 'supplier_invoice.create.conflict',
+            entityType: 'supplier_order',
+            entityId: linkedSaleIdResult.value,
+            details: { secondaryLabel: 'duplicate_invoice_for_order' },
+          });
         }
       }
 
@@ -389,7 +410,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         if (!result) {
-          return reply.code(409).send({ error: 'Invoice ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Invoice ID already exists',
+            action: 'supplier_invoice.create.conflict',
+            entityType: 'supplier_invoice',
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
 
         await logAudit({
@@ -408,7 +435,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       } catch (error) {
         const dup = getUniqueViolation(error);
-        if (dup) return reply.code(409).send({ error: duplicateInvoiceError(dup) });
+        if (dup) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: duplicateInvoiceError(dup),
+            action: 'supplier_invoice.create.conflict',
+            entityType: 'supplier_invoice',
+            details: { secondaryLabel: 'unique_violation' },
+          });
+        }
         throw error;
       }
     },
@@ -501,10 +536,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
 
       if (!existingInvoice) {
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'supplier_invoice.update.not_found',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+        });
       }
       if (idConflict) {
-        return reply.code(409).send({ error: 'Invoice ID already exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Invoice ID already exists',
+          action: 'supplier_invoice.update.conflict',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'duplicate_id' },
+        });
       }
       if (nextIdValue !== null) patch.id = nextIdValue;
 
@@ -519,9 +567,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes !== undefined ||
         items !== undefined;
       if (existingInvoice.status !== 'draft' && hasLockedFieldUpdates) {
-        return reply.code(409).send({
-          error: 'Non-draft invoices are read-only',
-          currentStatus: existingInvoice.status,
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft invoices are read-only',
+          action: 'supplier_invoice.update.conflict',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_read_only', fromValue: existingInvoice.status },
+          extraBody: { currentStatus: existingInvoice.status },
         });
       }
 
@@ -578,12 +631,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         resultItems = txResult.items;
       } catch (error) {
         const dup = getUniqueViolation(error);
-        if (dup) return reply.code(409).send({ error: duplicateInvoiceError(dup) });
+        if (dup) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: duplicateInvoiceError(dup),
+            action: 'supplier_invoice.update.conflict',
+            entityType: 'supplier_invoice',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'unique_violation' },
+          });
+        }
         throw error;
       }
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'supplier_invoice.update.not_found',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+        });
       }
 
       const didStatusChange =
@@ -628,10 +696,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existing = await supplierInvoicesRepo.findStatusAndSupplierName(idResult.value);
       if (!existing) {
-        return reply.code(404).send({ error: 'Invoice not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'supplier_invoice.delete.not_found',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+        });
       }
       if (existing.status !== 'draft') {
-        return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only draft invoices can be deleted',
+          action: 'supplier_invoice.delete.conflict',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_status', fromValue: existing.status },
+        });
       }
 
       await supplierInvoicesRepo.deleteById(idResult.value);

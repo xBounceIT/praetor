@@ -20,6 +20,7 @@ import {
 import { createChildLogger } from '../utils/logger.ts';
 import { generateItemId, generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
@@ -340,7 +341,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'supplier_quotes_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Quote ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote ID already exists',
+            action: 'supplier_quote.create.conflict',
+            entityType: 'supplier_quote',
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw error;
       }
@@ -470,10 +477,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : Promise.resolve(false),
       ]);
       if (linkedOrderId && !isIdOnlyUpdate) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an order exists',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'order_exists' },
+        });
       }
       if (idConflict) {
-        return reply.code(409).send({ error: 'Quote ID already exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quote ID already exists',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'duplicate_id' },
+        });
       }
       if (nextIdValue !== null) patch.id = nextIdValue;
 
@@ -499,13 +520,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'supplier_quotes_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Quote ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote ID already exists',
+            action: 'supplier_quote.update.conflict',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw error;
       }
 
       if (!updated) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.update.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -583,7 +617,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierQuoteVersionsRepo.listForQuote(idResult.value),
       ]);
       if (!exists) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.versions_list.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
       return versions;
     },
@@ -618,7 +658,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         versionIdResult.value,
       );
       if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Version not found',
+          action: 'supplier_quote.version_get.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: versionIdResult.value },
+        });
       }
       return version;
     },
@@ -652,21 +699,55 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
 
       if (linkedOrderId) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an order exists',
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'order_exists' },
+        });
       }
       if (!exists) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.restore.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
       if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Version not found',
+          action: 'supplier_quote.restore.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: versionIdResult.value },
+        });
       }
       const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
       if (missingSnapshotReference) {
-        return reply.code(409).send({ error: missingSnapshotReference });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: missingSnapshotReference,
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'snapshot_reference_missing' },
+        });
       }
       const snapshotExpirationDate = version.snapshot.quote.expirationDate;
       if (!snapshotExpirationDate) {
-        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Snapshot expiration date is missing',
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'snapshot_expiration_missing' },
+        });
       }
 
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
@@ -701,7 +782,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!restored.quote) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.restore.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -767,6 +854,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   // the appropriate error response and returns null.
   const assertQuoteEditableForAttachments = async (
     id: string,
+    request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<supplierQuotesRepo.SupplierQuote | null> => {
     const [quote, linkedOrderId] = await Promise.all([
@@ -774,15 +862,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       supplierQuotesRepo.findLinkedOrderId(id),
     ]);
     if (!quote) {
-      reply.code(404).send({ error: 'Supplier quote not found' });
+      await replyError(request, reply, {
+        statusCode: 404,
+        message: 'Supplier quote not found',
+        action: 'supplier_quote_attachment.mutate.not_found',
+        entityType: 'supplier_quote',
+        entityId: id,
+      });
       return null;
     }
     if (linkedOrderId) {
-      reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
+      await replyError(request, reply, {
+        statusCode: 409,
+        message: 'Quotes become read-only once an order exists',
+        action: 'supplier_quote_attachment.mutate.conflict',
+        entityType: 'supplier_quote',
+        entityId: id,
+        details: { secondaryLabel: 'order_exists' },
+      });
       return null;
     }
     if (normalizeSupplierQuoteStatus(quote.status) !== 'draft') {
-      reply.code(409).send({ error: 'Attachments can only be modified on draft supplier quotes' });
+      await replyError(request, reply, {
+        statusCode: 409,
+        message: 'Attachments can only be modified on draft supplier quotes',
+        action: 'supplier_quote_attachment.mutate.conflict',
+        entityType: 'supplier_quote',
+        entityId: id,
+        details: { secondaryLabel: 'non_draft_status', fromValue: quote.status },
+      });
       return null;
     }
     return quote;
@@ -812,7 +920,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const exists = await supplierQuotesRepo.existsById(idResult.value);
       if (!exists) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote_attachment.list.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
       const attachments = await supplierQuoteAttachmentsRepo.listForQuote(idResult.value);
       return attachments.map(projectAttachment);
@@ -842,17 +956,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!request.isMultipart()) {
-        return reply.code(400).send({ error: 'Request must be multipart/form-data' });
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: 'Request must be multipart/form-data',
+          action: 'supplier_quote_attachment.upload.invalid',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'not_multipart' },
+        });
       }
 
-      const quote = await assertQuoteEditableForAttachments(idResult.value, reply);
+      const quote = await assertQuoteEditableForAttachments(idResult.value, request, reply);
       if (!quote) return;
 
       let uploaded: { storedName: string; size: number } | null = null;
       try {
         const part = await request.file();
         if (!part) {
-          return reply.code(400).send({ error: 'A file is required' });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: 'A file is required',
+            action: 'supplier_quote_attachment.upload.invalid',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'no_file' },
+          });
         }
 
         const originalName = part.filename?.trim();
@@ -871,7 +999,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         if (!originalName) {
-          return reply.code(400).send({ error: 'Uploaded file is missing a filename' });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: 'Uploaded file is missing a filename',
+            action: 'supplier_quote_attachment.upload.invalid',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'missing_filename' },
+          });
         }
 
         const mimeType = part.mimetype || 'application/octet-stream';
@@ -883,7 +1018,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(413).send({ error: 'File exceeds the 10 MB upload limit' });
         }
         if (buffer.byteLength === 0) {
-          return reply.code(400).send({ error: 'Uploaded file is empty' });
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: 'Uploaded file is empty',
+            action: 'supplier_quote_attachment.upload.invalid',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'empty_file' },
+          });
         }
 
         uploaded = await saveSupplierQuoteAttachment(buffer, originalName);
@@ -951,7 +1093,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const attachment = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
       if (!attachment || attachment.quoteId !== idResult.value) {
-        return reply.code(404).send({ error: 'Attachment not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Attachment not found',
+          action: 'supplier_quote_attachment.download.not_found',
+          entityType: 'supplier_quote_attachment',
+          entityId: attachmentIdResult.value,
+        });
       }
 
       let opened: OpenedAttachment;
@@ -962,7 +1110,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           { err, attachmentId: attachment.id },
           'Stored attachment file is missing or unreadable',
         );
-        return reply.code(404).send({ error: 'Attachment file is no longer available' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Attachment file is no longer available',
+          action: 'supplier_quote_attachment.download.not_found',
+          entityType: 'supplier_quote_attachment',
+          entityId: attachmentIdResult.value,
+          details: { secondaryLabel: 'file_missing' },
+        });
       }
 
       // RFC 6266: provide an ASCII-safe `filename` for legacy clients plus an RFC 5987
@@ -1007,7 +1162,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
-      const quote = await assertQuoteEditableForAttachments(idResult.value, reply);
+      const quote = await assertQuoteEditableForAttachments(idResult.value, request, reply);
       if (!quote) return;
 
       const deleted = await supplierQuoteAttachmentsRepo.deleteById(
@@ -1015,7 +1170,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value,
       );
       if (!deleted) {
-        return reply.code(404).send({ error: 'Attachment not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Attachment not found',
+          action: 'supplier_quote_attachment.delete.not_found',
+          entityType: 'supplier_quote_attachment',
+          entityId: attachmentIdResult.value,
+        });
       }
 
       await deleteSupplierQuoteAttachment(deleted.storedName).catch((err) => {
@@ -1071,7 +1232,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const deleted = await supplierQuotesRepo.deleteById(idResult.value);
       if (!deleted) {
-        return reply.code(404).send({ error: 'Supplier quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.delete.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
       }
 
       await Promise.all(

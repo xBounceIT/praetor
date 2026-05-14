@@ -8,6 +8,7 @@ import {
 } from '../schemas/common.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const idParamSchema = {
@@ -101,7 +102,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const found = await notificationsRepo.markReadForUser(idResult.value, request.user.id);
 
       if (!found) {
-        return reply.code(404).send({ error: 'Notification not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Notification not found',
+          action: 'notification.mark_read.not_found',
+          entityType: 'notification',
+          entityId: idResult.value,
+        });
       }
 
       return { success: true };
@@ -156,7 +163,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const found = await notificationsRepo.deleteForUser(idResult.value, request.user.id);
 
       if (!found) {
-        return reply.code(404).send({ error: 'Notification not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Notification not found',
+          action: 'notification.delete.not_found',
+          entityType: 'notification',
+          entityId: idResult.value,
+        });
       }
 
       return reply.code(204).send();

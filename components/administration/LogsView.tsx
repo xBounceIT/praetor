@@ -10,6 +10,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 const humanizeToken = (value: string) =>
   value
@@ -156,7 +157,7 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
     return customLabel.toLowerCase();
   }
 
-  const [entityKey, verbKey] = row.action.split('.');
+  const [entityKey, verbKey, suffixKey] = row.action.split('.');
   if (!entityKey || !verbKey) {
     return humanizeToken(row.action);
   }
@@ -165,18 +166,22 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
     defaultValue: humanizeToken(verbKey),
   });
 
-  const targetLabel = row.details?.targetLabel;
-  if (targetLabel) {
-    const entityLabel = t(`logs.operations.entities.${entityKey}`, {
-      defaultValue: humanizeToken(entityKey),
-    });
-    return `${verbLabel.toLowerCase()} ${entityLabel}: ${targetLabel}`;
-  }
+  // For 3-part actions (e.g. `client_offer.update.conflict`) append a suffix like
+  // "(denied)" or "(conflict)" so the failed-operation rows are distinguishable in the table.
+  const suffixSuffix = suffixKey
+    ? t(`logs.operations.suffixes.${suffixKey}`, { defaultValue: '' })
+    : '';
 
   const entityLabel = t(`logs.operations.entities.${entityKey}`, {
     defaultValue: humanizeToken(entityKey),
   });
-  return `${verbLabel.toLowerCase()} ${entityLabel}`;
+
+  const targetLabel = row.details?.targetLabel;
+  const base = targetLabel
+    ? `${verbLabel.toLowerCase()} ${entityLabel}: ${targetLabel}`
+    : `${verbLabel.toLowerCase()} ${entityLabel}`;
+
+  return suffixSuffix ? `${base} ${suffixSuffix}` : base;
 };
 
 interface LogsViewProps {
@@ -198,6 +203,20 @@ const LogsView: React.FC<LogsViewProps> = ({
   const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => getPresetRange('last7Days').start);
   const [endDate, setEndDate] = useState<Date>(() => getPresetRange('last7Days').end);
+  const [usernameFilter, setUsernameFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState<string>('');
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('');
+  // Debounce both free-text filter inputs so we don't refetch on every keystroke.
+  const [debouncedUsername, setDebouncedUsername] = useState('');
+  const [debouncedAction, setDebouncedAction] = useState('');
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedUsername(usernameFilter.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [usernameFilter]);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedAction(actionFilter.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [actionFilter]);
 
   const timeRangeOptions = useMemo(
     () => [
@@ -251,13 +270,19 @@ const LogsView: React.FC<LogsViewProps> = ({
   const loadAuditLogs = useCallback(async () => {
     setError('');
     try {
-      const data = await logsApi.listAudit({ startDate, endDate });
+      const data = await logsApi.listAudit({
+        startDate,
+        endDate,
+        username: debouncedUsername || undefined,
+        action: debouncedAction || undefined,
+        entityType: entityTypeFilter || undefined,
+      });
       setRows(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
       setError(message || t('logs.errors.loadFailed'));
     }
-  }, [t, startDate, endDate]);
+  }, [t, startDate, endDate, debouncedUsername, debouncedAction, entityTypeFilter]);
 
   useEffect(() => {
     const load = async () => {
@@ -323,49 +348,130 @@ const LogsView: React.FC<LogsViewProps> = ({
 
   const dropdownValue = selectedPreset ?? detectedRange ?? '';
 
+  const entityTypeOptions = useMemo(
+    () => [
+      { id: '', name: t('logs.filters.entityTypeAll') },
+      { id: 'auth', name: t('logs.entities.auth', { defaultValue: 'Auth' }) },
+      { id: 'route', name: t('logs.entities.route', { defaultValue: 'Route' }) },
+      { id: 'user', name: t('logs.entities.user', { defaultValue: 'User' }) },
+      { id: 'role', name: t('logs.entities.role', { defaultValue: 'Role' }) },
+      { id: 'client', name: t('logs.entities.client', { defaultValue: 'Client' }) },
+      {
+        id: 'client_offer',
+        name: t('logs.entities.client_offer', { defaultValue: 'Client offer' }),
+      },
+      {
+        id: 'client_quote',
+        name: t('logs.entities.client_quote', { defaultValue: 'Client quote' }),
+      },
+      {
+        id: 'client_order',
+        name: t('logs.entities.client_order', { defaultValue: 'Client order' }),
+      },
+      { id: 'supplier', name: t('logs.entities.supplier', { defaultValue: 'Supplier' }) },
+      {
+        id: 'supplier_order',
+        name: t('logs.entities.supplier_order', { defaultValue: 'Supplier order' }),
+      },
+      {
+        id: 'supplier_quote',
+        name: t('logs.entities.supplier_quote', { defaultValue: 'Supplier quote' }),
+      },
+      {
+        id: 'supplier_invoice',
+        name: t('logs.entities.supplier_invoice', { defaultValue: 'Supplier invoice' }),
+      },
+      { id: 'invoice', name: t('logs.entities.invoice', { defaultValue: 'Invoice' }) },
+      { id: 'product', name: t('logs.entities.product', { defaultValue: 'Product' }) },
+      { id: 'project', name: t('logs.entities.project', { defaultValue: 'Project' }) },
+      { id: 'task', name: t('logs.entities.task', { defaultValue: 'Task' }) },
+      { id: 'work_unit', name: t('logs.entities.work_unit', { defaultValue: 'Work unit' }) },
+    ],
+    [t],
+  );
+
+  const handleEntityTypeChange = useCallback((value: string | string[]) => {
+    setEntityTypeFilter(Array.isArray(value) ? value[0] : value);
+  }, []);
+
   const refreshButton = (
-    <div className="flex items-center gap-3">
-      <DatePickerButton
-        label={t('logs.filters.startDate')}
-        value={startDate}
-        onChange={handleStartDateChange}
-        onClear={handleStartDateClear}
-        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-        startOfWeek={startOfWeek}
-        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-      />
-      <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-      <DatePickerButton
-        label={t('logs.filters.endDate')}
-        value={endDate}
-        onChange={handleEndDateChange}
-        onClear={handleEndDateClear}
-        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-        startOfWeek={startOfWeek}
-        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-      />
-      <SelectControl
-        options={timeRangeOptions}
-        value={dropdownValue}
-        onChange={handleTimeRangeChange}
-        displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleRefreshLogs}
-        disabled={loading || isRefreshing}
-        className={TABLE_CONTROL_BUTTON_CLASSNAME}
-      >
-        {isRefreshing ? (
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-        ) : (
-          <RefreshCw className="size-3.5" aria-hidden="true" />
-        )}
-        {t('common:buttons.refresh')}
-      </Button>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          type="search"
+          value={usernameFilter}
+          onChange={(event) => setUsernameFilter(event.target.value)}
+          placeholder={t('logs.filters.usernamePlaceholder', {
+            defaultValue: 'Filter by username',
+          })}
+          className="h-7 w-44 text-xs"
+          aria-label={t('logs.filters.username', { defaultValue: 'Username' })}
+        />
+        <Input
+          type="search"
+          value={actionFilter}
+          onChange={(event) => setActionFilter(event.target.value)}
+          placeholder={t('logs.filters.actionPlaceholder', {
+            defaultValue: 'Filter by action prefix',
+          })}
+          className="h-7 w-56 text-xs"
+          aria-label={t('logs.filters.action', { defaultValue: 'Action' })}
+        />
+        <SelectControl
+          options={entityTypeOptions}
+          value={entityTypeFilter}
+          onChange={handleEntityTypeChange}
+          displayValue={
+            entityTypeFilter
+              ? undefined
+              : t('logs.filters.entityTypeAll', { defaultValue: 'All entity types' })
+          }
+          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <DatePickerButton
+          label={t('logs.filters.startDate')}
+          value={startDate}
+          onChange={handleStartDateChange}
+          onClear={handleStartDateClear}
+          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+          startOfWeek={startOfWeek}
+          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+        />
+        <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        <DatePickerButton
+          label={t('logs.filters.endDate')}
+          value={endDate}
+          onChange={handleEndDateChange}
+          onClear={handleEndDateClear}
+          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+          startOfWeek={startOfWeek}
+          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+        />
+        <SelectControl
+          options={timeRangeOptions}
+          value={dropdownValue}
+          onChange={handleTimeRangeChange}
+          displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
+          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshLogs}
+          disabled={loading || isRefreshing}
+          className={TABLE_CONTROL_BUTTON_CLASSNAME}
+        >
+          {isRefreshing ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+          )}
+          {t('common:buttons.refresh')}
+        </Button>
+      </div>
     </div>
   );
 

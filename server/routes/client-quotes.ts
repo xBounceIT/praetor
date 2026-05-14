@@ -12,6 +12,7 @@ import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -621,7 +622,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Quote ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote ID already exists',
+            action: 'client_quote.create.conflict',
+            entityType: 'client_quote',
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
@@ -690,12 +697,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
       if (linkedOfferId && !isIdOnlyUpdate) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an offer exists',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'offer_exists' },
+        });
       }
 
       const current = await clientQuotesRepo.findCurrent(idResult.value);
       if (!current) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.update.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
       const currentStatus = current.status;
       const existingDiscount = current.discount;
@@ -711,7 +731,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes !== undefined ||
         isExpiredOverride !== undefined;
       if (currentStatus === 'confirmed' && hasNonStatusOrIdUpdates) {
-        return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Confirmed quotes are read-only',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'confirmed_read_only', fromValue: currentStatus },
+        });
       }
 
       let nextIdValue: string | undefined;
@@ -720,7 +747,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (await clientQuotesRepo.findIdConflict(nextIdValue, idResult.value)) {
-          return reply.code(409).send({ error: 'Quote ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote ID already exists',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_id', toValue: nextIdValue },
+          });
         }
       }
 
@@ -764,8 +798,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (isRestore) {
         if (await clientQuotesRepo.findNonDraftLinkedSale(idResult.value)) {
-          return reply.code(409).send({
-            error: 'Restore is only possible when linked sale orders are in draft status',
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Restore is only possible when linked sale orders are in draft status',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'non_draft_linked_sale' },
           });
         }
         await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value);
@@ -773,7 +812,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (status === 'quoted') {
         if (await clientQuotesRepo.findAnyLinkedSale(idResult.value)) {
-          return reply.code(409).send({ error: 'Cannot revert quote with existing sale orders' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Cannot revert quote with existing sale orders',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'has_linked_sale_orders' },
+          });
         }
       }
 
@@ -873,7 +919,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
-          return reply.code(409).send({ error: 'Quote ID already exists' });
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Quote ID already exists',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_id' },
+          });
         }
         throw err;
       }
@@ -881,7 +934,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const updatedQuote = result.quote;
       const updatedItems = result.items;
       if (!updatedQuote) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.update.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
 
       const updatedQuoteId = updatedQuote.id;
@@ -971,7 +1030,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         quoteVersionsRepo.listForQuote(idResult.value),
       ]);
       if (!exists) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.versions_list.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
       return versions;
     },
@@ -1004,7 +1069,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const version = await quoteVersionsRepo.findById(idResult.value, versionIdResult.value);
       if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Version not found',
+          action: 'client_quote.version_get.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: versionIdResult.value },
+        });
       }
       return version;
     },
@@ -1042,29 +1114,75 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
 
       if (linkedOfferId) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an offer exists',
+          action: 'client_quote.restore.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'offer_exists' },
+        });
       }
       if (!current) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.restore.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
       if (current.status === 'confirmed') {
-        return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Confirmed quotes are read-only',
+          action: 'client_quote.restore.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'confirmed_read_only' },
+        });
       }
       if (nonDraftLinkedSale) {
-        return reply.code(409).send({
-          error: 'Restore is only possible when linked sale orders are in draft status',
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Restore is only possible when linked sale orders are in draft status',
+          action: 'client_quote.restore.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_linked_sale' },
         });
       }
       if (!version) {
-        return reply.code(404).send({ error: 'Version not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Version not found',
+          action: 'client_quote.restore.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: versionIdResult.value },
+        });
       }
       const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
       if (missingSnapshotReference) {
-        return reply.code(409).send({ error: missingSnapshotReference });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: missingSnapshotReference,
+          action: 'client_quote.restore.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'snapshot_reference_missing' },
+        });
       }
       const snapshotExpirationDate = version.snapshot.quote.expirationDate;
       if (!snapshotExpirationDate) {
-        return reply.code(409).send({ error: 'Snapshot expiration date is missing' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Snapshot expiration date is missing',
+          action: 'client_quote.restore.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'snapshot_expiration_missing' },
+        });
       }
 
       const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
@@ -1106,7 +1224,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (!restored.quote) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.restore.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
 
       await logAudit({
@@ -1157,10 +1281,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const status = await clientQuotesRepo.findStatusAndClientName(idResult.value);
       if (!status) {
-        return reply.code(404).send({ error: 'Quote not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote not found',
+          action: 'client_quote.delete.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
       }
       if (status.status === 'confirmed') {
-        return reply.code(409).send({ error: 'Cannot delete a confirmed quote' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot delete a confirmed quote',
+          action: 'client_quote.delete.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'confirmed_status' },
+        });
       }
 
       await clientQuotesRepo.deleteById(idResult.value);

@@ -8,6 +8,7 @@ import { applyExternalRoleIdsForUserIfMatched } from '../services/external-auth.
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const authUserSchema = {
@@ -301,7 +302,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const hasRole = await rolesRepo.userHasRole(session.userId, roleIdResult.value);
       if (!hasRole) {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'auth.role_switch.denied',
+          entityType: 'role',
+          entityId: roleIdResult.value,
+          details: { targetLabel: roleIdResult.value, secondaryLabel: 'role_switch' },
+        });
       }
 
       const permissions = await getRolePermissions(roleIdResult.value);

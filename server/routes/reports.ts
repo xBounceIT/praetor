@@ -18,6 +18,7 @@ import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
 type AiProvider = 'gemini' | 'openrouter';
@@ -74,9 +75,19 @@ export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   };
 };
 
-const ensureAiEnabled = (cfg: GeneralAiConfig, reply: FastifyReply) => {
+const ensureAiEnabled = async (
+  cfg: GeneralAiConfig,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
   if (!cfg.enableAiReporting) {
-    reply.code(400).send({ error: 'AI Reporting is disabled by administration.' });
+    await replyError(request, reply, {
+      statusCode: 400,
+      message: 'AI Reporting is disabled by administration.',
+      action: 'reports_ai.access.invalid',
+      entityType: 'reports_ai',
+      details: { secondaryLabel: 'ai_reporting_disabled' },
+    });
     return false;
   }
   return true;
@@ -1370,7 +1381,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
       const userId = request.user.id;
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
       return reportsAiChatRepo.listSessionsForUser(userId);
     },
   );
@@ -1403,7 +1414,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!titleResult.ok) return badRequest(reply, titleResult.message);
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const id = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);
       await reportsAiChatRepo.createSession(id, userId, titleResult.value || '');
@@ -1458,10 +1469,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       if (!(await reportsAiChatRepo.sessionExistsForUser(idResult.value, userId))) {
-        return reply.code(404).send({ error: 'Session not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Session not found',
+          action: 'reports_ai_session.access.not_found',
+          entityType: 'reports_ai_session',
+          entityId: idResult.value,
+        });
       }
 
       const messages = await reportsAiChatRepo.listMessagesForSession(idResult.value, {
@@ -1509,10 +1526,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       if (!(await reportsAiChatRepo.archiveSession(idResult.value, userId))) {
-        return reply.code(404).send({ error: 'Session not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Session not found',
+          action: 'reports_ai_session.archive.not_found',
+          entityType: 'reports_ai_session',
+          entityId: idResult.value,
+        });
       }
 
       return reply.send({ success: true });
@@ -1559,7 +1582,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const uiLanguage = normalizeUiLanguage(language);
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
       const { provider, apiKey, modelId } = providerKeyModel;
@@ -1581,7 +1604,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
         const session = await reportsAiChatRepo.getActiveSessionForUser(resolvedSessionId, userId);
-        if (!session) return reply.code(404).send({ error: 'Session not found' });
+        if (!session) {
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Session not found',
+            action: 'reports_ai_session.stream.not_found',
+            entityType: 'reports_ai_session',
+            entityId: resolvedSessionId,
+          });
+        }
         shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
         resolvedSessionId = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);
@@ -1786,7 +1817,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const uiLanguage = normalizeUiLanguage(language);
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
       const { provider, apiKey, modelId } = providerKeyModel;
@@ -1805,14 +1836,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       request.raw.once('close', handleClientDisconnect);
 
       if (!(await reportsAiChatRepo.getActiveSessionForUser(sessionIdResult.value, userId))) {
-        return reply.code(404).send({ error: 'Session not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Session not found',
+          action: 'reports_ai_session.regenerate.not_found',
+          entityType: 'reports_ai_session',
+          entityId: sessionIdResult.value,
+        });
       }
 
       const userMsgRef = await reportsAiChatRepo.findUserMessage(
         messageIdResult.value,
         sessionIdResult.value,
       );
-      if (!userMsgRef) return reply.code(404).send({ error: 'User message not found' });
+      if (!userMsgRef) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User message not found',
+          action: 'reports_ai_message.regenerate.not_found',
+          entityType: 'reports_ai_message',
+          entityId: messageIdResult.value,
+        });
+      }
       const userMsgCreatedAt = userMsgRef.createdAt;
 
       const pairedAssistant = await reportsAiChatRepo.findFirstAssistantAfter(
@@ -1999,7 +2044,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const uiLanguage = normalizeUiLanguage(language);
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
       const { provider, apiKey, modelId } = providerKeyModel;
@@ -2013,7 +2058,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
         const session = await reportsAiChatRepo.getActiveSessionForUser(resolvedSessionId, userId);
-        if (!session) return reply.code(404).send({ error: 'Session not found' });
+        if (!session) {
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Session not found',
+            action: 'reports_ai_session.stream.not_found',
+            entityType: 'reports_ai_session',
+            entityId: resolvedSessionId,
+          });
+        }
         shouldAutoTitle = [reportsAiChatRepo.DEFAULT_CHAT_TITLE, ''].includes(session.title.trim());
       } else {
         resolvedSessionId = generatePrefixedId(reportsAiChatRepo.RPT_CHAT_ID_PREFIX);

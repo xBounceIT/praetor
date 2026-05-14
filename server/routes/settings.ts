@@ -19,6 +19,7 @@ import {
   hashPersonalAccessToken,
 } from '../utils/personal-access-token.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   forbidden,
@@ -243,7 +244,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const activeTokens = await mcpTokensRepo.listForUser(request.user.id);
       if (activeTokens.length >= MAX_ACTIVE_MCP_TOKENS_PER_USER) {
-        return reply.code(409).send({ error: 'Maximum active MCP token limit reached' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Maximum active MCP token limit reached',
+          action: 'mcp_token.create.conflict',
+          entityType: 'mcp_token',
+          details: { secondaryLabel: 'token_limit_reached' },
+        });
       }
 
       const rawToken = mcpTokensRepo.generateRawToken();
@@ -284,7 +291,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const revoked = await mcpTokensRepo.revokeForUser(idResult.value, request.user.id);
-      if (!revoked) return reply.code(404).send({ error: 'MCP token not found' });
+      if (!revoked) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'MCP token not found',
+          action: 'mcp_token.delete.not_found',
+          entityType: 'mcp_token',
+          entityId: idResult.value,
+        });
+      }
 
       return reply.code(204).send();
     },
@@ -335,7 +350,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const passwordHash = await usersRepo.getPasswordHash(request.user.id);
       if (passwordHash === null) {
-        return reply.code(404).send({ error: 'User not found' });
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.password_change.not_found',
+          entityType: 'user',
+          entityId: request.user.id,
+        });
       }
 
       const isMatch = await bcrypt.compare(currentPasswordResult.value, passwordHash);
