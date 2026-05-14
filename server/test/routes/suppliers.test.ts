@@ -1,4 +1,14 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
@@ -191,6 +201,47 @@ describe('POST /api/suppliers', () => {
         entityType: 'supplier',
       }),
     );
+  });
+
+  test('201 generates unique ids for same-millisecond supplier creates', async () => {
+    const fixedNow = 1_700_000_000_000;
+    const dateNowSpy = spyOn(Date, 'now').mockReturnValue(fixedNow);
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_SUPPLIER,
+      ...input,
+    }));
+
+    try {
+      const [firstRes, secondRes] = await Promise.all([
+        testApp.inject({
+          method: 'POST',
+          url: '/api/suppliers',
+          headers: authHeader(),
+          payload: { name: 'ACME 1', vatNumber: 'IT123' },
+        }),
+        testApp.inject({
+          method: 'POST',
+          url: '/api/suppliers',
+          headers: authHeader(),
+          payload: { name: 'ACME 2', vatNumber: 'IT456' },
+        }),
+      ]);
+
+      expect(firstRes.statusCode).toBe(201);
+      expect(secondRes.statusCode).toBe(201);
+      expect(createMock).toHaveBeenCalledTimes(2);
+
+      const firstInput = createMock.mock.calls[0]?.[0] as { id: string; createdAt: number };
+      const secondInput = createMock.mock.calls[1]?.[0] as { id: string; createdAt: number };
+
+      expect(firstInput.id).toMatch(/^s-/);
+      expect(secondInput.id).toMatch(/^s-/);
+      expect(firstInput.id).not.toBe(secondInput.id);
+      expect(firstInput.createdAt).toBe(fixedNow);
+      expect(secondInput.createdAt).toBe(fixedNow);
+    } finally {
+      dateNowSpy.mockRestore();
+    }
   });
 
   test('201 accepts crm.suppliers_all.create without base create', async () => {
