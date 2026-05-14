@@ -22,6 +22,22 @@ Set at least:
 Fresh installs create the bootstrap admin as `admin` / `password`. Change that password after
 the first login.
 
+### PostgreSQL TLS (optional)
+
+The backend uses `node-postgres`, which does **not** honor `PGSSLMODE` — TLS must be opted
+in via the app-level `DB_SSL` env var:
+
+- Bundled compose stack (no TLS on the Postgres container): leave `DB_SSL` unset.
+- Managed Postgres (RDS, Cloud SQL, Supabase, etc.) where the server presents a certificate:
+  set `DB_SSL=require`. The connection is encrypted but the server certificate is not
+  validated.
+- Strict deployments: set `DB_SSL=verify-full` and provide the CA either inline via
+  `DB_SSL_CA` (PEM string) or as a path via `DB_SSL_CA_FILE`. Without a CA, the system
+  trust store is used.
+
+`DB_SSL` is read by both the runtime pool and `drizzle-kit` migrations, so the same value
+applies to both paths.
+
 ## 2) Authenticate to Registry (if private)
 
 ```bash
