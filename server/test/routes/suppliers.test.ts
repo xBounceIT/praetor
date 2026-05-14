@@ -364,6 +364,18 @@ describe('PUT /api/suppliers/:id', () => {
     );
   });
 
+  test('400 invalid isDisabled value does not update supplier', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { isDisabled: 'ture' } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('200 accepts crm.suppliers_all.update without base update', async () => {
     getRolePermissionsMock.mockResolvedValue(['crm.suppliers_all.update']);
     updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, name: 'ACME 2' });

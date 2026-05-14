@@ -4,7 +4,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
-import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
+import { badRequest, parseBooleanField, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
   type: 'object',
@@ -121,8 +121,13 @@ const validateProviderBody = async (
     validated.name = name.value;
   }
 
-  if (source.enabled !== undefined) {
-    validated.enabled = parseBoolean(source.enabled);
+  const enabledResult = parseBooleanField(source, 'enabled');
+  if (!enabledResult.ok) {
+    badRequest(reply, enabledResult.message);
+    return null;
+  }
+  if (enabledResult.value !== undefined) {
+    validated.enabled = enabledResult.value;
   } else if (options.isCreate) {
     validated.enabled = false;
   }
