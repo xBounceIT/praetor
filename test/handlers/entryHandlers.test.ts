@@ -192,6 +192,38 @@ describe('makeEntryHandlers', () => {
     }
   });
 
+  test('addBulk merges successfully created entries even if some fail', async () => {
+    let counter = 0;
+    apiMocks.entriesCreate.mockImplementation((_data: unknown) => {
+      counter += 1;
+      if (counter === 2) return Promise.reject(new Error('boom'));
+      return Promise.resolve({ id: `e-new-${counter}`, createdAt: counter * 100 });
+    });
+    const entries = makeStubSetter<EntryLike>([{ id: 'e0', createdAt: 50 }]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1', costPerHour: 25 } as never,
+      viewingUserId: 'u2',
+      setEntries: entries.setter,
+    });
+
+    const restore = silenceConsole();
+    try {
+      await handlers.addBulk([
+        { task: 'a' } as never,
+        { task: 'b' } as never,
+        { task: 'c' } as never,
+      ]);
+      expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(3);
+      const ids = entries.get().map((e) => e.id);
+      expect(ids).toContain('e-new-1');
+      expect(ids).toContain('e-new-3');
+      expect(ids).toContain('e0');
+      expect(ids).not.toContain('e-new-2');
+    } finally {
+      restore();
+    }
+  });
+
   test('delete removes matching entry', async () => {
     apiMocks.entriesDelete.mockImplementation(() => Promise.resolve());
     const entries = makeStubSetter<EntryLike>([
