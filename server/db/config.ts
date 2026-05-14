@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
 import type { PoolConfig } from 'pg';
+import { createChildLogger } from '../utils/logger.ts';
+
+const logger = createChildLogger({ module: 'db/config' });
 
 const envInt = (
   key: string,
@@ -13,10 +17,15 @@ const envInt = (
 
 const DEFAULT_DB_PORT = 5432;
 
-export const getDbConnectionConfig = (): Pick<
-  PoolConfig,
-  'host' | 'port' | 'database' | 'user' | 'password'
-> => ({
+export interface DbConnectionConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
+export const getDbConnectionConfig = (): DbConnectionConfig => ({
   host: process.env.DB_HOST || 'localhost',
   port: envInt('DB_PORT', DEFAULT_DB_PORT, { min: 1, max: 65_535 }),
   database: process.env.DB_NAME || 'praetor',
@@ -24,8 +33,47 @@ export const getDbConnectionConfig = (): Pick<
   password: process.env.DB_PASSWORD || 'praetor',
 });
 
+const invalidSslWarnings = new Set<string>();
+const warnInvalidSsl = (value: string) => {
+  if (invalidSslWarnings.has(value)) return;
+  invalidSslWarnings.add(value);
+  logger.warn(
+    { value },
+    'Ignoring unknown DB_SSL value. Expected one of: disable, false, true, require, verify-ca, verify-full.',
+  );
+};
+
+const readSslCa = (): string | undefined => {
+  const inline = process.env.DB_SSL_CA?.trim();
+  if (inline) return inline;
+  const file = process.env.DB_SSL_CA_FILE?.trim();
+  if (!file) return undefined;
+  return readFileSync(file, 'utf8');
+};
+
+// `node-postgres` does not honor PGSSLMODE — only libpq does — so SSL must be
+// configured here in code. Defaults to off to preserve the bundled docker-compose
+// stack (Postgres image has no TLS). Enable via DB_SSL=require|verify-ca|verify-full.
+// verify-ca skips the hostname check (matching libpq), verify-full keeps it.
+export const getDbSslConfig = (): PoolConfig['ssl'] => {
+  const raw = process.env.DB_SSL?.trim().toLowerCase();
+  if (!raw || raw === 'false' || raw === 'disable') return false;
+  if (raw === 'true' || raw === 'require') return { rejectUnauthorized: false };
+  if (raw === 'verify-full' || raw === 'verify-ca') {
+    const ca = readSslCa();
+    return {
+      rejectUnauthorized: true,
+      ...(ca && { ca }),
+      ...(raw === 'verify-ca' && { checkServerIdentity: () => undefined }),
+    };
+  }
+  warnInvalidSsl(raw);
+  return false;
+};
+
 export const createDbPoolConfig = (overrides: PoolConfig = {}): PoolConfig => ({
   ...getDbConnectionConfig(),
+  ssl: getDbSslConfig(),
   max: envInt('PG_POOL_MAX', 10, { min: 1 }),
   idleTimeoutMillis: envInt('PG_POOL_IDLE_TIMEOUT_MS', 300_000, { min: 0 }),
   connectionTimeoutMillis: envInt('PG_POOL_CONN_TIMEOUT_MS', 2_000, { min: 0 }),
