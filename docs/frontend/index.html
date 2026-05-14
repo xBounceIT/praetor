@@ -95,7 +95,7 @@ procedure for an existing volume.</p>
 <li>
 <p><strong>Login</strong>:</p>
 <ul>
-<li>Bootstrap Admin: <code>admin</code> / <code>password</code></li>
+<li>Bootstrap Admin: <code>admin</code> / value of <code>ADMIN_DEFAULT_PASSWORD</code> (falls back to <code>password</code> when the env var is unset; an in-app warning surfaces until the admin password is changed away from any insecure default)</li>
 <li>Demo Manager: <code>manager</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
 <li>Demo User: <code>user</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
 </ul>

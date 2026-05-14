@@ -21,6 +21,9 @@ const apiMocks = {
     (id: string, updates: unknown): Promise<OfferLike> =>
       Promise.resolve({ id, ...(updates as object) }),
   ),
+  clientOffersRevertToDraft: mock(
+    (id: string, _reason?: string): Promise<OfferLike> => Promise.resolve({ id }),
+  ),
   clientOffersCreate: mock(
     (data: unknown): Promise<OfferLike> =>
       Promise.resolve({ id: 'offer-new', ...(data as object) }),
@@ -52,6 +55,8 @@ mock.module('../../../services/api', () => ({
       list: () => apiMocks.clientOffersList(),
       create: (data: unknown) => apiMocks.clientOffersCreate(data),
       update: (id: string, updates: unknown) => apiMocks.clientOffersUpdate(id, updates),
+      revertToDraft: (id: string, reason?: string) =>
+        apiMocks.clientOffersRevertToDraft(id, reason),
       delete: (id: string) => apiMocks.clientOffersDelete(id),
     },
     clientsOrders: {
@@ -99,11 +104,15 @@ const makeStubScalarSetter = <T>(initial: T) => {
 
 describe('makeQuoteHandlers', () => {
   beforeEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockClear());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockClear();
+    });
   });
 
   afterEach(() => {
-    Object.values(apiMocks).forEach((m) => m.mockReset());
+    Object.values(apiMocks).forEach((m) => {
+      m.mockReset();
+    });
   });
 
   test('updateQuote sees fresh quotes via getter (post-creation push)', async () => {
@@ -265,6 +274,32 @@ describe('makeQuoteHandlers', () => {
 
     await handlers.updateClientOffer('o1', {} as never);
 
+    expect(filterIdHolder.get()).toBe('o1-v2');
+  });
+
+  test('revertClientOfferToDraft uses the dedicated revert endpoint and fresh filter getter', async () => {
+    const filterIdHolder = makeStubScalarSetter<string | null>('o1');
+    apiMocks.clientOffersRevertToDraft.mockImplementation((_id: string) =>
+      Promise.resolve({ id: 'o1-v2' }),
+    );
+
+    const handlers = makeQuoteHandlers({
+      getQuotes: (() => []) as never,
+      getClientQuoteFilterId: () => null,
+      getClientOfferFilterId: () => filterIdHolder.get(),
+      setQuotes: makeStubSetter<QuoteLike>([]).setter,
+      setClientOffers: makeStubSetter<OfferLike>([]).setter,
+      setClientsOrders: makeStubSetter<OrderLike>([]).setter,
+      setInvoices: makeStubSetter<InvoiceLike>([]).setter,
+      setClientQuoteFilterId: makeStubScalarSetter<string | null>(null).setter,
+      setClientOfferFilterId: filterIdHolder.setter,
+      setActiveView: makeStubScalarSetter<string>('').setter,
+      refreshSupplierQuoteFlow: () => Promise.resolve(),
+    });
+
+    await handlers.revertClientOfferToDraft('o1', 'wrong status');
+
+    expect(apiMocks.clientOffersRevertToDraft).toHaveBeenCalledWith('o1', 'wrong status');
     expect(filterIdHolder.get()).toBe('o1-v2');
   });
 

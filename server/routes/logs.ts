@@ -14,6 +14,7 @@ const auditLogDetailsSchema = {
     counts: { type: 'object', additionalProperties: { type: 'number' } },
     fromValue: { type: 'string' },
     toValue: { type: 'string' },
+    reason: { type: 'string' },
   },
   additionalProperties: false,
 } as const;

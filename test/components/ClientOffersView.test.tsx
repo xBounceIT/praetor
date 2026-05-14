@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
@@ -55,6 +56,14 @@ const globexSent = buildOffer({
   clientId: 'c-2',
   clientName: 'Globex Industries',
   status: 'sent',
+});
+const terminalAccepted = buildOffer({
+  id: 'O-ACME-ACCEPTED',
+  status: 'accepted',
+});
+const terminalDenied = buildOffer({
+  id: 'O-ACME-DENIED',
+  status: 'denied',
 });
 
 const baseProps = {
@@ -135,6 +144,56 @@ describe('<ClientOffersView /> filter controls', () => {
     pickStatusOption('sales:clientOffers.allStatuses');
     expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();
     expect(screen.getByText('O-GLOBEX-SENT')).toBeInTheDocument();
+  });
+});
+
+describe('<ClientOffersView /> terminal status revert action', () => {
+  test('hides terminal revert when caller is not privileged', () => {
+    render(<ClientOffersView {...baseProps} offers={[terminalAccepted, terminalDenied]} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'sales:clientOffers.revertToDraft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('hides terminal revert for accepted offers that already have a linked order', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[terminalAccepted]}
+        offerIdsWithOrders={new Set([terminalAccepted.id])}
+        canRevertTerminalStatus
+        onRevertOfferToDraft={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'sales:clientOffers.revertToDraft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('confirms terminal revert with an optional audit reason', async () => {
+    const user = userEvent.setup();
+    const onRevertOfferToDraft = mock(() => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[terminalAccepted]}
+        canRevertTerminalStatus
+        onRevertOfferToDraft={onRevertOfferToDraft}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await user.click(await screen.findByTestId('client-offer-revert-O-ACME-ACCEPTED'));
+    await user.type(screen.getByLabelText('sales:clientOffers.revertReasonLabel'), 'wrong status');
+    await user.click(
+      screen.getByRole('button', { name: 'sales:clientOffers.confirmRevertToDraft' }),
+    );
+
+    await waitFor(() =>
+      expect(onRevertOfferToDraft).toHaveBeenCalledWith('O-ACME-ACCEPTED', 'wrong status'),
+    );
   });
 });
 
