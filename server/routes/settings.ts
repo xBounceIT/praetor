@@ -11,6 +11,7 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
@@ -373,6 +374,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         reply.header('x-auth-token', refreshedToken);
       }
+
+      await logAudit({
+        request,
+        action: 'password.updated',
+        entityType: 'user',
+        entityId: request.user.id,
+      });
 
       if (request.user.username === ADMIN_USERNAME) {
         if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {

@@ -7,6 +7,7 @@ import * as realPersonalAccessTokensRepo from '../../repositories/personalAccess
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -26,6 +27,7 @@ const settingsRepoSnap = { ...realSettingsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const mcpTokensRepoSnap = { ...realMcpTokensRepo };
 const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
+const auditSnap = { ...realAudit };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
@@ -47,6 +49,7 @@ const createPersonalAccessTokenIfMissingMock = mock();
 const renewPersonalAccessTokenForUserMock = mock();
 const bcryptCompareMock = mock();
 const bcryptHashMock = mock();
+const logAuditMock = mock(async () => undefined);
 
 let routePlugin: FastifyPluginAsync;
 
@@ -91,6 +94,10 @@ beforeAll(async () => {
     createForUserIfMissing: createPersonalAccessTokenIfMissingMock,
     renewForUser: renewPersonalAccessTokenForUserMock,
   }));
+  mock.module('../../utils/audit.ts', () => ({
+    ...auditSnap,
+    logAudit: logAuditMock,
+  }));
   mock.module('bcryptjs', () => ({
     default: { compare: bcryptCompareMock, hash: bcryptHashMock },
     compare: bcryptCompareMock,
@@ -111,6 +118,7 @@ afterAll(() => {
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
     ...personalAccessTokensRepoSnap,
   }));
+  mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -159,6 +167,7 @@ const allMocks = [
   renewPersonalAccessTokenForUserMock,
   bcryptCompareMock,
   bcryptHashMock,
+  logAuditMock,
 ];
 
 let testApp: FastifyInstance;
@@ -198,6 +207,7 @@ beforeEach(async () => {
     created: false,
   });
   renewPersonalAccessTokenForUserMock.mockResolvedValue(HAPPY_PERSONAL_ACCESS_TOKEN);
+  logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/settings');
 });
@@ -555,6 +565,14 @@ describe('PUT /api/settings/password', () => {
 
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'password.updated',
+        entityType: 'user',
+        entityId: 'u1',
+      }),
+    );
   });
 
   test('200 admin changing away from default password removes warning', async () => {
@@ -611,6 +629,7 @@ describe('PUT /api/settings/password', () => {
     expect(res.statusCode).toBe(500);
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   // Regression: rotate succeeded, so the rotated x-auth-token must be on the
@@ -635,6 +654,13 @@ describe('PUT /api/settings/password', () => {
     const rotated = res.headers['x-auth-token'];
     expect(typeof rotated).toBe('string');
     expect(decodeForAssertion(rotated as string).sessionVersion).toBe(2);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'password.updated',
+        entityType: 'user',
+        entityId: 'u1',
+      }),
+    );
   });
 
   test('400 missing currentPassword', async () => {
@@ -695,6 +721,7 @@ describe('PUT /api/settings/password', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/Incorrect current password/);
     expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('400 newPassword equals currentPassword', async () => {
@@ -710,6 +737,7 @@ describe('PUT /api/settings/password', () => {
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     expect(bcryptHashMock).not.toHaveBeenCalled();
     expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {
@@ -736,6 +764,7 @@ describe('PUT /api/settings/password', () => {
     expect(getPasswordHashMock).not.toHaveBeenCalled();
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     expect(rotatePasswordAndBumpSessionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 
