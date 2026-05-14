@@ -86,7 +86,8 @@
       "ldap": "LDAP",
       "oidc": "OpenID Connect",
       "saml": "SAML"
-    }
+    },
+    "failedToLoadAssignments": "Failed to load assignments. Saving now could overwrite existing data — please close and retry."
   },
   "workUnits": {
     "title": "Work Units",
@@ -113,6 +114,7 @@
     "newWorkUnit": "New Work Unit",
     "saveChanges": "Save Changes",
     "failedToSaveAssignments": "Failed to save assignments",
+    "failedToLoadUnitUsers": "Failed to load unit members. Saving now could remove existing members — please close and retry.",
     "deleteWorkUnit": "Delete Work Unit?",
     "unitName": "Unit Name",
     "selectManagers": "Select managers...",

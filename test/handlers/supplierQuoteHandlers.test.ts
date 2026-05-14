@@ -24,6 +24,14 @@ const apiMocks = {
   supplierInvoicesList: mock((): Promise<unknown[]> => Promise.resolve([])),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     supplierQuotes: {
@@ -114,18 +122,16 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
 
 const silenceConsole = () => {
   const originalError = console.error;
-  const originalAlert = globalThis.alert;
   console.error = mock(() => {}) as unknown as typeof console.error;
-  globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
   return () => {
     console.error = originalError;
-    globalThis.alert = originalAlert;
   };
 };
 
 describe('makeSupplierQuoteHandlers', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
+    toastErrorMock.mockClear();
   });
 
   afterEach(() => {
@@ -163,12 +169,12 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-new', status: 'draft' }]);
   });
 
-  test('addSupplierQuote swallows errors', async () => {
+  test('addSupplierQuote rethrows api error', async () => {
     apiMocks.supplierQuotesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.addSupplierQuote({} as never);
+      await expect(ctx.handlers.addSupplierQuote({} as never)).rejects.toThrow('boom');
       expect(ctx.supplierQuotes.get()).toEqual([]);
     } finally {
       restore();
@@ -200,12 +206,12 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(ctx.supplierQuoteFilterId.get()).toBe('sq-other');
   });
 
-  test('updateSupplierQuote swallows errors', async () => {
+  test('updateSupplierQuote rethrows api error', async () => {
     apiMocks.supplierQuotesUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.updateSupplierQuote('sq-1', {} as never);
+      await expect(ctx.handlers.updateSupplierQuote('sq-1', {} as never)).rejects.toThrow('boom');
     } finally {
       restore();
     }
@@ -268,12 +274,12 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-2' }]);
   });
 
-  test('deleteSupplierQuote swallows errors', async () => {
+  test('deleteSupplierQuote rethrows api error', async () => {
     apiMocks.supplierQuotesDelete.mockImplementation(() => Promise.reject(new Error('nope')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.deleteSupplierQuote('sq-1');
+      await expect(ctx.handlers.deleteSupplierQuote('sq-1')).rejects.toThrow('nope');
     } finally {
       restore();
     }
@@ -371,7 +377,7 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(items[0].productId).toBe('');
   });
 
-  test('createSupplierOrderFromQuote alerts on create error', async () => {
+  test('createSupplierOrderFromQuote toasts on create error', async () => {
     apiMocks.supplierOrdersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
@@ -385,6 +391,8 @@ describe('makeSupplierQuoteHandlers', () => {
         items: [],
       } as never);
       expect(ctx.setActiveView).not.toHaveBeenCalled();
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(toastErrorMock.mock.calls[0][0]).toBe('boom');
     } finally {
       restore();
     }

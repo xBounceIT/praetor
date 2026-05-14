@@ -3,6 +3,7 @@ import api from '../../services/api';
 import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
+import { toastError } from '../../utils/toast';
 
 /**
  * Quote handlers read three pieces of shared state — `quotes`,
@@ -76,6 +77,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       setQuotes((prev) => [quote, ...prev]);
     } catch (err) {
       console.error('Failed to add quote:', err);
+      throw err;
     }
   };
 
@@ -102,6 +104,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       await refreshClientQuoteFlow();
     } catch (err) {
       console.error('Failed to update quote:', err);
+      throw err;
     }
   };
 
@@ -111,6 +114,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       setQuotes((prev) => prev.filter((q) => q.id !== id));
     } catch (err) {
       console.error('Failed to delete quote:', err);
+      throw err;
     }
   };
 
@@ -171,7 +175,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       setActiveView('sales/client-offers');
     } catch (err) {
       console.error('Failed to create offer from quote:', err);
-      alert((err as Error).message || 'Failed to create offer from quote');
+      toastError((err as Error).message || 'Failed to create offer from quote');
     }
   };
 
@@ -181,6 +185,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       await refreshClientOrderFlow();
     } catch (err) {
       console.error('Failed to update order:', err);
+      throw err;
     }
   };
 
@@ -190,6 +195,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       setClientsOrders((prev) => prev.filter((o) => o.id !== id));
     } catch (err) {
       console.error('Failed to delete order:', err);
+      throw err;
     }
   };
 
@@ -221,7 +227,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to create order from offer:', err);
-      alert((err as Error).message || 'Failed to create order from offer');
+      toastError((err as Error).message || 'Failed to create order from offer');
     }
   };
 
