@@ -25,6 +25,7 @@ import {
   updateTimeEntry,
 } from '../services/timeEntries.ts';
 import { isPastLocalDate } from '../utils/date.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType } from '../utils/unit-type.ts';
 
 const hasPermission = (user: McpAuthenticatedUser, permission: string) =>
@@ -738,7 +739,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateMcpToken],
+      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateMcpToken],
       schema: {
         hide: true,
       },

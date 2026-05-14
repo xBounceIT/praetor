@@ -45,10 +45,23 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import praetorFaviconUrl from '../praetor-favicon.png';
-import type { CreatedMcpToken, McpToken, PersonalAccessToken, Settings } from '../services/api';
+import type {
+  CreatedMcpToken,
+  McpToken,
+  McpTokenScope,
+  PersonalAccessToken,
+  Settings,
+} from '../services/api';
 import type { UserAuthMethod } from '../types';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
@@ -61,7 +74,7 @@ export interface UserSettingsProps {
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   onListMcpTokens: () => Promise<McpToken[]>;
-  onCreateMcpToken: (name: string) => Promise<CreatedMcpToken>;
+  onCreateMcpToken: (name: string, scope: McpTokenScope) => Promise<CreatedMcpToken>;
   onRevokeMcpToken: (id: string) => Promise<unknown>;
   onGetPersonalAccessToken: () => Promise<PersonalAccessToken>;
   onRenewPersonalAccessToken: () => Promise<PersonalAccessToken>;
@@ -216,6 +229,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [mcpTokens, setMcpTokens] = useState<McpToken[]>([]);
   const [mcpTokenName, setMcpTokenName] = useState('');
+  const [mcpTokenScope, setMcpTokenScope] = useState<McpTokenScope>('full');
   const [rawMcpToken, setRawMcpToken] = useState('');
   const [mcpError, setMcpError] = useState('');
   const [isLoadingMcpTokens, setIsLoadingMcpTokens] = useState(false);
@@ -386,10 +400,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     setMcpError('');
     setRawMcpToken('');
     try {
-      const created = await onCreateMcpToken(name);
+      const created = await onCreateMcpToken(name, mcpTokenScope);
       setMcpTokens((prev) => [created.token, ...prev]);
       setRawMcpToken(created.rawToken);
       setMcpTokenName('');
+      setMcpTokenScope('full');
     } catch (err) {
       console.error('Failed to create MCP token:', err);
       setMcpError(t('mcp.createFailed'));
@@ -937,7 +952,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
             <form
               onSubmit={handleCreateMcpToken}
-              className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]"
+              className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_minmax(10rem,auto)_auto]"
             >
               <Field>
                 <FieldLabel htmlFor="mcp-token-name">{t('mcp.nameLabel')}</FieldLabel>
@@ -949,6 +964,26 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   placeholder={t('mcp.namePlaceholder')}
                   maxLength={120}
                 />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="mcp-token-scope">{t('mcp.scopeLabel')}</FieldLabel>
+                <Select
+                  value={mcpTokenScope}
+                  onValueChange={(value) => setMcpTokenScope(value as McpTokenScope)}
+                >
+                  <SelectTrigger id="mcp-token-scope">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">{t('mcp.scopeFull')}</SelectItem>
+                    <SelectItem value="read_only">{t('mcp.scopeReadOnly')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  {mcpTokenScope === 'read_only'
+                    ? t('mcp.scopeReadOnlyDescription')
+                    : t('mcp.scopeFullDescription')}
+                </FieldDescription>
               </Field>
               <Button
                 type="submit"
@@ -1016,7 +1051,17 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center"
                     >
                       <div>
-                        <p className="font-semibold text-foreground">{token.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{token.name}</p>
+                          <span
+                            className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                            data-scope={token.scope}
+                          >
+                            {token.scope === 'read_only'
+                              ? t('mcp.scopeReadOnly')
+                              : t('mcp.scopeFull')}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           {token.tokenPrefix}... · {t('mcp.created')}{' '}
                           {formatMcpTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}

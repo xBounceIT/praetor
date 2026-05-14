@@ -65,16 +65,18 @@ const mcpTokenSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     tokenPrefix: { type: 'string' },
+    scope: { type: 'string', enum: [...mcpTokensRepo.MCP_TOKEN_SCOPES] },
     createdAt: { type: 'number' },
     lastUsedAt: { type: ['number', 'null'] },
   },
-  required: ['id', 'name', 'tokenPrefix', 'createdAt', 'lastUsedAt'],
+  required: ['id', 'name', 'tokenPrefix', 'scope', 'createdAt', 'lastUsedAt'],
 } as const;
 
 const mcpTokenCreateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
+    scope: { type: 'string', enum: [...mcpTokensRepo.MCP_TOKEN_SCOPES] },
   },
   required: ['name'],
 } as const;
@@ -236,10 +238,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-      const { name } = request.body as { name?: unknown };
+      const { name, scope } = request.body as { name?: unknown; scope?: unknown };
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
       if (nameResult.value.length > 120) return badRequest(reply, 'name is too long');
+
+      const scopeResult = optionalEnum(scope, mcpTokensRepo.MCP_TOKEN_SCOPES, 'scope');
+      if (!scopeResult.ok) return badRequest(reply, scopeResult.message);
 
       const activeTokens = await mcpTokensRepo.listForUser(request.user.id);
       if (activeTokens.length >= MAX_ACTIVE_MCP_TOKENS_PER_USER) {
@@ -252,6 +257,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         userId: request.user.id,
         name: nameResult.value,
         rawToken,
+        scope: scopeResult.value ?? 'full',
       });
 
       return reply.code(201).send({ token, rawToken });

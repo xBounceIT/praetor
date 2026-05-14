@@ -187,6 +187,7 @@ beforeEach(async () => {
     id: 'mcp-token-1',
     name: 'Agent',
     tokenPrefix: 'praetor_mcp_raw',
+    scope: 'full',
     createdAt: 1000,
     lastUsedAt: null,
   });
@@ -369,6 +370,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -386,6 +388,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -407,6 +410,7 @@ describe('MCP token settings routes', () => {
         id: 'mcp-token-1',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_raw',
+        scope: 'full',
         createdAt: 1000,
         lastUsedAt: null,
       },
@@ -417,8 +421,59 @@ describe('MCP token settings routes', () => {
         userId: 'u1',
         name: 'Agent',
         rawToken: 'praetor_mcp_raw',
+        scope: 'full',
       }),
     );
+  });
+
+  test('POST /api/settings/mcp-tokens defaults scope to full when omitted', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'full' }),
+    );
+  });
+
+  test('POST /api/settings/mcp-tokens forwards explicit read_only scope', async () => {
+    createMcpTokenForUserMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      name: 'Agent',
+      tokenPrefix: 'praetor_mcp_raw',
+      scope: 'read_only',
+      createdAt: 1000,
+      lastUsedAt: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent', scope: 'read_only' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'read_only' }),
+    );
+    expect(JSON.parse(res.body).token.scope).toBe('read_only');
+  });
+
+  test('POST /api/settings/mcp-tokens rejects unknown scope', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent', scope: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
   });
 
   test('POST /api/settings/mcp-tokens rejects when current user has too many active tokens', async () => {
@@ -427,6 +482,7 @@ describe('MCP token settings routes', () => {
         id: `mcp-token-${i}`,
         name: `Agent ${i}`,
         tokenPrefix: `praetor_mcp_${i}`,
+        scope: 'full' as const,
         createdAt: 1000 + i,
         lastUsedAt: null,
       })),
