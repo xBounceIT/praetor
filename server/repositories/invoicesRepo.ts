@@ -141,6 +141,28 @@ export const findAmountPaid = async (
   return parseDbNumber(rows[0].amountPaid, 0);
 };
 
+export const findStatus = async (
+  invoiceId: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  return rows[0]?.status ?? null;
+};
+
+export const findStatusAndClientName = async (
+  invoiceId: string,
+  exec: DbExecutor = db,
+): Promise<{ status: string; clientName: string } | null> => {
+  const rows = await exec
+    .select({ status: invoices.status, clientName: invoices.clientName })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  return rows[0] ?? null;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,

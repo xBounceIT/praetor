@@ -181,6 +181,36 @@ describe('findAmountPaid', () => {
   });
 });
 
+describe('findStatus', () => {
+  test('returns status when row exists', async () => {
+    exec.enqueue({ rows: [['paid']] });
+    const result = await invoicesRepo.findStatus('INV-1', testDb);
+    expect(result).toBe('paid');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "status" from "invoices"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findStatus('INV-X', testDb)).toBeNull();
+  });
+});
+
+describe('findStatusAndClientName', () => {
+  test('returns status and clientName when row exists', async () => {
+    exec.enqueue({ rows: [['sent', 'Acme']] });
+    const result = await invoicesRepo.findStatusAndClientName('INV-1', testDb);
+    expect(result).toEqual({ status: 'sent', clientName: 'Acme' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select "status", "client_name"');
+    expect(exec.calls[0].params).toContain('INV-1');
+  });
+
+  test('returns null when invoice not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.findStatusAndClientName('INV-X', testDb)).toBeNull();
+  });
+});
+
 describe('findIdConflict', () => {
   test('excludes self with both id-equality and id-inequality predicates', async () => {
     exec.enqueue({ rows: [] });

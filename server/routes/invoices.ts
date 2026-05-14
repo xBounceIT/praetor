@@ -449,6 +449,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const existingStatus = await invoicesRepo.findStatus(idResult.value);
+      if (existingStatus === null) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+
+      const hasLockedFieldUpdates =
+        nextId !== undefined ||
+        clientId !== undefined ||
+        clientName !== undefined ||
+        issueDate !== undefined ||
+        dueDate !== undefined ||
+        amountPaid !== undefined ||
+        notes !== undefined ||
+        items !== undefined;
+      const hasStatusChange = typeof status === 'string' && status !== existingStatus;
+      if (existingStatus !== 'draft' && (hasLockedFieldUpdates || hasStatusChange)) {
+        return reply.code(409).send({
+          error: 'Non-draft invoices are read-only',
+          currentStatus: existingStatus,
+        });
+      }
+
       const patch: invoicesRepo.InvoiceUpdate = {};
 
       if (clientId !== undefined) {
@@ -620,6 +642,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const existing = await invoicesRepo.findStatusAndClientName(idResult.value);
+      if (!existing) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+      if (existing.status !== 'draft') {
+        return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
+      }
+
       // Invoice items will be deleted automatically via CASCADE
       try {
         const result = await invoicesRepo.deleteById(idResult.value);
@@ -635,7 +665,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
           details: {
             targetLabel: idResult.value,
-            secondaryLabel: result.clientName ?? '',
+            secondaryLabel: existing.clientName,
           },
         });
         return reply.code(204).send();
