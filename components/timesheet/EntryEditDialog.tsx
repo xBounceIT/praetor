@@ -201,36 +201,39 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
               onLocationChange={selection.setLocation}
               allowCustomTask={allowCustomTask}
               errors={errors}
-              extraTrailing={
-                <Field className="min-w-0">
-                  <FieldLabel htmlFor="entry-edit-hours">
-                    {t('entry.hours')} <span className="text-destructive">*</span>
-                  </FieldLabel>
-                  <Input
-                    id="entry-edit-hours"
-                    type="text"
-                    inputMode="decimal"
-                    pattern="^[0-9]*([.,][0-9]*)?$"
-                    value={duration}
-                    onChange={handleDurationInputChange}
-                    placeholder="0.0"
-                    className="h-9 min-h-9 max-h-9 rounded-lg py-2"
-                  />
-                </Field>
-              }
+              // Override the default 5-column layout — the dialog is much narrower than
+              // DailyView, so a 2-column grid keeps the dropdown values fully readable.
+              className="grid-cols-1 sm:grid-cols-2 md:grid-cols-2 xl:grid-cols-2"
             />
 
-            <Field className="min-w-0">
-              <FieldLabel htmlFor="entry-edit-notes">{t('entry.notesDescription')}</FieldLabel>
-              <Input
-                id="entry-edit-notes"
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t('entry.notesPlaceholder')}
-                className="h-10 rounded-lg"
-              />
-            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-4 items-start">
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="entry-edit-hours">
+                  {t('entry.hours')} <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  id="entry-edit-hours"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="^[0-9]*([.,][0-9]*)?$"
+                  value={duration}
+                  onChange={handleDurationInputChange}
+                  placeholder="0.0"
+                  className="h-10 rounded-lg"
+                />
+              </Field>
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="entry-edit-notes">{t('entry.notesDescription')}</FieldLabel>
+                <Input
+                  id="entry-edit-notes"
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={t('entry.notesPlaceholder')}
+                  className="h-10 rounded-lg"
+                />
+              </Field>
+            </div>
           </ModalBody>
           <ModalFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
