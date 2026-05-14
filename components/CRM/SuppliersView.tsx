@@ -173,7 +173,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     } catch (err) {
       const message = (err as Error).message;
       const fallback = t('crm:suppliers.failedToSave');
-      if (message?.toLowerCase().includes('supplier code')) {
+      if (message.toLowerCase().includes('supplier code')) {
         setErrors({ ...newErrors, supplierCode: t('crm:suppliers.codeUnique') });
       } else {
         setErrors({ ...newErrors, general: message || fallback });
@@ -188,7 +188,6 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   }, []);
 
   const handleDelete = async () => {
-    if (!canDeleteSuppliers) return;
     if (!supplierToDelete) return;
     try {
       await onDeleteSupplier(supplierToDelete.id);
