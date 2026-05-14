@@ -4,7 +4,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api/logs';
-import type { AuditLogEntry } from '../../types';
+import { AUDIT_ENTITY_TYPES, type AuditLogEntry } from '../../types';
 import DatePickerButton from '../shared/DatePickerButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -371,41 +371,12 @@ const LogsView: React.FC<LogsViewProps> = ({
   const entityTypeOptions = useMemo(
     () => [
       { id: '', name: t('logs.filters.entityTypeAll') },
-      { id: 'auth', name: t('logs.entities.auth', { defaultValue: 'Auth' }) },
-      { id: 'route', name: t('logs.entities.route', { defaultValue: 'Route' }) },
-      { id: 'user', name: t('logs.entities.user', { defaultValue: 'User' }) },
-      { id: 'role', name: t('logs.entities.role', { defaultValue: 'Role' }) },
-      { id: 'client', name: t('logs.entities.client', { defaultValue: 'Client' }) },
-      {
-        id: 'client_offer',
-        name: t('logs.entities.client_offer', { defaultValue: 'Client offer' }),
-      },
-      {
-        id: 'client_quote',
-        name: t('logs.entities.client_quote', { defaultValue: 'Client quote' }),
-      },
-      {
-        id: 'client_order',
-        name: t('logs.entities.client_order', { defaultValue: 'Client order' }),
-      },
-      { id: 'supplier', name: t('logs.entities.supplier', { defaultValue: 'Supplier' }) },
-      {
-        id: 'supplier_order',
-        name: t('logs.entities.supplier_order', { defaultValue: 'Supplier order' }),
-      },
-      {
-        id: 'supplier_quote',
-        name: t('logs.entities.supplier_quote', { defaultValue: 'Supplier quote' }),
-      },
-      {
-        id: 'supplier_invoice',
-        name: t('logs.entities.supplier_invoice', { defaultValue: 'Supplier invoice' }),
-      },
-      { id: 'invoice', name: t('logs.entities.invoice', { defaultValue: 'Invoice' }) },
-      { id: 'product', name: t('logs.entities.product', { defaultValue: 'Product' }) },
-      { id: 'project', name: t('logs.entities.project', { defaultValue: 'Project' }) },
-      { id: 'task', name: t('logs.entities.task', { defaultValue: 'Task' }) },
-      { id: 'work_unit', name: t('logs.entities.work_unit', { defaultValue: 'Work unit' }) },
+      ...AUDIT_ENTITY_TYPES.map((id) => ({
+        id,
+        // Each entity type has an i18n key under `logs.entities.<id>`; missing keys fall back
+        // to a humanized form so newly-added types show up readably even before translation.
+        name: t(`logs.entities.${id}`, { defaultValue: humanizeToken(id) }),
+      })),
     ],
     [t],
   );

@@ -161,7 +161,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return replyError(request, reply, {
           statusCode: 400,
           message: 'INVALID_RECIPIENT',
-          action: 'email_test.send.invalid',
+          action: 'email_config.test.invalid',
           entityType: 'email_config',
           details: { secondaryLabel: 'invalid_recipient' },
           extraBody: { code: 'INVALID_RECIPIENT' },

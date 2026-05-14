@@ -1234,9 +1234,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);
       if (linkedOrderId) {
-        return reply
-          .code(409)
-          .send({ error: 'Cannot delete a quote once an order has been created from it' });
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot delete a quote once an order has been created from it',
+          action: 'supplier_quote.delete.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'order_exists' },
+        });
       }
 
       // Fetch attachment metadata BEFORE deleting the quote - the FK cascade will drop the

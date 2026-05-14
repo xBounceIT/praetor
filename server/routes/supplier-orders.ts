@@ -949,9 +949,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action: result.action,
           entityType: 'supplier_order',
           entityId: idResult.value,
-          details: result.secondaryLabel
-            ? { secondaryLabel: result.secondaryLabel, fromValue: result.fromValue }
-            : undefined,
+          details: { secondaryLabel: result.secondaryLabel, fromValue: result.fromValue },
           extraBody: result.extraBody,
         });
       }
