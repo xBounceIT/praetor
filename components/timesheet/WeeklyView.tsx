@@ -19,6 +19,7 @@ import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from 
 import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
+import { toastError } from '../../utils/toast';
 import Calendar from '../shared/Calendar';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -492,10 +493,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       for (const id of entriesToDelete) {
         pending.push(Promise.resolve(onDeleteEntry(id)));
       }
-      await Promise.all(pending);
-      setPendingEdits({});
-      setWeekNote('');
-      setShowSuccess(true);
+      try {
+        await Promise.all(pending);
+        setPendingEdits({});
+        setWeekNote('');
+        setShowSuccess(true);
+      } catch (err) {
+        toastError(err instanceof Error ? err.message : t('entry.entryUpdateFailed'));
+      }
     } finally {
       setIsLoading(false);
     }

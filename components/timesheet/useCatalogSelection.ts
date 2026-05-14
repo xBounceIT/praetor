@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Project, ProjectTask, TimeEntryLocation } from '../../types';
 
 export const CUSTOM_TASK_SENTINEL = 'custom';
@@ -48,6 +48,13 @@ export function useCatalogSelection({
   const [taskName, setTaskName] = useState(initialSelection?.taskName ?? '');
   const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
 
+  // When seeded (edit dialog), the seed must survive the first snap-to-first pass —
+  // otherwise an entry whose task/project is no longer in the scoped catalog (orphan,
+  // archived) would silently jump to the catalog's first row. One ref per field so
+  // they consume independently.
+  const skipProjectSnapRef = useRef(initialSelection?.projectId !== undefined);
+  const skipTaskSnapRef = useRef(initialSelection?.taskId !== undefined);
+
   useEffect(() => {
     if (clients.length === 0) {
       if (clientId !== '') setClientId('');
@@ -72,16 +79,21 @@ export function useCatalogSelection({
   const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
 
   useEffect(() => {
+    const skipOnce = skipProjectSnapRef.current;
+    skipProjectSnapRef.current = false;
     if (filteredProjects.length === 0) {
       if (projectId !== '') setProjectId('');
       return;
     }
     if (!filteredProjects.some((project) => project.id === projectId)) {
+      if (skipOnce) return;
       setProjectId(firstFilteredProjectId);
     }
   }, [filteredProjects, firstFilteredProjectId, projectId]);
 
   useEffect(() => {
+    const skipOnce = skipTaskSnapRef.current;
+    skipTaskSnapRef.current = false;
     if (filteredTasks.length === 0) {
       setTaskId('');
       setTaskName('');
@@ -89,6 +101,7 @@ export function useCatalogSelection({
     }
 
     if (!filteredTasks.some((task) => task.id === taskId)) {
+      if (skipOnce) return;
       setTaskName(firstFilteredTaskName);
       setTaskId(firstFilteredTaskId);
     }

@@ -6,6 +6,13 @@ import { render } from '../../helpers/render';
 
 installI18nMock();
 
+const toastErrorMock = mock(() => {});
+mock.module('../../../utils/toast', () => ({
+  toastError: toastErrorMock,
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 const EntryEditDialog = (await import('../../../components/timesheet/EntryEditDialog')).default;
 
 const clients: Client[] = [
@@ -123,6 +130,60 @@ describe('<EntryEditDialog />', () => {
       expect(onClose).toHaveBeenCalled();
     });
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test('keeps the dialog open and surfaces a toast when onSave rejects', async () => {
+    toastErrorMock.mockClear();
+    const onSave = mock(() => Promise.reject(new Error('Server said no')));
+    const onClose = mock(() => {});
+
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        entry={sampleEntry}
+        onClose={onClose}
+        onSave={onSave as never}
+      />,
+    );
+
+    const hoursInput = document.getElementById('entry-edit-hours') as HTMLInputElement;
+    fireEvent.change(hoursInput, { target: { value: '4' } });
+    fireEvent.submit(hoursInput.closest('form') as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('Server said no');
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('allows editing other fields on a duration=0 placeholder entry', async () => {
+    const onSave = mock(() => Promise.resolve());
+    const onClose = mock(() => {});
+
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        entry={{ ...sampleEntry, duration: 0, isPlaceholder: true }}
+        onClose={onClose}
+        onSave={onSave as never}
+      />,
+    );
+
+    const hoursInput = document.getElementById('entry-edit-hours') as HTMLInputElement;
+    const notesInput = document.getElementById('entry-edit-notes') as HTMLInputElement;
+    expect(hoursInput.value).toBe('0');
+
+    fireEvent.change(notesInput, { target: { value: 'placeholder note' } });
+    fireEvent.submit(hoursInput.closest('form') as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
+    const [, patch] = (onSave as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [
+      string,
+      Partial<TimeEntry>,
+    ];
+    expect(patch).toEqual({ notes: 'placeholder note' });
   });
 
   test('cancel closes without saving', () => {

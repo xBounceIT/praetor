@@ -79,6 +79,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       console.error('Failed to update entry:', err);
+      throw err;
     }
   };
 

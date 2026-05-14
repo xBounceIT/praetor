@@ -281,7 +281,7 @@ describe('makeEntryHandlers', () => {
     expect(entries.get()[1]).toEqual({ id: 'e2', createdAt: 2, task: 'B' });
   });
 
-  test('update swallows errors', async () => {
+  test('update rethrows errors after logging so callers can react', async () => {
     apiMocks.entriesUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 1, task: 'A' }]);
     const handlers = makeEntryHandlers({
@@ -292,7 +292,7 @@ describe('makeEntryHandlers', () => {
 
     const restore = silenceConsole();
     try {
-      await handlers.update('e1', { task: 'A2' } as never);
+      await expect(handlers.update('e1', { task: 'A2' } as never)).rejects.toThrow('boom');
       expect(entries.get()).toEqual([{ id: 'e1', createdAt: 1, task: 'A' }]);
     } finally {
       restore();

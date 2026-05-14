@@ -918,6 +918,59 @@ describe('PUT /api/entries/:id', () => {
     expect(patch.task).toBeUndefined();
     expect(patch.duration).toBe(7);
   });
+
+  test.each([
+    ['task without projectId/clientId', { task: 'QA' }],
+    ['clientId without projectId/task', { clientId: 'c2', clientName: 'Other' }],
+    ['clientId + task without projectId', { clientId: 'c2', clientName: 'Other', task: 'QA' }],
+  ])('400 partial catalog patch (%s) is rejected', async (_label, payload) => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/must be updated together/);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 updating date alone forwards the new value to the repo', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { date: '2025-06-03' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindClientIdMock).not.toHaveBeenCalled();
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.date).toBe('2025-06-03');
+  });
+
+  test('400 updating date to a weekend when allowWeekendSelection is false', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    generalSettingsGetMock.mockResolvedValue({ allowWeekendSelection: false } as never);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      // 2025-06-07 is a Saturday.
+      payload: { date: '2025-06-07' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/weekend/i);
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/entries/:id', () => {

@@ -7,6 +7,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
 import { hasScopedActionPermission } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 import TaskFormModal, {
   type RecurringConfig,
   type TaskFormDetails,
@@ -113,7 +114,8 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
   };
 
   const parsedDuration = parseFloat(duration);
-  const hasValidDuration = Number.isFinite(parsedDuration) && parsedDuration > 0;
+  // Backend accepts duration >= 0 (placeholders carry 0); only block on blank/NaN.
+  const hasValidDuration = Number.isFinite(parsedDuration) && parsedDuration >= 0;
 
   const catalogChanged =
     selection.clientId !== entry.clientId ||
@@ -159,6 +161,8 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
         await onSave(entry.id, patch);
       }
       onClose();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t('entry.entryUpdateFailed'));
     } finally {
       setIsSubmitting(false);
     }
